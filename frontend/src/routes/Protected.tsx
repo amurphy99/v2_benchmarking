@@ -26,3 +26,8 @@ export function IsPatient() {
     const { user, profile } = useAuth();
     return (user.id === profile.plwd.id) ? <Outlet /> : <Navigate to="/dashboard" replace />;
 }
+
+export function IsStaff() {
+    const { user, profile } = useAuth();
+    return (profile.role === "Staff") ? <Outlet /> : <Navigate to="/dashboard" replace />;
+}
