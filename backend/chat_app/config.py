@@ -15,7 +15,7 @@ THIS_LANGUAGE = "en-US"
 
 # LLM Parameters
 MAX_LENGTH = 256
-PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
+PROMPT = "You are an assistant for dementia patients. Provide any response as short as possible. End your responses with the tag <|end|>."
 
 # Colors for logging
 RED    = "\033[0;31m"

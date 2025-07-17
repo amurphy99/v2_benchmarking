@@ -2,7 +2,8 @@
 # Audio Helper -- handles incoming audio data and the biomarkers generated from it
 # ======================================================================= ===================================
 # Might need to make sure this should or shouldn't be done threaded like this
-# "librosa is precise but slow; if latency matters and you’re always going integer-ratio 48 kHz to 16 kHz or similar, scipy.signal.resample_poly is ~3-5x faster."
+# "librosa is precise but slow; if latency matters and you’re always going integer-ratio 48 kHz to 16 kHz or similar, 
+# scipy.signal.resample_poly is ~3-5x faster."
 
 # Audio Data
 import numpy as np
@@ -38,7 +39,7 @@ _POOL = ThreadPoolExecutor(max_workers=4)
 # =======================================================================
 # Handle Audio Data
 # =======================================================================
-def handle_audio_data(data):
+def extract_prosody_pronunciation(data):
     try:
         # Decode the received base64 data to bytes & get the sample rate
         audio_bytes, sample_rate = base64.b64decode(data["data"]), data["sampleRate"]
@@ -81,7 +82,7 @@ async def extract_audio_biomarkers(data, overlapped_speech_count):
     loop = asyncio.get_running_loop()
 
     # 1) Run heavy function in thread pool
-    prosody_features, pronunciation_features = await loop.run_in_executor(_POOL, handle_audio_data, data)
+    prosody_features, pronunciation_features = await loop.run_in_executor(_POOL, extract_prosody_pronunciation, data)
     t1 = time()
     logger.info(f"{cf.CYAN}[Aud] Audio data processed:    {(t1-t0):5.4f}s {cf.RESET}")
 

@@ -8,6 +8,7 @@ interface AudioChunkMessage {
     timestamp   : number;
     sampleRate  : number;
     data        : string;  // base64 payload
+    duration    : number;  // duration of the audio chunk in milliseconds
 }
 type WSMessage = AudioChunkMessage;
 
@@ -38,6 +39,7 @@ export default function useAudioStreamer({
                     timestamp  : timestamp, 
                     data       : toBase64(int16), 
                     sampleRate : sampleRate,
+                    duration   : chunkMs,
                 });
             },
         });

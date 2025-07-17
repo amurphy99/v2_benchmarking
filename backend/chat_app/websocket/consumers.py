@@ -17,6 +17,7 @@ from ..                      import config as cf
 from ..services.db_services  import ChatService
 from  .services.chatHelpers  import generate_LLM_response
 from  .services.audioHelpers import extract_audio_biomarkers, extract_text_biomarkers
+from .services.transcriptionServices import TranscriptionServices
 
 # ------------------------------------------------------------------
 # Helper: Start a background task and log any exception it raises --- put into another file
@@ -90,12 +91,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
+        # Create new transcription service instance
+        self.transcription_services = await TranscriptionServices.init()
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
         # -----------------------------------------------------------------------
         # This is where we could potentially have a connection on the robot and web app and monitor the conversation in real time
         if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
+        
 
     # -----------------------------------------------------------------------
     # Close Connection 
@@ -187,7 +191,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_audio_data(self, data):
         # Generate the audio-related biomarker scores
         audio_biomarkers = await extract_audio_biomarkers(data, self.overlapped_speech_count)
-      
+        
+        transcript = await self.transcription_services.transcribe(data)
+        if transcript:
+            self._handle_transcription({"type": "transcription", "data": transcript})
+                
         # Save biomarkers to the DB
         fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
         if self.return_biomarkers: await self.send(json.dumps({"type": "audio_scores", "data": audio_biomarkers}))
