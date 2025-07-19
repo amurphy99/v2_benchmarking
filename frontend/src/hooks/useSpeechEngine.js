@@ -80,7 +80,7 @@ export default function useSpeechEngine({
     useEffect(() => {
         audioRef.current = new AudioStreamer({
             sampleRate: 16_000,
-            chunkMs: 5_000,
+            chunkMs: 1_000,
             onChunk: (int16, timestamp) => {
                 sendToServer({ type: 'audio_data', timestamp: timestamp, data: toBase64(int16), sampleRate: 16_000 })
             },

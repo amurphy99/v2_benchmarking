@@ -65,7 +65,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # 1) Authentication Block 
         # -----------------------------------------------------------------------
         # Authenticate before accepting connection (uses custom "unauth" code)
-        if not self.scope["user"].is_authenticated: await self.close(code=4001); return
+        if not self.scope["user"].is_authenticated: 
+            await self.close(code=4001)
+            return
         self.user   = self.scope["user"]
         self.source = self.scope.get("source", "unknown")
         await self.accept()
@@ -92,7 +94,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
         # Create new transcription service instance
-        self.transcription_services = await TranscriptionServices.init()
+        self.transcription_services = TranscriptionServices()
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
@@ -189,12 +191,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Audio Data
     # =======================================================================
     async def _handle_audio_data(self, data):
-        # Generate the audio-related biomarker scores
-        audio_biomarkers = await extract_audio_biomarkers(data, self.overlapped_speech_count)
         
+         # Generate the transcript from the audio data
         transcript = await self.transcription_services.transcribe(data)
         if transcript:
-            self._handle_transcription({"type": "transcription", "data": transcript})
+            logger.info(f"{cf.YELLOW}[Transcription] Transcript received: {transcript}")
+            fire_and_log(self._handle_transcription({"type": "transcription", "data": transcript}))
+                    
+        # Generate the audio-related biomarker scores
+        audio_biomarkers = await extract_audio_biomarkers(data, self.overlapped_speech_count)
                 
         # Save biomarkers to the DB
         fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
@@ -203,4 +208,3 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Update turntaking (12 audio windows for 1 minute of data)
         self.audio_windows_count += 1
         self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
-     
