@@ -17,7 +17,7 @@ type WSMessage = AudioChunkMessage;
 // --------------------------------------------------------------------
 export default function useAudioStreamer({
     sampleRate = 16_000,
-    chunkMs    =  1_000,
+    chunkMs    =  64,
     dataType   = "audio_data",
     sendToServer,
 }: {

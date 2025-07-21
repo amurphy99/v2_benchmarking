@@ -95,6 +95,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
         # Create new transcription service instance
         self.transcription_services = TranscriptionServices()
+        await self.transcription_services.start()
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
@@ -122,6 +123,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
+        
+        await self.transcription_services.stop()
 
         logger.info(f"Client disconnected:  {code}") 
 
@@ -193,10 +196,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_audio_data(self, data):
         
          # Generate the transcript from the audio data
-        transcript = await self.transcription_services.transcribe(data)
-        if transcript:
-            logger.info(f"{cf.YELLOW}[Transcription] Transcript received: {transcript}")
-            fire_and_log(self._handle_transcription({"type": "transcription", "data": transcript}))
+        # transcript = await self.transcription_services.transcribe(data)
+        # if transcript:
+        #     logger.info(f"{cf.YELLOW}[Transcription] Transcript received: {transcript}")
+        #     fire_and_log(self._handle_transcription({"type": "transcription", "data": transcript}))
+        
+        await self.transcription_services.send_audio(data)
                     
         # Generate the audio-related biomarker scores
         audio_biomarkers = await extract_audio_biomarkers(data, self.overlapped_speech_count)
