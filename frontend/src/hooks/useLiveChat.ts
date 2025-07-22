@@ -51,6 +51,7 @@ export default function useLiveChat({
 
 	const { start: startAud, stop: stopAud } = useAudioStreamer({
 		sendToServer: send,
+        chunkMs: 64
 	});
 
 	const {
