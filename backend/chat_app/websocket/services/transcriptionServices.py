@@ -79,14 +79,12 @@ class TranscriptionServices:
         while self.streaming:
             if self.audio_buffer:
                 chunk = self.audio_buffer.popleft()
-                for i in range(0, len(chunk), CHUNK_SIZE):
-                    piece = chunk[i:i+CHUNK_SIZE]
-                    try:
-                        await self._session.send_realtime_input(
-                            audio=types.Blob(data=piece, mime_type="audio/pcm;rate=16000")
-                        )
-                    except Exception as e:
-                        logger.error(f"{cf.YELLOW}[Transcription] Error sending to Gemini: {e}")
+                try:
+                    await self._session.send_realtime_input(
+                        audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000")
+                    )
+                except Exception as e:
+                    logger.error(f"{cf.YELLOW}[Transcription] Error sending to Gemini: {e}")
             else:
                 await asyncio.sleep(0.05)
     
@@ -142,4 +140,37 @@ class TranscriptionServices:
     #     else:
     #         self.silence_timeout = 0
     #     return None
+    
+from google.cloud import speech_v1
 
+
+async def sample_streaming_recognize():
+    # Create a client
+    client = speech_v1.SpeechAsyncClient()
+
+    # Initialize request argument(s)
+    streaming_config = speech_v1.StreamingRecognitionConfig()
+    streaming_config.config.language_code = "en-US"
+
+    request = speech_v1.StreamingRecognizeRequest(
+        streaming_config=streaming_config,
+    )
+
+    # This method expects an iterator which contains
+    # 'speech_v1.StreamingRecognizeRequest' objects
+    # Here we create a generator that yields a single `request` for
+    # demonstrative purposes.
+    requests = [request]
+
+    def request_generator():
+        for request in requests:
+            yield request
+
+    # Make the request
+    stream = await client.streaming_recognize(requests=request_generator())
+
+    # Handle the response
+    async for response in stream:
+        print(response)
+
+# [END speech_v1_generated_Speech_StreamingRecognize_async]

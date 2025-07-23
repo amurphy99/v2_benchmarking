@@ -3,7 +3,7 @@
 # =======================================================================
 from django.apps import apps
 
-import json, asyncio, logging
+import json, asyncio, logging, base64
 logger = logging.getLogger(__name__)
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -28,6 +28,8 @@ def fire_and_log(coro):
         except Exception: logger.exception("Background task crashed")
     return asyncio.create_task(_runner())
 
+SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
+
 
 # ======================================================================= ===================================
 # ChatConsumer 
@@ -44,6 +46,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     """
     MAX_CONTEXT = 10  # (how many recent messages to keep for the LLM)
+    CHUNK_SIZE = 2_048 # How big the chunks of audio received from the frontend are, in bytes
+    SECONDS = 3 # How often we want to send audio to calculate biomarkers
+    
 
     # =======================================================================
     # Open WebSocket Connection
@@ -96,6 +101,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Create new transcription service instance
         self.transcription_services = TranscriptionServices()
         await self.transcription_services.start()
+        self.audio_buffer = bytearray()
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
@@ -204,11 +210,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.transcription_services.send_audio(data)
                     
         # Generate the audio-related biomarker scores
-        audio_biomarkers = await extract_audio_biomarkers(data, self.overlapped_speech_count)
-                
-        # Save biomarkers to the DB
-        fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
-        if self.return_biomarkers: await self.send(json.dumps({"type": "audio_scores", "data": audio_biomarkers}))
+        self.audio_buffer.extend(base64.b64decode(data['data']))
+        if len(self.audio_buffer) >= (self.SECONDS * SECOND):
+            audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
+            audio_biomarkers = await extract_audio_biomarkers(audio_data, self.overlapped_speech_count)
+            self.audio_buffer.clear()
+
+            # Save biomarkers to the DB
+            fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
+            if self.return_biomarkers: await self.send(json.dumps({"type": "audio_scores", "data": audio_biomarkers}))
 
         # Update turntaking (12 audio windows for 1 minute of data)
         self.audio_windows_count += 1
