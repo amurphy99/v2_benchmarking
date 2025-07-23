@@ -100,8 +100,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
         # Create new transcription service instance
         self.transcription_services = TranscriptionServices()
-        await self.transcription_services.start()
         self.audio_buffer = bytearray()
+        self.initial_buffer = []
+        self.started = False
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
@@ -206,20 +207,26 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # if transcript:
         #     logger.info(f"{cf.YELLOW}[Transcription] Transcript received: {transcript}")
         #     fire_and_log(self._handle_transcription({"type": "transcription", "data": transcript}))
-        
-        await self.transcription_services.send_audio(data)
+        if not self.started:
+            self.initial_buffer.append(data)
+            if len(self.initial_buffer) >= 5:
+                self.started = True
+                for buffered_chunk in self.initial_buffer:
+                    await self.transcription_services.send_audio(buffered_chunk)
+        else:
+            await self.transcription_services.send_audio(data)
                     
         # Generate the audio-related biomarker scores
-        self.audio_buffer.extend(base64.b64decode(data['data']))
-        if len(self.audio_buffer) >= (self.SECONDS * SECOND):
-            audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
-            audio_biomarkers = await extract_audio_biomarkers(audio_data, self.overlapped_speech_count)
-            self.audio_buffer.clear()
+        # self.audio_buffer.extend(base64.b64decode(data['data']))
+        # if len(self.audio_buffer) >= (self.SECONDS * SECOND):
+        #     audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
+        #     audio_biomarkers = await extract_audio_biomarkers(audio_data, self.overlapped_speech_count)
+        #     self.audio_buffer.clear()
 
-            # Save biomarkers to the DB
-            fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
-            if self.return_biomarkers: await self.send(json.dumps({"type": "audio_scores", "data": audio_biomarkers}))
+        #     # Save biomarkers to the DB
+        #     fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, audio_biomarkers))
+        #     if self.return_biomarkers: await self.send(json.dumps({"type": "audio_scores", "data": audio_biomarkers}))
 
-        # Update turntaking (12 audio windows for 1 minute of data)
-        self.audio_windows_count += 1
-        self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+        # # Update turntaking (12 audio windows for 1 minute of data)
+        # self.audio_windows_count += 1
+        # self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
