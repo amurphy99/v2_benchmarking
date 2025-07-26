@@ -105,11 +105,12 @@ SSH:/home/user/
  │   │   ├── chat_app/       # Python backend logic
  │   │   │   ├── websocket/biomarkers/biomarker_models/
 +│   │   │   │   ├── stanford-parser-full-2020-11-17/stanford-parser-4.2.0-models.jar
-+│   │   │   │   ├── new_LSA.csv
++│   │   │   │   ├── google-stt-key.json
  │   │   │   │   └── ...
  │   │   │   └── ...
  │   │   │
  │   │   ├── requirements-web.txt
++│   │   ├── new_LSA.csv
  │   │   └── ...
  │   │
  │   ├── frontend/
