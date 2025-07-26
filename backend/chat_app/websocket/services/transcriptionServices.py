@@ -15,57 +15,68 @@ SAMPLE_RATE = 16000
 CHUNK_SIZE = 2048  # 64ms of 16-bit PCM audio = 2048 bytes
 
 class TranscriptionServices:
-    def __init__(self):
-        self.client = speech.SpeechClient()
-        self.audio_buffer = Queue()
-        self.streaming = False
+    def __init__(self, on_transcription_callback=None, loop=None):
+        self._client = speech.SpeechClient()
+        self._streaming_config = None
+        self._audio_buffer = Queue()
+        self._streaming = False
+        self.on_transcription_callback = on_transcription_callback
+        self.loop = loop or asyncio.get_event_loop()
 
-    def audio_generator(self):
-        while self.streaming:
-            if self.audio_buffer:
-                data = self.audio_buffer.get()
+    def _audio_generator(self):
+        while self._streaming:
+            if self._audio_buffer:
+                data = self._audio_buffer.get()
                 if data is None:
-                    logger.info(f"{cf.RED}[Transcription] Queue is empty.")
                     break
-                logger.info(f"{cf.RED}[Transcription] Sending {len(data)} bytes at {time.time()}.")
                 yield speech.StreamingRecognizeRequest(audio_content=data)
 
-    async def start(self):
-        logger.info(f"{cf.RED}[Transcription] Started streaming.")
+    def start(self):
+        self._streaming = True
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=SAMPLE_RATE,
             language_code="en-US",
         )
-        streaming_config = speech.StreamingRecognitionConfig(
+        self._streaming_config = speech.StreamingRecognitionConfig(
             config=config,
-            interim_results=True
+            interim_results=False,
         )
 
-        self.streaming = True
+        threading.Thread(target=self._start_streaming_thread, daemon=True).start()
 
-        # Open a generator stream to Google
-        requests = self.audio_generator()
-        responses = await self.client.streaming_recognize(config=streaming_config, requests=requests)
+    def _start_streaming_thread(self):
+        requests = self._audio_generator()
 
-        # Handle transcription responses in a thread
-        threading.Thread(target=self.listen_responses, args=(responses,), daemon=True).start()
+        try:
+            responses = self._client.streaming_recognize(config=self._streaming_config, requests=requests)
+            self._listen_responses(responses)
+        except Exception as e:
+            print(f"[ERROR] Streaming connection failed: {e}")
 
-    async def listen_responses(self, responses):
+
+    def _listen_responses(self, responses):
         for response in responses:
-            logger.info(f"{cf.RED}[Transcription] Received response: {response}.")
             for result in response.results:
-                if result.is_final or result.alternatives:
-                    print("Transcript:", result.alternatives[0].transcript)
+                if result.is_final:
+                    transcript = result.alternatives[0].transcript
+                    logger.info(f"{cf.RED}[Transcription] Received final transcription: {transcript}.")
+                    if self.on_transcription_callback:
+                        data = {"type": "transcript", "data": transcript}
+                        if asyncio.iscoroutinefunction(self.on_transcription_callback):
+                            asyncio.run_coroutine_threadsafe(
+                                self.on_transcription_callback(data),
+                                self.loop
+                            )
+                        else:
+                            self.on_transcription_callback(data)
 
-
-    async def send_audio(self, data):
+    def send_audio(self, data):
         audio_bytes = base64.b64decode(data["data"])
-        self.audio_buffer.put(audio_bytes)
-        logger.info(f"{cf.RED}[Transcription] Received {len(audio_bytes)} audio bytes.")
-        if not self.streaming:
-            await self.start()
+        self._audio_buffer.put(audio_bytes)
+        if not self._streaming:
+            self.start()
 
     def stop(self):
-        self.streaming = False
-        self.audio_buffer.put(None)
+        self._streaming = False
+        self._audio_buffer.put(None)

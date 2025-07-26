@@ -3,7 +3,7 @@
 # =======================================================================
 from django.apps import apps
 
-import json, asyncio, logging, base64
+import json, asyncio, logging, base64, threading
 logger = logging.getLogger(__name__)
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -15,8 +15,8 @@ from datetime import datetime, timezone
 # From this project
 from ..                      import config as cf
 from ..services.db_services  import ChatService
-from  .services.chatHelpers  import generate_LLM_response
-from  .services.audioHelpers import extract_audio_biomarkers, extract_text_biomarkers
+from .services.chatHelpers  import generate_LLM_response
+from .services.audioHelpers import extract_audio_biomarkers, extract_text_biomarkers
 from .services.transcriptionServices import TranscriptionServices
 
 # ------------------------------------------------------------------
@@ -48,7 +48,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     MAX_CONTEXT = 10  # (how many recent messages to keep for the LLM)
     CHUNK_SIZE = 2_048 # How big the chunks of audio received from the frontend are, in bytes
     SECONDS = 3 # How often we want to send audio to calculate biomarkers
-    
 
     # =======================================================================
     # Open WebSocket Connection
@@ -99,17 +98,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
         # Create new transcription service instance
-        self.transcription_services = TranscriptionServices()
+        loop = asyncio.get_event_loop()
+        self.transcription_services = TranscriptionServices(on_transcription_callback=self._handle_transcription, loop=loop)
         self.audio_buffer = bytearray()
-        self.initial_buffer = []
-        self.started = False
 
         # -----------------------------------------------------------------------
         # 3) Send misc information to the frontend (ToDo: biomarkers, etc)
         # -----------------------------------------------------------------------
         # This is where we could potentially have a connection on the robot and web app and monitor the conversation in real time
         if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
-        
+                
 
     # -----------------------------------------------------------------------
     # Close Connection 
@@ -131,7 +129,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
         
-        await self.transcription_services.stop()
+        self.transcription_services.stop()
 
         logger.info(f"Client disconnected:  {code}") 
 
@@ -150,6 +148,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif data["type"] == "audio_data"   : await self._handle_audio_data   (data)
         elif data["type"] == "transcription": await self._handle_transcription(data)
         elif data["type"] == "end_chat"     : await database_sync_to_async(ChatService.close_session)(self.user, source=self.source)
+        elif data["type"] == "toggle_stream": self._toggle_stream(data)
 
     # =======================================================================
     # Text Transcriptions
@@ -203,20 +202,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_audio_data(self, data):
         
          # Generate the transcript from the audio data
-        # transcript = await self.transcription_services.transcribe(data)
-        # if transcript:
-        #     logger.info(f"{cf.YELLOW}[Transcription] Transcript received: {transcript}")
-        #     fire_and_log(self._handle_transcription({"type": "transcription", "data": transcript}))
-        if not self.started:
-            self.initial_buffer.append(data)
-            if len(self.initial_buffer) >= 5:
-                self.started = True
-                for buffered_chunk in self.initial_buffer:
-                    await self.transcription_services.send_audio(buffered_chunk)
-        else:
-            await self.transcription_services.send_audio(data)
-                    
-        # Generate the audio-related biomarker scores
+        self.transcription_services.send_audio(data)
+                            
+        # # Generate the audio-related biomarker scores
         # self.audio_buffer.extend(base64.b64decode(data['data']))
         # if len(self.audio_buffer) >= (self.SECONDS * SECOND):
         #     audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
@@ -230,3 +218,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # # Update turntaking (12 audio windows for 1 minute of data)
         # self.audio_windows_count += 1
         # self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+        
+    def _toggle_stream(self, data):
+        cmd = data["data"]
+        if cmd == "start":
+            self.transcription_services.start()
+        elif cmd == "stop":
+            self.transcription_services.stop()

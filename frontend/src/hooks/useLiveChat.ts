@@ -77,11 +77,11 @@ export default function useLiveChat({
 	const start = () => {
 		setRecording(true);
 		startAud();
-		// startASR();
+        send({ type: "toggle_stream", data: "start" });
 	};
 	const stop = () => {
 		stopAud();
-		// stopASR();
+        send({ type: "toggle_stream", data: "stop" });
 	};
 	const save = () => {
 		setRecording(false);
