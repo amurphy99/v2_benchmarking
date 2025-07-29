@@ -33,7 +33,7 @@ export default function useChatSocket({
       : `wss://${location.host}/ws/chat/`;
   const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
 
-  // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
+  // Receive things from the backend: LLM messages, Biomarker scores (sometimes), audio bytes of synthesized speech
   const onMessage = useCallback(
     (event: MessageEvent) => {
       const { type, data } = JSON.parse(event.data) as WSMessage;
@@ -48,6 +48,8 @@ export default function useChatSocket({
       } else if (type === "periodic_scores") {
         console.log("Periodic scores received");
         onScores({ type, data });
+      } else if (type === "speech") {
+        console.log("Received speech synthesis")
       }
     },
     [onLLMResponse, onScores]

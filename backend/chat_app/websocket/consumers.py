@@ -17,7 +17,7 @@ from ..                      import config as cf
 from ..services.db_services  import ChatService
 from .services.chatHelpers  import generate_LLM_response
 from .services.audioHelpers import extract_audio_biomarkers, extract_text_biomarkers
-from .services.transcriptionServices import TranscriptionServices
+from .services.speechProvider import SpeechToTextProvider, TextToSpeechProvider
 
 # ------------------------------------------------------------------
 # Helper: Start a background task and log any exception it raises --- put into another file
@@ -97,9 +97,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
-        # Create new transcription service instance
-        loop = asyncio.get_event_loop()
-        self.transcription_services = TranscriptionServices(on_transcription_callback=self._handle_transcription, loop=loop)
+        # Create new speech provider instances
+        loop_stt = asyncio.get_event_loop()
+        self.stt_provider = SpeechToTextProvider(on_transcription_callback=self._handle_transcription, loop=loop_stt)
+        loop_tts = asyncio.get_event_loop()
+        self.tts_provider = TextToSpeechProvider(on_synthesis_callback=self.receive_json, loop=loop_tts)
         self.audio_buffer = bytearray()
 
         # -----------------------------------------------------------------------
@@ -129,7 +131,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
         
-        self.transcription_services.stop()
+        self.stt_provider.stop()
+        self.tts_provider.stop()
 
         logger.info(f"Client disconnected:  {code}") 
 
@@ -149,7 +152,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif data["type"] == "transcription": await self._handle_transcription(data)
         elif data["type"] == "end_chat"     : await database_sync_to_async(ChatService.close_session)(self.user, source=self.source)
         elif data["type"] == "toggle_stream": self._toggle_stream(data)
-
+        elif data["type"] == "speech"       : await self.send_json({"type": "speech", "data": data})
+ 
     # =======================================================================
     # Text Transcriptions
     # =======================================================================
@@ -195,6 +199,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # On-utterance biomarker scores (run in a thread so we don't block the loop)
         fire_and_log(self._on_utterance_biomarkers())
+        
+        # 3) Send text data to TTS provider to be synthesized into speech
+        self.tts_provider._send_text(text)
 
     # =======================================================================
     # Audio Data
@@ -202,7 +209,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_audio_data(self, data):
         
          # Generate the transcript from the audio data
-        self.transcription_services.send_audio(data)
+        self.stt_provider.send_audio(data)
                             
         # # Generate the audio-related biomarker scores
         # self.audio_buffer.extend(base64.b64decode(data['data']))
@@ -222,6 +229,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     def _toggle_stream(self, data):
         cmd = data["data"]
         if cmd == "start":
-            self.transcription_services.start()
+            self.stt_provider.start()
         elif cmd == "stop":
-            self.transcription_services.stop()
+            self.stt_provider.stop()
