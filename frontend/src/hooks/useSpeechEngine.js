@@ -3,7 +3,7 @@ import { useRef, useState, useEffect } from 'react';
 import AudioStreamer from '../utils/AudioStreamer'; // --- needs to be updated to have 2 simultaneous buffers for Gemini ---
 import toBase64 from '../utils/toBase64';
 import { logText, logOverlap } from '../utils/loggingHelpers';
-import { Providers } from '../speechProviders';
+// import { Providers } from '../speechProviders';
 import useBackendConnection from './useBackendConnection';
 import useLatencyLogger from './useLatencyLogger';
 

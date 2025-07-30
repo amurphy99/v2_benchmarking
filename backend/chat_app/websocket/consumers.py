@@ -29,6 +29,7 @@ def fire_and_log(coro):
     return asyncio.create_task(_runner())
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
+CHUNK_SIZE = 4096 # How many bytes of audio we can send at a time
 
 
 # ======================================================================= ===================================
@@ -100,8 +101,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Create new speech provider instances
         loop_stt = asyncio.get_event_loop()
         self.stt_provider = SpeechToTextProvider(on_transcription_callback=self._handle_transcription, loop=loop_stt)
-        loop_tts = asyncio.get_event_loop()
-        self.tts_provider = TextToSpeechProvider(on_synthesis_callback=self.receive_json, loop=loop_tts)
+        self.tts_provider = TextToSpeechProvider()
         self.audio_buffer = bytearray()
 
         # -----------------------------------------------------------------------
@@ -132,7 +132,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []
         
         self.stt_provider.stop()
-        self.tts_provider.stop()
 
         logger.info(f"Client disconnected:  {code}") 
 
@@ -152,7 +151,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif data["type"] == "transcription": await self._handle_transcription(data)
         elif data["type"] == "end_chat"     : await database_sync_to_async(ChatService.close_session)(self.user, source=self.source)
         elif data["type"] == "toggle_stream": self._toggle_stream(data)
-        elif data["type"] == "speech"       : await self.send_json({"type": "speech", "data": data})
  
     # =======================================================================
     # Text Transcriptions
@@ -182,11 +180,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Get the LLMs response (awaited since it is the most important/longest process)
         system_utt = await generate_LLM_response(self.context_buffer)
-
+        
+        # Synthesize the speech 
+        speech = self.tts_provider.synthesize_speech(system_utt)
+        fire_and_log(self._handle_speech(speech))
+        
         # Immediately send the response back through the websocket
         await self.send(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
-        logger.info(f"{cf.YELLOW}[LLM] Response sent in {(time()-t0):.4f}s. {system_utt}  {cf.RESET}")
-
+        
+        
         # -----------------------------------------------------------------------
         # 2) Background persistence & biomarkers
         # -----------------------------------------------------------------------
@@ -200,8 +202,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # On-utterance biomarker scores (run in a thread so we don't block the loop)
         fire_and_log(self._on_utterance_biomarkers())
         
-        # 3) Send text data to TTS provider to be synthesized into speech
-        self.tts_provider._send_text(text)
+    async def _handle_speech(self, audio_bytes: bytes) -> None:
+        # Splits audio data into chunks so we can send it to the frontend
+        for i in range(0, len(audio_bytes), CHUNK_SIZE):
+            chunk = audio_bytes[i:i + CHUNK_SIZE]
+            await self.send(bytes_data=chunk)
 
     # =======================================================================
     # Audio Data
@@ -225,6 +230,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # # Update turntaking (12 audio windows for 1 minute of data)
         # self.audio_windows_count += 1
         # self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+        
         
     def _toggle_stream(self, data):
         cmd = data["data"]

@@ -19,10 +19,12 @@ export default function useLiveChat({
 	onUserUtterance,
 	onSystemUtterance = (_: string) => {},
 	onScores = () => {},
+    onAudio = () => {},
 }: {
 	onUserUtterance: (text: string) => void;
 	onSystemUtterance: (text: string) => void;
 	onScores: () => void;
+    onAudio: (data: Blob) => void;
 }) {
 	// Misc. setup
 	const qc = useQueryClient();
@@ -44,9 +46,10 @@ export default function useLiveChat({
 		recording,
 		onLLMResponse: (text: string) => {
 			onLLMres(text);
-			speak(text);
+			// speak(text);
 		},
 		onScores,
+        onAudio,
 	});
 
 	const { start: startAud, stop: stopAud } = useAudioStreamer({

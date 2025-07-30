@@ -7,6 +7,8 @@ import LiveChatView from "./components/LiveChatView";
 import SaveChatModal from "@/components/modals/SaveChatModal";
 
 import { useLocalChatSession } from "@/hooks/live-chat";
+import { playAudio } from '@/utils/AudioPlayer'
+import AudioPlayer from "@/utils/AudioPlayer";
 
 // ====================================================================
 // Chat
@@ -15,6 +17,7 @@ import { useLocalChatSession } from "@/hooks/live-chat";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat() {
 	const navigate = useNavigate();
+    const player = new AudioPlayer(16_000, 1, 16);
 
 	// Local (frontend, view-related only) chat tracking
 	const { pushMessage, session } = useLocalChatSession();
@@ -24,12 +27,16 @@ export function Chat() {
 	const onSystemUtterance = (text: string) => {
 		pushMessage("assistant", text);
 	};
+    const onAudio = (data: Blob) => {
+        player.sendAudio(data)
+    }
 
 	// Live-chat hook
 	const { start, stop, save } = useLiveChat({
 		onUserUtterance,
 		onSystemUtterance,
 		onScores: () => {},
+        onAudio
 	});
 
 	// Separate recording flag that we control ourselves

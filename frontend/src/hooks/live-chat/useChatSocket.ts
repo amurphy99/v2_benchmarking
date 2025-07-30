@@ -16,6 +16,7 @@ export default function useChatSocket({
   recording,
   onLLMResponse = (unknown) => {},
   onScores = (WSMessage) => {},
+  onAudio = (audioData) => {},
 }) {
   // WebSocket setup
   const [connected, setConnected] = useState(false);
@@ -36,23 +37,25 @@ export default function useChatSocket({
   // Receive things from the backend: LLM messages, Biomarker scores (sometimes), audio bytes of synthesized speech
   const onMessage = useCallback(
     (event: MessageEvent) => {
-      const { type, data } = JSON.parse(event.data) as WSMessage;
-      if (type === "llm_response") {
-        onLLMResponse(data);
-      } else if (type === "biomarker_scores") {
-        console.log("On-Utterance scores received");
-        onScores({ type, data });
-      } else if (type === "audio_scores") {
-        console.log("On-Audio scores received");
-        onScores({ type, data });
-      } else if (type === "periodic_scores") {
-        console.log("Periodic scores received");
-        onScores({ type, data });
-      } else if (type === "speech") {
-        console.log("Received speech synthesis")
-      }
-    },
-    [onLLMResponse, onScores]
+        if (event.data instanceof Blob) {
+            onAudio(event.data);
+        } else {
+            const { type, data } = JSON.parse(event.data) as WSMessage;
+            if (type === "llm_response") {
+                console.log("LLM response received")
+                onLLMResponse(data);
+            } else if (type === "biomarker_scores") {
+                console.log("On-Utterance scores received");
+                onScores({ type, data });
+            } else if (type === "audio_scores") {
+                console.log("On-Audio scores received");
+                onScores({ type, data });
+            } else if (type === "periodic_scores") {
+                console.log("Periodic scores received");
+                onScores({ type, data });
+            }
+            }
+        }, [onLLMResponse, onScores]
   );
 
   // Open and close the websocket connection on change of the "recording" flag

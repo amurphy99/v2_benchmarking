@@ -85,65 +85,18 @@ class TextToSpeechProvider:
     
     def __init__(self, on_synthesis_callback=None, loop=None):
         self._client = texttospeech.TextToSpeechClient()
-        self._started = False
-        self._config_request = None
-        self._text_buffer = Queue()
-        self._on_synthesis_callback = on_synthesis_callback
-        self._loop = loop or None
-        
-    def _text_generator(self):
-        while self._started:
-            if self._text_buffer:
-                data = self._text_buffer.get()
-                if data is None:
-                    break
-                yield texttospeech.StreamingSynthesizeRequest(
-                    input=texttospeech.StreamingSynthesisInput(text=data)
-                )
-    
-    def start(self):
-        self._started = True
-        streaming_config = texttospeech.StreamingSynthesizeConfig(
-            voice=texttospeech.VoiceSelectionParams(
-                name="en-US-Chirp3-HD-Charon",
-                language_code="en-US",
-            )
+        self._voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+        )
+        self._audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.PCM
         )
 
-        self.config_request = texttospeech.StreamingSynthesizeRequest(
-            streaming_config=streaming_config
+                        
+    def synthesize_speech(self, text: str) -> bytes:
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+        response = self._client.synthesize_speech(
+            input=synthesis_input, voice=self._voice, audio_config=self._audio_config
         )
         
-        threading.Thread(target=self._start_synthesis_thread, daemon=True).start()
-    
-    def stop(self):
-        self._started = False
-        self._text_buffer.put(None)
-        
-    def _send_text(self, text):
-        self._text_buffer.put(text)
-        self._started = False
-        
-    def _start_synthesis_thread(self):
-        requests = self._text_generator()
-
-        try:
-            responses = self._client.streaming_synthesize(requests)
-            self._listen_responses(responses)
-        except Exception as e:
-            print(f"[ERROR] Synthesis connection failed: {e}")
-
-
-    def _listen_responses(self, responses):
-        for response in responses:
-            if response.audio_content:
-                logger.info(f"{cf.RED}[TTS] Received {len(response.audio_content)} bytes of speech synthesis.")
-                if self._on_synthesis_callback:
-                    data = {"type": "speech", "data": response.audio_content}
-                    if asyncio.iscoroutinefunction(self._on_synthesis_callback):
-                        asyncio.run_coroutine_threadsafe(
-                            self._on_synthesis_callback(data),
-                            self._loop
-                        )
-                    else:
-                        self._on_synthesis_callback(data)
+        return response.audio_content
