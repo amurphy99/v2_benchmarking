@@ -1,98 +1,70 @@
-export async function playAudio(data: Blob) {
-    const arrayBuffer = await data.arrayBuffer(); // Convert to ArrayBuffer
-    const wav = wrapPCMWithWAV(arrayBuffer, 16000); // Use the WAV wrapper function from before
-    const audioContext = new AudioContext();
-    const audioBuffer = await audioContext.decodeAudioData(wav);
-
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.start();
-}
-
-function wrapPCMWithWAV(pcmArrayBuffer: ArrayBuffer, sampleRate: number = 16000, numChannels: number = 1, bitsPerSample: number = 16) {
-    const pcmLength = pcmArrayBuffer.byteLength;
-    const blockAlign = numChannels * bitsPerSample / 8;
-    const byteRate = sampleRate * blockAlign;
-    const wavHeaderSize = 44;
-    const totalSize = pcmLength + wavHeaderSize;
-
-    const wavBuffer = new ArrayBuffer(totalSize);
-    const view = new DataView(wavBuffer);
-
-    // Write WAV header
-    let offset = 0;
-
-    // RIFF identifier
-    writeString(view, offset, 'RIFF'); offset += 4;
-    view.setUint32(offset, totalSize - 8, true); offset += 4; // file length - 8
-    writeString(view, offset, 'WAVE'); offset += 4;
-
-    // fmt chunk
-    writeString(view, offset, 'fmt '); offset += 4;
-    view.setUint32(offset, 16, true); offset += 4; // size of fmt chunk
-    view.setUint16(offset, 1, true); offset += 2;  // audio format (1 = PCM)
-    view.setUint16(offset, numChannels, true); offset += 2;
-    view.setUint32(offset, sampleRate, true); offset += 4;
-    view.setUint32(offset, byteRate, true); offset += 4;
-    view.setUint16(offset, blockAlign, true); offset += 2;
-    view.setUint16(offset, bitsPerSample, true); offset += 2;
-
-    // data chunk
-    writeString(view, offset, 'data'); offset += 4;
-    view.setUint32(offset, pcmLength, true); offset += 4;
-
-    // Copy PCM data
-    new Uint8Array(wavBuffer, offset).set(new Uint8Array(pcmArrayBuffer));
-
-    return wavBuffer;
-}
-
-function writeString(view: DataView, offset: number, string: string) {
-    for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-    }
-}
-
 export default class AudioPlayer {
     private sampleRate: number;
     private numChannels: number;
     private bitsPerSample: number;
-    private audioBuffer: Blob[];
+    private audioBuffer: AudioBuffer;
     private playing: boolean;
+    private audioContext: AudioContext;
+    private bufferLength: number;
 
     constructor({ sampleRate, numChannels, bitsPerSample }) {
-        this.sampleRate = sampleRate ?? 16_000;
+        this.sampleRate = sampleRate ?? 24_000;
         this.numChannels = numChannels ?? 1;
         this.bitsPerSample = bitsPerSample ?? 16;
         this.playing = false;
+        this.audioContext = new AudioContext();
+        this.audioBuffer = null;
+        this.bufferLength = 0;
     }
 
-    public sendAudio(data: Blob) : void {
-        this.audioBuffer.push(data);
-        if (this.playing) {
-            this.playAudio();
-        } else {
-            if (this.audioBuffer.length >= 3) {
-                this.playing = true;
+    public async sendAudio(data: Blob | null) {
+        if (data == null) {
+            setTimeout(() => {
+                console.log("Now playing audio: ", this.audioBuffer);
                 this.playAudio();
-            }
+            }, 1000)
+            return;
         }
+        const arrayBuffer = await data.arrayBuffer(); // Convert to ArrayBuffer
+        const wav = this.wrapPCMWithWAV(arrayBuffer); // Use the WAV wrapper function from before
+        const audioBuffer = await this.audioContext.decodeAudioData(wav);
+        if (!this.audioBuffer) {
+            this.audioBuffer = audioBuffer;
+        } else {
+            this.audioBuffer = this.appendBuffer(this.audioBuffer, audioBuffer);
+            console.log("Appended to audio buffer: ", this.audioBuffer)
+        }
+        this.bufferLength += audioBuffer.length;
     }
 
-    public async playAudio() {
-        while (this.audioBuffer.length > 0) {
-            const data: Blob = this.audioBuffer.pop();
-            const arrayBuffer = await data.arrayBuffer(); // Convert to ArrayBuffer
-            const wav = wrapPCMWithWAV(arrayBuffer, 16000); // Use the WAV wrapper function from before
-            const audioContext = new AudioContext();
-            const audioBuffer = await audioContext.decodeAudioData(wav);
+    public playAudio() {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.audioBuffer;
+        source.connect(this.audioContext.destination);
+        source.start(source.buffer.duration);
+        this.audioBuffer = null;
+        this.bufferLength = 0;
+    }
 
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            source.start();
+    public async playBlob(blob: Blob) {
+        const arrayBuffer = await blob.arrayBuffer(); // Convert to ArrayBuffer
+        const wav = this.wrapPCMWithWAV(arrayBuffer); // Use the WAV wrapper function from before
+        const buffer = await this.audioContext.decodeAudioData(wav);
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.audioContext.destination);
+        source.start(source.buffer.duration);
+    }
+
+    private appendBuffer(buffer1: AudioBuffer, buffer2: AudioBuffer) {
+        var numberOfChannels = Math.min( buffer1.numberOfChannels, buffer2.numberOfChannels );
+        var tmp = this.audioContext.createBuffer( numberOfChannels, (buffer1.length + buffer2.length), buffer1.sampleRate );
+        for (var i = 0; i < numberOfChannels; i++) {
+            var channel = tmp.getChannelData(i);
+            channel.set( buffer1.getChannelData(i), 0);
+            channel.set( buffer2.getChannelData(i), buffer1.length);
         }
+        return tmp;
     }
 
     private wrapPCMWithWAV(pcmArrayBuffer: ArrayBuffer) : ArrayBuffer {

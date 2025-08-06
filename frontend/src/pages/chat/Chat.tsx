@@ -7,7 +7,8 @@ import LiveChatView from "./components/LiveChatView";
 import SaveChatModal from "@/components/modals/SaveChatModal";
 
 import { useLocalChatSession } from "@/hooks/live-chat";
-import { playAudio } from '@/utils/AudioPlayer'
+import PCMPlayer from '@/utils/PCMPlayer';
+import PCMStreamer from "@/hooks/live-chat/useAudioPlayer";
 import AudioPlayer from "@/utils/AudioPlayer";
 
 // ====================================================================
@@ -17,7 +18,14 @@ import AudioPlayer from "@/utils/AudioPlayer";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat() {
 	const navigate = useNavigate();
-    const player = new AudioPlayer(16_000, 1, 16);
+    const player = new AudioPlayer({sampleRate: 16_000, numChannels: 1, bitsPerSample: 16});
+    // const streamer = new PCMStreamer({numChannels: 1, sampleRate: 16_000})
+    // const pcmPlayer = new PCMPlayer({
+    //     encoding: '16bitInt',
+    //     channels: 1,
+    //     sampleRate: 24_000,
+    //     flushingTime: 64
+    // });
 
 	// Local (frontend, view-related only) chat tracking
 	const { pushMessage, session } = useLocalChatSession();
@@ -27,8 +35,10 @@ export function Chat() {
 	const onSystemUtterance = (text: string) => {
 		pushMessage("assistant", text);
 	};
-    const onAudio = (data: Blob) => {
-        player.sendAudio(data)
+    const onAudio = (data: Blob | null) => {
+        // streamer.sendAudio(data)
+        // pcmPlayer.feed(data);
+        player.sendAudio(data);
     }
 
 	// Live-chat hook

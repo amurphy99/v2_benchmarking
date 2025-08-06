@@ -47,7 +47,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     """
     MAX_CONTEXT = 10  # (how many recent messages to keep for the LLM)
-    CHUNK_SIZE = 2_048 # How big the chunks of audio received from the frontend are, in bytes
     SECONDS = 3 # How often we want to send audio to calculate biomarkers
 
     # =======================================================================
@@ -181,13 +180,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Get the LLMs response (awaited since it is the most important/longest process)
         system_utt = await generate_LLM_response(self.context_buffer)
         
-        # Synthesize the speech 
-        speech = self.tts_provider.synthesize_speech(system_utt)
-        fire_and_log(self._handle_speech(speech))
-        
         # Immediately send the response back through the websocket
         await self.send(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
         
+        # Synthesize the speech 
+        speech = self.tts_provider.synthesize_speech(system_utt)
+        fire_and_log(self._handle_speech(speech))
         
         # -----------------------------------------------------------------------
         # 2) Background persistence & biomarkers
@@ -207,6 +205,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         for i in range(0, len(audio_bytes), CHUNK_SIZE):
             chunk = audio_bytes[i:i + CHUNK_SIZE]
             await self.send(bytes_data=chunk)
+        await self.send(json.dumps({'type': 'audio_end'}))
+        logger.info(f"{cf.YELLOW}[TTS] Sent synthesized speech to frontend.")
+        
 
     # =======================================================================
     # Audio Data

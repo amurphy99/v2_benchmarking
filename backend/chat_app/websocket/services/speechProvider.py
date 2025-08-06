@@ -83,7 +83,7 @@ class SpeechToTextProvider:
 
 class TextToSpeechProvider:
     
-    def __init__(self, on_synthesis_callback=None, loop=None):
+    def __init__(self):
         self._client = texttospeech.TextToSpeechClient()
         self._voice = texttospeech.VoiceSelectionParams(
             language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
@@ -94,9 +94,12 @@ class TextToSpeechProvider:
 
                         
     def synthesize_speech(self, text: str) -> bytes:
-        synthesis_input = texttospeech.SynthesisInput(text=text)
-        response = self._client.synthesize_speech(
-            input=synthesis_input, voice=self._voice, audio_config=self._audio_config
-        )
-        
-        return response.audio_content
+        try:
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+            response = self._client.synthesize_speech(
+                input=synthesis_input, voice=self._voice, audio_config=self._audio_config,
+            )
+            logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
+            return response.audio_content
+        except Exception as e:
+            logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")

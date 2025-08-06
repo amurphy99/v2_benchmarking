@@ -53,6 +53,9 @@ export default function useChatSocket({
             } else if (type === "periodic_scores") {
                 console.log("Periodic scores received");
                 onScores({ type, data });
+            } else if (type === "audio_end") {
+                console.log("Audio end received");
+                onAudio(null)
             }
             }
         }, [onLLMResponse, onScores]
