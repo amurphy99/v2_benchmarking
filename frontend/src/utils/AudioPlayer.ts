@@ -2,53 +2,40 @@ export default class AudioPlayer {
     private sampleRate: number;
     private numChannels: number;
     private bitsPerSample: number;
-    private audioBuffer: AudioBuffer;
-    private playing: boolean;
     private audioContext: AudioContext;
-    private bufferLength: number;
 
     constructor({ sampleRate, numChannels, bitsPerSample }) {
-        this.sampleRate = sampleRate ?? 24_000;
+        this.sampleRate = sampleRate ?? 16_000;
         this.numChannels = numChannels ?? 1;
         this.bitsPerSample = bitsPerSample ?? 16;
-        this.playing = false;
         this.audioContext = new AudioContext();
-        this.audioBuffer = null;
-        this.bufferLength = 0;
     }
 
     public async sendAudio(data: Blob | null) {
-        if (data == null) {
-            setTimeout(() => {
-                console.log("Now playing audio: ", this.audioBuffer);
-                this.playAudio();
-            }, 1000)
-            return;
-        }
         const arrayBuffer = await data.arrayBuffer(); // Convert to ArrayBuffer
         const wav = this.wrapPCMWithWAV(arrayBuffer); // Use the WAV wrapper function from before
         const audioBuffer = await this.audioContext.decodeAudioData(wav);
-        if (!this.audioBuffer) {
-            this.audioBuffer = audioBuffer;
-        } else {
-            this.audioBuffer = this.appendBuffer(this.audioBuffer, audioBuffer);
-            console.log("Appended to audio buffer: ", this.audioBuffer)
-        }
-        this.bufferLength += audioBuffer.length;
+        
     }
 
     public playAudio() {
         const source = this.audioContext.createBufferSource();
-        source.buffer = this.audioBuffer;
         source.connect(this.audioContext.destination);
         source.start(source.buffer.duration);
-        this.audioBuffer = null;
-        this.bufferLength = 0;
     }
 
     public async playBlob(blob: Blob) {
         const arrayBuffer = await blob.arrayBuffer(); // Convert to ArrayBuffer
         const wav = this.wrapPCMWithWAV(arrayBuffer); // Use the WAV wrapper function from before
+        const buffer = await this.audioContext.decodeAudioData(wav);
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.audioContext.destination);
+        source.start(source.buffer.duration);
+    }
+
+    public async playChunk(chunk: ArrayBuffer) {
+        const wav = this.wrapPCMWithWAV(chunk); // Use the WAV wrapper function from before
         const buffer = await this.audioContext.decodeAudioData(wav);
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;

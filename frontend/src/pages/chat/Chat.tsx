@@ -18,7 +18,8 @@ import AudioPlayer from "@/utils/AudioPlayer";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat() {
 	const navigate = useNavigate();
-    const player = new AudioPlayer({sampleRate: 16_000, numChannels: 1, bitsPerSample: 16});
+    // const player = new AudioPlayer({sampleRate: 16_000, numChannels: 1, bitsPerSample: 16});
+    const player_gemini = new AudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16})
     // const streamer = new PCMStreamer({numChannels: 1, sampleRate: 16_000})
     // const pcmPlayer = new PCMPlayer({
     //     encoding: '16bitInt',
@@ -38,7 +39,8 @@ export function Chat() {
     const onAudio = (data: Blob | null) => {
         // streamer.sendAudio(data)
         // pcmPlayer.feed(data);
-        player.sendAudio(data);
+        // player.playChunk(data);
+        player_gemini.playBlob(data)
     }
 
 	// Live-chat hook

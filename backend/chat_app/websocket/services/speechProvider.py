@@ -1,4 +1,6 @@
 from google.cloud import speech, texttospeech
+from google import genai
+from google.genai import types
 import threading
 import asyncio
 import os
@@ -7,11 +9,12 @@ from queue import Queue
 import base64
 from ... import config as cf
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Constants
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 2048  # 64ms of 16-bit PCM audio = 2048 bytes
+SAMPLE_RATE = 16_000
+CHUNK_SIZE = 2_048  # 64ms of 16-bit PCM audio = 2048 bytes
 
 class SpeechToTextProvider:
     def __init__(self, on_transcription_callback=None, loop=None):
@@ -89,12 +92,9 @@ class TextToSpeechProvider:
             language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
         )
         self._audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.PCM
+            audio_encoding=texttospeech.AudioEncoding.PCM,
         )
-        self._audio_config2 = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
-        )
-
+        self._gemini_client = genai.Client()
                         
     def synthesize_speech(self, text: str) -> bytes:
         try:
@@ -102,19 +102,30 @@ class TextToSpeechProvider:
             response = self._client.synthesize_speech(
                 input=synthesis_input, voice=self._voice, audio_config=self._audio_config,
             )
-            responsemp3 = self._client.synthesize_speech(
-                input=synthesis_input, voice=self._voice, audio_config=self._audio_config2
-            )
             logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
-            with open("audio_pcm_binary.txt", "wb") as binary_file:
-                binary_file.write(response.audio_content)
-            with open("audio_pcm.txt", "w") as file:
-                file.write(response.audio_content)
-            with open("audio_mp3_binary.txt", "wb") as binary_file:
-                binary_file.write(responsemp3.audio_content)
-            with open("audio_mp3.txt", "w") as file:
-                file.write(responsemp3.audio_content)
-            
             return response.audio_content
+        except Exception as e:
+            logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")
+            
+    
+    def synthesize_speech_gemini(self, text: str) -> bytes:
+        try:
+            response = self._gemini_client.models.generate_content(
+                model="gemini-2.5-flash-preview-tts",
+                contents="Say cheerfully: " + text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name='Kore',
+                            )
+                        )
+                    ),
+                )
+            )
+            data = response.candidates[0].content.parts[0].inline_data.data
+            logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
+            return data
         except Exception as e:
             logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")
