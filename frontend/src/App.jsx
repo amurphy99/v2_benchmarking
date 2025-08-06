@@ -23,13 +23,14 @@ export default function App() {
             <Route element={ <Unprotected/> }> 
                 <Route path="/login"   element={<Login  />} />
                 <Route path="/signup"  element={<SignUp />} />
+                <Route path="/chat" element={<Chat />} />
             </Route>
 
             {/* Protected Routes */}
             <Route element={ <Protected/> }>
                 {/* Patient */}
                 <Route element={ <IsPatient/> }>
-                    <Route path="/chat" element={<Chat />} />
+                    
                 </Route>
 
                 {/* Caregiver */}

@@ -91,6 +91,9 @@ class TextToSpeechProvider:
         self._audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.PCM
         )
+        self._audio_config2 = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        )
 
                         
     def synthesize_speech(self, text: str) -> bytes:
@@ -99,7 +102,19 @@ class TextToSpeechProvider:
             response = self._client.synthesize_speech(
                 input=synthesis_input, voice=self._voice, audio_config=self._audio_config,
             )
+            responsemp3 = self._client.synthesize_speech(
+                input=synthesis_input, voice=self._voice, audio_config=self._audio_config2
+            )
             logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
+            with open("audio_pcm_binary.txt", "wb") as binary_file:
+                binary_file.write(response.audio_content)
+            with open("audio_pcm.txt", "w") as file:
+                file.write(response.audio_content)
+            with open("audio_mp3_binary.txt", "wb") as binary_file:
+                binary_file.write(responsemp3.audio_content)
+            with open("audio_mp3.txt", "w") as file:
+                file.write(responsemp3.audio_content)
+            
             return response.audio_content
         except Exception as e:
             logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")
