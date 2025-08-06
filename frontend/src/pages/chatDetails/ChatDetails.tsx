@@ -6,7 +6,6 @@ import { useChatSessions                 } from "@/hooks/queries/useChatSessions
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { dateFormatLong                  } from "@/utils/styling/numFormatting";
 
-import ProfileBar       from "@/components/user-info/ProfileBar";
 import RadarTrack       from "./components/RadarTrack";
 import ChatTranscript   from "./components/ChatTranscript";
 import ChatBiomarkers   from "./components/ChatBiomarkers";
@@ -30,7 +29,6 @@ export function ChatDetails () {
     if (isLoading) { return <p>Loading chat history...</p>; }
     return (
     <div className="flex flex-col">
-        <ProfileBar/>
         {chatOverview(dateFormatLong.format(chatDate))}
         
         <div className="flex flex-col mx-[1rem]">

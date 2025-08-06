@@ -16,7 +16,7 @@ class GoalView(ProfileMixin, generics.RetrieveUpdateAPIView):
     """
     (Might need to do the reset stuff or last start data that is implemented in the model definition...)
     GET  /api/goal/  => fetch the single Goal row for this user
-    PUT  /api/goal/  => update "target", "startDay"
+    PUT  /api/goal/  => update target / auto_renew / period / start_date / start_dow
     """
     serializer_class   = GoalSerializer
     permission_classes = [permissions.IsAuthenticated]

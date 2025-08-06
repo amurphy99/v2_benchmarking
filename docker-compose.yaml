@@ -5,7 +5,6 @@
 volumes:
   db_data:
   letsencrypt:
-  webroot:
 
 networks:
   appnet:
@@ -59,7 +58,3 @@ services:
     networks: [appnet]
     env_file: [./.env]
 
-  certbot:
-    extends: { file: ./nginx/docker-compose.proxy.yaml, service: certbot }
-    networks: [appnet]
-    env_file: [./.env]

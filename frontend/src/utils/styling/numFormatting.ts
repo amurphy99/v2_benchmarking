@@ -6,6 +6,11 @@ export const dateFormat = new Intl.DateTimeFormat("en-US", {
     day   : "2-digit" 
 });
 
+export const dateFormatTime = new Intl.DateTimeFormat("en-US", {
+    hour   : "2-digit",
+    minute : "2-digit",
+});
+
 export const dateFormatShort = new Intl.DateTimeFormat("en-US", {
     month : "short", 
     day   : "2-digit" 

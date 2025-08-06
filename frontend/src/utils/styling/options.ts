@@ -7,6 +7,8 @@ export const biomarkerKeys = [
     "Turntaking",
 ] as const;
 
+export type CanonicalKey = typeof biomarkerKeys[number];
+
 export const biomarkerKeysLower = [
     "alteredgrammar",
     "anomia",

@@ -32,6 +32,7 @@ ALLOWED_HOSTS = [
     "cognibot.org",            "www.cognibot.org", 
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
+    "10.0.2.2", # for android dev
 ]
 
 

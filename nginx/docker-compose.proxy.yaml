@@ -1,62 +1,25 @@
 # ====================================================================
 # Web Proxy Services
 # ====================================================================
+# Will receive an environment file from the root
 services:
-  # --------------------------------------------------------------------
-  # Nginx (public entrypoint for the app)
-  # --------------------------------------------------------------------
   nginx:
     build:
       context: .
-      dockerfile: Dockerfile-nginx
-      args:
-        CONF_FILE: ${CONF_FILE}
     container_name: nginx
     depends_on: [frontend, backend]
-    environment:
-      DOMAIN: ${DOMAIN}
     ports:
       - "80:80"
       - "443:443"
     networks: [appnet]
     volumes:
-      - letsencrypt:/etc/letsencrypt:ro                   # certs (read-only for Nginx)
-      - webroot:/var/www/certbot:ro 
-      - ./${CONF_FILE}:/etc/nginx/conf.d/default.conf:ro  # Make sure CONF_FILE is defined before this is ran
-
-  # --------------------------------------------------------------------
-  # Certbot for HTTPS
-  # --------------------------------------------------------------------
-  # Runs certbot once, then cron keeps renewing. (renew daily and reload nginx if needed)
-  certbot:
-    image: certbot/certbot:latest
-    container_name: certbot
-    networks: [appnet]
-    volumes:
       - letsencrypt:/etc/letsencrypt
-      - webroot:/var/www/certbot
-    environment:
-      - DOMAIN=${DOMAIN}
-      - DOMAIN_WWW=${DOMAIN_WWW}
-      - CERT_EMAIL=${CERT_EMAIL}
-    #entrypoint: ["sh", "-c"]
-    command: >
-      certonly --webroot
-        --webroot-path /var/www/certbot
-        --email $CERT_EMAIL
-        --agree-tos --non-interactive
-        -d $DOMAIN -d $DOMAIN_WWW &&
-
-    #  echo '0 3 * * * certbot renew --webroot -w /var/www/certbot --quiet --post-hook "nginx -s reload"' \
-    #    | crontab - && \
-    #  crond -f
 
 # ====================================================================
 # Volumes & Networks
 # ====================================================================
 volumes:
   letsencrypt:
-  webroot:
 
 # Declared, not created. Root file will create it.
 networks:

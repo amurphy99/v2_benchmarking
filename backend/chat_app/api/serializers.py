@@ -50,11 +50,12 @@ class ReminderSerializer(serializers.ModelSerializer):
         read_only_fields = ("id")
         
 class GoalSerializer(serializers.ModelSerializer):
-    remaining = serializers.SerializerMethodField()
+    current   = serializers.IntegerField(read_only=True)
+    remaining = serializers.IntegerField(read_only=True)
     class Meta:
         model  = Goal
-        fields = ("id", "target", "startDay", "current", "remaining", "last_reset")
-        read_only_fields = ("id", "remaining")
+        fields = ("id", "target", "auto_renew", "period", "start_date", "start_dow", "current", "remaining")
+        read_only_fields = ("id", "current", "remaining")
 
     def get_remaining(self, obj): return obj.remaining
 

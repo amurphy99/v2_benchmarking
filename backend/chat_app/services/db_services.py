@@ -25,11 +25,6 @@ logger = logging.getLogger(__name__)
             print(e)
             pass  # If there is an error in extracting sentiment or topics, we will return "N/A"
         
-        # Update the goal
-        goal = Goal.objects.get(user=profile)
-        goal.reset()
-        goal.current += 1
-        goal.save()
 
         
 def get_sentiment_topics(data_messages):
@@ -63,16 +58,21 @@ class ChatService:
     
     @staticmethod
     @transaction.atomic
-    def close_session(user, *, source="webapp", notes=None, topics=None, sentiment=None):
+    def close_session(user, session, *, source="webapp", notes=None, topics=None, sentiment=None):
         """
         Marks the current session inactive, fills in "ended_at", stores 
         optional metadata, and immediately opens a fresh/blank session.
         """
-        session = ChatSession.objects.select_for_update().filter(user=user, is_active=True).first()
-        if not session: return None
-
         session.is_active = False
         session.end_ts    = timezone.now()
+
+        # -----------------------------------------------------------------------
+        # Get all messages for this session
+        # ----------------------------------------------------------------------- 
+        #msgs = (ChatMessage.objects
+        #    .filter(session=session)             # could also stack .filter(role="user")
+        #    .order_by("ts")                      # or "start_ts", "id" ?
+        #    .values_list("content", flat=True))  # returns a queryset of strings
 
         # ToDo: Probably should calculate the topics and sentiment right here using helper functions
         # Topics and sentiment won't be sent as arguments, they will be calculated here
@@ -81,11 +81,8 @@ class ChatService:
         if sentiment is not None: session.sentiment = sentiment
 
         session.save()
-
-        logger.info(f"{cf.RED}[DB ] ChatSession closed for {user.username} {cf.RESET}")
-
-        # Get ready for next conversation
-        ChatSession.objects.create(user=user, source=source)
+       
+        logger.info(f"{cf.RLINE_1}{cf.RED}[DB] ChatSession closed for {user.username} {cf.RESET}{cf.RLINE_2}")
         return session
     
     # -----------------------------------------------------------------------
@@ -93,19 +90,16 @@ class ChatService:
     # -----------------------------------------------------------------------
     # Messages
     @staticmethod
-    def add_message(user, role, text, *, start_ts=None, end_ts=None):
-        session = ChatService.get_or_create_active_session(user)
+    def add_message(session, role, text, *, start_ts=None, end_ts=None):
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
     
     # Biomarker Scores
     @staticmethod
-    def add_biomarker(user, score_type, score):
-        session = ChatService.get_or_create_active_session(user)
+    def add_biomarker(session, score_type, score):
         return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
     
     @staticmethod
-    def add_biomarkers_bulk(user, scores: dict):
-        session = ChatService.get_or_create_active_session(user)
+    def add_biomarkers_bulk(session, scores: dict):
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
 
   

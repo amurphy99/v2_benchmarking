@@ -1,14 +1,12 @@
-import ProfileBar       from "@/components/user-info/ProfileBar";
-import ChatHistory      from "./components/ChatHistory";
 import PerformanceTrack from "./components/PerformanceTrack";
+import WeeklyChats from "./components/WeeklyChats";
 
 // Dashboard ("Speech Analysis" page)
 export function Dashboard() {
     return (
-        <>  
-            <ProfileBar/>
-            <PerformanceTrack/>
-            <ChatHistory/>
-        </>
+    <div className="d-flex flex-col mx-[1rem] mb-[1rem]">  
+        <PerformanceTrack/>
+        <WeeklyChats/>
+    </div>
     );
 }

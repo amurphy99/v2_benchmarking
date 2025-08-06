@@ -9,7 +9,7 @@ import { useGoal, useUpdateGoal } from "@/hooks/queries/useGoal";
 
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-type PeriodOptions = "Week" | "Month";
+type PeriodOptions = "N" | "W" | "M";
 type Methods = { submit: () => void };
 
 
@@ -24,11 +24,12 @@ export const GoalForm = forwardRef<Methods>((props, ref) => {
 
     // Get the current values from the profile & set them as state values for the form
     const { profile } = useAuth();
-    const [autoRenew, setAutoRenew] = useState<boolean>(true);
-    const [target,    setTarget   ] = useState<number>(profile.goal.target);
-    const [period,    setPeriod   ] = useState<"Week" | "Month">("Week");
-    const [startDay,  setStartDay ] = useState<number>(profile.goal.startDay);
-    const { windowLabel, todayIdx } = getWindowLabel(startDay);
+    const [autoRenew, setAutoRenew] = useState<boolean        >(profile.goal.auto_renew);
+    const [target,    setTarget   ] = useState<number         >(profile.goal.target);
+    const [period,    setPeriod   ] = useState<"N" | "W" | "M">(profile.goal.period);
+    const [startDay,  setStartDay ] = useState<string         >(profile.goal.start_date);
+    const [startDOW,  setStartDOW ] = useState<number         >(profile.goal.start_dow);
+    const { windowLabel, todayIdx } = getWindowLabel(startDOW);
 
     // Form submission logic 
     // ToDo: actually change the goal -- maybe do the async/await here + try and except
@@ -84,7 +85,7 @@ export const GoalForm = forwardRef<Methods>((props, ref) => {
             {/* Start day */}
             <div className={rowThree}>
                 <label className={formText}>Start Day</label>
-                <select className={`mt-1 ${borderStyle}`} value={startDay} onChange={(e) => setStartDay(+e.target.value)} >
+                <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
                     {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
                 </select>
             </div>

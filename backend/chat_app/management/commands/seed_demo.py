@@ -8,7 +8,7 @@ from random          import random
 from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore
 
 # Demo data
-USERNAMES     = ("demo_patient", "demo_caregiver")
+USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
 BIOMARKERS    = ("alteredgrammar", "anomia", "pragmatic", "pronunciation", "prosody", "turntaking")
 DEMO_MESSAGES = [
     "Hi, I'm the user.", 
@@ -27,10 +27,12 @@ class Command(BaseCommand):
     # ====================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
-        User = get_user_model()
-
         # Delete and recreate the user data
+        User = get_user_model()
         User.objects.filter(username__in=USERNAMES).delete()
+
+        # Setup for Goal creation
+        two_days_ago = timezone.localdate() - timedelta(days=2)
 
         # Create user entries for both the patient and caregiver
         plwd = User.objects.create_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
@@ -39,10 +41,22 @@ class Command(BaseCommand):
 
         # Also create settings and goal objects for the new Profile
         UserSettings.objects.create(user=profile)
-        Goal        .objects.create(user=profile, target=5)
+        Goal        .objects.create(user=profile, target=5, start_date=two_days_ago)
 
         # Add sample ChatSessions
-        self.seed_chats(plwd, days_back=6)
+        self.seed_chats(plwd, days_back=10)
+
+        # --------------------------------------------------------------------
+        # Second profile
+        # --------------------------------------------------------------------
+        plwd_2 = User.objects.create_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
+        care_2 = User.objects.create_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
+        profile_2 = Profile.objects.create(plwd=plwd_2, caregiver=care_2)
+
+        UserSettings.objects.create(user=profile_2)
+        Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
+        self.seed_chats(plwd_2, days_back=10)
+
 
     # ====================================================================
     # Seed ChatSessions into the DB for a user
@@ -76,4 +90,4 @@ class Command(BaseCommand):
                     score.ts = ts
                     score.save(update_fields=["ts"])
 
-            print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")
+            #print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")

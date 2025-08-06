@@ -23,7 +23,7 @@ export default function ChatHistory() {
     // Return UI component
     if (isLoading) { return <p>Loading chat history...</p>; }
     return (
-        <div className="m-[2rem]">
+        <div className="">
             {/* Title & Sort Option */}
             <div className="flex align-middle gap-3">
                 <span className={h3}> Chat History </span>

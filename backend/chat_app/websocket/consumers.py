@@ -75,8 +75,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.user   = self.scope["user"]
         self.source = self.scope.get("source", "unknown")
         await self.accept()
-        print(self.user)
-        print(self.source)
+
+        logger.info(f"{cf.RLINE_1}{cf.RED}[WS] ChatSession opened for {self.user} from {self.source} {cf.RESET}{cf.RLINE_2}")
+        
 
         # I don't think any frontend uses these during the chat right now, but I'll leave this option in
         self.return_biomarkers = False # (self.source in ["webapp"])
@@ -148,7 +149,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Audio data or text transcription
         elif data["type"] == "audio_data"   : await self._handle_audio_data   (data)
         elif data["type"] == "transcription": await self._handle_transcription(data)
-        elif data["type"] == "end_chat"     : await database_sync_to_async(ChatService.close_session)(self.user, source=self.source)
+        elif data["type"] == "end_chat"     : await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)
         elif data["type"] == "toggle_stream": self._toggle_stream(data)
  
     # =======================================================================
@@ -157,21 +158,20 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # On-Utterance Biomarkers (saves them to the DB as soon as we get them)
     async def _on_utterance_biomarkers(self):
         utterance_biomarkers = await extract_text_biomarkers(self.context_buffer)
-        fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.user, utterance_biomarkers))
+        fire_and_log(database_sync_to_async(ChatService.add_biomarkers_bulk)(self.session, utterance_biomarkers))
         if self.return_biomarkers: await self.send(json.dumps({"type": "biomarker_scores", "data": utterance_biomarkers}))
     
     # Process and respond to the users utterance text
     async def _handle_transcription(self, data):
         t0 = time()
         text = data["data"].lower()
-        user = self.user
         logger.info(f"{cf.YELLOW}[LLM] User utt received {text}  {cf.RESET}")
 
         # -----------------------------------------------------------------------
         # 1) Process the users message & reply with the LLM ASAP
         # -----------------------------------------------------------------------
         # Fire-and-forget DB write for the user message
-        fire_and_log(database_sync_to_async(ChatService.add_message)(user, "user", text))
+        fire_and_log(database_sync_to_async(ChatService.add_message)(self.session, "user", text))
 
         # Update in-memory context
         self.context_buffer.append(("user", text, time()))
@@ -191,7 +191,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # 2) Background persistence & biomarkers
         # -----------------------------------------------------------------------
         # LLM/Assistant message
-        fire_and_log(database_sync_to_async(ChatService.add_message)(user, "assistant", system_utt))
+        fire_and_log(database_sync_to_async(ChatService.add_message)(self.session, "assistant", system_utt))
 
         # Update the in-memory buffer again
         self.context_buffer.append(("assistant", system_utt, time()))

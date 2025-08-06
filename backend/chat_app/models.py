@@ -4,7 +4,7 @@ from django.conf      import settings
 from django.utils     import timezone
 from django.contrib.postgres.fields import ArrayField
 
-from datetime  import timedelta
+from datetime import date, timedelta
 
 # Arguments that get reused
 init_args    = dict(null=True, blank=True)
@@ -141,41 +141,59 @@ class Reminder(models.Model):
 # One-to-one Models
 # =======================================================================
 class Goal(models.Model):
-    """
-    ToDo: 
-        Do we need these functions? Or can this be done in PUT? 
-        If so, should probably remove them from here just to keep things clean.
-    """
-    user       = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="goal")
-    target     = models.IntegerField(default=5)
-    #auto_renew = models.BooleanField(default=True)
-    startDay   = models.IntegerField(default=0, choices=DAYS_OF_WEEK)
-    current    = models.IntegerField(default=0)
-    last_reset = models.DateField   (**init_args)
+    PERIOD_NONE    = "N"   # no rollover
+    PERIOD_WEEKLY  = "W"
+    PERIOD_MONTHLY = "M"
+    PERIOD_CHOICES = [(PERIOD_NONE, "None"), (PERIOD_WEEKLY, "Weekly"), (PERIOD_MONTHLY, "Monthly")]
+
+    # Core fields
+    user        = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="goal")
+    target      = models.PositiveIntegerField(default=5)
+    auto_renew  = models.BooleanField(default=True)
+    period      = models.CharField(max_length=1, choices=PERIOD_CHOICES, default=PERIOD_WEEKLY)
+    start_date  = models.DateField(default=timezone.localdate)                      # anchor
+    start_dow   = models.PositiveSmallIntegerField(default=0, choices=DAYS_OF_WEEK) # only used when period = WEEKLY
+
+    # --------------------------------------------------------------------
+    # Properties
+    # --------------------------------------------------------------------
+    # To calculate 'current', use the 'date' property of ChatSessions
+    @property
+    def current(self) -> int:
+        start = self.current_period_start()
+        return ChatSession.objects.filter(user=self.user.plwd, is_active=False, date__gte=start).count()
     
     @property
-    def remaining(self): return max(0, (self.target - self.current))
+    def remaining(self) -> int: return max(0, self.target - self.current)
 
-    def get_last_start_date(self):
-        """Returns the most recent date that matches the goal's start_day_of_week."""
-        today  = timezone.localdate()
-        offset = (today.weekday() - self.startDay) % 7
-        last_start_date = today - timedelta(days=offset)
-        return last_start_date
-    
-    def reset(self):
+    # --------------------------------------------------------------------
+    # Helper –- figure out current period window
+    # --------------------------------------------------------------------
+    def current_period_start(self) -> date:
         today = timezone.localdate()
-        last_start_date = self.get_last_start_date()
 
-        if not self.last_reset or self.last_reset < last_start_date:
-            self.current = 0
-            self.last_reset = today
-            self.save()
+        # Never roll over
+        if not self.auto_renew or self.period == self.PERIOD_NONE: 
+            return self.start_date
+
+        # Find most recent "start_dow" not after today
+        if self.period == self.PERIOD_WEEKLY:
+            offset = (today.weekday() - self.start_dow) % 7
+            return today - timedelta(days=offset)
+
+        # Anchor on day-of-month from start_date (e.g. 15th)
+        if self.period == self.PERIOD_MONTHLY: 
+            anchor_dom = self.start_date.day
+            # Roll back one month
+            if today.day < anchor_dom: return (today.replace(day=1) - timedelta(days=1)).replace(day=anchor_dom)
+            else:                      return  today.replace(day=anchor_dom)
+
     
-    def __str__(self): return f"{self.user.plwd.username} goal"
+    def __str__(self): return f"{self.user.plwd.username} goal ({self.period})"
     
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user"], name="one_goal_per_user")]
+
 
 class UserSettings(models.Model):
     user               = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="settings_user")

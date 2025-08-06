@@ -23,10 +23,12 @@ export interface Reminder {
 export interface Goal {
   id         : number;
   target     : number;
-  startDay   : number; // Sunday = 0 ... Saturday = 6 
+  auto_renew : boolean;
+  period     : "N" | "W" | "M";
+  start_date : string;
+  start_dow  : number; // Sunday = 0 ... Saturday = 6 
   current    : number;
   remaining  : number;
-  last_reset : string; 
 }
 
 // =======================================================================
