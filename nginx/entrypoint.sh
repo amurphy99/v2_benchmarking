@@ -4,6 +4,9 @@ set -euo pipefail
 # --------------------------------------------------------------------------------
 # Startup
 # --------------------------------------------------------------------------------
+echo "[entry] Rendering nginx template for ${DOMAIN}"
+echo "[entry] Checking initial cert: /etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+
 # Render template
 envsubst '${DOMAIN} ${DOMAIN_WWW}' \
   < /etc/nginx/templates/default.template \
@@ -19,7 +22,8 @@ if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
 fi
 
 # Try to renew on startup (no-op if >30 days left)
-certbot renew --webroot -w /var/www/certbot --quiet || true
+echo "[entry] One-shot renew check on startup..."
+/usr/bin/certbot renew --webroot -w /var/www/certbot --quiet || true
 
 # --------------------------------------------------------------------------------
 # Renew nightly at 3am; reload nginx after a successful renewal
@@ -37,8 +41,5 @@ crond -l 8
 # --------------------------------------------------------------------------------
 # Nginx
 # --------------------------------------------------------------------------------
-#echo "0 3 * * * certbot renew --webroot -w /var/www/certbot --quiet --post-hook 'nginx -s reload'" | crontab -
-#crond
-
 # Exec nginx in foreground
 exec nginx -g "daemon off;"
