@@ -1,9 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider            } from "@/context/AuthProvider";
 
-import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
+import { Unprotected, Protected, AppLayout, IsPatient } from "@/routes";
 
-import { Dashboard, History, ChatDetails, Chat, ProgressSummary } from "@/pages";
+import { Dashboard, History, ChatDetails, Chat, ProgressSummary, AnimationTest } from "@/pages";
 import Login           from "@/pages/Login";
 import SignUp          from "@/pages/SignUp";
 import Schedule        from "@/pages/Schedule";
@@ -42,6 +42,8 @@ export default function App() {
                 <Route path="/progress" element={<ProgressSummary />} />
                 
             </Route>
+
+            <Route path="/animation-test" element={<AnimationTest />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
