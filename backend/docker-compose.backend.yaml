@@ -12,7 +12,7 @@ services:
     env_file: [.env]
     networks: [appnet]
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql
     
   # -------------------------------------------------------------------- 
   # 2) Django Backend Server
