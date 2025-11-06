@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Avatar from "../common/avatar/Avatar";
 
-export default function AnimationTest() {
+export function AnimationTest() {
     const [botMessage, setBotMessage] = useState("Chat with me!");
     const [animation, setAnimation] = useState();
     const [animCount, setAnimCount] = useState(0);
