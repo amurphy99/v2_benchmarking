@@ -50,7 +50,7 @@ export function AnimationTest() {
     <>
         <select 
             onChange={(e) => setEmotion(e.target.value)} 
-            className={`p-2 border-1 border-solid border-gray-400 rounded-lg mt-[1rem] bg-red-50 text-center text-xl hover:cursor-pointer`}
+            className={`p-2 border-1 border-solid border-gray-400 rounded-lg m-[1rem] bg-red-50 text-center text-xl hover:cursor-pointer`}
             defaultValue="select"
         >
             <option value="select" disabled>Choose An Emotion</option>
@@ -61,6 +61,7 @@ export function AnimationTest() {
             <option value="Angry">Angry</option>
             <option value="Neutral">Neutral</option>
         </select>
+        <p className="m-[1rem] text-lg">Current animation playing: {animation}</p>
         <div className="flex flex-col justify-between h-[85vh]">
             {!isMobile ? 
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
