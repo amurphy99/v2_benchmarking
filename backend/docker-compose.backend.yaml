@@ -7,12 +7,12 @@ services:
   # --------------------------------------------------------------------
   # Database is only accessable through the backend Django server
   db:
-    image: postgres
+    image: postgres:17
     container_name: db
     env_file: [.env]
     networks: [appnet]
     volumes:
-      - db_data:/var/lib/postgresql
+      - db_data:/var/lib/postgresql/data
     
   # -------------------------------------------------------------------- 
   # 2) Django Backend Server
