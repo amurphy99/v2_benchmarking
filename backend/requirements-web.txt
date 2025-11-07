@@ -68,4 +68,5 @@ rest_framework_simplejwt
 vaderSentiment
 keyboard
 google-genai
+google-cloud-texttospeech
 google-cloud-speech
