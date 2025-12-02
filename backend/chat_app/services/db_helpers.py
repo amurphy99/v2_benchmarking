@@ -9,11 +9,6 @@ from nltk.corpus          import stopwords
 
 from collections import Counter
 
-
-def get_message_text(messages):
-    return " ".join([message["message"] for message in messages if (message["sender"] == "You")])
-
-
 def sentiment_scores(sentence): # From Geeks for Geeks
     # Create a SentimentIntensityAnalyzer object.
     sid_obj = SentimentIntensityAnalyzer()
@@ -25,6 +20,7 @@ def sentiment_scores(sentence): # From Geeks for Geeks
     if   sentiment_dict['compound'] >=  0.05: return "Positive"
     elif sentiment_dict['compound'] <= -0.05: return "Negative"
     else:                                     return "Neutral"
+    
     
 def get_topics(text): # From freeCodeCamp
     
@@ -52,3 +48,24 @@ def get_topics(text): # From freeCodeCamp
         topics.append(token[0])
         
     return str(topics)[1:-1].replace("'", "")
+
+
+def get_sentiment_topics(msgs):
+    '''Gets the sentiment and topics of a set of user utterances.'''
+    message_text = "Message message message message message"
+    try:
+        messages = [msg for msg in msgs]
+        message_text = " ".join(messages)
+    except:
+        None
+    # Sentiment
+    try:    
+        sentiment = sentiment_scores(message_text)
+    except: 
+        sentiment = "N/A"
+    # Topics
+    try:    
+        topics = get_topics(message_text)
+    except: 
+        topics = "N/A"
+    return sentiment, topics

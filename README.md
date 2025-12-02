@@ -11,105 +11,70 @@ The app uses 4 different docker containers:
 3) Backend  (websocket server, biomarker logic)
 4) Frontend (vite, react) 
 
-Everything is wrapped in docker-compose.yml and the frontend is the only component accessable outside of the VM as it gets served by Nginx. The database and backend are only accessible from inside the docker network.
+Everything is wrapped in docker-compose.yaml and the frontend and backend APIs are the only components accessable outside of the VM as they get served by Nginx. The database and LLM are only accessible from inside the docker network.
 
 
 
 ## How to Run
 
-<details closed> <summary>Locally (outdated)</summary>
-<br>
+<details closed> <summary>Locally</summary>
 
-``` docker compose up --build ```
+### Frontend
+1. `cd` into the `frontend` directory
+2. `npm install` (only need to do once if you haven't already)
+3. `npm run dev`
 
-<br>
+### Backend
+1. Need to have copies of `new_LSA.csv` and the stanford-parser models file placed in their correct directories.
+2. Open Docker Desktop
+3. `cd` into the `backend` directory
+4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines
+5. `docker compose -f docker-compose.backend.yaml up --build`
 
-1. Ensure your machine has the requirements installed
-2. Clone the repo using this terminal command: git clone https://github.com/softwareJengineer/chat_app_v2
-3. Open Docker Desktop
+The web app can be accessed through localhost:5173 in your browser.
 
-In the backend directory:
-4. Build the docker container using this command: docker-compose up --build
-5. To start the docker container simply run: docker-compose up
-6. To shut down the container simply run: docker-compose down
-
-In the frontend directory:
-7. Run the command: npm run dev
-8. The web app can be accessed through localhost:5173 in your browser
-
-REQUIREMENTS
-1. Node.js
-3. Python3
-4. Java 22
-5. new_LSA.csv
-6. stanford-parser models file
-7. Phi-3_finetuned.gguf
-
-<br>
+<hr>
 </details>
 
 <details closed> <summary>Deployed (Google Cloud)</summary>
 <br>
 
 1. SSH into the cloud instance
-2. Upload ```deploy_app.sh``` (untracked file)
-3. Run ```deploy_app.sh```
+2. Upload `deploy_app.sh` (untracked file)
+3. Run `bash deploy_app.sh`
     * More info on how this works: https://github.com/amurphy99/chat_app_deployment
+    * Installs docker & updates other dependencies
+    * Downloads required, non-tracked files from cloud storage
+    * Clones the repo & copies the non-tracked files (model files) into their proper locations 
+    * Builds the Docker containers & starts the app
 
-<br>
+Useful commands:
+* `sudo docker logs backend` (also used with the other containers)
+* More in `chat_app_deployment`
+
+<hr>
 </details>
 
 
-## To Do:
-
-### General
-- [ ] If the first utterance is shorter than our audio buffer chunk size (5 seconds), the audio based scores (prosody, pronunciation) are generated with an error. 
-    - Should these be done in another separate async task on reception of audio data? If no audio has been recieved between utterances, the scores will be the same anyways, so there is no reason to re-calculate them.
-- [ ] Rename docker-compose.yml extension to .yaml (need to do in the deploy repo too though)
-- [ ] Recent chats don't work (not sure if just local difference though)
-- [ ] Changing settings doesn't do anything
-- [ ] When the robots responses are long and the height of the text box increases, it pushes the avatar down and on top of the finish button making it so users cannot click on it to finish & save a conversation
-
-
-### llama_api
-- [ ] cap-add SYS_RESOURCE (?)
-
-
-### Other/general issues
-- [ ] I've gotten signed out/lost authorization a few times mid conversation and not been able to save. The auth lasts 15 minutes now instead of 5, but I still think that some conversations/sessions might last longer...?
-
-
-
-
-<br><br>
-
-
-## To start it up:
-1. SSH into the instance
-2. Upload deploy_app.sh
-3. Run deploy_app.sh (```bash deploy_app.sh```)
-    * Installs docker & updates other dependencies
-    * Downloads required, non-tracked files from cloud storage
-    * Clones the repo & copies the non-tracked files (.env, model files) into their proper locations 
-    * Builds the Docker containers & starts the app
-
-
+<br>
 
 # Project Architecture
 ```diff
+
 SSH:/home/user/
  ├── v2_benchmarking/
  │   ├── backend/
  │   │   ├── Dockerfile-backend
- │   │   ├── backend/        # Django app
- │   │   ├── chat_app/       # Python backend logic
+ │   │   ├── backend/             # Django app
+ │   │   ├── chat_app/            # Python backend logic
  │   │   │   ├── websocket/biomarkers/biomarker_models/
 +│   │   │   │   ├── stanford-parser-full-2020-11-17/stanford-parser-4.2.0-models.jar
 +│   │   │   │   ├── new_LSA.csv
  │   │   │   │   └── ...
  │   │   │   └── ...
  │   │   │
-+│   │   ├── google-stt-key.json
++│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
++│   │   ├── .env                 # Created programmatically during startup script
  │   │   ├── requirements-web.txt
  │   │   └── ...
  │   │
@@ -117,43 +82,37 @@ SSH:/home/user/
  │   │   ├── Dockerfile-frontend  # Builds and serves Vite app
  │   │   ├── src/
  │   │   ├── public/
- │   │   └── ...
++│   │   └── .env                 # Created programmatically during startup script
  │   │
  │   ├── llama_api/
- │   │   ├── Dockerfile           # Not actually used-- we download an image instead
-+│   │   ├── Phi-3_finetuned.gguf # LLM model (isn't actually here, accesses via volume)
- │   │   └── server.config        # Reverse proxy + static serving
+ │   │   ├── compose.yaml         # Deployment (GPU) mode -- download Llama web API image
+ │   │   ├── dummy_compose.yaml   # Sandbox (CPU) mode -- returns dummy responses
++│   │   └── Phi-3_finetuned.gguf # LLM model (isn't actually here, accesses via volume)
  │   │
  │   ├── nginx/
- │   │   └── default.conf         # Serves frontend container at the VMs IP address
+ │   │   ├── Dockerfile           # Sets up certbot and nginx
+ │   │   └── default.conf         # Frontend & Backend API are served
  │   │
-+│   ├── .env                     # Shared .env
-+│   ├── .env.deploy              # Environment variables built by deploy_app.sh
- │   ├── docker-compose.yml       # Starts up all of the containers
++│   ├── .env                     # Created programmatically during startup script
+ │   ├── docker-compose.yaml      # Starts up all of the containers
  │   └── ...
  │
- ├── deployment-files/            # Untracked files downloaded from GCS bucket by deploy_app.sh
-+│   ├── .env
+ │
+ │
+ ├── deployment-files/            # Untracked files downloaded from GCS bucket
  │   ├── models/      
 +│   │   ├── new_LSA.csv
 +│   │   ├── stanford-parser-4.2.0-models.jar
 +│   │   └── Phi-3_finetuned.gguf
  │   │
- │   ├── logs/        # For backend log output
+ │   ├── logs/                    # For backend log output
  │   └── ... 
  │
- └── deploy_app.sh    # Script to set everything up
+!└── deploy_app.sh                # Script to set everything up
+
 ```
 
 
 <br><hr>
-
-# Misc. Notes
-* The docker extends stuff documentation (later might want to do include or something)
-    - https://docs.docker.com/compose/how-tos/multiple-compose-files/extends/ 
-    - https://docs.docker.com/compose/how-tos/multiple-compose-files/include/ 
-
-
-
 
 

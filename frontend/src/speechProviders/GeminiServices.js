@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Default Arguments
 const defaultModel = 'gemini-2.0-flash-live-001';
+const apiKey = import.meta.env.VITE_SPEECH_KEY || '';
 const defaultSampleRateHertz = 16_000;
 
 // Configuration from .env variables
@@ -55,10 +56,25 @@ export class GeminiASR {
         this._listener = (async () => {
             try {
                 for await (const msg of this.session.stream()) {
-                    if (msg.transcriptPart ) {this.onPartial  (msg.transcriptPart .text); if (!speaking) {speaking = true;  this.onUserSpeakingChange(true ); this.onUserSpeakingStart();}}
-                    if (msg.transcriptFinal) {this.onUtterance(msg.transcriptFinal.text); if ( speaking) {speaking = false; this.onUserSpeakingChange(false);                            }}
-                }
-            } catch (err) { console.error('GeminiASR stream error:', err); }
+					if (msg.transcriptPart) {
+						this.onPartial(msg.transcriptPart.text);
+						if (!speaking) {
+							speaking = true;
+							this.onUserSpeakingChange(true);
+							this.onUserSpeakingStart();
+						}
+					}
+					if (msg.transcriptFinal) {
+						this.onUtterance(msg.transcriptFinal.text);
+						if (speaking) {
+							speaking = false;
+							this.onUserSpeakingChange(false);
+						}
+					}
+				}
+            } catch (err) { 
+                console.error('GeminiASR stream error:', err); 
+            }
         })();
     }
 
