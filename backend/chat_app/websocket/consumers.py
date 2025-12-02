@@ -198,7 +198,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
     def _toggle_stream(self, data):
         cmd = data["data"]
-        if cmd == "start":
-            self.stt_provider.start()
-        elif cmd == "stop":
-            self.stt_provider.stop()
+        if   cmd == "start": self.stt_provider.start()
+        elif cmd == "stop" : self.stt_provider.stop()
+        
