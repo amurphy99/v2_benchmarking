@@ -2,7 +2,7 @@ from django.db    import transaction
 from django.utils import timezone
 from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore
 
-from .. import config as cf
+from .  import logging_utils as lu
 from .db_helpers import get_sentiment_topics
 
 import logging
@@ -84,7 +84,7 @@ class ChatService:
         if sentiment is not None: session.sentiment = sentiment
         session.save()
        
-        logger.info(f"{cf.RLINE_1}{cf.RED}[DB] ChatSession closed for {user.username} {cf.RESET}{cf.RLINE_2}")
+        logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")
         return session
     
     # -----------------------------------------------------------------------

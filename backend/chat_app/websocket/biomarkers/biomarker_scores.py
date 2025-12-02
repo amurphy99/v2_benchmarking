@@ -1,6 +1,6 @@
 import logging
 from . import biomarker_config as BioConfig
-from ...config import RESET
+from ...services.logging_utils import RESET
 
 # Set up logger
 logger = logging.getLogger(__name__)

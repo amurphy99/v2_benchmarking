@@ -1,12 +1,9 @@
-import pandas as pd
-import os
-
-from ... import config as cf
+from ...services import logging_utils as lu
 
 # Constants
-WINDOW_SIZE = 5      # seconds
-HOP_LENGTH  = 0.01   # 10ms for feature extraction
-SAMPLE_RATE = 16000  # Hz
+WINDOW_SIZE = 5       # seconds
+HOP_LENGTH  = 0.01    # 10ms for feature extraction
+SAMPLE_RATE = 16_000  # Hz
 
 PROSODY_FEATURES = [
     'F0final_sma', 'voicingFinalUnclipped_sma',
@@ -26,16 +23,16 @@ PRONUNCIATION_FEATURES = [
 # For the LLM
 LAST_X_CHAT_ENTRIES = 5
 
-# =======================================================================
+# ================================================================================
 # Configure Logging
-# =======================================================================
+# ================================================================================
 # Time how long each biomarker takes to calculate and log it
 TIME_BIOMARKERS = True
 
-# -----------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 # Biomarker Logging Helpers
-# -----------------------------------------------------------------------
-BIO_LOG = f"{cf.GREEN}[Bio] "
+# --------------------------------------------------------------------------------
+BIO_LOG = f"{lu.GREEN}[Bio] "
 PRAG = f"{BIO_LOG}Pragmatic:      "
 GRAM = f"{BIO_LOG}Altered Grammar:"
 PROS = f"{BIO_LOG}Prosody:        "

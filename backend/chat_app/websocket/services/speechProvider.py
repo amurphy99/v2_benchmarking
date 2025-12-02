@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import threading, asyncio, base64, logging, os
 from queue import Queue
 
-from ... import config as cf
+from ...services import logging_utils as lu
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class SpeechToTextProvider:
                     if transcript == self._recent_transcript: # in case of duplicate final transcripts
                         continue
                     self._recent_transcript = transcript
-                    logger.info(f"{cf.RED}[Transcription] Received final transcription: {transcript}")
+                    logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript}")
                     word_timestamps = self._get_word_timestamps(datetime.now(), result.alternatives[0].words)
                     if self._transcript_callback:
                         data = {"type": "user_utt", "data": transcript}
@@ -150,17 +150,17 @@ class TextToSpeechProvider:
                 audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             )
         else:
-            logger.error(f"{cf.RED}[TTS] Unsupported audio encoding: {encoding}")
+            logger.error(f"{lu.RED}[TTS] Unsupported audio encoding: {encoding}")
             return None
         try:
             synthesis_input = texttospeech.SynthesisInput(text=text)
             response = self._client.synthesize_speech(
                 input=synthesis_input, voice=self._voice, audio_config=self._audio_config,
             )
-            logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
+            logger.info(f"{lu.YELLOW}[TTS] Speech synthesized")
             return response.audio_content
         except Exception as e:
-            logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")
+            logger.error(f"{lu.RED}[TTS] Error synthesizing speech: {e}")
     
     # May not need if we decide to use the Google Cloud TTS instead
     # def synthesize_speech_gemini(self, text: str) -> bytes:
@@ -182,7 +182,7 @@ class TextToSpeechProvider:
     #             )
     #         )
     #         data = response.candidates[0].content.parts[0].inline_data.data
-    #         logger.info(f"{cf.YELLOW}[TTS] Speech synthesized")
+    #         logger.info(f"{lu.YELLOW}[TTS] Speech synthesized")
     #         return data
     #     except Exception as e:
-    #         logger.error(f"{cf.RED}[TTS] Error synthesizing speech: {e}")
+    #         logger.error(f"{lu.RED}[TTS] Error synthesizing speech: {e}")
