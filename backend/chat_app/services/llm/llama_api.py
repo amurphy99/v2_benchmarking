@@ -31,8 +31,14 @@ class LlamaAPI:
     # Call the API at '/v1/completions'
     # --------------------------------------------------------------------------------
     async def __call__(self, prompt, max_tokens=64, stop=None, echo=False):
-        # Prepare input
-        llm_json = {"prompt": prompt, "max_tokens": max_tokens, "stop": stop, "echo": echo}
+        # Prepare input (specifying which model to use)
+        llm_json = {
+            "model"      : "models/Phi-3_finetuned.gguf",
+            "prompt"     : prompt, 
+            "max_tokens" : max_tokens, 
+            "stop"       : stop, 
+            "echo"       : echo
+        }
 
         # Get a response from the API
         try:
