@@ -1,16 +1,17 @@
-# ======================================================================= 
+# ================================================================================ 
 # Setup
-# =======================================================================
+# ================================================================================
 # Load Packages
 import os, warnings, logging
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# --------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 # Global Variables
-# --------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# USE_LLM will still use "sandbox" or "production" but now sandbox=local development, production=any cloud VM
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
-USE_LLM       = os.getenv("APP_ENVIRONMENT", "production") != "sandbox" # (don't actually need to load the LLM to test)
+USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
 
 # LLM Parameters
@@ -33,9 +34,9 @@ RLINE_1 = f"\n{RED}{HLINE}{RESET}\n"
 RLINE_2 = f"\n{RED}{HLINE}{RESET}"
 
 
-# =======================================================================
+# ================================================================================
 # Logging Setup
-# =======================================================================
+# ================================================================================
 # Ignore warnings
 warnings.filterwarnings(action='ignore')
 
@@ -57,9 +58,9 @@ logging.getLogger("chardet.charsetprober").disabled = True
 logger = logging.getLogger(__name__)
 
 
-# =======================================================================
+# ================================================================================
 # Testing Utilities
-# =======================================================================
+# ================================================================================
 # Check for model files individually
 def check_for_model_files(pronunciation_model_path, prosody_model_path):
     missing_files = []
@@ -72,9 +73,9 @@ def check_for_model_files(pronunciation_model_path, prosody_model_path):
         raise FileNotFoundError(missing_str)
     
 
-# =======================================================================
+# ================================================================================
 # LLM & Other Models' Settings
-# =======================================================================
+# ================================================================================
 # For checking the model files are there
 current_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -94,17 +95,6 @@ try:
     # Setup the LLM
     llm = LLMClass()
     logger.info("LLM initialized successfully")
-
-
-    """ 
-    if USE_LLM:   
-        llm = Llama(model_path   = LLM_model_path, 
-                n_ctx        = max_length, 
-                n_threads    = 8,    # was 16 before 
-                n_gpu_layers = -1,   # 0 for CPU
-                verbose      = True,
-            )
-    """
 
 except Exception as e:
     logger.error(f"Failed to initialize LLM: {e}")
