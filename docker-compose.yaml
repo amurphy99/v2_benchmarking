@@ -27,7 +27,6 @@ services:
   backend:
     extends: { file: ./backend/docker-compose.backend.yaml, service: backend }
     networks: [appnet]
-    depends_on: [llama_api]
     env_file: [./.env]      # optional global override
 
   # --------------------------------------------------------------------------------
