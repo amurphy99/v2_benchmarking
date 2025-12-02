@@ -14,12 +14,14 @@ services:
     networks: [appnet]
     volumes:
       - letsencrypt:/etc/letsencrypt
+      - webroot:/var/www/certbot
 
 # ====================================================================
 # Volumes & Networks
 # ====================================================================
 volumes:
   letsencrypt:
+  webroot:
 
 # Declared, not created. Root file will create it.
 networks:

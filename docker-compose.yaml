@@ -5,6 +5,7 @@
 volumes:
   db_data:
   letsencrypt:
+  webroot:
 
 networks:
   appnet:
