@@ -12,7 +12,9 @@ interface WSMessage { type: string; data: unknown; }
 export default function useChatSocket({ 
     recording, 
     onLLMResponse = (unknown)   => {}, 
-    onScores      = (WSMessage) => {} 
+    onScores      = (WSMessage) => {},
+    onUserUtt     = (text) => {},
+    onAudio       = (data) => {},
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -33,10 +35,23 @@ export default function useChatSocket({
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
     const onMessage = useCallback((event: MessageEvent) => {
         const { type, data } = JSON.parse(event.data) as WSMessage;
-        if      (type === "llm_response"    ) { onLLMResponse(data); }
-        else if (type === "biomarker_scores") {console.log("On-Utterance scores received"); onScores({ type, data });} 
-        else if (type ===     "audio_scores") {console.log("On-Audio scores received"    ); onScores({ type, data });} 
-        else if (type === "periodic_scores" ) {console.log("Periodic scores received"    ); onScores({ type, data });}
+        if (type === "llm_response") {
+            onLLMResponse(data);
+        } else if (type === "biomarker_scores") {
+            console.log("On-Utterance scores received");
+            onScores({ type, data });
+        } else if (type === "audio_scores") {
+            console.log("On-Audio scores received");
+            onScores({ type, data });
+        } else if (type === "periodic_scores") {
+            console.log("Periodic scores received");
+            onScores({ type, data });
+        } else if (type === "user_utt") {
+            console.log("User utterance received");
+            onUserUtt(data);
+        } else if (type === "audio_chunk") {
+            onAudio(data);
+        }
     }, [onLLMResponse, onScores]);
 
     // Open and close the websocket connection on change of the "recording" flag

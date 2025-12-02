@@ -72,7 +72,10 @@ SSH:/home/user/
 +│   │   │   │   ├── new_LSA.csv
  │   │   │   │   └── ...
  │   │   │   └── ...
+ │   │   │
++│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
 +│   │   ├── .env                 # Created programmatically during startup script
+ │   │   ├── requirements-web.txt
  │   │   └── ...
  │   │
  │   ├── frontend/

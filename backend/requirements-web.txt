@@ -7,10 +7,6 @@ websockets
 whitenoise
 librosa
 numpy
-react
-axios
-tailwindcss
-vite
 pandas
 three
 certifi==2024.8.30
@@ -71,3 +67,6 @@ djangorestframework-simplejwt
 rest_framework_simplejwt
 vaderSentiment
 keyboard
+google-genai
+google-cloud-texttospeech
+google-cloud-speech

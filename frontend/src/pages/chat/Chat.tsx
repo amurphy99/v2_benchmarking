@@ -21,19 +21,34 @@ export function Chat() {
     const { pushMessage, session } = useLocalChatSession();
     const onUserUtterance   = (text: string) => { pushMessage("user",      text); };
     const onSystemUtterance = (text: string) => { pushMessage("assistant", text); };
-  
+
     // Live-chat hook
     const { start, stop, save } = useLiveChat({ onUserUtterance, onSystemUtterance, onScores: () => {} });
     
     // Separate recording flag that we control ourselves
     const [recording, setRecording ] = useState(false);
-    const startChat = () => { start(); setRecording(true ); };
-    const pauseChat = () => { stop (); setRecording(false); };
+    const startChat = () => {
+		start();
+		setRecording(true);
+	};
+	const pauseChat = () => {
+		stop();
+		setRecording(false);
+	};
 
     // Modal control
     const [showModal, setShowModal] = useState(false);
-    const endChatModal = () => {         setShowModal(true ); if (!recording) { pauseChat(); }; }; 
-    const saveChat     = () => { save(); setShowModal(false); navigate("/progress"); }; // use the stop speaking callback
+    const endChatModal = () => {
+		setShowModal(true);
+		if (!recording) {
+			pauseChat();
+		}
+	};
+	const saveChat = () => {
+		save();
+		setShowModal(false);
+		navigate("/progress");
+	}; // use the stop speaking callback
 
 
     // --------------------------------------------------------------------

@@ -5,7 +5,7 @@
  *
  *  new AudioStreamer({
  *    sampleRate : 16_000,                   // target output rate
- *    chunkMs    : 5_000,                    // chunk length in ms
+ *    chunkMs    : 64,                    // chunk length in ms
  *    onChunk    : (int16, ts) => { ... },   // required
  *    onError    : err => {}                 // optional
  *  })
@@ -16,7 +16,8 @@
 export default class AudioStreamer {
     constructor({ sampleRate, chunkMs, onChunk, onError }) {
         this.sampleRate = sampleRate ?? 16_000;
-        this.chunkSize  = Math.round((sampleRate * (chunkMs ?? 5_000)) / 1_000); // samples
+        this.chunkMs    = chunkMs ?? 64;
+        this.chunkSize  = Math.round((sampleRate * (this.chunkMs ?? 1_000)) / 1_000); // samples
         this.onChunk    = onChunk;
         this.onError    = onError ?? console.error;
     
