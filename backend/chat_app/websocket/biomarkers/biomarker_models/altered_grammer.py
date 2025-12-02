@@ -15,7 +15,7 @@ from time import time
 #logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-stanza.download('en', verbose=False, force=True)
+stanza.download('en', verbose=False)
 nlp = stanza.Pipeline('en')
 
 java_path = shutil.which("java")
