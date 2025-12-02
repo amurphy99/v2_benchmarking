@@ -30,12 +30,12 @@ else
   echo "[entry] Existing certificate found for ${DOMAIN}, skipping initial obtain."
 fi
 
-# Try to renew on startup (no-op if >30 days left)
-echo "[entry] One-shot renew check on startup..."
-if /usr/bin/certbot renew --webroot -w /var/www/certbot --quiet; then
+# Try to renew on startup (no-op if >30 days left) [times out in 30s]
+echo "[entry] One-shot renew check on startup (max 120s)..."
+if timeout 30 /usr/bin/certbot renew --webroot -w /var/www/certbot --quiet; then
   echo "[entry] Startup renew check completed successfully (or no renewal needed)."
 else
-  echo "[entry] WARNING: Startup renew check encountered errors (non-fatal)." >&2
+  echo "[entry] WARNING: Startup renew check failed or timed out (non-fatal)." >&2
 fi
 
 # --------------------------------------------------------------------------------
