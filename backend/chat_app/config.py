@@ -15,7 +15,7 @@ USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actual
 THIS_LANGUAGE = "en-US"
 
 # LLM Parameters
-MAX_LENGTH = 256
+MAX_LENGTH = 64 # 256
 PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
 
 
