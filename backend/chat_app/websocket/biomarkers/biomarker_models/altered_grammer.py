@@ -20,20 +20,24 @@ logger = logging.getLogger(__name__)
 #nlp = stanza.Pipeline('en')
 
 
-STANZA_DIR = "/app/stanza_resources"
-os.makedirs(STANZA_DIR, exist_ok=True)
+#STANZA_DIR = "/app/stanza_resources"
+#os.makedirs(STANZA_DIR, exist_ok=True)
 
 try:
     # Download English models into this directory
-    stanza.download("en", model_dir=STANZA_DIR, verbose=False)
+    #stanza.download("en", model_dir=STANZA_DIR, verbose=False)
 
     # Build pipeline from that directory
-    nlp = stanza.Pipeline("en", dir=STANZA_DIR)
-    logger.info("Stanza English pipeline initialized using %s", STANZA_DIR)
+    #nlp = stanza.Pipeline("en", dir=STANZA_DIR)
+    #logger.info("Stanza English pipeline initialized using %s", STANZA_DIR)
+
+    stanza.download('en', verbose=False)
+    nlp = stanza.Pipeline('en')
+    logger.info("[STANZA] Stanza English pipeline initialized")
 
 except Exception as e:
     # Do NOT crash the whole backend if stanza fails
-    logger.error("Failed to initialize Stanza pipeline: %s", e)
+    logger.error("[STANZA] Failed to initialize Stanza pipeline: %s", e)
     nlp = None
 
 
