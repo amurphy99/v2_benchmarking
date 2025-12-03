@@ -3,6 +3,9 @@
 # ================================================================================
 RESET   = "\033[0m"
 
+# Format
+BOLD = "\033[1m"
+
 # Colors
 RED     = "\033[0;31m"
 GREEN   = "\033[0;32m"
@@ -25,3 +28,7 @@ BG_WHITE    = "\033[47m"
 HLINE   = "-----------------------------------------------------------------------"
 RLINE_1 = f"\n{RED}{HLINE}{RESET}\n"
 RLINE_2 = f"\n{RED}{HLINE}{RESET}"
+
+# Specific presets
+USER_MSG = f"{RESET}{BG_GREEN  }{BOLD}"
+ROBO_MSG = f"{RESET}{BG_MAGENTA}{BOLD}"

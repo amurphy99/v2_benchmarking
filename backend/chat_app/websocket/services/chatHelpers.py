@@ -30,7 +30,7 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
     # 1) Process the users message
     # -----------------------------------------------------------------------
     text = data["data"].lower()
-    logger.info(f"{lu.YELLOW}[LLM] User utt received: \n{lu.BG_GREEN}{text} {lu.RESET}")
+    logger.info(f"{lu.YELLOW}[LLM] User utt received: \n{lu.USER_MSG}{text} {lu.RESET}")
 
     # Fire-and-forget DB write for the "user" message & update in-memory context
     context_buffer = await msg_callback(role="user", text=data['data'], time=time())
@@ -40,7 +40,7 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
     # -----------------------------------------------------------------------
     t1 = time(); logger.info(f"{lu.YELLOW}[LLM] Sending LLM request... {lu.RESET}")
     system_utt = await generate_LLM_response(context_buffer)
-    t2 = time(); logger.info(f"{lu.YELLOW}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.BG_MAGENTA}{system_utt} {lu.RESET}")
+    t2 = time(); logger.info(f"{lu.YELLOW}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.ROBO_MSG}{system_utt} {lu.RESET}")
 
     # Immediately send the response back through the websocket
     await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
