@@ -49,6 +49,7 @@ class LlamaAPI:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 #response = await client.post(f"{self.base_url}/v1/completions", json=llm_json, headers=self.headers)
                 response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
+                print(f"\n{response}\n")
                 response.raise_for_status()
                 return response.json()
             
