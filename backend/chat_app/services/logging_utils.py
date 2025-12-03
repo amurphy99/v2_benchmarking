@@ -14,6 +14,9 @@ BLUE    = "\033[0;34m"
 MAGENTA = "\033[0;35m"
 CYAN    = "\033[0;96m"
 
+# Bright
+BRIGHT_YELLOW = "\033[0;93m"
+
 # Background Colors
 BG_BLACK    = "\033[40m"
 BG_RED      = "\033[41m"

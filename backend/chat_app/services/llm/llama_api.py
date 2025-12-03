@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 import httpx
 from ...services import logging_utils as lu
 
@@ -49,6 +50,16 @@ class LlamaAPI:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
                 response.raise_for_status()
+  
+  
+                # Pretty-print the entire response
+                data = response.json()
+                pretty = json.dumps(data, indent=2, ensure_ascii=False)
+                print(f"\n{lu.BRIGHT_YELLOW}---------- LLM RAW RESPONSE ----------{lu.RESET}")
+                print(pretty)
+                print(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}\n")
+
+                
                 return response.json()
             
         # On timeout...
