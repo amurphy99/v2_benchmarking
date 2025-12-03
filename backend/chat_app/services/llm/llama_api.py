@@ -19,7 +19,7 @@ class LlamaAPI:
         # Default to env vars so you can configure per environment
         self.api_key  = api_key  or os.getenv("LLM_GATEWAY_TOKEN")
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
-        self.full_url = f"http://{self.base_url}:8080/v1/chat/completions"
+        self.full_url = f"http://{self.base_url}:8080/v1/completions"
         self.timeout  = timeout
 
         # Log initialization
@@ -47,9 +47,7 @@ class LlamaAPI:
         # Get a response from the API
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                #response = await client.post(f"{self.base_url}/v1/completions", json=llm_json, headers=self.headers)
                 response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
-                print(f"\n{response}\n")
                 response.raise_for_status()
                 return response.json()
             
