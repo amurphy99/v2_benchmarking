@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
-    "baseUrl": "./frontend",
-    "paths": { "@/*": ["src/*"]  },
+    "paths": { "@/*": ["./frontend/src/*"]  },
     "jsx": "react-jsx",
     "lib": ["ES2017", "DOM", "DOM.Iterable"],
   }
