@@ -15,8 +15,29 @@ from time import time
 #logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-stanza.download('en', verbose=False)
-nlp = stanza.Pipeline('en')
+
+#stanza.download('en', verbose=False)
+#nlp = stanza.Pipeline('en')
+
+
+STANZA_DIR = "/app/stanza_resources"
+os.makedirs(STANZA_DIR, exist_ok=True)
+
+try:
+    # Download English models into this directory
+    stanza.download("en", model_dir=STANZA_DIR, verbose=False)
+
+    # Build pipeline from that directory
+    nlp = stanza.Pipeline("en", dir=STANZA_DIR)
+    logger.info("Stanza English pipeline initialized using %s", STANZA_DIR)
+
+except Exception as e:
+    # Do NOT crash the whole backend if stanza fails
+    logger.error("Failed to initialize Stanza pipeline: %s", e)
+    nlp = None
+
+
+
 
 java_path = shutil.which("java")
 
@@ -53,6 +74,10 @@ where  the weights of the trained ML model and these features are used to calcul
 def generate_grammar_score(list_sentences, speech_duration_seconds):
     start_time = time()
     logger.info(f"\nGenerating grammar score for {list_sentences} sentences over {speech_duration_seconds:.2f} seconds")
+
+    # Stanza is not available
+    if nlp is None: return 1
+
 
     if not list_sentences: logger.warning("No sentences provided. Returning default score of 1."); return 1
    
