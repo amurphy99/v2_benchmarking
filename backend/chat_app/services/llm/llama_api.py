@@ -1,6 +1,7 @@
 import os
 import logging
 import httpx
+from ...services import logging_utils as lu
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,14 @@ class LlamaAPI:
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 10.0):
         # Default to env vars so you can configure per environment
-        self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
         self.api_key  = api_key  or os.getenv("LLM_GATEWAY_TOKEN")
+        self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
+        self.full_url = f"http://{self.base_url}:8080/v1/chat/completions"
         self.timeout  = timeout
 
-        logger.info(f"Llama API LLM initialized, URL: {self.base_url}")
+        # Log initialization
+        logger.info(f"{lu.YELLOW}Llama API LLM initialized, base URL: {self.base_url}{lu.RESET}")
+        logger.info(f"{lu.YELLOW}Full URL: {self.full_url}{lu.RESET}")
 
         # API authorization key
         self.headers = {}
@@ -43,7 +47,8 @@ class LlamaAPI:
         # Get a response from the API
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(f"{self.base_url}/v1/completions", json=llm_json, headers=self.headers)
+                #response = await client.post(f"{self.base_url}/v1/completions", json=llm_json, headers=self.headers)
+                response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
                 response.raise_for_status()
                 return response.json()
             
