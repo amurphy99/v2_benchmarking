@@ -25,16 +25,11 @@ export default function ChatTranscript({ chatSession } : { chatSession: ChatSess
 
     // Return UI Component
     return (
-    <div className="mt-[1rem]">
-        <div className={h2}> Transcript: </div>
-
-        <div className="overflow-y-auto mt-[1rem] border-1 rounded-lg border-gray-200 p-[1rem]">
-
-            <div className="flex flex-col w-50">
+    <div>
+        <div className="overflow-y-auto">
+            <div className="flex flex-col">
                 {sortedMessages.map((msg) => (<MessageBubble msg={msg} key={msg.id} pName={patient_name} chatStart={chatStart} />))}
             </div>
-
-
         </div>
     </div>
     );

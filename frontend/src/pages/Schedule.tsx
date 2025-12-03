@@ -60,7 +60,7 @@ export default function Schedule() {
         </div>
 
         <div className="flex justify-center m-[2rem]">
-            <Button onClick={openNew} variant="outline-dark" size="lg"> Create a New Reminder </Button>
+            <Button onClick={openNew} variant="outline-dark" size={"lg"}> Create a New Reminder </Button>
         </div>
 
         <ReminderModal rem={selected} show={showModal} existing={editing} onHide={() => setShowModal(false)} />

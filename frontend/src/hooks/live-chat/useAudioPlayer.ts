@@ -11,7 +11,7 @@ import   useLatencyLogger      from "@/hooks/useLatencyLogger";
  * @param bufferAhead How much audio should be buffered before starting to play.
  * @returns 
  */
-export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSample = 32, bufferAhead = 0.2} ) {
+export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSample = 16, bufferAhead = 0.2} ) {
     const [systemSpeaking, setSystemSpeaking] = useState(false);
 	const audioContextRef = useRef<AudioContext>(null);
 	const scheduleTimeRef = useRef<number>(0);
@@ -34,7 +34,7 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
 			const raw = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
 			const bufferToDecode = raw.buffer;
 			try {
-				const audioBuffer = pcmToAudioBuffer(bufferToDecode, sampleRate, numChannels, 16, ctx);
+				const audioBuffer = pcmToAudioBuffer(bufferToDecode, sampleRate, numChannels, bitsPerSample, ctx);
 				const startTime = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead);
 
 				const source = ctx.createBufferSource();

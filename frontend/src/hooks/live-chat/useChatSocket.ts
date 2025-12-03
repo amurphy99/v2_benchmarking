@@ -2,8 +2,6 @@ import { useRef, useEffect, useState, useCallback } from "react";
 
 import { getAccess } from "@/api";
 
-interface WSMessage { type: string; data: unknown; }
-
 // ====================================================================
 // Handle the WebSocket Connection to the Backend
 // ====================================================================
@@ -34,9 +32,11 @@ export default function useChatSocket({
 
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
     const onMessage = useCallback((event: MessageEvent) => {
-        const { type, data } = JSON.parse(event.data) as WSMessage;
+        const response = JSON.parse(event.data);
+        const type = response.type;
+        const data = response.data;
         if (type === "llm_response") {
-            onLLMResponse(data);
+            onLLMResponse(response);
         } else if (type === "biomarker_scores") {
             console.log("On-Utterance scores received");
             onScores({ type, data });
@@ -51,6 +51,8 @@ export default function useChatSocket({
             onUserUtt(data);
         } else if (type === "audio_chunk") {
             onAudio(data);
+        } else if (type === "lipsync_data") {
+            console.log("Received lipsync data")
         }
     }, [onLLMResponse, onScores]);
 
@@ -69,7 +71,7 @@ export default function useChatSocket({
     }, [recording]);
 
     // Send helper
-    const send = useCallback((msg: WSMessage) => {
+    const send = useCallback((msg) => {
         const ws = wsRef.current;
         if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg));                         }
         else                                   { console.warn("WebSocket not open; message not sent"); }

@@ -1,4 +1,5 @@
 import { API_URL } from "../utils/constants";
+import { refreshToken } from "./auth";
 
 // API acess/authorization token
 let access: string | undefined;
@@ -23,9 +24,13 @@ export async function request<T> (path: string, opts: RequestInit={}): Promise<T
     // If it fails... (401 => unauthorized access)
     if (response.status === 401) {
         // Try to refresh the access token before trying again
-        const r = await fetch(`${API_URL}/token/refresh/`, { method: "POST", credentials: "include", });
-        if (r.ok) {const { access: newAccess } = (await r.json()) as { access: string }; setAccess(newAccess);
-        response = await doFetch(newAccess); // retry with fresh token
+        try {
+            const r = await refreshToken(access);
+			setAccess(r.access);
+			response = await doFetch(r.access); // retry with fresh token
+        } catch (err: Error | unknown) {
+            console.error("Token refresh failed: ", err);
+            setAccess(undefined);
         }
     }
 

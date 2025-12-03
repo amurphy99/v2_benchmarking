@@ -20,9 +20,14 @@ export default function Login() {
         try {
             setLoading(true);
             await login(form.username, form.password);
-            toast.success("Logged in!"); navigate("/dashboard");
-        } catch (err) { toast.error((err as Error).message); console.log((err as Error).message);
-        } finally     { setLoading(false); }
+            toast.success("Logged in!"); 
+            navigate("/goal");
+        } catch (err) { 
+            toast.error((err as Error).message); 
+            console.log((err as Error).message);
+        } finally     { 
+            setLoading(false); 
+        }
     };
 
     const loginStyle = "p-2 border-b-1 border-gray-400";
@@ -32,9 +37,9 @@ export default function Login() {
     <form onSubmit={handleSubmit}>
         <div className="flex flex-col h-[100vh] justify-center items-center  ">
        
-            <h1 className="font-mono text-lg">AI Assistant Chat</h1>
+            <h1 className="font-mono text-lg">Welcome to CogniBot!</h1>
 
-            <div className="flex flex-col gap-2 border-1 border-gray-400 rounded-lg p-4 md:w-1/2">
+            <div className="flex flex-col gap-2 border-1 border-gray-400 rounded-lg p-4 w-3/4 sm:w-1/2">
                 <label>Username</label><input required autoComplete="username"                          name="username" value={form.username} onChange={handleChange} className={loginStyle}/>
                 <label>Password</label><input required autoComplete="current-password" type="password"  name="password" value={form.password} onChange={handleChange} className={loginStyle}/>
 

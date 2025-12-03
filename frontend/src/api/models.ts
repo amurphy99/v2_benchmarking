@@ -7,6 +7,8 @@
 export interface UserSettings {
   patientViewOverall: boolean;
   patientCanSchedule: boolean;
+  taskType          : string;
+  taskSubtype       : string;
 }
 
 export interface Reminder {
@@ -93,9 +95,12 @@ export interface ChatSession {
   end_ts    : string | null;
   duration? : number;          // in seconds
 
-  topics    : string[];        // stored as JSONField
-  sentiment : number | null;
+  topics    : string;        // stored as an unparsed list string
+  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | null;
   notes     : string | null;
+
+  taskType  : string;
+  taskSubtype: string | null;
 
   messages        : ChatMessage[];
   biomarkers      : ChatBiomarkerScore[];
@@ -125,3 +130,8 @@ export interface SignupResponse {
 
 // User verification token
 export type Tokens = { access: string; refresh: string, user: User };
+
+export interface Download {
+    fileName            : string;
+    fileContents        : string;
+}
