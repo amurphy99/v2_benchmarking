@@ -7,6 +7,7 @@ RESET   = "\033[0m"
 BOLD = "\033[1m"
 
 # Colors
+WHITE   = "\033[0;37m"
 RED     = "\033[0;31m"
 GREEN   = "\033[0;32m"
 YELLOW  = "\033[0;33m"
@@ -27,11 +28,15 @@ BG_MAGENTA  = "\033[45m"
 BG_CYAN     = "\033[46m"
 BG_WHITE    = "\033[47m"
 
+# Bright Background Colors
+BG_BRIGHT_MAGENTA = "\033[0;105m"
+BG_BRIGHT_GREEN   = "\033[0;102m"
+
 # Horizontal line breaks
 HLINE   = "-----------------------------------------------------------------------"
 RLINE_1 = f"\n{RED}{HLINE}{RESET}\n"
 RLINE_2 = f"\n{RED}{HLINE}{RESET}"
 
 # Specific presets
-USER_MSG = f"{RESET}{BG_GREEN  }{BOLD}"
-ROBO_MSG = f"{RESET}{BG_MAGENTA}{BOLD}"
+USER_MSG = f"{RESET}{BG_BRIGHT_GREEN  }{WHITE}"
+ROBO_MSG = f"{RESET}{BG_BRIGHT_MAGENTA}{WHITE}"
