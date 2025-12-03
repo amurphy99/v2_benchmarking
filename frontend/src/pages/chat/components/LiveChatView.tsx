@@ -7,12 +7,13 @@ import { useAuth } from "@/context/AuthProvider";
 import Avatar from "@/pages/common/avatar/Avatar";
 import AvatarView from "./AvatarView";
 import ChatMessages from "./ChatMessages";
-import { ThreeDot } from "react-loading-indicators";
 
 // --------------------------------------------------------------------
 // Get the most recent message from the system
 // --------------------------------------------------------------------
-const default_message = `Chat with me!`;
+const default_message = `Chat with me! Here's a long message to ensure that the scrolling behavior works correctly. The intended behavior
+is that when this message is long enough and displays over several lines, the chat bubble should display a horizontal scrollbar instead of
+being very long and taking too much vertical space, thereby covering the recording buttons.`;
 export function getRecentMessage(messages: LocalChatMessage[], fallback = default_message): string {
     const latest = messages.reduce<LocalChatMessage | null>((acc, m) => {
         if (m.role !== "assistant") return acc; // skip
@@ -24,7 +25,7 @@ export function getRecentMessage(messages: LocalChatMessage[], fallback = defaul
 // ====================================================================
 // LiveChatView (show the Avater and/or the messages from the conversation)
 // ====================================================================
-export default function LiveChatView({ messages, animation, isMobile }: { messages: LocalChatMessage[], animation: string, isMobile: boolean }) {
+export default function LiveChatView({ messages }: { messages: LocalChatMessage[] }) {
     const [viewMode, setViewMode] = useState(4);
     const { user } = useAuth();
 
@@ -37,51 +38,45 @@ export default function LiveChatView({ messages, animation, isMobile }: { messag
 
         // Chat history or Avatar views separately
         if (viewMode == 1) {
-            return (
-                <div className={chatHistoryWrapper1}>
-                <ChatMessages messages={messages} />
-                </div>
-            );
+        return (
+            <div className={chatHistoryWrapper1}>
+            <ChatMessages messages={messages} />
+            </div>
+        );
         } else if (viewMode == 3) {
-            return (
-                <div className="h-[65vh] mb-[2rem]">
-                <AvatarView animation={animation} chatbotMessage={getRecentMessage(messages)} />
-                </div>
-            );
+        return (
+            <div className="h-[65vh] mb-[2rem]">
+            <AvatarView chatbotMessage={getRecentMessage(messages)} />
+            </div>
+        );
         }
 
         // Default / main view for the app -- keeping the other ones still though for debugging (want to be able to see the chat history)
-        else if (viewMode == 4 && !isMobile) {
-            return (
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
-                    <div className="sm:w-1/5" />
-                    <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} /> 
-                    </div> 
-                    <div className="hidden sm:inline-block bubble"> 
-                        {getRecentMessage(messages)} 
-                    </div>
-                </div>
-            );
-        } 
-        
-        else if (viewMode == 4 && isMobile) {
-            return (
-                <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} />
-                    <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">{getRecentMessage(messages)}</div>
-                </div>
-            )
+        else if (viewMode == 4) {
+        return (
+            <div className="h-[65vh] mb-[2rem]">
+            <div className="my-[1rem] flex justify-center border-1 border-black p-[1em] rounded-lg mx-[25%] overflow-y-scroll h-[10vh]">
+                {getRecentMessage(messages)}
+            </div>
+            <div className="h-[60vh] mt-[1em] w-full">
+                <Avatar />
+            </div>
+            </div>
+        );
         }
 
         // Combined split view
         else if (viewMode == 2) {
-            return (
-                <div className="flex md:flex-row flex-col h-[65vh] mt-[1em] w-full mb-[2rem]">
-                    <div className={chatHistoryWrapper2}               > <ChatMessages messages      = {                  messages  }/> </div>
-                    <div className="md:w-1/2 w-[100vw] md:h-full h-1/2"> <AvatarView animation={animation} chatbotMessage = { getRecentMessage(messages) }/> </div>
-                </div> 
-                );
+        return (
+            <div className="flex md:flex-row flex-col h-[65vh] mt-[1em] w-full mb-[2rem]">
+            <div className={chatHistoryWrapper2}>
+                <ChatMessages messages={messages} />{" "}
+            </div>
+            <div className="md:w-1/2 w-[100vw] md:h-full h-[65vh]">
+                <AvatarView chatbotMessage={getRecentMessage(messages)} />{" "}
+            </div>
+            </div>
+        );
         }
     }
 

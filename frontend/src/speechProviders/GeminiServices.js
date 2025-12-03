@@ -2,10 +2,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Default Arguments
 const defaultModel = 'gemini-2.0-flash-live-001';
+const apiKey = import.meta.env.VITE_SPEECH_KEY || '';
 const defaultSampleRateHertz = 16_000;
 
 // Configuration from .env variables
-const apiKey = import.meta.env.VITE_SPEECH_KEY || "";
+// const apiKey = import.meta.env.VITE_SPEECH_KEY || "";
 
 /*  ====================================================================
  *  GeminiASR
@@ -25,6 +26,8 @@ const apiKey = import.meta.env.VITE_SPEECH_KEY || "";
  * ==================================================================== */
 export class GeminiASR {
     constructor({ onUtterance, onPartial, onUserSpeakingChange, onUserSpeakingStart, model, sourceSampleRateHertz }) {
+        if (!apiKey) throw new Error('GeminiASR requires an API key.');
+
         this.genai = new GoogleGenerativeAI({ apiKey });
         this.model = model ?? defaultModel;
         
@@ -109,71 +112,55 @@ export class GeminiASR {
  *  stop()       : cancel current playback
  *  ==================================================================== */
 export class GeminiTTS {
-	constructor({ onStart, onDone, model }) {
-		this.genai = new GoogleGenerativeAI({ apiKey });
-		this.model = model ?? defaultModel;
+    constructor({ onStart, onDone, model }) {
+        if (!apiKey) throw new Error('GeminiTTS requires an API key.');
+        
+        this.genai   = new GoogleGenerativeAI({ apiKey });
+        this.model   = model ?? defaultModel;
 
-		this.onStart = onStart ?? (() => {});
-		this.onDone = onDone ?? (() => {});
+        this.onStart = onStart ?? (() => {});
+        this.onDone  = onDone  ?? (() => {});
 
-		this.audioCtx = new (window.AudioContext ||
-			window.webkitAudioContext)();
-		this.currSrc = null;
-	}
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        this.currSrc  = null;
+    }
 
-	// --------------------------------------------------------------------
-	// TTS for the given text
-	// --------------------------------------------------------------------
-	async speak(text) {
-		if (!text) return;
-		this.onStart();
+    // --------------------------------------------------------------------
+    // TTS for the given text
+    // --------------------------------------------------------------------
+    async speak(text) {if (!text) return;
+        this.onStart();
 
-		// One-off live session just for this utterance
-		const session = await this.genai.live.connect({
-			model: this.model,
-			config: { responseModalities: ["AUDIO"] },
-		});
+        // One-off live session just for this utterance
+        const session = await this.genai.live.connect({model: this.model, config: {responseModalities: ['AUDIO']}});
 
-		// Send the prompt
-		await session.sendClientContent({ role: "user", parts: [{ text }] });
+        // Send the prompt
+        await session.sendClientContent({role: 'user', parts: [{ text }]});
 
-		// Get the response
-		try {
-			for await (const msg of session.stream()) {
-				if (msg.audioChunk) {
-					await this._playChunk(msg.audioChunk);
-				}
-			}
-		} catch (error) {
-			console.error("GeminiTTS error:", error);
-		} finally {
-			await session.close();
-			console.log("Speech synthesized");
-			this.onDone();
-		}
-	}
+        // Get the response
+        try           {for await (const msg of session.stream()) {if (msg.audioChunk) {await this._playChunk(msg.audioChunk);}}} 
+        catch (error) {console.error('GeminiTTS error:', error);} 
+        finally       {await session.close(); console.log("Speech synthesized"); this.onDone();}
+    }
 
-	// --------------------------------------------------------------------
-	// Play the audio received
-	// --------------------------------------------------------------------
-	async _playChunk(chunk) {
-		// chunk.data is Uint8Array PCM-ulaw @24kHz
-		// Might need to resample to match output device...
-		const buffer = await this.audioCtx.decodeAudioData(chunk.data.buffer);
-		this.currSrc?.stop();
+    // --------------------------------------------------------------------
+    // Play the audio received
+    // --------------------------------------------------------------------
+    async _playChunk(chunk) {
+        // chunk.data is Uint8Array PCM-ulaw @24kHz 
+        // Might need to resample to match output device...
+        const buffer = await this.audioCtx.decodeAudioData(chunk.data.buffer);
+        this.currSrc?.stop();
 
-		const src = this.audioCtx.createBufferSource();
-		src.buffer = buffer;
-		src.connect(this.audioCtx.destination);
-		src.start(0);
-		this.currSrc = src;
-	}
+        const src = this.audioCtx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(this.audioCtx.destination);
+        src.start(0);
+        this.currSrc = src;
+    }
 
-	// --------------------------------------------------------------------
-	// Close Session
-	// --------------------------------------------------------------------
-	stop() {
-		this.currSrc?.stop();
-		this.onDone();
-	}
+    // --------------------------------------------------------------------
+    // Close Session
+    // --------------------------------------------------------------------
+    stop() {this.currSrc?.stop(); this.onDone();}
 }
