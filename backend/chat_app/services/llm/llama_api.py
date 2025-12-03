@@ -14,7 +14,7 @@ class LlamaAPI:
       - LLM_GATEWAY_TOKEN  (the same token configured in nginx on the GPU VM)
     """
 
-    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 30.0):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 10.0):
         # Default to env vars so you can configure per environment
         self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
         self.api_key  = api_key  or os.getenv("LLM_GATEWAY_TOKEN")
@@ -46,6 +46,11 @@ class LlamaAPI:
                 response = await client.post(f"{self.base_url}/v1/completions", json=llm_json, headers=self.headers)
                 response.raise_for_status()
                 return response.json()
+            
+        # On timeout...
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM call timed out after {self.timeout}s: {e}")
+            return {"choices": [{"text": "The language model took too long to respond. Please try again."}]}
 
         # On error...
         except httpx.HTTPError as e:
