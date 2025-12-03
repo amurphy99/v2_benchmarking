@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 # Project Code
 from ..biomarkers.biomarker_scores import generate_audio_biomarkers, generate_utterance_biomarkers
 from ..biomarkers.biomarker_config import SAMPLE_RATE, PROSODY_FEATURES, PRONUNCIATION_FEATURES
-from ... import config as cf
+from ...services                   import logging_utils as lu
 
-# =======================================================================
+# ================================================================================
 # Constants
-# =======================================================================
+# ================================================================================
 # Initialize opensmile feature extractor
 feature_extractor = opensmile.Smile(
     feature_set     = opensmile.FeatureSet.ComParE_2016,
@@ -35,14 +35,14 @@ feature_extractor = opensmile.Smile(
 # Re-use one pool for the whole process
 _POOL = ThreadPoolExecutor(max_workers=4)
 
-# =======================================================================
+# ================================================================================
 # Handle Audio Data
-# =======================================================================
+# ================================================================================
 def handle_audio_data(data):
     try:
         # Decode the received base64 data to bytes & get the sample rate
         audio_bytes, sample_rate = data["data"], data["sampleRate"]
-        logger.info(f"{cf.CYAN}[Aud] Audio data received: {len(audio_bytes):,} bytes at {sample_rate:,}Hz {cf.RESET}")
+        logger.info(f"{lu.CYAN}[Aud] Audio data received: {len(audio_bytes):,} bytes at {sample_rate:,}Hz {lu.RESET}")
         
         # Normalize audio data
         audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
@@ -66,9 +66,9 @@ def handle_audio_data(data):
         return None, None
     
 
-# =======================================================================
+# ================================================================================
 # Audio Data/Biomarkers Wrapper
-# =======================================================================
+# ================================================================================
 async def extract_audio_biomarkers(data, overlapped_speech_count):
     """
     Async wrapper that:
@@ -83,18 +83,18 @@ async def extract_audio_biomarkers(data, overlapped_speech_count):
     # 1) Run heavy function in thread pool
     prosody_features, pronunciation_features = await loop.run_in_executor(_POOL, handle_audio_data, data)
     t1 = time()
-    logger.info(f"{cf.CYAN}[Aud] Audio data processed:    {(t1-t0):5.4f}s {cf.RESET}")
+    logger.info(f"{lu.CYAN}[Aud] Audio data processed:    {(t1-t0):5.4f}s {lu.RESET}")
 
     # 2) Generate the audio-related biomarker scores
     audio_biomarkers = generate_audio_biomarkers(prosody_features, pronunciation_features, overlapped_speech_count)
-    logger.info(f"{cf.CYAN}[Bio] Audio biomarkers done:   {(time()-t1):5.4f}s {cf.RESET}")
+    logger.info(f"{lu.CYAN}[Bio] Audio biomarkers done:   {(time()-t1):5.4f}s {lu.RESET}")
 
     return audio_biomarkers
 
 
-# =======================================================================
+# ================================================================================
 # On-Utterance Biomarkers
-# =======================================================================
+# ================================================================================
 # I'm also just gonna put this here for now, obviously file structure should be changed
 async def extract_text_biomarkers(context_buffer):
     t0 = time()
@@ -102,7 +102,7 @@ async def extract_text_biomarkers(context_buffer):
     
     # Run heavy function in thread pool
     utterance_biomarkers = await loop.run_in_executor(_POOL, lambda: generate_utterance_biomarkers(context_buffer))
-    logger.info(f"{cf.MAGENTA}[Bio] Biomarkers done in:      {(time()-t0):5.4f}s {cf.RESET}")
+    logger.info(f"{lu.MAGENTA}[Bio] Biomarkers done in:      {(time()-t0):5.4f}s {lu.RESET}")
 
     # Return the biomarkers
     return utterance_biomarkers 

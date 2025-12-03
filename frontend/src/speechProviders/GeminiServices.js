@@ -6,7 +6,7 @@ const apiKey = import.meta.env.VITE_SPEECH_KEY || '';
 const defaultSampleRateHertz = 16_000;
 
 // Configuration from .env variables
-const apiKey = import.meta.env.VITE_SPEECH_KEY || "";
+// const apiKey = import.meta.env.VITE_SPEECH_KEY || "";
 
 /*  ====================================================================
  *  GeminiASR

@@ -10,12 +10,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async
 
 from time     import time
-from datetime import datetime, timezone
-from math     import ceil
 
 # From this project
 from ..services              import logging_utils as lu 
-from ..                      import config as cf
 from ..services.db_services  import ChatService
 from .services.bg_helpers    import fire_and_log
 from .services.chatHelpers   import handle_transcription, handle_stt_output
@@ -102,7 +99,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # This is where we could potentially have a connection on the robot and web app and monitor the conversation in real time
         if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
         
-        logger.info(f"{cf.RLINE_1}{cf.RED}[WS] ChatSession opened for {self.user} from {self.source} {cf.RESET}{cf.RLINE_2}")
+        logger.info(f"{lu.RLINE_1}{lu.RED}[WS] ChatSession opened for {self.user} from {self.source} {lu.RESET}{lu.RLINE_2}")
                 
 
     # -----------------------------------------------------------------------

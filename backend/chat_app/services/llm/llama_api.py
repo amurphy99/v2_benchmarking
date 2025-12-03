@@ -1,37 +1,74 @@
-# Logging setup
+import os
 import logging
+import json
+import httpx
+from ...services import logging_utils as lu
+
 logger = logging.getLogger(__name__)
 
-# Need this to communicate with the other container
-import httpx
-
-# --------------------------------------------------------------------
-# Class for communicating with the llama_api container server 
-# --------------------------------------------------------------------
-# Might need to get this endpoint URL from somewhere else and not have it be hardcoded like this...
+# ================================================================================
+# Wrapper class for communicating with the LLM running on the GPU VM
+# ================================================================================
 class LlamaAPI:
-    # Initialize with a given endpoint for the LLM API container
-    def __init__(self, base_url="http://llama_api:11434"):
-        self.base_url = base_url
-        logger.info(f"Llama API LLM initialized, URL: {self.base_url}")
+    """
+    Expected environment variables on the CPU VM:
+      - LLM_BASE_URL       (e.g. "http://10.128.0.5:8080")
+      - LLM_GATEWAY_TOKEN  (the same token configured in nginx on the GPU VM)
+    """
 
-    # Call the LLM from the API container
-    async def __call__(self, prompt, max_tokens=None, stop=None, echo=False):
-        # Prepare input 
-        llm_json = {"prompt": prompt, "max_tokens": max_tokens, "stop": stop, "echo": echo}
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 10.0):
+        # Default to env vars so you can configure per environment
+        self.api_key  = api_key  or os.getenv("LLM_GATEWAY_TOKEN")
+        self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
+        self.full_url = f"http://{self.base_url}:8080/v1/completions"
+        self.timeout  = timeout
+
+        # Log initialization
+        logger.info(f"{lu.YELLOW}Llama API LLM initialized, base URL: {self.base_url}{lu.RESET}")
+        logger.info(f"{lu.YELLOW}Full URL: {self.full_url}{lu.RESET}")
+
+        # API authorization key
+        self.headers = {}
+        if not self.api_key: logger.warning("LLM_GATEWAY_TOKEN (api_key) is not set - calls to nginx will be rejected (401).")
+        else: self.headers["Authorization"] = f"Bearer {self.api_key}"
+
+    # --------------------------------------------------------------------------------
+    # Call the API at '/v1/completions'
+    # --------------------------------------------------------------------------------
+    async def __call__(self, prompt, max_tokens=64, stop=["<|end|>", "\n"], echo=False):
+        # Prepare input (specifying which model to use)
+        llm_json = {
+            "model"      : "models/Phi-3_finetuned.gguf",
+            "prompt"     : prompt, 
+            "max_tokens" : max_tokens, 
+            "stop"       : stop, 
+            "echo"       : echo
+        }
 
         # Get a response from the API
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(f"{self.base_url}/v1/completions", json=llm_json)
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
                 response.raise_for_status()
+  
+  
+                # Pretty-print the entire response
+                data = response.json()
+                pretty = json.dumps(data, indent=2, ensure_ascii=False)
+                print(f"\n{lu.BRIGHT_YELLOW}---------- LLM RAW RESPONSE ----------{lu.RESET}")
+                print(pretty)
+                print(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}\n")
+
+                
                 return response.json()
-        
+            
+        # On timeout...
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM call timed out after {self.timeout}s: {e}")
+            return {"choices": [{"text": "The language model took too long to respond. Please try again."}]}
+
         # On error...
-        except httpx.HTTPError as e: 
+        except httpx.HTTPError as e:
             logger.error(f"LLM call failed: {e}")
             return {"error": str(e)}
         
-        # --- Maybe make a default response to return here? ---
-        return response.json()
-    

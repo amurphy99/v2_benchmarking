@@ -7,9 +7,8 @@ This project aims to create a progressive web app to run a speech system oriente
 ## How it works
 The app uses 4 different docker containers:
 1) Database (postgres)
-2) LLama API
-3) Backend  (websocket server, biomarker logic)
-4) Frontend (vite, react) 
+2) Backend  (websocket server, biomarker logic)
+3) Frontend (vite, react) 
 
 Everything is wrapped in docker-compose.yaml and the frontend and backend APIs are the only components accessable outside of the VM as they get served by Nginx. The database and LLM are only accessible from inside the docker network.
 
@@ -84,11 +83,6 @@ SSH:/home/user/
  │   │   ├── public/
 +│   │   └── .env                 # Created programmatically during startup script
  │   │
- │   ├── llama_api/
- │   │   ├── compose.yaml         # Deployment (GPU) mode -- download Llama web API image
- │   │   ├── dummy_compose.yaml   # Sandbox (CPU) mode -- returns dummy responses
-+│   │   └── Phi-3_finetuned.gguf # LLM model (isn't actually here, accesses via volume)
- │   │
  │   ├── nginx/
  │   │   ├── Dockerfile           # Sets up certbot and nginx
  │   │   └── default.conf         # Frontend & Backend API are served
@@ -103,7 +97,7 @@ SSH:/home/user/
  │   ├── models/      
 +│   │   ├── new_LSA.csv
 +│   │   ├── stanford-parser-4.2.0-models.jar
-+│   │   └── Phi-3_finetuned.gguf
+-│   │   └── Phi-3_finetuned.gguf # No longer need to download this when we do the setup...
  │   │
  │   ├── logs/                    # For backend log output
  │   └── ... 

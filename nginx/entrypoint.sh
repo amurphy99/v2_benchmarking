@@ -14,16 +14,29 @@ envsubst '${DOMAIN} ${DOMAIN_WWW}' \
 
 # First-run: obtain cert if missing
 if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
-  certbot certonly --webroot \
-    --webroot-path /var/www/certbot \
-    --non-interactive --agree-tos \
-    -d "${DOMAIN}" -d "${DOMAIN_WWW}" \
-    --email "${CERT_EMAIL}"
+  echo "[entry] No existing certificate found for ${DOMAIN}, requesting a new one..."
+
+  if certbot certonly --webroot \
+      --webroot-path /var/www/certbot \
+      --non-interactive --agree-tos \
+      -d "${DOMAIN}" -d "${DOMAIN_WWW}" \
+      --email "${CERT_EMAIL}"; then
+    echo "[entry] Successfully obtained initial certificate for ${DOMAIN}"
+  else
+    echo "[entry] ERROR: Failed to obtain initial certificate for ${DOMAIN}" >&2
+    exit 1
+  fi
+else
+  echo "[entry] Existing certificate found for ${DOMAIN}, skipping initial obtain."
 fi
 
-# Try to renew on startup (no-op if >30 days left)
-echo "[entry] One-shot renew check on startup..."
-/usr/bin/certbot renew --webroot -w /var/www/certbot --quiet || true
+# Try to renew on startup (no-op if >30 days left) [times out in 30s]
+echo "[entry] One-shot renew check on startup (max 120s)..."
+if timeout 30 /usr/bin/certbot renew --webroot -w /var/www/certbot --quiet; then
+  echo "[entry] Startup renew check completed successfully (or no renewal needed)."
+else
+  echo "[entry] WARNING: Startup renew check failed or timed out (non-fatal)." >&2
+fi
 
 # --------------------------------------------------------------------------------
 # Renew nightly at 3am; reload nginx after a successful renewal
@@ -36,10 +49,12 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 CRON
 
 # Start crond with verbose logging to container stdout
+echo "[entry] Starting crond for nightly certbot renew cronjob (3:00 AM)..."
 crond -l 8
 
 # --------------------------------------------------------------------------------
 # Nginx
 # --------------------------------------------------------------------------------
 # Exec nginx in foreground
+echo "[entry] Starting nginx in foreground..."
 exec nginx -g "daemon off;"

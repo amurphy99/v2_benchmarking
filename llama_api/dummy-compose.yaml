@@ -1,6 +1,0 @@
-services:
-  llama_api:
-    image: alpine
-    container_name: llama_api
-    command: ["sh", "-c", "echo 'Dummy llama_api loaded (CPU-only mode)' && sleep infinity"]
-    networks: [appnet]

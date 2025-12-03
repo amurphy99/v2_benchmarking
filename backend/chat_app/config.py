@@ -1,41 +1,65 @@
-# ======================================================================= 
+# ================================================================================ 
 # Setup
-# =======================================================================
+# ================================================================================
 # Load Packages
 import os, warnings, logging
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# --------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 # Global Variables
-# --------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# USE_LLM will still use "sandbox" or "production" but now sandbox=local development, production=any cloud VM
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
-USE_LLM       = os.getenv("APP_ENVIRONMENT", "production") != "sandbox" # (don't actually need to load the LLM to test)
+USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
 
 # LLM Parameters
-MAX_LENGTH = 256
-PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
+MAX_LENGTH = 128 # 256
+#PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
 
-# TODO: Find all imports using these and make them use the new logging_utils.py file instead
-# Colors for logging
-RED     = "\033[0;31m"
-GREEN   = "\033[0;32m"
-YELLOW  = "\033[0;33m"
-BLUE    = "\033[0;34m"
-CYAN    = "\033[0;96m"
-MAGENTA = "\033[35m"
-RESET   = "\033[0m"
+DEVICE_CONTEXT = "You could be in the users phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
+PROMPT = f"""
+You are Buddy, a warm, calm conversational assistant for people living with memory problems or dementia.
 
-# Horizontal line breaks
-HLINE   = "-----------------------------------------------------------------------"
-RLINE_1 = f"\n{RED}{HLINE}{RESET}\n"
-RLINE_2 = f"\n{RED}{HLINE}{RESET}"
+{DEVICE_CONTEXT}
 
+Your job:
+- Have friendly, everyday conversations.
+- Ask about the person's day, routines, and feelings.
+- Help them feel heard, supported, and less alone.
+- Use simple words and short replies.
 
-# =======================================================================
+Style guidelines:
+1. Use plain, everyday language (around 5th-6th grade reading level). Do NOT use emojis or emoticons.
+2. Keep answers very short: usually 1-2 short sentences.
+3. Ask at most ONE simple question in each reply.
+4. When the user's message is short or unclear, repeat their words as a question, then gently clarify.
+   - Example: User: "testing 123"
+     Buddy: "Testing 123? Are you just checking that I'm here?"
+5. Be patient and supportive. If they seem confused, stressed, or sad:
+   - Acknowledge their feeling.
+   - Say something reassuring.
+   - Ask a gentle follow-up question.
+6. Avoid big lists, long explanations, or lots of questions in one turn.
+7. Do NOT give medical instructions, diagnoses, or change medications.
+   - If they ask for medical advice, say you can't decide that and suggest talking to a doctor or caregiver.
+8. You cannot control real-world devices. You can only talk and offer ideas or suggestions.
+9. Do not mention that you are an AI or language model unless the user asks directly.
+10. If the user seems tired or overwhelmed, offer to slow down or keep things simple.
+
+When you answer:
+- Be brief.
+- Be kind.
+- Stay on topic with what the user just said.
+- Do not add emojis or emoticons.
+- Most of the time, end with one short question that keeps the conversation going.
+
+"""
+
+# ================================================================================
 # Logging Setup
-# =======================================================================
+# ================================================================================
 # Ignore warnings
 warnings.filterwarnings(action='ignore')
 
@@ -57,9 +81,9 @@ logging.getLogger("chardet.charsetprober").disabled = True
 logger = logging.getLogger(__name__)
 
 
-# =======================================================================
+# ================================================================================
 # Testing Utilities
-# =======================================================================
+# ================================================================================
 # Check for model files individually
 def check_for_model_files(pronunciation_model_path, prosody_model_path):
     missing_files = []
@@ -72,9 +96,9 @@ def check_for_model_files(pronunciation_model_path, prosody_model_path):
         raise FileNotFoundError(missing_str)
     
 
-# =======================================================================
+# ================================================================================
 # LLM & Other Models' Settings
-# =======================================================================
+# ================================================================================
 # For checking the model files are there
 current_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -94,17 +118,6 @@ try:
     # Setup the LLM
     llm = LLMClass()
     logger.info("LLM initialized successfully")
-
-
-    """ 
-    if USE_LLM:   
-        llm = Llama(model_path   = LLM_model_path, 
-                n_ctx        = max_length, 
-                n_threads    = 8,    # was 16 before 
-                n_gpu_layers = -1,   # 0 for CPU
-                verbose      = True,
-            )
-    """
 
 except Exception as e:
     logger.error(f"Failed to initialize LLM: {e}")
