@@ -5,6 +5,8 @@ import { FaCircleUser } from "react-icons/fa6";
 import { Profile, User              } from "@/api";
 import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
 import { toastMessage               } from "@/utils/functions/toast_helper";
+import { downloadData } from "@/api";
+
 
 
 // ====================================================================
@@ -20,7 +22,6 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
 
     // Download report utility
     const downloadReport = () => { toastMessage("downloadReport() not implemented yet...", false); }
-    const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
 
     // --------------------------------------------------------------------
     // Popover 
@@ -35,7 +36,7 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
                     <UserInfo user={profile.caregiver} isCare={true }/>
                 </div>
 
-                <button onClick={downloadReport} className={reportStyle}> Download Report </button>
+                <DownloadButton />
             </Popover.Body>
         </Popover>
     );
@@ -48,7 +49,7 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
     <OverlayTrigger show={show} placement="bottom" overlay={popover} trigger={[]} delay={{show: 250, hide: 400}}>
         <button onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} className={overlayStyle}>
             <FaUser size={25} color={isCare ? CAREGIVER_HEX : PATIENT_HEX}/>
-            <span className="text-nowrap align-middle">{user.first_name} {user.last_name}</span>
+            <span className="text-nowrap align-middle hidden sm:block">{user.first_name} {user.last_name}</span>
         </button>
     </OverlayTrigger>
     );
@@ -75,4 +76,31 @@ function UserInfo({ user, isCare } : { user: User, isCare: boolean }) {
         </span>
     </div>
     );
+}
+
+function DownloadButton() {
+    const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
+
+    const download = async () => {
+        const { fileName, fileContents } = await downloadData();
+        // console.log(download)
+        // Create a temporary link element
+        const link = document.createElement('a');
+        const blob = new Blob([fileContents], { type: 'text/plain' });
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+
+        // Programmatically click the link to trigger the download
+        link.click();
+
+        // Clean up the URL object
+        URL.revokeObjectURL(link.href);
+    }
+
+    return (
+        <button className={reportStyle} onClick={() => download()}>
+            Download Report
+        </button>
+    )
+    
 }

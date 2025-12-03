@@ -11,7 +11,7 @@ export async function login(username: string, password: string): Promise<Tokens>
         body        : JSON.stringify({ username, password }),
         credentials : "include",                                // let Django use cookies
     });
-    if (!response.ok) throw new Error("Bad credentials");
+    if (!response.ok) throw new Error(response.statusText);
     return response.json();
 }
 

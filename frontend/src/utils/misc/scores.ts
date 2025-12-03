@@ -9,7 +9,7 @@ export function getSessionsBefore(sessions: ChatSession[], cutoff: Date): ChatSe
 }
 
 
-// Get "average_scores" from each session and average each
+// Get "average_scores" from each session and average each; gets the average score of each biomarker across the whole week
 export function averageScore(sessions: ChatSession[]): Record<BiomarkerType, number> {
     const work: Record<string, { sum: number; count: number }> = Object.create(null);
 
@@ -33,3 +33,24 @@ export function averageScore(sessions: ChatSession[]): Record<BiomarkerType, num
 
     return result;
 }
+
+export function getFlaggedDays(sessions: ChatSession[], biomarker: BiomarkerType) : ChatSession[] {
+    var flagged: ChatSession[] = []
+    sessions.forEach((session) => {
+        if (session.average_scores[biomarker] <= 0.35) {
+            flagged.push(session);
+        }
+    })
+    return flagged;
+}
+
+export function getExemplarDays(sessions: ChatSession[], biomarker: BiomarkerType) : ChatSession[] {
+    var flagged: ChatSession[] = []
+    sessions.forEach((session) => {
+        if (session.average_scores[biomarker] >= 0.75) {
+            flagged.push(session);
+        }
+    })
+    return flagged;
+}
+
