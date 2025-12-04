@@ -40,6 +40,11 @@ export interface RAGInstructions {
     description : string;
 }
 
+export interface UpdateRAGInstructionsPayload {
+    instructions: string;
+    description : string;
+}
+
 // =======================================================================
 // Users & Profiles
 // =======================================================================

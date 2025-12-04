@@ -80,6 +80,16 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save(user=self.get_profile())
+        
+class RAGInstructionsViewSet(viewsets.ModelViewSet):
+    """
+    GET  /api/rag/  => fetch all RAG instructions
+    """
+    serializer_class   = RAGInstructionsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return RAGInstructions.objects.all()
 
 # ======================================================================= ===================================
 # Read-only List & Details (messages, biomarkers)
@@ -101,16 +111,6 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
                 .filter(is_active=False)
                 .select_related("user")
                 .prefetch_related("messages", "biomarker_scores"))
-        
-class RAGInstructionsViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    GET  /api/rag/  => fetch all RAG instructions
-    """
-    serializer_class   = RAGInstructionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return RAGInstructions.objects.all()
 
 # ======================================================================= ===================================
 # Profile Related Views

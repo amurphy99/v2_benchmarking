@@ -63,9 +63,10 @@ class Command(BaseCommand):
     # ====================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
-        # Delete and recreate the user data
+        # Delete and recreate the user data, RAG instructions
         User = get_user_model()
         User.objects.filter(username__in=USERNAMES).delete()
+        RAGInstructions.objects.all().delete()
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)

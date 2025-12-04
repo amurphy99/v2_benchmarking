@@ -65,7 +65,6 @@ class RAGInstructionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = RAGInstructions
         fields = ("id", "name", "instructions", "description")
-        read_only_fields = ("id")
 
 # =======================================================================
 # Profiles

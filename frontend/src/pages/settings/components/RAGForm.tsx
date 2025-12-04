@@ -12,8 +12,6 @@ export default function RAGForm() {
 
     if (isLoading) { return <p>Loading...</p>; }
 
-    console.log(RAGInstructions)
-
     const setCurInstructions = (name: string) => {
         const idx = RAGInstructions.findIndex((rag) => rag.name === name);
         if (idx !== -1) {
@@ -27,7 +25,6 @@ export default function RAGForm() {
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         updateRAGInstructions(name, {
-            name: name,
             instructions: instructions,
             description: description
         })
