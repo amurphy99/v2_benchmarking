@@ -66,7 +66,7 @@ async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
     
     # Synthesize the speech 
     tts_provider = TextToSpeechProvider()
-    speech = tts_provider.synthesize_speech(system_utt, "wav")
+    speech = tts_provider.synthesize_speech(system_utt)
     fire_and_log(handle_speech(speech, send_callback))
     logger.info(f"{lu.YELLOW}[LLM] Response sent to frontend. {lu.RESET}")
     

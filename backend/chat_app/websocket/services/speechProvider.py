@@ -90,7 +90,7 @@ class SpeechToTextProvider:
             for result in response.results:
                 if result.is_final:
                     transcript = result.alternatives[0].transcript
-                    if transcript == self._recent_transcript: # in case of duplicate final transcripts
+                    if transcript == self._recent_transcript or len(transcript) < 1: # in case of duplicate final transcripts
                         continue
                     self._recent_transcript = transcript
                     logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript}")
@@ -146,7 +146,6 @@ class TextToSpeechProvider:
                             )
                         )
                     ),
-                    thinking_config=types.ThinkingConfig(thinking_budget=0), # Disables thinking
                 )
             )
             data = response.candidates[0].content.parts[0].inline_data.data

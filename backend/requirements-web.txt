@@ -53,7 +53,7 @@ sounddevice==0.5.0
 stanza==1.9.2
 sympy==1.13.3
 threadpoolctl==3.5.0
-torch==2.4.1
+# torch==2.4.1
 tqdm==4.66.5
 typing_extensions==4.12.2
 tzdata==2024.2
