@@ -19,7 +19,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r"chatsessions", ChatSessionViewSet, basename="chatsession")
 router.register(r"reminders",    ReminderViewSet,    basename="reminder"   )
-router.register(r"rag",          RAGInstructionsViewSet, basename="rag_instructions")
+router.register(r"rags",          RAGInstructionsViewSet, basename="rag_instructions")
 
 # ------------------------------------------------------------------
 # Single-object endpoints (no list) & auth go into urlpatterns
@@ -41,7 +41,7 @@ urlpatterns = [
     path("signup/",   SignupView.as_view(), name="signup" ),
     
     # Single-row resources (not connected to a user)
-    path("rag/<str:rag_name>/", RAGInstructionsView.as_view(), name="rag_instructions"),
+    path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
 
     # JWT login
     path("token/",         MyTokenObtainPairView.as_view(), name="token"        ),

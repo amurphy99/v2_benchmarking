@@ -6,6 +6,7 @@ import { useState } from "react";
 
 export default function RAGForm() {
     const {data: RAGInstructions, isLoading} = useRAGInstructions();
+    const [id, setId] = useState<number>(-1);
     const [name, setName] = useState<string>("");
     const [instructions, setInstructions] = useState<string>("");
     const [description,  setDescription ] = useState<string>("");
@@ -15,6 +16,7 @@ export default function RAGForm() {
     const setCurInstructions = (name: string) => {
         const idx = RAGInstructions.findIndex((rag) => rag.name === name);
         if (idx !== -1) {
+            setId(idx);
             setName(RAGInstructions[idx].name);
             setInstructions(RAGInstructions[idx].instructions);
             setDescription(RAGInstructions[idx].description);
@@ -24,7 +26,7 @@ export default function RAGForm() {
     // Form submission logic 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateRAGInstructions(name, {
+        updateRAGInstructions(id, {
             instructions: instructions,
             description: description
         })

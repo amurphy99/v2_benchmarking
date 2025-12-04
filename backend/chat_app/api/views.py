@@ -52,14 +52,14 @@ class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
     
 class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     """
-    GET  /api/rag/<str:rag_name>/  => fetch a single set of RAG instructions
-    PUT  /api/rag/<str:rag_name>/  => update various fields
+    GET  /api/rag/<int:ragid>/  => fetch a single set of RAG instructions
+    PUT  /api/rag/<int:ragid>/  => update various fields
     """
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, rag_name):
-        instructions = RAGInstructions.objects.get(name=rag_name)
+    def get_object(self, ragid):
+        instructions = RAGInstructions.objects.get(id=ragid)
         return instructions
 
 # ======================================================================= ===================================
