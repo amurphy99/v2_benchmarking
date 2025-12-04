@@ -1,12 +1,15 @@
 # Django Rest Framework imports
 from rest_framework import viewsets, generics, permissions
-from rest_framework_simplejwt.views       import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession
-from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer
+from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer
 from  .mixins      import ProfileMixin
+from ..helpers.downloadHelpers     import get_download_data
 
 # ======================================================================= ===================================
 # Single-object endpoints (no list, one-to-one)
@@ -38,6 +41,14 @@ class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
         profile = self.get_profile()
         settings, _ = UserSettings.objects.get_or_create(user=profile)
         return settings
+    
+class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
+    """View to request the user's data to download. Returns a formatted string of the user's data."""
+    serializer_class   = DownloadDataSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        return self.get_profile()
 
 # ======================================================================= ===================================
 # List + Create
@@ -118,3 +129,21 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+    
+class MyTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)      # gives {"refresh": ..., "access": ...}
+        decoded_payload = token_backend.decode(data['access'], verify=True)
+        user_id=decoded_payload['user_id']
+        user = get_user_model().objects.get(id=user_id)
+        data["user"] = {
+            "id"        : user.id,
+            "username"  : user.username,
+            "first_name": user.first_name,
+            "last_name" : user.last_name,
+            "is_staff"  : user.is_staff,
+        }
+        return data
+class MyTokenRefreshView(TokenRefreshView):
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = MyTokenRefreshSerializer

@@ -10,10 +10,13 @@ class ProfileMixin:
     """
     def get_profile(self):
         user = self.request.user
+        return get_profile(user)
+            
+def get_profile(user):
+    try:
+        return Profile.objects.get(plwd=user)
+    except Profile.DoesNotExist:
         try:
-            return Profile.objects.get(plwd=user)
+            return Profile.objects.get(caregiver=user)
         except Profile.DoesNotExist:
-            try:
-                return Profile.objects.get(caregiver=user)
-            except Profile.DoesNotExist:
-                raise NotFound("No matching Profile for this user.")
+            raise NotFound("No matching Profile for this user.")

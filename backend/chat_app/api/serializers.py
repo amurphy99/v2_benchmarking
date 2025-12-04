@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal
+from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
 from django.db           import transaction
@@ -28,7 +29,8 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ChatSession
-        fields = ("id", "user", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics", "sentiment", "notes", "messages", "biomarkers", "average_scores")
+        fields = ("id", "user", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics", 
+                  "sentiment", "notes", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts
@@ -41,7 +43,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule")
+        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype")
         
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -82,6 +84,20 @@ class ProfileSerializer(serializers.ModelSerializer):
     def get_role(self, obj):
         req_user = self.context["request"].user
         return "Patient" if obj.plwd == req_user else "Caregiver"
+    
+class DownloadDataSerializer(serializers.ModelSerializer):
+    fileName = serializers.SerializerMethodField()
+    fileContents = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Profile
+        fields = ("fileName", "fileContents")
+    
+    def get_fileName(self, obj):
+        return f"{obj.plwd.first_name}_{obj.plwd.last_name}_data"
+    
+    def get_fileContents(self, obj):
+        return get_download_data(obj)
 
 # =======================================================================
 # Signup

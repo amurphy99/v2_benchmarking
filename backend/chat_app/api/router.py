@@ -1,5 +1,4 @@
 from rest_framework.routers         import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 from django.urls import path, include
 
 from .health import health
@@ -7,7 +6,9 @@ from .views import (
     GoalView, UserSettingsView,              # One-off endpoints
     ProfileView, SignupView,                 # Auth / Profile
     MyTokenObtainPairView,                   # JWT login
+    MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
+    DownloadDataView                         # Download data endpoint
 )
 
 # ------------------------------------------------------------------
@@ -30,6 +31,7 @@ urlpatterns = [
     # Single-row resources (one per user)
     path("goal/",             GoalView.as_view(), name="goal"    ),
     path("settings/", UserSettingsView.as_view(), name="settings"),
+    path("download/", DownloadDataView.as_view(), name="download"),
 
     # Profile & signup
     path("profile/", ProfileView.as_view(), name="profile"),
@@ -37,5 +39,5 @@ urlpatterns = [
 
     # JWT login
     path("token/",         MyTokenObtainPairView.as_view(), name="token"        ),
-    path("token/refresh/",      TokenRefreshView.as_view(), name="token_refresh"),
+    path("token/refresh/",      MyTokenRefreshView.as_view(), name="token_refresh"),
 ]

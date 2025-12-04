@@ -23,31 +23,18 @@ def sentiment_scores(sentence): # From Geeks for Geeks
     
     
 def get_topics(text): # From freeCodeCamp
-    
-    # Initialize english stopwords
     english_stopwords = stopwords.words("english")
-
-    #convert article to tokens
     tokens = word_tokenize(text)
-
-    #extract alpha words and convert to lowercase
     alpha_lower_tokens = [word.lower() for word in tokens if word.isalpha()]
-
-    #remove stopwords
     alpha_no_stopwords = [word for word in alpha_lower_tokens if word not in english_stopwords]
-
-    #Count word
     BoW = Counter(alpha_no_stopwords)
-
-    #3 Most common words
-    most_common = BoW.most_common(3)
+    most_common = BoW.most_common(6)
     
     topics = []
-    
     for token in most_common:
         topics.append(token[0])
         
-    return str(topics)[1:-1].replace("'", "")
+    return str(topics).strip()
 
 
 def get_sentiment_topics(msgs):
@@ -67,5 +54,5 @@ def get_sentiment_topics(msgs):
     try:    
         topics = get_topics(message_text)
     except: 
-        topics = "N/A"
+        topics = "['No','Topics','Available']"
     return sentiment, topics

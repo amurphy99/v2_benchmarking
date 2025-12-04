@@ -4,7 +4,7 @@ import MyWordCloud from "../common/WordCloud";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { useAuth } from "@/context/AuthProvider";
 import { TopicsCard } from "../common/TopicsCard";
-import { colStyle, widthStyle } from "@/utils/styling/sharedStyles";
+import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
 import DropdownModal from "@/components/modals/DropdownModal";
 
 export function DaySummary() {
@@ -18,7 +18,7 @@ export function DaySummary() {
 
     function ChatSummaryCard() {
         return (
-            <div className="rounded-lg w-full p-[2rem] sm:w-3/4 lg:w-1/2 bg-white shadow-md shadow-gray-300">
+            <div className={`${blockStyle}`}>
                 <h2 className={`${role}-text`}>Chat Summary</h2>
                 <p className="text-lg">To do: Add a summary of the chat.</p>
                 <button className={`${role}-button-outline p-[1rem] text-xl rounded-md w-full`} onClick={() => {toTranscript()}}> View Full Transcript </button>
@@ -36,7 +36,7 @@ export function DaySummary() {
 
     
     return (
-        <div className="pb-[3rem]">
+        <div>
             <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
                 ← {chatDate.toLocaleDateString("en-US", dateFormatOptions)}
             </div>

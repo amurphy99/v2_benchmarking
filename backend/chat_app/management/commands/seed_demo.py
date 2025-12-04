@@ -16,6 +16,8 @@ DEMO_MESSAGES = [
     "I'm doing well, thank you!", 
     "Can you tell me about your day?", 
     "Sure. This morning I went for a walk.",
+    "Did you enjoy your walk?",
+    "Yes, I enjoyed my walk.",
 ]
 
 
@@ -42,7 +44,6 @@ class Command(BaseCommand):
         # Also create settings and goal objects for the new Profile
         UserSettings.objects.create(user=profile)
         Goal        .objects.create(user=profile, target=5, start_date=two_days_ago)
-
         # Add sample ChatSessions
         self.seed_chats(plwd, days_back=10)
         
@@ -74,7 +75,9 @@ class Command(BaseCommand):
             ended_at   = started_at + timedelta(minutes=5)
 
             # 1) Create a ChatSession object
-            session = ChatSession.objects.create(user=plwd_user, source="webapp", is_active=False, end_ts=ended_at)
+            session = ChatSession.objects.create(user=plwd_user, source="webapp", is_active=False, end_ts=ended_at, 
+                                                 topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
+                                                 sentiment="Positive")
             session.date = started_at
             session.save(update_fields=["date"])
 

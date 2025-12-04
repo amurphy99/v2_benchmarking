@@ -1,9 +1,10 @@
 from django.db    import transaction
 from django.utils import timezone
-from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore
+from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
 
 from .  import logging_utils as lu
 from .db_helpers import get_sentiment_topics
+from ..api.mixins import get_profile
 
 import logging
 logger = logging.getLogger(__name__)
@@ -14,34 +15,6 @@ logger = logging.getLogger(__name__)
 # --- ToDo: Need to add topic/sentiment fields, probably on close ---
 # --- ToDo: If chat hasn't been modified in X time, save it and remake one automatically ---
 # Later on may need to specifically add start/end timestamps to chats/messages
-"""
-
-        sentiment = "N/A"
-        topics = "N/A"
-        message_text = get_message_text(messages)
-        try:
-            sentiment = sentiment_scores(message_text)
-            topics = get_topics(message_text)
-        except Exception as e:
-            print(e)
-            pass  # If there is an error in extracting sentiment or topics, we will return "N/A"
-        
-
-        
-def get_sentiment_topics(data_messages):
-    message_text = get_message_text(data_messages)
-
-    # Sentiment
-    try:    sentiment = sentiment_scores(message_text)
-    except: sentiment = "N/A"
-
-    # Topics
-    try:    topics = get_topics(message_text)
-    except: topics = "N/A"
-
-    return sentiment, topics
-
-"""
 
 class ChatService:
     # -----------------------------------------------------------------------
@@ -82,6 +55,12 @@ class ChatService:
         if notes     is not None: session.notes     = notes
         if topics    is not None: session.topics    = topics
         if sentiment is not None: session.sentiment = sentiment
+        
+        profile = get_profile(user)
+        if profile is not None:
+            settings = UserSettings.objects.get(user=profile)
+            session.taskType    = settings.taskType
+            session.taskSubtype = settings.taskSubtype
         session.save()
        
         logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")
