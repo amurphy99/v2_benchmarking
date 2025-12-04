@@ -1,14 +1,13 @@
+import { updateGoal, updateUserSettings } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
 import { h4, plainButtonStyle, plainButtonStyleDisabled, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
-import { ChangeEventHandler, useState } from "react";
-import { Button } from "react-bootstrap";
+import { useState } from "react";
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 type PeriodOptions = "N" | "W" | "M";
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
-type Methods = { submit: () => void };
 
 export function Settings() {
     const { profile } = useAuth();
@@ -26,7 +25,20 @@ export function Settings() {
     // ToDo: actually change the goal -- maybe do the async/await here + try and except
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        toastMessage("Settings updated (To-do)", true); 
+        updateUserSettings({
+            patientCanSchedule: true,
+            patientViewOverall: true,
+            taskType: taskType,
+            taskSubtype: taskSubtype,
+        });
+        updateGoal({
+            auto_renew: autoRenew,
+            target: target,
+            period: period,
+            start_date: startDay,
+            start_dow: startDOW,
+        })
+        toastMessage("Settings updated", true); 
     };
 
     const handleFileChange = (e) => {
@@ -45,6 +57,7 @@ export function Settings() {
     // Return UI component
     // --------------------------------------------------------------------
     return (
+    <div className="m-[1rem]">
     <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
         <div className={h4}> Patient Goal </div>
     
@@ -105,8 +118,8 @@ export function Settings() {
             <div className="flex items-center justify-between gap-2">
                 <select className={`w-50 ${borderStyle}`} value={taskType} onChange={(e) => setTaskType(e.target.value as TaskOptions)}>
                     <option value="chat" > Free Chat  </option>
-                    <option value="chatTopic"> Chat About A Topic </option>
-                    <option value="chatImage"> Chat About An Image </option>
+                    <option value="chattopic"> Chat About A Topic </option>
+                    <option value="chatimage"> Chat About An Image </option>
                 </select>
             </div>
 
@@ -114,7 +127,7 @@ export function Settings() {
             <span className={formText}>Chat Prompt</span>
 
             <div className="flex flex-col gap-2">
-                <input type="text" disabled={taskType != "chatTopic"} className={`w-full ${borderStyle} ${taskType != "chatTopic" ? disabledStyle : ""}`} value={taskSubtype} 
+                <input type="text" disabled={taskType != "chattopic"} className={`w-full ${borderStyle} ${taskType != "chattopic" ? disabledStyle : ""}`} value={taskSubtype} 
                     onChange={(e) => setTaskSubtype(e.target.value)} />
                 <input
                     type="file"
@@ -127,7 +140,7 @@ export function Settings() {
                     htmlFor="upload-image"
                     className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
                     onClick={(e) => {
-                        if (taskType !== "chatImage") {
+                        if (taskType !== "chatimage") {
                         e.preventDefault(); // stop the file picker from opening
                         }
                     }}
@@ -143,6 +156,7 @@ export function Settings() {
         <button type="submit" className="btn btn-primary w-fit">Save Settings</button>
 
     </form>
+    </div>
     );
 }
     

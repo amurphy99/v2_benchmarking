@@ -32,7 +32,7 @@ const TITLES: Record<string, string> = {
     default         : "Cognibot",
 };
 
-const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert"]
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings"]
 
 // ====================================================================
 // Header
@@ -79,6 +79,12 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                         <ProfileInfo profile={profile} user={user}/>
                         <NavLink to="/settings" className={`text-gray-500`}> <GoGear size={22}/> </NavLink>
                     </>
+                }
+                {
+                    isCare ? 
+                    <NavLink to="/settings">
+                        <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
+                    </NavLink> : null
                 }
                 {
                     isCare ? 

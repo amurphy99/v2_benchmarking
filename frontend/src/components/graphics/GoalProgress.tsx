@@ -6,7 +6,7 @@ export default function GoalProgress () {
     const current = profile.goal.current;
     const target  = profile.goal.target
 
-    const percent = Math.round((current / target) * 100);
+    const percent = Math.min(Math.round((current / target) * 100), 100);
 
     return (
         <div className={`${role}-text`}>
