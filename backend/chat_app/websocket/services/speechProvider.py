@@ -33,7 +33,7 @@ class SpeechToTextProvider:
 
     def _audio_generator(self):
         '''Generates audio requests from the audio buffer.'''
-        while self._streaming:
+        while self._streaming or self._audio_buffer:
             if self._audio_buffer:
                 data = self._audio_buffer.get()
                 if data is None:
