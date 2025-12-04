@@ -22,7 +22,6 @@ export function Settings() {
     const { windowLabel, todayIdx } = getWindowLabel(startDOW);
     
     // Form submission logic 
-    // ToDo: actually change the goal -- maybe do the async/await here + try and except
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         updateUserSettings({
