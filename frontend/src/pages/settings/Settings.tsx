@@ -4,6 +4,7 @@ import { toastMessage } from "@/utils/functions/toast_helper";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
 import { h4, plainButtonStyle, plainButtonStyleDisabled, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
+import RAGForm from "./components/RAGForm";
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 type PeriodOptions = "N" | "W" | "M";
@@ -57,104 +58,106 @@ export function Settings() {
     // --------------------------------------------------------------------
     return (
     <div className="m-[1rem]">
-    <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
-        <div className={h4}> Patient Goal </div>
-    
-        {/*   Auto Renew   */}
-        <div className={switchStyle}>
-            <label className={switchLabel}> Auto-renew goal frequency </label>
-            <input className="form-check-input" type="checkbox" role="switch" checked={autoRenew ?? false} onChange={(e) => setAutoRenew(e.target.checked)}/>
-        </div>
-
-
-        {/*   Frequency   */}
-        <div className="flex flex-col"> 
-            <span className={formText}>Frequency</span>
-
-            <div className="flex items-center justify-between gap-2">
-                {/* Type of activity we have the goal for (?) */}
-                <select disabled className={`w-40 ${disabledStyle}`}> <option>Daily Chat</option> </select>
-
-                {/* Goal number */}
-                <input type="number" min={1} className={`w-15 ${borderStyle}`} value={target} 
-                    onChange={(e) => setTarget(+e.target.value)} />
-
-                {/* Time unit */}
-                <span className="w-20"> Times Per </span>
-                <select className={`w-25 ${borderStyle}`} value={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
-                    <option value="Week" > Week  </option>
-                    <option value="Month"> Month </option>
-                </select>
-            </div>
-        </div>
-
-
-        {/*   Start Day & Window   */}
-        <div className="flex items-center gap-2">
-            {/* Start day */}
-            <div className={rowThree}>
-                <label className={formText}>Start Day</label>
-                <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
-                    {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
-                </select>
+        <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
+            <div className={h4}> Patient Goal </div>
+        
+            {/*   Auto Renew   */}
+            <div className={switchStyle}>
+                <label className={switchLabel}> Auto-renew goal frequency </label>
+                <input className="form-check-input" type="checkbox" role="switch" checked={autoRenew ?? false} onChange={(e) => setAutoRenew(e.target.checked)}/>
             </div>
 
-            {/* Current window preview */}
-            <div className={rowThree}>
-                <label className={formText}>Current Goal Window</label>
-                <span className={`mt-1 ${disabledStyle}`}> {windowLabel} </span>
+
+            {/*   Frequency   */}
+            <div className="flex flex-col"> 
+                <span className={formText}>Frequency</span>
+
+                <div className="flex items-center justify-between gap-2">
+                    {/* Type of activity we have the goal for (?) */}
+                    <select disabled className={`w-40 ${disabledStyle}`}> <option>Daily Chat</option> </select>
+
+                    {/* Goal number */}
+                    <input type="number" min={1} className={`w-15 ${borderStyle}`} value={target} 
+                        onChange={(e) => setTarget(+e.target.value)} />
+
+                    {/* Time unit */}
+                    <span className="w-20"> Times Per </span>
+                    <select className={`w-25 ${borderStyle}`} value={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
+                        <option value="Week" > Week  </option>
+                        <option value="Month"> Month </option>
+                    </select>
+                </div>
             </div>
-        </div>
 
-        <br />
 
-        <div className={h4}> Chat Settings </div>
-        {/*   Chat Task Type   */}
-        <div className="flex flex-col"> 
-            <span className={formText}>Chat Type</span>
+            {/*   Start Day & Window   */}
+            <div className="flex items-center gap-2">
+                {/* Start day */}
+                <div className={rowThree}>
+                    <label className={formText}>Start Day</label>
+                    <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
+                        {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
+                    </select>
+                </div>
 
-            {/* Main Chat Type */}
-            <div className="flex items-center justify-between gap-2">
-                <select className={`w-50 ${borderStyle}`} value={taskType} onChange={(e) => setTaskType(e.target.value as TaskOptions)}>
-                    <option value="chat" > Free Chat  </option>
-                    <option value="chattopic"> Chat About A Topic </option>
-                    <option value="chatimage"> Chat About An Image </option>
-                </select>
+                {/* Current window preview */}
+                <div className={rowThree}>
+                    <label className={formText}>Current Goal Window</label>
+                    <span className={`mt-1 ${disabledStyle}`}> {windowLabel} </span>
+                </div>
             </div>
 
-            {/* Prompt if chosen chatTopic or chatImage */}
-            <span className={formText}>Chat Prompt</span>
+            <br />
 
-            <div className="flex flex-col gap-2">
-                <input type="text" disabled={taskType != "chattopic"} className={`w-full ${borderStyle} ${taskType != "chattopic" ? disabledStyle : ""}`} value={taskSubtype} 
-                    onChange={(e) => setTaskSubtype(e.target.value)} />
-                <input
-                    type="file"
-                    accept="image/*"
-                    id="upload-image"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                />
-                <label 
-                    htmlFor="upload-image"
-                    className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
-                    onClick={(e) => {
-                        if (taskType !== "chatimage") {
-                        e.preventDefault(); // stop the file picker from opening
-                        }
-                    }}
-                >
-                    Upload Image
-                </label>
-                <div className="italic text-gray-500"> {selectedFile ? `Selected file: ${selectedFile.name}` : "No file selected"} </div>
+            <div className={h4}> Chat Settings </div>
+            {/*   Chat Task Type   */}
+            <div className="flex flex-col"> 
+                <span className={formText}>Chat Type</span>
+
+                {/* Main Chat Type */}
+                <div className="flex items-center justify-between gap-2">
+                    <select className={`w-50 ${borderStyle}`} value={taskType} onChange={(e) => setTaskType(e.target.value as TaskOptions)}>
+                        <option value="chat" > Free Chat  </option>
+                        <option value="chattopic"> Chat About A Topic </option>
+                        <option value="chatimage"> Chat About An Image </option>
+                    </select>
+                </div>
+
+                {/* Prompt if chosen chatTopic or chatImage */}
+                <span className={formText}>Chat Prompt</span>
+
+                <div className="flex flex-col gap-2">
+                    <input type="text" disabled={taskType != "chattopic"} className={`w-full ${borderStyle} ${taskType != "chattopic" ? disabledStyle : ""}`} value={taskSubtype} 
+                        onChange={(e) => setTaskSubtype(e.target.value)} />
+                    <input
+                        type="file"
+                        accept="image/*"
+                        id="upload-image"
+                        style={{ display: 'none' }}
+                        onChange={handleFileChange}
+                    />
+                    <label 
+                        htmlFor="upload-image"
+                        className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
+                        onClick={(e) => {
+                            if (taskType !== "chatimage") {
+                            e.preventDefault(); // stop the file picker from opening
+                            }
+                        }}
+                    >
+                        Upload Image
+                    </label>
+                    <div className="italic text-gray-500"> {selectedFile ? `Selected file: ${selectedFile.name}` : "No file selected"} </div>
+                </div>
             </div>
-        </div>
 
-        <br />
+            <br />
 
-        <button type="submit" className="btn btn-primary w-fit">Save Settings</button>
+            <button type="submit" className="btn btn-primary w-fit">Save Settings</button>
 
-    </form>
+        </form>
+
+        <RAGForm />
     </div>
     );
 }

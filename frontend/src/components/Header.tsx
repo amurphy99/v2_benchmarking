@@ -77,7 +77,6 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                     <>
                         <div className={`vr`}></div>
                         <ProfileInfo profile={profile} user={user}/>
-                        <NavLink to="/settings" className={`text-gray-500`}> <GoGear size={22}/> </NavLink>
                     </>
                 }
                 {

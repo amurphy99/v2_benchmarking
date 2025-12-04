@@ -209,3 +209,10 @@ class UserSettings(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user"], name="one_settings_per_user")]
+
+class RAGInstructions(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    instructions = models.TextField()
+    description  = models.TextField()
+    
+    def __str__(self): return f"{self.name}: {self.description}"

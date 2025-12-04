@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal
+from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
@@ -60,6 +60,12 @@ class GoalSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "current", "remaining")
 
     def get_remaining(self, obj): return obj.remaining
+    
+class RAGInstructionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RAGInstructions
+        fields = ("id", "name", "instructions", "description")
+        read_only_fields = ("id")
 
 # =======================================================================
 # Profiles

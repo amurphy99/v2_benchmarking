@@ -6,8 +6,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession
-from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer
+from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions
+from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 
@@ -49,6 +49,18 @@ class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
     
     def get_object(self):
         return self.get_profile()
+    
+class RAGInstructionsView(generics.RetrieveUpdateAPIView):
+    """
+    GET  /api/rag/<str:rag_name>/  => fetch a single set of RAG instructions
+    PUT  /api/rag/<str:rag_name>/  => update various fields
+    """
+    serializer_class   = RAGInstructionsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self, rag_name):
+        instructions = RAGInstructions.objects.get(name=rag_name)
+        return instructions
 
 # ======================================================================= ===================================
 # List + Create
@@ -89,6 +101,16 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
                 .filter(is_active=False)
                 .select_related("user")
                 .prefetch_related("messages", "biomarker_scores"))
+        
+class RAGInstructionsViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    GET  /api/rag/  => fetch all RAG instructions
+    """
+    serializer_class   = RAGInstructionsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return RAGInstructions.objects.all()
 
 # ======================================================================= ===================================
 # Profile Related Views

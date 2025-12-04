@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder
+from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, RAGInstructions
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -19,7 +19,41 @@ DEMO_MESSAGES = [
     "Did you enjoy your walk?",
     "Yes, I enjoyed my walk.",
 ]
+DEMO_RAG_NAMES = [
+    "start_conversation",
+    "end_conversation",
+    "initiate_smalltalk",
+]
+DEMO_RAG_DESCRIPTIONS = [
+    "Instructions for starting a conversation with the user.",
+    "Instructions for ending a conversation with the user.",
+    "Instructions for initiating small talk with the user.",
+]
 
+DEMO_RAG_INSTRUCTIONS = [
+    '''
+    Purpose / Goal:
+    Start the chat warmly, introduce yourself as QT Robot, and invite the user to share their name.
+
+    When to use:
+    At the very beginning of interaction, when there is no previous chat history with the user.
+    ''',
+    '''
+    Purpose / Goal:
+    Close the interaction on a positive emotional note so the user feels valued.
+
+    When to use:
+    After reflecting on fun and imaginative scenarios regarding the past and the future, gracefully bring an end to the conversation.
+    ''',
+    '''
+    Purpose / Goal:
+    Build rapport and make the user comfortable through short, pleasant conversation.
+
+    When to use:
+    •	Once the user replies or shares their name, transition naturally into light small talk or a fun, simple question about them. 
+    •	Also, as a follow-up after the initial greetings phase, you will ask questions based on the user's response. The follow-up questions should be open-ended based on the user's response, such that the user can elaborate on the previously mentioned topic.
+    ''',
+]
 
 class Command(BaseCommand):
     help = "Seeds demo users and a sample ChatSession with messages+biomarkers."
@@ -61,6 +95,7 @@ class Command(BaseCommand):
         Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
         self.seed_chats(plwd_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
+        self.seed_rag_instructions()
 
 
     # ====================================================================
@@ -99,7 +134,7 @@ class Command(BaseCommand):
 
             #print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")
             
-     # ====================================================================
+    # ====================================================================
     # Seed Reminders into the DB for a user
     # ====================================================================
     def seed_reminders(self, plwd, num_reminders=5):
@@ -127,3 +162,13 @@ class Command(BaseCommand):
                                            end=end_day, startTime=start_time, endTime=end_time,
                                            daysOfWeek=[3])
         reminder.save()
+        
+    # ====================================================================
+    # Seed RAG Instructions into the DB
+    # ====================================================================
+    def seed_rag_instructions(self):
+        for idx, name in enumerate(DEMO_RAG_NAMES):
+            description = DEMO_RAG_DESCRIPTIONS[idx]
+            instructions = DEMO_RAG_INSTRUCTIONS[idx]
+            rag_obj = RAGInstructions.objects.create(name=name, description=description, instructions=instructions)
+            rag_obj.save()

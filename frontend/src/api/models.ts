@@ -33,6 +33,13 @@ export interface Goal {
   remaining  : number;
 }
 
+export interface RAGInstructions {
+    id          : number;
+    name        : string;
+    instructions: string;
+    description : string;
+}
+
 // =======================================================================
 // Users & Profiles
 // =======================================================================
