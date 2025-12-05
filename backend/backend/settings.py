@@ -33,6 +33,7 @@ ALLOWED_HOSTS = [
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
     "sandbox2.cognibot.org",   "www.sandbox2.cognibot.org",
+    "sandbox3.cognibot.org",   "www.sandbox3.cognibot.org",
     "10.0.2.2", # for android dev
 ]
 
@@ -135,12 +136,13 @@ ASGI_APPLICATION = 'backend.asgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE'    : 'django.db.backends.postgresql',
-        'NAME'      : config('POSTGRES_DB'),
-        'USER'      : config('POSTGRES_USER'),
-        'PASSWORD'  : config('POSTGRES_PASSWORD'),
-        'HOST'      : 'db',
-        'PORT'      : '5432',
+        'ENGINE'   : 'django.db.backends.postgresql',
+        'NAME'     : config('POSTGRES_DB'),
+        'USER'     : config('POSTGRES_USER'),
+        'PASSWORD' : config('POSTGRES_PASSWORD'),
+        # kept the defaults, so old deployments should still work
+        'HOST'     : config('POSTGRES_HOST', default='db'), 
+        'PORT'     : config('POSTGRES_PORT', default='5432'),
     }
 }
 
