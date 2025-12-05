@@ -22,7 +22,7 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
                 <div className="flex flex-col w-full p-[0.5rem]">
                     <div className="flex justify-between w-full">
                         <b className="no-underline text-xl font-semibold">{date.toLocaleDateString("en-US", {month: "short", day: "numeric"})}</b>
-                        <p className="">{session.duration / 60} minutes</p>
+                        <p className="">{Math.round((session.duration / 60) * 100) / 100} minutes</p>
                     </div>
                     <div className={`${role}-text pb-2`}>
                         <p className="font-bold text-3xl mb-1">{topics[0]}</p>
