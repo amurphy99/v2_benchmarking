@@ -21,6 +21,12 @@ export const dateFormatOptionsShort: Intl.DateTimeFormatOptions = {
     day     : "numeric",
 };
 
+export const dateFormatOptionsMed: Intl.DateTimeFormatOptions = {
+    weekday : "short",
+    month   : "short",
+    day     : "numeric",
+};
+
 export const dateFormatOptions: Intl.DateTimeFormatOptions = {
     month   : "short",
     day     : "numeric",

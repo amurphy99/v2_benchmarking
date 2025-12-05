@@ -57,7 +57,7 @@ export function Settings() {
     // --------------------------------------------------------------------
     return (
     <div className="m-[1rem]">
-    <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
+    <form onSubmit={onSubmit} className="flex flex-col m-[1rem]">
         <div className={h4}> Patient Goal </div>
     
         {/*   Auto Renew   */}
@@ -68,7 +68,7 @@ export function Settings() {
 
 
         {/*   Frequency   */}
-        <div className="flex flex-col"> 
+        <div className="flex flex-col w-fit"> 
             <span className={formText}>Frequency</span>
 
             <div className="flex items-center justify-between gap-2">

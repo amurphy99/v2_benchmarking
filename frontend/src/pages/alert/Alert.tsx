@@ -4,7 +4,7 @@ import { blockStyle, colStyle } from "@/utils/styling/sharedStyles";
 import WeeklyMoods from "@/components/graphics/WeeklyMoods";
 import { getMoodAlert, getWordAlert, WordAlert } from "@/utils/functions/getAlerts";
 import { useAuth } from "@/context/AuthProvider";
-import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
+import { dateFormatOptionsMed, dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 
 export function Alert() {
     const { data: sessions, isLoading } = useChatSessions();
@@ -44,7 +44,7 @@ function FlaggedWordAlert( { wordAlerts } : { wordAlerts: WordAlert[] } ) {
                 {wordAlerts.map( (alert, idx) => {
                     return(
                         <div className="grid grid-cols-4 items-start justify-between" key={idx}>
-                            <li className="text-xl text-center font-semibold underline text-violet-600 m-0">
+                            <li className="text-xl self-center font-semibold underline text-violet-600 m-0 list-inside">
                                 {alert.date.toLocaleDateString("en-US", dateFormatOptionsShort)}
                             </li>
                             <div className="text-xl col-span-3 flex flex-row flex-wrap gap-x-4 border-1 border-gray-200 rounded-md p-1">
@@ -66,8 +66,13 @@ function MoodAlert( { week, days } : { week: ChatWeek, days: Date[] } ) {
     return (
         <div className={`${blockStyle}`}>
             <h2 className={`caregiver-text mb-0`}>Mood Change</h2>
-            <p className="text-lg mt-[1rem]">{useAuth().profile.plwd.first_name} was in a bad mood on {days.toString()}. You might want to talk to her.</p>
+            <p className="text-lg mt-[1rem]">{useAuth().profile.plwd.first_name} was in a bad mood on 
+                {stringifyDays(days)}. You might want to talk with them.</p>
             <WeeklyMoods week={week} />
         </div>
     )
+}
+
+function stringifyDays(days: Date[]): string {
+    return days.map(day => day.toLocaleDateString("en-US", dateFormatOptionsMed)).join(", ");
 }

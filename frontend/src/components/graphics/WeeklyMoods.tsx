@@ -1,3 +1,4 @@
+import { flaggedMoods } from "@/utils/functions/getAlerts";
 import { ChatWeek, getChatsInWeek } from "@/utils/functions/getChatWeeks";
 import { Icon } from "@iconify/react/dist/iconify.js";
 
@@ -13,7 +14,7 @@ export default function WeeklyMoods( { week } : { week: ChatWeek } ) {
             {sessions.map((day, idx) => {
                 return (
                     <div className="flex flex-col items-center" key={idx}>
-                        <p className={day.sessions[0]?.sentiment == "Negative" ? flaggedStyle : unflaggedStyle}>{day.day}</p>
+                        <p className={flaggedMoods.includes(day.sessions[0]?.sentiment) ? flaggedStyle : unflaggedStyle}>{day.day}</p>
                         <div className={day.sessions.length > 0 ? emoteStyle : emptyStyle}>
                             {day.sessions.length > 0 ? getEmote(day.sessions[0]?.sentiment) : null}
                         </div>
