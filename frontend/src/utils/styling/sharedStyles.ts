@@ -18,3 +18,8 @@ export const switchLabel = "font-medium";
 
 export const plainButtonStyle = "border border-solid border-gray-300 rounded p-2 text-center hover:cursor-pointer hover:bg-gray-100 w-fit";
 export const plainButtonStyleDisabled = "border border-solid border-gray-300 rounded p-2 text-center bg-gray-100 text-gray-400 w-fit";
+
+export const formText      = "font-medium fw-bold";
+export const borderStyle   = "border border-gray-100 py-1 px-2"
+export const disabledStyle = `bg-gray-100 text-gray-400 ${borderStyle}`;
+
