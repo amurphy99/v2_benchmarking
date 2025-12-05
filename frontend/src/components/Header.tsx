@@ -38,7 +38,7 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // Header
 // ====================================================================
 export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, profile, logout } = useAuth();
+    const { user, profile } = useAuth();
     const role = profile.role.toLowerCase();
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
@@ -54,9 +54,7 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     if (SHOW_HEADER.includes(pathname)) {
         return (
         <header className={"flex items-center gap-6 px-[2rem] py-[1rem]"}>
-            <div className={`${isMobile ? "block" : "hidden"} ${role}-text hover:cursor-pointer`} onClick={() => logout()}>
-                <FaCircleUser size={"2.5rem"} />
-            </div>
+            <ProfileInfo profile={profile} user={user} />
             <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
             <div className={`ml-auto flex items-center gap-3`}>
 
@@ -68,17 +66,11 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                         <NavLink to="/practice"   className={navLinkCls}> Practice  </NavLink> :
                         <NavLink to="/chat"      className={navLinkCls}> Chat      </NavLink>
                     }
-                    <NavLink to="/schedule"  className={navLinkCls}> Schedule  </NavLink>
                     <NavLink to="/analysis" className={navLinkCls}> Analysis  </NavLink>
                 </nav>
 
                 {/* Right Side Icons */}
-                {isMobile ? null : 
-                    <>
-                        <div className={`vr`}></div>
-                        <ProfileInfo profile={profile} user={user}/>
-                    </>
-                }
+                <div className={`vr`}></div>
                 {
                     isCare ? 
                     <NavLink to="/settings">
@@ -91,6 +83,7 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                         <Icon icon="fluent-color:mail-alert-32" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
                 }
+                
                 
             </div>
 

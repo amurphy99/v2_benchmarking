@@ -3,9 +3,10 @@ import { OverlayTrigger, Popover } from "react-bootstrap";
 import { FaUser       } from "react-icons/fa";
 import { FaCircleUser } from "react-icons/fa6";
 import { Profile, User              } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
+import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
 import { toastMessage               } from "@/utils/functions/toast_helper";
 import { downloadData } from "@/api";
+import { useAuth } from "@/context/AuthProvider";
 
 
 
@@ -14,14 +15,14 @@ import { downloadData } from "@/api";
 // ====================================================================
 export default function ProfileInfo({ profile, user } : { profile: Profile, user: User }) {
     const isCare = profile.caregiver.id === user.id;
+    const { logout } = useAuth();
 
     // Popover controls
     const [show, setShow] = useState(false);
     const open  = () => setShow(true);
     const close = () => setShow(false);
 
-    // Download report utility
-    const downloadReport = () => { toastMessage("downloadReport() not implemented yet...", false); }
+    const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"
 
     // --------------------------------------------------------------------
     // Popover 
@@ -35,8 +36,8 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
                     <UserInfo user={profile.plwd     } isCare={false}/>
                     <UserInfo user={profile.caregiver} isCare={true }/>
                 </div>
-
-                <DownloadButton />
+                {isCare ? <DownloadButton /> : null}
+                <button className={logoutStyle} onClick={() => logout()}>Log Out</button>
             </Popover.Body>
         </Popover>
     );
@@ -48,8 +49,7 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
     return (
     <OverlayTrigger show={show} placement="bottom" overlay={popover} trigger={[]} delay={{show: 250, hide: 400}}>
         <button onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} className={overlayStyle}>
-            <FaUser size={25} color={isCare ? CAREGIVER_HEX : PATIENT_HEX}/>
-            <span className="text-nowrap align-middle hidden sm:block">{user.first_name} {user.last_name}</span>
+            <FaCircleUser size={"2.5rem"} color={isCare ? CAREGIVER_OKLCH : PATIENT_OKLCH}/>
         </button>
     </OverlayTrigger>
     );
@@ -83,7 +83,6 @@ function DownloadButton() {
 
     const download = async () => {
         const { fileName, fileContents } = await downloadData();
-        // console.log(download)
         // Create a temporary link element
         const link = document.createElement('a');
         const blob = new Blob([fileContents], { type: 'text/plain' });

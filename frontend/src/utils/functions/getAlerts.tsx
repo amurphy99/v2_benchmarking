@@ -1,5 +1,7 @@
 import { ChatSession } from "@/api";
 
+export const flaggedMoods = ["Negative", "Sad", "Angry", "Scared"];
+
 export interface WordAlert {
     date: Date,
     words: string[],
@@ -8,7 +10,7 @@ export interface WordAlert {
 export function getMoodAlert(sessions: ChatSession[]): Date[] {
     var days: Date[] = [];
     for (let session of sessions) {
-        if (session.sentiment == "Negative") {
+        if (flaggedMoods.includes(session.sentiment)) {
             days.push(new Date(session.date));
         }
     }

@@ -58,14 +58,48 @@ export function Settings() {
     // --------------------------------------------------------------------
     return (
     <div className="m-[1rem]">
-        <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
-            <div className={h4}> Patient Goal </div>
-        
-            {/*   Auto Renew   */}
-            <div className={switchStyle}>
-                <label className={switchLabel}> Auto-renew goal frequency </label>
-                <input className="form-check-input" type="checkbox" role="switch" checked={autoRenew ?? false} onChange={(e) => setAutoRenew(e.target.checked)}/>
+    <form onSubmit={onSubmit} className="flex flex-col m-[1rem]">
+        <div className={h4}> Patient Goal </div>
+    
+        {/*   Auto Renew   */}
+        <div className={switchStyle}>
+            <label className={switchLabel}> Auto-renew goal frequency </label>
+            <input className="form-check-input" type="checkbox" role="switch" checked={autoRenew ?? false} onChange={(e) => setAutoRenew(e.target.checked)}/>
+        </div>
+
+
+        {/*   Frequency   */}
+        <div className="flex flex-col w-fit"> 
+            <span className={formText}>Frequency</span>
+
+            <div className="flex items-center justify-between gap-2">
+                {/* Type of activity we have the goal for (?) */}
+                <select disabled className={`w-40 ${disabledStyle}`}> <option>Daily Chat</option> </select>
+
+                {/* Goal number */}
+                <input type="number" min={1} className={`w-15 ${borderStyle}`} value={target} 
+                    onChange={(e) => setTarget(+e.target.value)} />
+
+                {/* Time unit */}
+                <span className="w-20"> Times Per </span>
+                <select className={`w-25 ${borderStyle}`} value={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
+                    <option value="Week" > Week  </option>
+                    <option value="Month"> Month </option>
+                </select>
             </div>
+        </div>
+
+
+        {/*   Start Day & Window   */}
+        <div className="flex items-center gap-2">
+            {/* Start day */}
+            <div className={rowThree}>
+                <label className={formText}>Start Day</label>
+                <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
+                    {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
+                </select>
+            </div>
+        </div>
 
 
             {/*   Frequency   */}

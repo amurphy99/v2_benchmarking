@@ -13,6 +13,7 @@ from ...         import config        as cf
 from ...services import logging_utils as lu 
 from .speechProvider import TextToSpeechProvider
 from .bg_helpers import fire_and_log
+from ...services.emotionHelpers import classify_emotion_with_vader
 
 ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your request."
 test = "\033[42m"
@@ -41,9 +42,10 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
     t1 = time(); logger.info(f"{lu.YELLOW}[LLM] Sending LLM request... {lu.RESET}")
     system_utt = await generate_LLM_response(context_buffer)
     t2 = time(); logger.info(f"{lu.YELLOW}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.ROBO_MSG}{system_utt} {lu.RESET}")
-
-    # Immediately send the response back through the websocket
-    await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
+    
+    emotion = await classify_llm_text_emotion_async(system_utt, emo_classifier_type="vader")
+    
+    await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'emotion': emotion, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
     t3 = time(); logger.info(f"{lu.YELLOW}[LLM] Response sent {(t3-t2):.4f}s ({(t3-t0):.4f}s total). {lu.RESET}")
 
     # -----------------------------------------------------------------------
@@ -66,7 +68,7 @@ async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
     
     # Synthesize the speech 
     tts_provider = TextToSpeechProvider()
-    speech = tts_provider.synthesize_speech(system_utt, "wav")
+    speech = tts_provider.synthesize_speech(system_utt)
     fire_and_log(handle_speech(speech, send_callback))
     logger.info(f"{lu.YELLOW}[LLM] Response sent to frontend. {lu.RESET}")
     
@@ -119,3 +121,29 @@ def prepare_LLM_input(context_buffer):
     LLM_input += "".join([format_turn(turn) for turn in context_buffer])
     LLM_input += f"\n<|assistant|>\n"
     return LLM_input
+
+# -----------------------------------------------------------------------
+# Classify the LLM text using vader or zero-shot (not integrated right now)
+# -----------------------------------------------------------------------
+async def classify_llm_text_emotion_async(text: str, emo_classifier_type: str="vader") -> str:
+    """
+    Asynchronously classify emotion using either Zero-Shot or VADER method.
+
+    Args:
+        text (str): The text to classify.
+        type (str): The type of classifier to use ("zero_shot" or "vader").
+
+    Returns:
+        str: The classified emotion label.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        if emo_classifier_type == "vader":
+            return await loop.run_in_executor(None, lambda: classify_emotion_with_vader(text))
+        else:
+            logger.warning(f"Unknown classifier_type: {emo_classifier_type}. Returning 'Neutral'.")
+            return "Neutral"
+
+    except Exception as e:
+        logger.exception(f"Emotion classification failed (returning 'Neutral'): {e}")
+        return "Neutral"
