@@ -36,12 +36,12 @@ export default function FooterNav() {
                         Practice
                     </NavLink>
                 </div>
-                <div className="flex flex-col items-center">
+                {/* <div className="flex flex-col items-center">
                     <NavLink to="/schedule" className={footerLinkCaregiverCls}>
                         <IoCalendarOutline size={"2rem"} />
                         Schedule
                     </NavLink>
-                </div>
+                </div> */}
             </div>
         );
     } else {
@@ -65,12 +65,12 @@ export default function FooterNav() {
                         Chat
                     </NavLink>
                 </div>
-                <div className="flex flex-col items-center">
+                {/* <div className="flex flex-col items-center">
                     <NavLink to="/schedule" className={footerLinkPatientCls}>
                         <IoCalendarOutline size={"2rem"} />
                         Schedule
                     </NavLink>
-                </div>
+                </div> */}
                 <div className="flex flex-col items-center">
                     <NavLink to="/analysis" className={footerLinkPatientCls}>
                         <FaChartBar size={"2rem"} />

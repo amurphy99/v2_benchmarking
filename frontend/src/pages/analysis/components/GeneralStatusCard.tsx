@@ -22,7 +22,7 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
                         <CircularProgress score={curScore} role={role} />
                     </div>
                     {prevWeek ? 
-                    <span className="p-2 mt-[-10vw] lg:mt-[-5vw] gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
+                    <span className="p-2 mx-2 mt-[-10vw] lg:mt-[-5vw] gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
                         <p className="mb-0 text-center">From last week:</p>
                         {scoreDiff >= 0 ? 
                             <TbArrowBigUp color={"green"} size={"2rem"} /> : 
