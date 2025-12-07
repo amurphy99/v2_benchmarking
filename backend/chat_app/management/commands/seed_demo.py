@@ -169,7 +169,8 @@ class Command(BaseCommand):
     # Seed Activities into the DB
     # ====================================================================
     def seed_activities(self):
-        Activity.objects.create(name="memory_activity") # just one for now
+        # just one for now
+        Activity.objects.get_or_create(name="memory_activity")  # don't create if already exists.
         
     # ====================================================================
     # Seed RAG Instructions into the DB
