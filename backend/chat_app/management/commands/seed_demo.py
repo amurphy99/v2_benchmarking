@@ -66,7 +66,7 @@ class Command(BaseCommand):
         # Delete and recreate the user data, RAG instructions
         User = get_user_model()
         User.objects.filter(username__in=USERNAMES).delete()
-        RAGInstructions.objects.all().delete() # this shouldn't be necessary now because of FK constraints
+        #RAGInstructions.objects.all().delete() # this shouldn't be necessary now because of FK constraints
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)
