@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, RAGInstructions
+from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -66,7 +66,7 @@ class Command(BaseCommand):
         # Delete and recreate the user data, RAG instructions
         User = get_user_model()
         User.objects.filter(username__in=USERNAMES).delete()
-        RAGInstructions.objects.all().delete()
+        # RAGInstructions.objects.all().delete() # this shouldn't be necessary now because of FK constraints
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)
@@ -96,6 +96,7 @@ class Command(BaseCommand):
         Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
         self.seed_chats(plwd_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
+        self.seed_activities()
         self.seed_rag_instructions()
 
 
@@ -163,13 +164,28 @@ class Command(BaseCommand):
                                            end=end_day, startTime=start_time, endTime=end_time,
                                            daysOfWeek=[3])
         reminder.save()
+
+    # ====================================================================
+    # Seed Activities into the DB
+    # ====================================================================
+    def seed_activities(self):
+        Activity.objects.create(name="memory_activity") # just one for now
         
     # ====================================================================
     # Seed RAG Instructions into the DB
     # ====================================================================
     def seed_rag_instructions(self):
+        User = get_user_model()
+        memory_activity = Activity.objects.get(name="memory_activity")
+        demo_user = User.objects.get(username="demo_caregiver")
+
         for idx, name in enumerate(DEMO_RAG_NAMES):
             description = DEMO_RAG_DESCRIPTIONS[idx]
             instructions = DEMO_RAG_INSTRUCTIONS[idx]
-            rag_obj = RAGInstructions.objects.create(name=name, description=description, instructions=instructions)
-            rag_obj.save()
+            RAGInstructions.objects.create(
+                name=name,
+                description=description,
+                instructions=instructions,
+                user=demo_user,
+                activity=memory_activity,
+            )

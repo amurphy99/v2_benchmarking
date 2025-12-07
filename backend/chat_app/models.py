@@ -210,9 +210,44 @@ class UserSettings(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user"], name="one_settings_per_user")]
 
-class RAGInstructions(models.Model):
+# =======================================================================
+# Activities and RAG Instructions Models
+# =======================================================================
+
+class Activity(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    instructions = models.TextField()
-    description  = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+class RAGInstructions(models.Model):
     
-    def __str__(self): return f"{self.name}: {self.description}"
+    # need to allow null for initial migration (as we already have some data), need make this false later
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="rag_instructions",
+        null=True, blank=True,
+    )
+    activity = models.ForeignKey(
+        "Activity",
+        on_delete=models.CASCADE,
+        related_name="rag_instructions",
+        null=True, blank=True, 
+    )
+    name = models.CharField(max_length=100)
+    instructions = models.TextField()
+    description = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "user", "activity"],
+                name="unique_rag_instruction_per_user_activity_name",
+            )
+        ]
+
+    def __str__(self):
+        user_part = getattr(self.user, "username", "GLOBAL")
+        activity_part = getattr(self.activity, "name", "NO_ACTIVITY")
+        return f"{user_part} / {activity_part} / {self.name}: {self.description}"

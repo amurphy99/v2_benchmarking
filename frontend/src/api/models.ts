@@ -38,6 +38,8 @@ export interface RAGInstructions {
     name        : string;
     instructions: string;
     description : string;
+    user        : number; // PK of user
+    activity    : number; // PK of Activity
 }
 
 export interface UpdateRAGInstructionsPayload {

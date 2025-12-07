@@ -6,7 +6,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions
+from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions, Activity
 from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
@@ -58,10 +58,13 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, ragid):
-        instructions = RAGInstructions.objects.get(id=ragid)
-        return instructions
-
+    def get_object(self):
+        # 'ragid' comes from the URL pattern, e.g. path("api/rag/<int:ragid>/")
+        ragid = self.kwargs["ragid"]
+        return RAGInstructions.objects.get(
+            id=ragid, 
+            user=self.request.user,  # Only allow access to your own instructions
+        )
 # ======================================================================= ===================================
 # List + Create
 # ======================================================================= ===================================
@@ -83,13 +86,19 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
         
 class RAGInstructionsViewSet(viewsets.ModelViewSet):
     """
-    GET  /api/rag/  => fetch all RAG instructions
+    GET  /api/rag/  => fetch all RAG instructions for the current user
     """
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return RAGInstructions.objects.all()
+        # Only return instructions belonging to the logged-in user
+        return RAGInstructions.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        # For now, always use the 'memory_activity'
+        activity = Activity.objects.get(name="memory_activity")
+        serializer.save(user=self.request.user, activity=activity)
 
 # ======================================================================= ===================================
 # Read-only List & Details (messages, biomarkers)
