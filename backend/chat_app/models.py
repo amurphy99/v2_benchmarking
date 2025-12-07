@@ -239,13 +239,13 @@ class RAGInstructions(models.Model):
     instructions = models.TextField()
     description = models.TextField()
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["name", "user", "activity"],
-                name="unique_rag_instruction_per_user_activity_name",
-            )
-        ]
+    # class Meta:
+    #     constraints = [
+    #         models.UniqueConstraint(
+    #             fields=["name", "user", "activity"],
+    #             name="unique_rag_instruction_per_user_activity_name",
+    #         )
+    #     ]
 
     def __str__(self):
         user_part = getattr(self.user, "username", "GLOBAL")
