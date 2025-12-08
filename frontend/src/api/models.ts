@@ -42,7 +42,14 @@ export interface RAGInstructions {
     activity    : number; // PK of Activity
 }
 
+export interface CreateRAGInstructionsPayload {
+    name        : string;
+    instructions: string;
+    description : string;
+}
+
 export interface UpdateRAGInstructionsPayload {
+    name?: string;
     instructions: string;
     description : string;
 }

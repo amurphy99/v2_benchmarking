@@ -1,67 +1,192 @@
-import { updateRAGInstructions } from "@/api";
+import { createRAGInstruction, updateRAGInstructions, deleteRAGInstruction } from "@/api";
+import { RAGInstructions } from "@/api/models";
 import { useRAGInstructions } from "@/hooks/queries/useRAGInstructions";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { h4 } from "@/utils/styling/sharedStyles";
+import { useAuth } from "@/context/AuthProvider";
 import { useState } from "react";
+import RAGInstructionModal from "@/components/modals/RAGInstructionModal";
+
+type Mode = "create" | "edit";
 
 export default function RAGForm() {
-    const {data: RAGInstructions, isLoading} = useRAGInstructions();
-    const [id, setId] = useState<number>(-1);
-    const [name, setName] = useState<string>("");
-    const [instructions, setInstructions] = useState<string>("");
-    const [description,  setDescription ] = useState<string>("");
+  const { profile } = useAuth();
 
-    if (isLoading) { return <p>Loading...</p>; }
+  const {
+    data: ragInstructions = [],
+    isLoading,
+    refetch,
+  } = useRAGInstructions(profile?.id);
 
-    const setCurInstructions = (name: string) => {
-        const idx = RAGInstructions.findIndex((rag) => rag.name === name);
-        if (idx !== -1) {
-            setId(idx);
-            setName(RAGInstructions[idx].name);
-            setInstructions(RAGInstructions[idx].instructions);
-            setDescription(RAGInstructions[idx].description);
-        }
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<Mode>("create");
+  const [activeInstruction, setActiveInstruction] = useState<{
+    id: number;
+    name: string;
+    description: string;
+    instructions: string;
+  } | null>(null);
+
+  if (isLoading) {
+    return <p>Loading...</p>;
+  }
+
+  // Extract existing names for duplicate checks
+  const existingNames = ragInstructions.map((rag: RAGInstructions) => rag.name);
+
+  const openCreateModal = () => {
+    setModalMode("create");
+    setActiveInstruction(null);
+    setModalOpen(true);
+  };
+
+  const openEditModal = (rag: RAGInstructions) => {
+    setModalMode("edit");
+    setActiveInstruction({
+      id: rag.id,
+      name: rag.name,
+      description: rag.description,
+      instructions: rag.instructions,
+    });
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (rag: RAGInstructions) => {
+    const confirmed = window.confirm(
+      `Delete instruction "${rag.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteRAGInstruction(rag.id);
+      toastMessage("RAG instruction deleted", true);
+      await refetch?.();
+    } catch (err) {
+      console.error(err);
+      toastMessage("Failed to delete RAG instruction", false);
     }
+  };
 
-    // Form submission logic 
-    const onSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        updateRAGInstructions(id, {
-            instructions: instructions,
-            description: description
-        })
-        toastMessage("RAG Instructions Updated", true); 
-    };
+  const handleModalSubmit = async (values: {
+    name: string;
+    description: string;
+    instructions: string;
+  }) => {
+    try {
+      if (modalMode === "create") {
+        // Extra client-side duplicate guard (DB constraint still protects us)
+        if (existingNames.includes(values.name)) {
+          toastMessage(
+            "You already have an instruction with this keyword.",
+            false
+          );
+          return;
+        }
 
-    // Common styles
-    const formText      = "font-medium fw-bold";
-    const borderStyle   = "border border-gray-100 py-1 px-2";
+        await createRAGInstruction({
+          name: values.name,
+          description: values.description,
+          instructions: values.instructions,
+        });
+        toastMessage("RAG instruction created", true);
+      } else if (modalMode === "edit" && activeInstruction) {
+        await updateRAGInstructions(activeInstruction.id, {
+          name: activeInstruction.name,   // name is not editable
+          description: values.description,
+          instructions: values.instructions,
+        });
+        toastMessage("RAG instruction updated", true);
+      }
 
-    return (
-        <form onSubmit={onSubmit} className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
-            <div className={h4}> Chat Settings </div>
-            <label className={formText}>RAG Instructions Name</label>
-            <select className={`mt-1 ${borderStyle}`} onChange={(e) => {setCurInstructions(e.target.value)}} defaultValue="select" >
-                <option value="select" disabled>Choose a Set of Instructions</option>
-                {RAGInstructions.map((rag, idx) => (
-                    <option key={idx} value={rag.name}>{rag.name}</option>))
-                }
-            </select>
+      setModalOpen(false);
+      setActiveInstruction(null);
+      await refetch?.();
+    } catch (err: any) {
+      console.error(err);
+      toastMessage("Something went wrong while saving.", false);
+    }
+  };
 
-            <label className={formText}>Description</label>
-            <input type="text" className={`mt-1 mb-2 ${borderStyle}`} value={description} 
-                onChange={(e) => setDescription(e.target.value)} disabled={name === "select"}>
-            </input>
+  // Common styles
+  const formText = "font-medium fw-bold";
+  const borderStyle = "border border-gray-100 py-1 px-2";
 
-            <label className={formText}>Instructions</label>
-            <textarea rows={10} className={`mt-1 mb-2 ${borderStyle}`} value={instructions} 
-            onChange={(e) => setInstructions(e.target.value)} disabled={name === "select"}>
+  return (
+    <section className="flex flex-col w-3/4 sm:w-1/2 m-[1rem]">
+      <div className={h4}>Memory Activity Chat Settings</div>
 
-            </textarea>
+      <div className="flex items-center justify-between mt-4 mb-3">
+        <div className={formText}>Model Instructions</div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={openCreateModal}
+        >
+          Create New Instruction
+        </button>
+      </div>
 
-            <button type="submit" className="btn btn-primary w-fit">
-                Update RAG Instructions
-            </button>
-        </form>
-    )
+      {ragInstructions.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          You don&apos;t have any RAG instructions yet. Create instructions to customize
+          how your model behaves during the conversation. Each instruction should represent a 
+          specific scenario or state you want the model to follow, eg. &quot;start_conversation&quot;, &quot;initiate_smalltalk&quot;, or &quot;end_session&quot;.
+        </p>
+      ) : (
+        <ul
+          className={`border border-gray-100 rounded-md divide-y divide-gray-100 ${borderStyle}`}
+        >
+          {ragInstructions.map((rag: RAGInstructions) => (
+            <li
+              key={rag.id}
+              className="flex items-center justify-between px-3 py-2"
+            >
+              <div>
+                <div className="text-sm font-semibold">{rag.name}</div>
+                <div className="text-xs text-gray-500">
+                  {rag.description || "No description"}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => openEditModal(rag)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => handleDelete(rag)}
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <RAGInstructionModal
+        isOpen={modalOpen}
+        mode={modalMode}
+        existingNames={existingNames}
+        initialValues={
+          modalMode === "edit" && activeInstruction
+            ? {
+                name: activeInstruction.name,
+                description: activeInstruction.description,
+                instructions: activeInstruction.instructions,
+              }
+            : undefined
+        }
+        onClose={() => {
+          setModalOpen(false);
+          setActiveInstruction(null);
+        }}
+        onSubmit={handleModalSubmit}
+      />
+    </section>
+  );
 }

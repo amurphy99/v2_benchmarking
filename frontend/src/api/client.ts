@@ -34,6 +34,11 @@ export async function request<T> (path: string, opts: RequestInit={}): Promise<T
         }
     }
 
+    // 204 No Content => just return undefined (added for delete operations)
+    if (response.status === 204) {
+        return undefined as T;
+    }
+
     // It failed again...
     if (!response.ok) throw new Error(response.statusText);
 
