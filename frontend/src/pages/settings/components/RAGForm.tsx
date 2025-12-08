@@ -1,4 +1,4 @@
-import { updateRAGInstructions } from "@/api";
+import { RAGInstructions, updateRAGInstructions } from "@/api";
 import { useRAGInstructions } from "@/hooks/queries/useRAGInstructions";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { h4 } from "@/utils/styling/sharedStyles";
@@ -6,8 +6,7 @@ import { useState } from "react";
 
 export default function RAGForm() {
     const {data: RAGInstructions, isLoading} = useRAGInstructions();
-    const [id, setId] = useState<number>(-1);
-    const [name, setName] = useState<string>("");
+    const [curInst, setCurInst] = useState<RAGInstructions | null>(null);
     const [instructions, setInstructions] = useState<string>("");
     const [description,  setDescription ] = useState<string>("");
 
@@ -16,8 +15,7 @@ export default function RAGForm() {
     const setCurInstructions = (name: string) => {
         const idx = RAGInstructions.findIndex((rag) => rag.name === name);
         if (idx !== -1) {
-            setId(idx);
-            setName(RAGInstructions[idx].name);
+            setCurInst(RAGInstructions[idx]);
             setInstructions(RAGInstructions[idx].instructions);
             setDescription(RAGInstructions[idx].description);
         }
@@ -26,7 +24,8 @@ export default function RAGForm() {
     // Form submission logic 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        updateRAGInstructions(id, {
+        updateRAGInstructions(curInst.id, {
+            name: curInst.name,
             instructions: instructions,
             description: description
         })
@@ -49,13 +48,13 @@ export default function RAGForm() {
             </select>
 
             <label className={formText}>Description</label>
-            <input type="text" className={`mt-1 mb-2 ${borderStyle}`} value={description} 
-                onChange={(e) => setDescription(e.target.value)} disabled={name === "select"}>
-            </input>
+            <textarea className={`mt-1 mb-2 ${borderStyle}`} value={description} 
+                onChange={(e) => setDescription(e.target.value)} disabled={curInst == null}>
+            </textarea>
 
             <label className={formText}>Instructions</label>
             <textarea rows={10} className={`mt-1 mb-2 ${borderStyle}`} value={instructions} 
-            onChange={(e) => setInstructions(e.target.value)} disabled={name === "select"}>
+            onChange={(e) => setInstructions(e.target.value)} disabled={curInst == null}>
 
             </textarea>
 

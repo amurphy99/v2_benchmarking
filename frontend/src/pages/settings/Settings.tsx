@@ -7,7 +7,7 @@ export function Settings() {
     // Return UI component
     // --------------------------------------------------------------------
     return (
-    <div className="m-[1rem]">
+    <div className="m-[1rem] pb-[5rem]">
         <GoalForm />
         <ChatTypeForm />
         <RAGForm />

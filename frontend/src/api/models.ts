@@ -41,6 +41,7 @@ export interface RAGInstructions {
 }
 
 export interface UpdateRAGInstructionsPayload {
+    name: string,
     instructions: string;
     description : string;
 }

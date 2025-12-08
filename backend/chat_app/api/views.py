@@ -58,7 +58,8 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self, ragid):
+    def get_object(self):
+        ragid = self.kwargs["ragid"]
         instructions = RAGInstructions.objects.get(id=ragid)
         return instructions
 
