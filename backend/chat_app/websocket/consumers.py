@@ -3,7 +3,7 @@
 # =======================================================================
 from django.apps import apps
 
-import json, asyncio, logging, base64
+import json, asyncio, logging, base64, os
 logger = logging.getLogger(__name__)
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -195,10 +195,3 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Update turntaking (12 audio windows for 1 minute of data)
         self.audio_windows_count += 1
         self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
-        
-        
-    def _toggle_stream(self, data):
-        cmd = data["data"]
-        if   cmd == "start": self.stt_provider.start()
-        elif cmd == "stop" : self.stt_provider.stop()
-        

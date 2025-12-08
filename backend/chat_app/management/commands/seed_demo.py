@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions
+from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -54,6 +54,32 @@ DEMO_RAG_INSTRUCTIONS = [
     •	Also, as a follow-up after the initial greetings phase, you will ask questions based on the user's response. The follow-up questions should be open-ended based on the user's response, such that the user can elaborate on the previously mentioned topic.
     ''',
 ]
+DEMO_IMAGES = [
+    {
+        "topic": "Moon Landing",
+        "url": "https://images.pexels.com/photos/41162/moon-landing-apollo-11-nasa-buzz-aldrin-41162.jpeg",
+        "photographer": "Pixabay",
+        "photographer_url": "https://www.pexels.com/@pixabay/"
+    },
+    {
+        "topic": "Gardening",
+        "url": "https://images.pexels.com/photos/5905352/pexels-photo-5905352.jpeg",
+        "photographer": "Vanessa P",
+        "photographer_url": "https://www.pexels.com/@vanessa-p-273294/"
+    },
+    {
+        "topic": "Grandchildren",
+        "url": "https://images.pexels.com/photos/6148876/pexels-photo-6148876.jpeg",
+        "photographer": "RDNE Stock Project",
+        "photographer_url": "https://www.pexels.com/@rdne/"
+    },
+    {
+        "topic": "Walk",
+        "url": "https://images.pexels.com/photos/631986/pexels-photo-631986.jpeg",
+        "photographer": "Tobi",
+        "photographer_url": "https://www.pexels.com/@pripicart/"
+    }
+]
 
 class Command(BaseCommand):
     help = "Seeds demo users and a sample ChatSession with messages+biomarkers."
@@ -95,6 +121,7 @@ class Command(BaseCommand):
 
         UserSettings.objects.create(user=profile_2)
         Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
+        self.seed_images()
         self.seed_chats(plwd_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
         self.seed_activities()
@@ -126,6 +153,13 @@ class Command(BaseCommand):
             
         return user
 
+    # Seed AlbumImages into the DB
+    # ====================================================================
+    def seed_images(self):
+        for img in DEMO_IMAGES:
+            album_image = AlbumImage.objects.create(topic=img["topic"], url=img["url"], photographer=img["photographer"], photographer_url=img["photographer_url"])
+            album_image.save()
+            
     # ====================================================================
     # Seed ChatSessions into the DB for a user
     # ====================================================================
@@ -142,6 +176,10 @@ class Command(BaseCommand):
                                                  topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
                                                  sentiment="Positive")
             session.date = started_at
+            topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
+            print("Seeding for demo image of", topic)
+            image = AlbumImage.objects.get(topic=topic)
+            session.image = image
             session.save(update_fields=["date"])
 
             # 2) Add ChatMessages to the ChatSession (message timestamps spaced 20 seconds apart)

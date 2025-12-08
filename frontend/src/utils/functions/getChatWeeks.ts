@@ -1,5 +1,6 @@
-import { ChatSession, BiomarkerType, ChatMessage      } from "@/api";
+import { ChatSession, BiomarkerType, ChatMessage, AlbumImage      } from "@/api";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
+import { matchImage } from "./matchImage";
 
 // Interface for the ChatWeek objects we return
 export interface ChatWeek {
@@ -7,6 +8,7 @@ export interface ChatWeek {
     end        : Date;           // Sunday 23:59:59.999
     sessions   : ChatSession[];
     prevScores : Record<BiomarkerType, number>;
+    image      : AlbumImage | null;
 }
 
 export interface ChatsPerDay {
@@ -42,13 +44,14 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
         const chatDate = new Date(chat.date);
 
         // Advance cursor until chat fits in current week
-        while (chatDate >= endOfWeek(cursor, weekStartsOn)) {
+        while (chatDate >= endOfWeek(cursor, weekStartsOn)) {            
             // Flush previous bucket
             result.push({
                 start      : new Date(cursor),
                 end        : endOfWeek(cursor, weekStartsOn, true),
                 sessions   : bucket,
                 prevScores : averageScore(getSessionsBefore(sessions, new Date(cursor))),
+                image      : matchImage(bucket, getMainTopic(bucket)),
             });
 
             // Advance 7 days
@@ -64,6 +67,7 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
         end        : endOfWeek(cursor, weekStartsOn, true),
         sessions   : bucket,
         prevScores : averageScore(getSessionsBefore(sessions, new Date(cursor))),
+        image      : matchImage(bucket, getMainTopic(bucket)),
     });
 
     return result;
@@ -91,6 +95,7 @@ export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1)
         end: weekEnd,
         sessions: bucket,
         prevScores: null,
+        image: matchImage(bucket, getMainTopic(bucket)),
     })
 }
 
@@ -131,15 +136,33 @@ export function getChatsInWeek(week: ChatWeek): SessionsOnDay[] {
  * @param week The ChatWeek to get the messages of
  * @returns A 1-d array of all the chat messages for the week
  */
-export function getWeeklyMessages(week: ChatWeek) {
+export function getMessages(sessions: ChatSession[]) {
     var messages: ChatMessage[] = [];
-    for (var i = 0; i < week.sessions.length; i++) {
-        var session: ChatSession = week.sessions[i];
+    for (var i = 0; i < sessions.length; i++) {
+        var session: ChatSession = sessions[i];
         for (var j = 0; j < session.messages.length; j++) {
             messages.push(session.messages[j]);
         }
     }
     return messages;
+}
+
+export function getMainTopic(sessions: ChatSession[]) {
+    var topics: string[] = [];
+    for (var i = 0; i < sessions.length; i++) {
+        var session: ChatSession = sessions[i];
+        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        for (var j = 0; j < sessionTopics.length; j++) {
+            var topic = sessionTopics[j].trim();
+            if (topic && !topics.includes(topic)) {
+                topics.push(topic);
+            }
+        }
+    }
+    const mostFrequent = Array.from(new Set(topics)).reduce((prev, curr) =>
+        topics.filter(el => el === curr).length > topics.filter(el => el === prev).length ? curr : prev
+    );
+    return mostFrequent;
 }
 
 // --------------------------------------------------------------------

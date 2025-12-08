@@ -11,6 +11,16 @@ init_args    = dict(null=True, blank=True)
 DAYS_OF_WEEK = ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday'),)
 
 # =======================================================================
+# AlbumImage 
+# =======================================================================
+# Every topic (from conversations) has one associated image, and every ChatSession has a main topic
+class AlbumImage(models.Model):
+    topic = models.CharField(max_length=100, unique=True)
+    url = models.CharField(max_length=255)
+    photographer = models.CharField(max_length=100)
+    photographer_url = models.CharField(max_length=255)
+    
+# =======================================================================
 # ChatSession 
 # =======================================================================
 # Every conversation is a ChatSession, but only one is ever active at once
@@ -39,6 +49,7 @@ class ChatSession(models.Model):
     sentiment = models.CharField(**init_args, max_length=255, default="N/A")
     taskType  = models.CharField(**init_args, max_length=255, default="chat")
     taskSubtype = models.CharField(**init_args, max_length=255, default="N/A")
+    image     = models.ForeignKey(AlbumImage, on_delete=models.SET_NULL, null=True)
 
     class Meta:
         constraints = [UniqueConstraint(fields=["user"], condition=Q(is_active=True), name="unique_active_session_per_user",),] # One active session per user

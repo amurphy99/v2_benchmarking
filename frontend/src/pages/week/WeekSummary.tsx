@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthProvider";
-import { ChatWeek, getWeeklyMessages } from "@/utils/functions/getChatWeeks";
+import { ChatWeek, getMessages } from "@/utils/functions/getChatWeeks";
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { useLocation, useNavigate } from "react-router-dom";
 import { TopicsCard } from "../common/TopicsCard";
@@ -16,7 +16,7 @@ export function WeekSummary() {
     const role = useAuth().profile?.role?.toLowerCase();
 
     const chatWeek = state.chatWeek;
-    const weeklyMessages = getWeeklyMessages(chatWeek);
+    const weeklyMessages = getMessages(chatWeek.sessions);
 
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
     

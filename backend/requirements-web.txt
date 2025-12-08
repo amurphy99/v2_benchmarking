@@ -78,3 +78,4 @@ langchain-huggingface==1.1.0
 langchain-postgres==0.0.16
 langchain-text-splitters==1.0.0
 sentence_transformers
+pexels-api
