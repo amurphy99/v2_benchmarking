@@ -75,48 +75,6 @@ export default function GoalForm() {
             </div>
         </div>
 
-
-            {/*   Frequency   */}
-            <div className="flex flex-col"> 
-                <span className={formText}>Frequency</span>
-
-                <div className="flex items-center justify-between gap-2">
-                    {/* Type of activity we have the goal for (?) */}
-                    <select disabled className={`w-40 ${disabledStyle}`}> <option>Daily Chat</option> </select>
-
-                    {/* Goal number */}
-                    <input type="number" min={1} className={`w-15 ${borderStyle}`} value={target} 
-                        onChange={(e) => setTarget(+e.target.value)} />
-
-                    {/* Time unit */}
-                    <span className="w-20"> Times Per </span>
-                    <select className={`w-25 ${borderStyle}`} value={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
-                        <option value="Week" > Week  </option>
-                        <option value="Month"> Month </option>
-                    </select>
-                </div>
-            </div>
-
-
-            {/*   Start Day & Window   */}
-            <div className="flex items-center gap-2">
-                {/* Start day */}
-                <div className={rowThree}>
-                    <label className={formText}>Start Day</label>
-                    <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
-                        {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
-                    </select>
-                </div>
-
-                {/* Current window preview */}
-                <div className={rowThree}>
-                    <label className={formText}>Current Goal Window</label>
-                    <span className={`mt-1 ${disabledStyle}`}> {windowLabel} </span>
-                </div>
-            </div>
-
-            <button type="submit" className="btn btn-primary w-fit my-2">Save Goal</button>
-
         </form>
     )
 }

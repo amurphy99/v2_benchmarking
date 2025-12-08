@@ -59,12 +59,10 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        # 'ragid' comes from the URL pattern, e.g. path("api/rag/<int:ragid>/")
         ragid = self.kwargs["ragid"]
-        return RAGInstructions.objects.get(
-            id=ragid, 
-            user=self.request.user,  # Only allow access to your own instructions
-        )
+        instructions = RAGInstructions.objects.get(id=ragid)
+        return instructions
+
 # ======================================================================= ===================================
 # List + Create
 # ======================================================================= ===================================
