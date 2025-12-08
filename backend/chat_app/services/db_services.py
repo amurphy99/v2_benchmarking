@@ -1,11 +1,12 @@
 from django.db    import transaction
 from django.utils import timezone
-from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
+from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
 
 from .  import logging_utils as lu
 from .topicHelpers import get_topics
 from .emotionHelpers import classify_emotion_with_vader
 from ..api.mixins import get_profile
+from .imageHelpers import get_images
 
 import logging
 logger = logging.getLogger(__name__)
@@ -57,8 +58,19 @@ class ChatService:
         # ToDo: Probably should calculate the topics and sentiment right here using helper functions
         # Topics and sentiment won't be sent as arguments, they will be calculated here
         if notes     is not None: session.notes     = notes
-        if topics    is not None: session.topics    = topics
         if sentiment is not None: session.sentiment = sentiment
+        
+        if topics    is not None: 
+            session.topics    = str(topics).strip()
+            topic = topics[0]
+            try: # See if there is already an image for the topic
+                album_image = AlbumImage.objects.get(topic=topic)
+                session.image = album_image
+            except AlbumImage.DoesNotExist: # If there is not already an image for the topic, get a new one from Pexels
+                image = get_images(topic, "pexels", 1)
+                album_image = AlbumImage.objects.create(topic=image.topic, url=image.url, photographer=image.photographer, photographer_url=image.photographer_url)
+                album_image.save()
+                session.image = album_image
         
         profile = get_profile(user)
         if profile is not None:

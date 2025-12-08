@@ -69,3 +69,4 @@ keyboard
 google-genai
 google-cloud-texttospeech
 google-cloud-speech
+pexels-api
