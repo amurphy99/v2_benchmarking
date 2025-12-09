@@ -89,9 +89,12 @@ class Command(BaseCommand):
     # ====================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
+        # Seed AlbumImages first
+        self.seed_images()
+
         # Delete and recreate the user data, RAG instructions
-        #User = get_user_model()
-        # User.objects.filter(username__in=USERNAMES).delete()
+        User = get_user_model()
+        User.objects.filter(username__in=USERNAMES).delete()
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)
@@ -121,7 +124,6 @@ class Command(BaseCommand):
 
         UserSettings.objects.create(user=profile_2)
         Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
-        self.seed_images()
         self.seed_chats(plwd_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
         self.seed_activities()
@@ -177,7 +179,6 @@ class Command(BaseCommand):
                                                  sentiment="Positive")
             session.date = started_at
             topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
-            print("Seeding for demo image of", topic)
             image = AlbumImage.objects.get(topic=topic)
             session.image = image
             session.save(update_fields=["date"])
