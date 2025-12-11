@@ -10,6 +10,7 @@ from ..models      import                    Goal,           UserSettings,      
 from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
+from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
 # ======================================================================= ===================================
 # Single-object endpoints (no list, one-to-one)
@@ -60,7 +61,10 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         ragid = self.kwargs["ragid"]
-        instructions = RAGInstructions.objects.get(id=ragid)
+        instructions = RAGInstructions.objects.get(
+            id=ragid, 
+            user=self.request.user, # only allow access to own instructions
+        )
         return instructions
 
 # ======================================================================= ===================================
@@ -96,7 +100,35 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # For now, always use the 'memory_activity'
         activity = Activity.objects.get(name="memory_activity")
-        serializer.save(user=self.request.user, activity=activity)
+        instance = serializer.save(user=self.request.user, activity=activity)
+
+        # Vector DB update
+        try:
+            index_single_instruction(instance)
+        except Exception as e:
+            print(f"[VectorDB] Failed to index new instruction {instance.id}: {e}")
+
+    def perform_update(self, serializer):
+        # Save the updated instruction to the default DB
+        instance = serializer.save()
+
+        # Update the vector store for this instruction
+        try:
+            index_single_instruction(instance)
+        except Exception as e:
+            print(f"[VectorDB] Failed to update embedding for instruction {instance.id}: {e}")
+
+    def perform_destroy(self, instance):
+        inst_id = instance.id
+
+        # Delete chunks from vector DB first
+        try:
+            delete_instruction_embeddings(inst_id)
+        except Exception as e:
+            print(f"[VectorDB] Failed to delete embeddings for {inst_id}: {e}")
+
+        # Delete from default DB
+        instance.delete()
 
 # ======================================================================= ===================================
 # Read-only List & Details (messages, biomarkers)

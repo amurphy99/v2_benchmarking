@@ -1,5 +1,6 @@
 from django.db import models
 from pgvector.django import VectorField
+from .config import EMBED_DIM
 
 
 class RAGInstructionChunkEmbedding(models.Model):
@@ -21,7 +22,7 @@ class RAGInstructionChunkEmbedding(models.Model):
 
     # The embedding dimension depends on the model used to generate it, it is 384 for minilm-l6-v2
     # we should probably read this from config or env variable later
-    embedding = VectorField(dimensions=384)
+    embedding = VectorField(dimensions=EMBED_DIM)
 
     # Used for upsert / partial rebuild logic
     last_indexed_at = models.DateTimeField()

@@ -148,9 +148,10 @@ DATABASES = {
     },
     'vector': {
         'ENGINE'   : 'django.db.backends.postgresql',
+        'NAME'     : config('VECTOR_DB_NAME'),
         'USER'     : config('VECTOR_DB_USER'),
         'PASSWORD' : config('VECTOR_DB_PASSWORD'),
-        'HOST'     : config('VECTOR_DB_HOST'),
+        'HOST'     : config('VECTOR_DB_HOST', default='db_vector'),
         'PORT'     : config('VECTOR_DB_PORT', default='5432'),
     }
 }

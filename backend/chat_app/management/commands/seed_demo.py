@@ -64,16 +64,17 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **kwargs):
         # Delete and recreate the user data, RAG instructions
-        User = get_user_model()
-        User.objects.filter(username__in=USERNAMES).delete()
-        #RAGInstructions.objects.all().delete() # this shouldn't be necessary now because of FK constraints
+        #User = get_user_model()
+        # User.objects.filter(username__in=USERNAMES).delete()
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)
 
         # Create user entries for both the patient and caregiver
-        plwd = User.objects.create_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
-        care = User.objects.create_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
+        # I added this so that the user_id does not change on every seed run. 
+        # This could lead to dangling vector embeddings since they are linked to a separate DB using the user_id, and cascading delete won't work across DBs.
+        plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
+        care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
         profile = Profile.objects.create(plwd=plwd, caregiver=care)
 
         # Also create settings and goal objects for the new Profile
@@ -88,8 +89,8 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------
         # Second profile
         # --------------------------------------------------------------------
-        plwd_2 = User.objects.create_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
-        care_2 = User.objects.create_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
+        plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
+        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
         profile_2 = Profile.objects.create(plwd=plwd_2, caregiver=care_2)
 
         UserSettings.objects.create(user=profile_2)
@@ -99,6 +100,32 @@ class Command(BaseCommand):
         self.seed_activities()
         self.seed_rag_instructions()
 
+    # ====================================================================
+    # Helper: Get user if exists (cleaning their data), or create new
+    # ====================================================================
+    def get_or_create_demo_user(self, username, **kwargs):
+        User = get_user_model()
+        # Try to fetch the existing user to preserve their ID
+        user, created = User.objects.get_or_create(username=username, defaults=kwargs)
+        
+        if not created:
+            # If user exists, update their details just in case they changed
+            for k, v in kwargs.items():
+                if k != 'password':
+                    setattr(user, k, v)
+            user.set_password(kwargs.get('password', '1'))
+            user.save()
+            
+            # Delete Profiles linked to this user
+            Profile.objects.filter(plwd=user).delete()
+            Profile.objects.filter(caregiver=user).delete()
+            
+            # Delete other direct relations
+            ChatSession.objects.filter(user=user).delete()
+            Reminder.objects.filter(user=user).delete()
+            RAGInstructions.objects.filter(user=user).delete()
+            
+        return user
 
     # ====================================================================
     # Seed ChatSessions into the DB for a user
