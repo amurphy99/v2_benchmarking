@@ -9,6 +9,7 @@ export interface UserSettings {
   patientCanSchedule: boolean;
   taskType          : string;
   taskSubtype       : string;
+  modelChoice       : string;
 }
 
 export interface Reminder {

@@ -50,7 +50,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype")
+        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
         
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
