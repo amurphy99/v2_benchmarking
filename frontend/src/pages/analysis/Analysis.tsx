@@ -1,5 +1,5 @@
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
-import { getWeeklyMessages, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
+import { getMessages, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
 import { useAuth } from "@/context/AuthProvider";
 
 import { TopicsCard } from "../common/TopicsCard";
@@ -21,7 +21,7 @@ export function Analysis() {
     const prevWeek = weeks.length > 1 ? weeks[weeks.length - 2] : null;
     const avg = averageScore(currentWeek.sessions);
 
-    const weeklyMessages = getWeeklyMessages(currentWeek);
+    const weeklyMessages = getMessages(currentWeek.sessions);
 
     const getPerformance = (score: number) : string => {
         if (score <= 0.30) {

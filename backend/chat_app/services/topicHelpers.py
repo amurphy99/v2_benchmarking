@@ -20,4 +20,4 @@ def get_topics(message_text): # From freeCodeCamp
     for token in most_common:
         topics.append(token[0])
         
-    return str(topics).strip()
+    return topics

@@ -83,6 +83,14 @@ export interface ChatBiomarkerScore {
   ts         : string;
 }
 
+export interface AlbumImage {
+    id              : number;
+    topic           : string;
+    url             : string;
+    photographer    : string;
+    photographer_url: string;
+}
+
 // ChatSessions
 export interface ChatSession {
   id        : number;
@@ -96,6 +104,7 @@ export interface ChatSession {
   duration? : number;          // in seconds
 
   topics    : string;        // stored as an unparsed list string
+  image     : AlbumImage;
   sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | null;
   notes     : string | null;
 

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal
+from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal, AlbumImage
 from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
@@ -8,6 +8,11 @@ from django.db           import transaction
 # =======================================================================
 # ChatSession Related Data
 # =======================================================================
+class AlbumImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlbumImage
+        fields = ("id", "topic", "url", "photographer", "photographer_url")
+        read_only_fields = fields
 class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ChatMessage
@@ -21,6 +26,7 @@ class BiomarkerSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class ChatSessionSerializer(serializers.ModelSerializer):
+    image          = AlbumImageSerializer(read_only=True)
     messages       = ChatMessageSerializer(many=True, read_only=True)
     biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
     start_ts       = serializers.SerializerMethodField()
@@ -30,7 +36,8 @@ class ChatSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ChatSession
         fields = ("id", "user", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics", 
-                  "sentiment", "notes", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype")
+                  "sentiment", "notes", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
+                  "image")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts

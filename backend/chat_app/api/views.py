@@ -87,7 +87,7 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         return (ChatSession.objects
                 .filter(user=profile.plwd)
                 .filter(is_active=False)
-                .select_related("user")
+                .select_related("user", "image")
                 .prefetch_related("messages", "biomarker_scores"))
 
 # ======================================================================= ===================================

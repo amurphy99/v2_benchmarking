@@ -15,7 +15,6 @@ export function ChatAlbum() {
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
-    
     const weeks = groupSessionsByWeek(sessions).reverse();
 
     const changeDisplay = () => {
