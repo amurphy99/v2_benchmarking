@@ -2,7 +2,7 @@ import { updateGoal } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
-import { borderStyle, disabledStyle, formText, h4, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
+import { borderStyle, disabledStyle, formText, h4, rowThree, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -29,10 +29,8 @@ export default function GoalForm() {
         toastMessage("User goal updated", true); 
     };
 
-    const rowThree      = "flex flex-col justify-around gap-0 w-50";
-
     return (
-        <form onSubmit={onSubmit} className="flex flex-col m-[1rem]">
+        <form onSubmit={onSubmit} className="flex flex-col px-[1rem] w-full max-w-[50rem]">
         <div className={h4}> Patient Goal </div>
     
         {/*   Auto Renew   */}
@@ -67,13 +65,21 @@ export default function GoalForm() {
         {/*   Start Day & Window   */}
         <div className="flex items-center gap-2">
             {/* Start day */}
-            <div className={rowThree}>
+            <div className={`w-1/2 ${rowThree}`}>
                 <label className={formText}>Start Day</label>
                 <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
                     {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
                 </select>
             </div>
+
+            {/* Current window preview */}
+            <div className={`w-1/2 ${rowThree}`}>
+                <label className={formText}>Current Goal Window</label>
+                <span className={`mt-1 ${disabledStyle}`}> {windowLabel} </span>
+            </div>
         </div>
+
+        <button type="submit" className="btn btn-primary w-fit my-2">Save Goal</button>
 
         </form>
     )

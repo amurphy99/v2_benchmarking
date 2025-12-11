@@ -1,7 +1,7 @@
 import { updateUserSettings } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { toastMessage } from "@/utils/functions/toast_helper";
-import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled } from "@/utils/styling/sharedStyles";
+import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
@@ -9,9 +9,10 @@ type TaskOptions   = "chat" | "chatTopic" | "chatImage";
 export default function ChatTypeForm() {
     const { profile } = useAuth();
 
-    const [taskType,  setTaskType ] = useState<string         >(profile.settings.taskType);
-    const [taskSubtype, setTaskSubtype] = useState<string     >(profile.settings.taskSubtype);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [taskType,  setTaskType ]         = useState<string     >(profile.settings.taskType);
+    const [taskSubtype, setTaskSubtype]     = useState<string     >(profile.settings.taskSubtype);
+    const [selectedFile, setSelectedFile]   = useState<File | null>(null);
+    const [model, setModel]                 = useState<string     >(profile.settings.modelChoice);
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,6 +21,7 @@ export default function ChatTypeForm() {
             patientViewOverall: true,
             taskType: taskType,
             taskSubtype: taskSubtype,
+            modelChoice: model,
         });
         toastMessage("Chat Settings updated", true); 
     };
@@ -31,47 +33,54 @@ export default function ChatTypeForm() {
     };
 
     return (
-        <form onSubmit={onSubmit} className="flex flex-col m-[1rem]">
+        <form onSubmit={onSubmit} className="flex flex-col p-[1rem] w-full max-w-[50rem]">
         <div className={h4}> Chat Settings </div>
-        {/*   Chat Task Type   */}
-        <div className="flex flex-col"> 
-            <span className={formText}>Chat Type</span>
-
-            {/* Main Chat Type */}
-            <div className="flex items-center justify-between gap-2">
-                <select className={`w-50 ${borderStyle}`} value={taskType} onChange={(e) => setTaskType(e.target.value as TaskOptions)}>
+        {/* Main Chat Type */}
+        <div className="flex flex-row gap-2 w-full">
+            <div className={`w-1/2 ${rowThree}`}>
+                <label className={formText}>Chat Type</label>
+                <select className={`${borderStyle}`} value={taskType} onChange={(e) => setTaskType(e.target.value as TaskOptions)}>
                     <option value="chat" > Free Chat  </option>
                     <option value="chattopic"> Chat About A Topic </option>
                     <option value="chatimage"> Chat About An Image </option>
                 </select>
             </div>
-
-            {/* Prompt if chosen chatTopic or chatImage */}
-            <span className={formText}>Chat Prompt</span>
-
-            <div className="flex flex-col gap-2">
-                <input type="text" disabled={taskType != "chattopic"} className={`w-full ${borderStyle} ${taskType != "chattopic" ? disabledStyle : ""}`} value={taskSubtype} 
-                    onChange={(e) => setTaskSubtype(e.target.value)} />
-                <input
-                    type="file"
-                    accept="image/*"
-                    id="upload-image"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                />
-                <label 
-                    htmlFor="upload-image"
-                    className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
-                    onClick={(e) => {
-                        if (taskType !== "chatimage") {
-                        e.preventDefault(); // stop the file picker from opening
-                        }
-                    }}
-                >
-                    Upload Image
-                </label>
-                <div className="italic text-gray-500"> {selectedFile ? `Selected file: ${selectedFile.name}` : "No file selected"} </div>
+            { /* Avatar Model */}
+            <div className={`w-1/2 ${rowThree}`}>
+                <label className={formText}>Avatar Model</label>
+                <select className={`${borderStyle}`} value={model} onChange={(e) => setModel(e.target.value)}>
+                    <option value="buddy" > Buddy Robot </option>
+                    <option value="qt" > QT Robot </option>
+                </select>
             </div>
+        </div>
+
+        {/* Prompt if chosen chatTopic or chatImage */}
+        <span className={formText}>Chat Prompt</span>
+
+        <div className="flex flex-col gap-2">
+            <input type="text" disabled={taskType != "chattopic"} 
+                className={`w-full max-w-[30rem] ${borderStyle} ${taskType != "chattopic" ? disabledStyle : ""}`} value={taskSubtype} 
+                onChange={(e) => setTaskSubtype(e.target.value)} />
+            <input
+                type="file"
+                accept="image/*"
+                id="upload-image"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+            />
+            <label 
+                htmlFor="upload-image"
+                className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
+                onClick={(e) => {
+                    if (taskType !== "chatimage") {
+                    e.preventDefault(); // stop the file picker from opening
+                    }
+                }}
+            >
+                Upload Image
+            </label>
+            <div className="italic text-gray-500"> {selectedFile ? `Selected file: ${selectedFile.name}` : "No file selected"} </div>
         </div>
 
         <br />
