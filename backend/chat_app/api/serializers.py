@@ -26,6 +26,7 @@ class BiomarkerSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class ChatSessionSerializer(serializers.ModelSerializer):
+    image          = AlbumImageSerializer(read_only=True)
     messages       = ChatMessageSerializer(many=True, read_only=True)
     biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
     start_ts       = serializers.SerializerMethodField()

@@ -19,7 +19,7 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
             <h2>{week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}</h2>
             <div className="w-full aspect-square flex self-center">
-                <div className="flex items-end justify-between size-full p-4 bg-cover bg-center hover:cursor-pointer hover:shadow-lg/30" 
+                <div className="flex items-end justify-between size-full p-4 bg-cover bg-center bg-blue-200 hover:cursor-pointer hover:shadow-lg/30" 
                 onClick={() => {toWeeklySummary(week)}}
                 style={{ backgroundImage: `url(${week?.image?.url})`}}>
                     <h1 className="text-white font-bold underline text-shadow-lg">
@@ -39,7 +39,7 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
                         <div 
                             key={idx} 
                             className="flex-col flex-none flex items-center justify-end pb-2 aspect-square 
-                                text-white font-bold underline text-shadow-lg bg-cover bg-center
+                                text-white font-bold underline text-shadow-lg bg-cover bg-center bg-purple-200
                                 hover:cursor-pointer hover:shadow-lg/30 hover:scale-90"
                             onClick={() => {toDaySummary(session)}}
                             style={{ backgroundImage: `url(${session?.image?.url})`}}

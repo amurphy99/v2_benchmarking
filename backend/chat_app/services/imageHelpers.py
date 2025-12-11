@@ -16,10 +16,10 @@ def get_images(topic, source="pexels", n=1):
             photographer = photos[0].photographer
             photographer_url = photos[0].url
             return {
-                topic: topic,
-                url: url,
-                photographer: photographer,
-                photographer_url: photographer_url
+                "topic": topic,
+                "url": url,
+                "photographer": photographer,
+                "photographer_url": photographer_url
             }
         else:
             return None
