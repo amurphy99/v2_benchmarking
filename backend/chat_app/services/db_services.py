@@ -60,15 +60,24 @@ class ChatService:
         if notes     is not None: session.notes     = notes
         if sentiment is not None: session.sentiment = sentiment
         
-        if topics    is not None: 
+        if topics    is not None and len(topics) > 0: 
             session.topics    = str(topics).strip()
-            topic = topics[0]
             try: # See if there is already an image for the topic
-                album_image = AlbumImage.objects.get(topic=topic)
+                album_image = AlbumImage.objects.get(topic=topics[0])
                 session.image = album_image
             except AlbumImage.DoesNotExist: # If there is not already an image for the topic, get a new one from Pexels
-                image = get_images(topic, "pexels", 1)
-                album_image = AlbumImage.objects.create(topic=image.topic, url=image.url, photographer=image.photographer, photographer_url=image.photographer_url)
+                image = get_images(topics[0], "pexels", 1)
+                if image is None:
+                    image = get_images(topics[1], "pexels", 1)
+                    if image is None:
+                        image = {
+                            "id": -1,
+                            "topic": "N/A",
+                            "url": "https://images.pexels.com/photos/356079/pexels-photo-356079.jpeg",
+                            "photographer": "Pixabay",
+                            "photographer_url": "https://www.pexels.com/@pixabay/"
+                        }
+                album_image = AlbumImage.objects.create(topic=image["topic"], url=image["url"], photographer=image["photographer"], photographer_url=image["photographer_url"])
                 album_image.save()
                 session.image = album_image
         

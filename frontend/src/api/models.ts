@@ -105,11 +105,11 @@ export interface ChatBiomarkerScore {
 }
 
 export interface AlbumImage {
-    id              : number,
-    topic           : string,
-    url             : string,
-    photographer    : string,
-    photographer_url: string
+    id              : number;
+    topic           : string;
+    url             : string;
+    photographer    : string;
+    photographer_url: string;
 }
 
 // ChatSessions

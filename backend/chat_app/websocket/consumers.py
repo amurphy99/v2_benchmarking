@@ -195,3 +195,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Update turntaking (12 audio windows for 1 minute of data)
         self.audio_windows_count += 1
         self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+        
+    async def _toggle_stream(self, data):
+        if data["data"] == "start":
+            self.stt_provider.start()
+        elif data["data"] == "stop":
+            self.stt_provider.stop()

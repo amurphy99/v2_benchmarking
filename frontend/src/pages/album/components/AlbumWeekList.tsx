@@ -18,7 +18,7 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
             <div className="flex flex-row gap-2 rounded-md bg-white shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] 
             hover:cursor-pointer hover:shadow-[0px_0px_4px_4px_rgba(0,0,0,0.15)]"
             onClick={() => {toDaySummary(session)}}>
-                <div className="bg-cover bg-center px-10 overflow-hidden rounded-l-md flex items-center"
+                <div className="bg-cover bg-purple-200 bg-center px-10 overflow-hidden rounded-l-md flex items-center"
                 style={{ backgroundImage: `url(${session?.image?.url})`}}/>
                 <div className="flex flex-col w-full p-[0.5rem]">
                     <div className="flex justify-between w-full">

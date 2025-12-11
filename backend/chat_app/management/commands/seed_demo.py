@@ -89,7 +89,8 @@ class Command(BaseCommand):
     # ====================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
-        # Seed AlbumImages first
+        # Delete and recreate AlbumImages first
+        AlbumImage.objects.all().delete()
         self.seed_images()
 
         # Delete and recreate the user data, RAG instructions
@@ -172,15 +173,15 @@ class Command(BaseCommand):
             day_offset = timedelta(days=i)
             started_at = (now_utc - day_offset).replace(hour=9, minute=0, second=0, microsecond=0)
             ended_at   = started_at + timedelta(minutes=5)
+            
+            topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
+            image = AlbumImage.objects.get(topic=topic)
 
             # 1) Create a ChatSession object
             session = ChatSession.objects.create(user=plwd_user, source="webapp", is_active=False, end_ts=ended_at, 
                                                  topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
-                                                 sentiment="Positive")
+                                                 sentiment="Positive", image=image)
             session.date = started_at
-            topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
-            image = AlbumImage.objects.get(topic=topic)
-            session.image = image
             session.save(update_fields=["date"])
 
             # 2) Add ChatMessages to the ChatSession (message timestamps spaced 20 seconds apart)
