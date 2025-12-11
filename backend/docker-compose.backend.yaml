@@ -5,7 +5,9 @@ services:
   # -------------------------------------------------------------------- 
   # 1) Postgres Database
   # --------------------------------------------------------------------
-  # Database is only accessable through the backend Django server
+  # Database is only accessable through the backend Django server 
+  # (Not needed anymore because because of separate VM for the databases)
+  # Uncomment to run the database container locally during development
   # db:
   #   image: postgres:17
   #   container_name: db
@@ -26,7 +28,8 @@ services:
     command: |
       sh -c "
         python manage.py makemigrations --noinput &&
-        python manage.py migrate --noinput &&
+        python manage.py migrate --database=default --noinput &&
+        python manage.py migrate --database=vector  --noinput &&
         python manage.py seed_demo &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
@@ -44,8 +47,8 @@ services:
 # Docker will also create them automatically if this file is run individually.
 volumes:
   db_data:
-    # external: true
+    external: true
 
 networks:
   appnet:
-    # external: true
+    external: true

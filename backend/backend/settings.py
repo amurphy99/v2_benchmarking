@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
+    'pgvector.django',   # enables pgvector extension support for Django
+    'rag_vectorstore',   # custom RAG vectorstore app for creating/storing embeddings.
 ]
 
 MIDDLEWARE = [
@@ -143,8 +145,19 @@ DATABASES = {
         # kept the defaults, so old deployments should still work
         'HOST'     : config('POSTGRES_HOST', default='db'), 
         'PORT'     : config('POSTGRES_PORT', default='5432'),
+    },
+    'vector': {
+        'ENGINE'   : 'django.db.backends.postgresql',
+        'USER'     : config('VECTOR_DB_USER'),
+        'PASSWORD' : config('VECTOR_DB_PASSWORD'),
+        'HOST'     : config('VECTOR_DB_HOST'),
+        'PORT'     : config('VECTOR_DB_PORT', default='5432'),
     }
 }
+
+DATABASE_ROUTERS = [
+    'backend.db_routers.VectorDBRouter',
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
