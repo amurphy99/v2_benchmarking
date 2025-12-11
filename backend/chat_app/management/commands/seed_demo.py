@@ -122,7 +122,6 @@ class Command(BaseCommand):
             
             # Delete other direct relations
             ChatSession.objects.filter(user=user).delete()
-            Reminder.objects.filter(user=user).delete()
             RAGInstructions.objects.filter(user=user).delete()
             
         return user
