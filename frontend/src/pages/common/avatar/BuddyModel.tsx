@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react'
 import { useGLTF, useAnimations } from '@react-three/drei'
 import { LoopOnce, LoopPingPong } from 'three';
 
-export default function Model({
+export default function BuddyModel({
     animation,
     animCount,
     ...props

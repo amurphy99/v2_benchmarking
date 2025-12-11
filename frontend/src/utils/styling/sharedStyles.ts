@@ -22,4 +22,4 @@ export const plainButtonStyleDisabled = "border border-solid border-gray-300 rou
 export const formText      = "font-medium fw-bold";
 export const borderStyle   = "border border-gray-100 py-1 px-2"
 export const disabledStyle = `bg-gray-100 text-gray-400 ${borderStyle}`;
-
+export const rowThree      = "flex flex-col justify-around gap-0";

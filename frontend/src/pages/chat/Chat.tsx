@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
 import useLiveChat   from "@/hooks/useLiveChat";
-import LiveChatView  from "./components/LiveChatView";
 import SaveChatModal from "@/components/modals/SaveChatModal";
 
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
+import { useAuth } from "@/context/AuthProvider";
 
 
 // ====================================================================
@@ -18,6 +18,7 @@ import { Spinner } from "react-bootstrap";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat( {isMobile} : {isMobile: boolean}) {
     const navigate = useNavigate();
+    const model = useAuth().profile.settings.modelChoice;
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
     const [animation, setAnimation] = useState();
     const [animCount, setAnimCount] = useState(0);
@@ -93,7 +94,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} /> 
+                        <Avatar animation={animation} animCount={animCount} model={model} /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -102,7 +103,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
                 :
                     
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} />
+                    <Avatar animation={animation} animCount={animCount} model={model} />
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
