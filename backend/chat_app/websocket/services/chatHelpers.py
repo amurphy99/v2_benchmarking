@@ -20,10 +20,14 @@ test = "\033[42m"
 
 CHUNK_SIZE = 8_192 # How many bytes of audio we can send at a time
 
+
+class RagParseError(Exception):
+    """Raised when the RAG LLM output cannot be parsed into the expected JSON schema."""
+
 # ======================================================================= ===================================
 # Process the users message & reply with the LLM ASAP
 # ======================================================================= ===================================
-async def handle_transcription(data, msg_callback, send_callback, bio_callback):
+async def handle_transcription(data, msg_callback, send_callback, bio_callback, *, response_fn=None, response_fn_kwargs=None):
     """ Takes three callbacks from the consumers object """
     t0 = time()
     
@@ -40,7 +44,32 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
     # 2) Get the LLMs response (awaited since it is the most important/longest process)
     # -----------------------------------------------------------------------
     t1 = time(); logger.info(f"{lu.YELLOW}[LLM] Sending LLM request... {lu.RESET}")
-    system_utt = await generate_LLM_response(context_buffer)
+    
+    try:
+        # Generate assistant response
+        if response_fn is None:
+            system_utt = await generate_LLM_response(context_buffer)
+        else:
+            response_fn_kwargs = response_fn_kwargs or {}
+            system_utt = await response_fn(context_buffer, user_text, **response_fn_kwargs)
+
+    except RagParseError:
+        # On parsing/structured-output failure, send a signal to frontend;
+        await send_callback(json.dumps({
+            "type": "rag_parse_error",
+            "data": "RAG_PARSE_ERROR",
+            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+        }))
+        return None
+
+    except Exception as e:
+        # Safety net to catch other exceptions and not crash the websocket
+        await send_callback(json.dumps({
+            "type": "chat_error",
+            "data": "CHAT_BACKEND_ERROR",
+            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+        }))
+
     t2 = time(); logger.info(f"{lu.YELLOW}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.ROBO_MSG}{system_utt} {lu.RESET}")
     
     emotion = await classify_llm_text_emotion_async(system_utt, emo_classifier_type="vader")
