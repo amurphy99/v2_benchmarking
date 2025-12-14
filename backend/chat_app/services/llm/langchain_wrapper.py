@@ -31,16 +31,19 @@ def format_messages_to_phi_prompt(messages: List[BaseMessage]) -> str:
 class CustomChatModel(BaseChatModel):
     """LangChain chat wrapper"""
 
-    # This type annotation tells Pydantic to expect the custom client
+    # This type annotation tells Pydantic to expect the additional attributes
     client: Any = None
+    max_tokens: int = 128
+    stop: List[str] = ["<|end|>", "\n"]
+    echo: bool = False
 
     def __init__(
         self,
         client: LlamaAPI,
         *,
-        max_tokens: int = 256,
+        max_tokens: int = 128,
         stop: Optional[list[str]] = None,
-        echo: bool = True,
+        echo: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
