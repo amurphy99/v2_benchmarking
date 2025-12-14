@@ -3,10 +3,9 @@ import json
 import asyncio
 import logging
 import re
-from dataclasses import dataclass
 
-from django.db.models import Value
 from django.db.models.functions import Lower
+from django.core.exceptions import ObjectDoesNotExist
 
 from pgvector.django import CosineDistance
 
@@ -35,6 +34,22 @@ class LlmResponse(BaseModel):
 
 output_parser = PydanticOutputParser(pydantic_object=LlmResponse)
 _available_scenarios_logged = False
+
+def resolve_instruction_owner(user):
+    """
+    Memory activity instructions are authored by caregiver.
+    The `user` is actually a patient (plwd), so we need to use their paired caregiver's id to fetch
+    instructions.
+    """
+    # If the user is a patient, they should have a Profile via related_name="PLwD"
+    try:
+        profile = user.PLwD  # Profile where this user is the patient (plwd)
+        return profile.caregiver
+    except ObjectDoesNotExist:
+        pass
+
+    # Otherwise treat them as caregiver (or unpaired)
+    return user
 
 
 def parse_llm_json(text: str) -> dict:
@@ -92,13 +107,13 @@ def get_activity(activity_name: str) -> Activity:
     return Activity.objects.get(name=activity_name)
 
 
-def get_available_scenarios(user, activity: Activity) -> list[dict]:
+def get_available_scenarios(user_id: int, activity: Activity) -> list[dict]:
     """
     Returns [{name: ..., description: ...}, ...]
     """
     qs = (
         RAGInstructions.objects
-        .filter(user=user, activity=activity)
+        .filter(user=user_id, activity=activity)
         .values("name", "description")
         .order_by(Lower("name"))
     )
@@ -132,7 +147,7 @@ def embed_query(text: str) -> list[float]:
 def retrieve_instruction_chunks(
     *,
     instruction_name: str,
-    user_id: int,
+    user_id:int,
     activity_id: int,
     query_text: str,
     k: int = 4,
@@ -282,8 +297,9 @@ async def rag_response_fn(
 ) -> dict:
     global _available_scenarios_logged
     activity = get_activity(activity_name)
+    instruction_owner = resolve_instruction_owner(user)
 
-    scenarios = get_available_scenarios(user, activity)
+    scenarios = get_available_scenarios(instruction_owner, activity)
     available_scenarios_text = format_available_scenarios(scenarios)
 
     if not _available_scenarios_logged:
@@ -294,7 +310,7 @@ async def rag_response_fn(
 
     chunks = retrieve_instruction_chunks(
         instruction_name=current,
-        user_id=user.id,
+        user_id=instruction_owner,
         activity_id=activity.id,
         query_text=user_text,
         k=4,
