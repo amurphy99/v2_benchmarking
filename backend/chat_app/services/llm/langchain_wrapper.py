@@ -31,6 +31,9 @@ def format_messages_to_phi_prompt(messages: List[BaseMessage]) -> str:
 class CustomChatModel(BaseChatModel):
     """LangChain chat wrapper"""
 
+    # This type annotation tells Pydantic to expect the custom client
+    client: Any = None
+
     def __init__(
         self,
         client: LlamaAPI,
