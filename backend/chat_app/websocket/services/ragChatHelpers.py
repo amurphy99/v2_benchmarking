@@ -5,6 +5,7 @@ import json
 import asyncio
 import logging
 import re
+from typing import Any
 
 from django.db.models.functions import Lower
 from django.core.exceptions import ObjectDoesNotExist
@@ -63,6 +64,31 @@ def resolve_instruction_owner(user):
 
     # Otherwise treat them as caregiver (or unpaired)
     return user
+
+
+def _message_content_to_text(content: Any) -> str:
+    """Normalize LangChain message content to plain text."""
+    if isinstance(content, str):
+        return content
+
+    # Some models return list[dict|str] blocks we join them.
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                # common pattern: {"type":"text","text":"..."}
+                txt = item.get("text")
+                if isinstance(txt, str):
+                    parts.append(txt)
+                else:
+                    parts.append(str(item))
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+
+    return str(content)
 
 
 def parse_llm_json(text: str) -> dict:
@@ -250,12 +276,17 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
     Always prefer async chain execution.
     """
     prompt = ChatPromptTemplate.from_messages(messages)
-    chain = prompt | cf.llm 
+    chain = prompt | cf.llm_lc_wrapper
 
     out = await chain.ainvoke({})
+    
+    if isinstance(out, AIMessage):
+        return _message_content_to_text(out.content)
 
-    # Normalize output to string
-    return out if isinstance(out, str) else str(out)
+    if isinstance(out, str):
+        return out
+
+    return str(out)
 
 def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputParser, *, trace_id: str = "no-trace") -> "LlmResponse":
     """

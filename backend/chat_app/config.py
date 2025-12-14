@@ -3,6 +3,7 @@
 # ================================================================================
 # Load Packages
 import os, warnings, logging
+from .services.llm.langchain_wrapper import CustomChatModel
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -117,6 +118,8 @@ try:
        
     # Setup the LLM
     llm = LLMClass()
+
+    llm_lc_wrapper = CustomChatModel(llm, max_tokens=256, echo=True) if USE_LLM else None
     logger.info("LLM initialized successfully")
 
 except Exception as e:
