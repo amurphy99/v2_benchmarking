@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 START_SCENARIO = "start_conversation"
-_available_scenarios_logged = False
-
 
 class LlmResponse(BaseModel):
     assistant_response: str = Field(..., description="the assistant's response to the user query")
@@ -36,6 +34,7 @@ class LlmResponse(BaseModel):
 
 
 output_parser = PydanticOutputParser(pydantic_object=LlmResponse)
+_available_scenarios_logged = False
 
 
 def parse_llm_json(text: str) -> dict:
@@ -280,7 +279,8 @@ async def rag_response_fn(
     user,
     activity_name: str,
     rag_state: dict,
-) -> str:
+) -> dict:
+    global _available_scenarios_logged
     activity = get_activity(activity_name)
 
     scenarios = get_available_scenarios(user, activity)
@@ -326,4 +326,9 @@ async def rag_response_fn(
     logger.info("LLM next_scenario: %s", llm_struct.next_scenario)
 
     rag_state["current_scenario"] = llm_struct.next_scenario
-    return llm_struct.assistant_response
+    
+    return {
+    "text": llm_struct.assistant_response,
+    "current_scenario": llm_struct.current_scenario,
+    "next_scenario": llm_struct.next_scenario,
+    }

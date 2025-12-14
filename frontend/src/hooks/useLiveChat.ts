@@ -15,17 +15,39 @@ export default function useLiveChat({
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
     onEmotion         = (         ) => {},
+    wsPath = "/ws/chat/",
+    onDebugTurn,
+    onRagParseError,
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
     onEmotion         : (emotion: string) => void;
+    wsPath           ?: string;
+    onDebugTurn      ?: (turn: {
+                            role: "user" | "assistant";
+                            text: string;
+                            state?: string;
+                        }) => void;
+    onRagParseError  ?: () => void;
 }) {
     // Misc. setup
     const qc = useQueryClient();
     const onLLMres = (response) => {
-		logText(`[LLM] Response:   ${response.data}`);
-		onSystemUtterance(response.data);
+		const payload = response.data;
+
+        const text = typeof payload === "string" ? payload : payload?.text ?? "";
+
+        onSystemUtterance(text);
+
+        const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
+
+        onDebugTurn?.({
+            role: "assistant",
+            text,
+            state,
+        });
+
         if (response.emotion) {
             onEmotion(response.emotion)
         }
@@ -34,14 +56,24 @@ export default function useLiveChat({
 
     const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16, bufferAhead: 0.2})
 
+    // wrap the user utterances
+    const onUserUttWrapped = (text: string) => {
+        onUserUtterance(text);
+        onDebugTurn?.({ role: "user", text });
+    };
+
 	const { send } = useChatSocket({
 		recording,
-		onLLMResponse: (text: string) => {
-			onLLMres(text);
-		},
+        wsPath,
+		onLLMResponse: onLLMres,
 		onScores,
-		onUserUtt: onUserUtterance,
+		onUserUtt: onUserUttWrapped,
 		onAudio: sendAudio,
+        onError: (msg) => {
+            if (msg?.type === "rag_parse_error") {
+                onRagParseError?.();
+            }
+        },
 	});
 	const { start: startAud, stop: stopAud } = useAudioStreamer({
 		chunkMs: 64,

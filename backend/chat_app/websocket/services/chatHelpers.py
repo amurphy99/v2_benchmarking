@@ -51,7 +51,7 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
             system_utt = await generate_LLM_response(context_buffer)
         else:
             response_fn_kwargs = response_fn_kwargs or {}
-            system_utt = await response_fn(context_buffer, user_text, **response_fn_kwargs)
+            system_utt = await response_fn(context_buffer[:-1], text, **response_fn_kwargs)
 
     except RagParseError:
         # On parsing/structured-output failure, send a signal to frontend;
@@ -71,17 +71,27 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
         }))
 
     t2 = time(); logger.info(f"{lu.YELLOW}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.ROBO_MSG}{system_utt} {lu.RESET}")
-    
-    emotion = await classify_llm_text_emotion_async(system_utt, emo_classifier_type="vader")
-    
-    await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'emotion': emotion, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
+
+    payload = system_utt
+
+    # Normalize for both string and dict responses (RAG output returns a dict)
+    if isinstance(payload, dict):
+        response_data = payload
+        response_text = payload.get("text", "")
+    else:
+        response_data = payload
+        response_text = payload
+
+    emotion = await classify_llm_text_emotion_async(response_text, emo_classifier_type="vader")
+
+    await send_callback(json.dumps({'type': 'llm_response', 'data': response_data, 'emotion': emotion, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
     t3 = time(); logger.info(f"{lu.YELLOW}[LLM] Response sent {(t3-t2):.4f}s ({(t3-t0):.4f}s total). {lu.RESET}")
 
     # -----------------------------------------------------------------------
     # 3) Background persistence & biomarkers
     # -----------------------------------------------------------------------
     # Fire-and-forget DB write for the "assistant" message & update in-memory context
-    await msg_callback(role="assistant", text=system_utt, time=time())
+    await msg_callback(role="assistant", text=response_text, time=time())
 
     # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
     asyncio.create_task(bio_callback())
