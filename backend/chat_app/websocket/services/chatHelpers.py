@@ -4,6 +4,7 @@
 ======================================================================= 
 """
 import json, logging, asyncio, base64
+import traceback
 from math import ceil
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
 
     except RagParseError:
         # On parsing/structured-output failure, send a signal to frontend;
+        logger.warning("[CHAT] RagParseError: %s", repr(e))
         await send_callback(json.dumps({
             "type": "rag_parse_error",
             "data": "RAG_PARSE_ERROR",
@@ -63,7 +65,10 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
         return None
 
     except Exception as e:
+        tb = traceback.format_exc()
         # Safety net to catch other exceptions and not crash the websocket
+        logger.error("[CHAT] Unhandled error in handle_transcription: %s", repr(e))
+        logger.error("[CHAT] Traceback:\n%s", tb)
         await send_callback(json.dumps({
             "type": "chat_error",
             "data": "CHAT_BACKEND_ERROR",
