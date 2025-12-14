@@ -244,21 +244,18 @@ def build_system_prompt(
     """
 
 
-
 async def invoke_chain_get_raw_text(messages: list) -> str:
     """
     Run prompt -> llm only and return raw text output.
-    Runs off the event loop to avoid blocking the websocket.
+    Always prefer async chain execution.
     """
     prompt = ChatPromptTemplate.from_messages(messages)
     chain = prompt | cf.llm 
 
-    def _run():
-        out = chain.invoke({})
-        # LlamaCpp usually returns a string; other models may return objects.
-        return out if isinstance(out, str) else str(out)
+    out = await chain.ainvoke({})
 
-    return await asyncio.to_thread(_run)
+    # Normalize output to string
+    return out if isinstance(out, str) else str(out)
 
 def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputParser, *, trace_id: str = "no-trace") -> "LlmResponse":
     """
