@@ -1,4 +1,6 @@
 # chat_app/services/ragChatHelper.py
+import time
+import uuid
 import json
 import asyncio
 import logging
@@ -23,6 +25,15 @@ from ...         import config        as cf
 
 logger = logging.getLogger(__name__)
 
+def _truncate(s: str, n: int = 3000) -> str:
+    s = "" if s is None else str(s)
+    return s if len(s) <= n else (s[:n] + f"\n... [truncated {len(s)-n} chars]")
+
+def _log_json_fail(trace_id: str, raw_text: str, err: Exception):
+    logger.error(
+        "[RAG][%s] JSON parse failed: %s\nRAW:\n%s",
+        trace_id, repr(err), _truncate(raw_text, 8000)
+    )
 
 START_SCENARIO = "start_conversation"
 
@@ -82,6 +93,7 @@ def parse_llm_json(text: str) -> dict:
         except Exception:
             return None
 
+    logger.debug("[RAG] parse_llm_json candidate:\n%s", _truncate(candidate, 4000))
     # Attempt 1: direct
     obj = try_load(candidate)
     if obj is not None:
@@ -100,6 +112,7 @@ def parse_llm_json(text: str) -> dict:
     if obj is not None:
         return obj
 
+    logger.debug("[RAG] parse_llm_json repaired:\n%s", _truncate(repaired, 4000))
     raise RagParseError("Failed to parse/repair JSON output from LLM")
 
 
@@ -245,7 +258,7 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
 
     return await asyncio.to_thread(_run)
 
-def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputParser) -> "LlmResponse":
+def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputParser, *, trace_id: str = "no-trace") -> "LlmResponse":
     """
     Cycle:
       1) Try PydanticOutputParser.parse(raw_text)
@@ -254,16 +267,21 @@ def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputPa
     """
     # ---- PydanticOutputParser ----
     try:
+        logger.debug("[RAG][%s] parse: trying pydantic parser", trace_id)
         parsed = output_parser.parse(raw_text)
-        # parsed should already be LlmResponse if parser is configured with it
+        logger.debug("[RAG][%s] parse: pydantic success", trace_id)
         return parsed
     except Exception as e1:
         first_err = e1
-
-    # ---- repair + json + validate ----
+        logger.warning("[RAG][%s] parse: pydantic failed: %s", trace_id, repr(e1))
+    
+    # ---- Try Repairing JSON ----
     try:
-        payload = parse_llm_json(raw_text) 
+        logger.debug("[RAG][%s] parse: trying repair json", trace_id)
+        payload = parse_llm_json(raw_text)
+        logger.debug("[RAG][%s] parse: repair json success keys=%s", trace_id, list(payload.keys()))
     except Exception as e2:
+        logger.error("[RAG][%s] parse: repair json failed: %s", trace_id, repr(e2))
         raise RagParseError(f"Failed parsing via pydantic and repair; repair step error: {e2}") from first_err
 
     try:
@@ -277,6 +295,8 @@ def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputPa
             raise ValueError("current_scenario missing/invalid")
         if not isinstance(nxt, str) or not nxt.strip():
             raise ValueError("next_scenario missing/invalid")
+
+        logger.info("[RAG][%s] parse: validated current=%s next=%s",trace_id, cur.strip(), nxt.strip())
 
         return LlmResponse(
             assistant_response=resp.strip(),
@@ -297,24 +317,35 @@ async def rag_response_fn(
 ) -> dict:
     global _available_scenarios_logged
     activity = get_activity(activity_name)
+
+    trace_id = uuid.uuid4().hex[:8]
+    t0 = time.time()
+    logger.info("[RAG][%s] Start", trace_id,)
+    logger.info("[RAG][%s] user=%s instruction_owner=%s activity=%s",
+                trace_id, getattr(user, "id", None), getattr(instruction_owner, "id", None), activity_name)
+
+
     instruction_owner = resolve_instruction_owner(user)
 
-    scenarios = get_available_scenarios(instruction_owner, activity)
+    scenarios = get_available_scenarios(instruction_owner.id, activity)
     available_scenarios_text = format_available_scenarios(scenarios)
 
     if not _available_scenarios_logged:
+        logger.debug("[RAG][%s] scenarios_count=%d", trace_id, len(scenarios))
         logger.info("Available scenarios:\n%s", available_scenarios_text)
         _available_scenarios_logged = True
 
     current = rag_state.get("current_scenario") or START_SCENARIO
+    logger.info("[RAG][%s] current_scenario=%s", trace_id, current)
 
     chunks = retrieve_instruction_chunks(
         instruction_name=current,
-        user_id=instruction_owner,
+        user_id=instruction_owner.id,
         activity_id=activity.id,
         query_text=user_text,
         k=4,
     )
+    logger.info("[RAG][%s] retrieved_chunks=%d", trace_id, len(chunks))
     instructions_text = chunks_to_text(chunks)
 
     system_prompt = build_system_prompt(
@@ -330,19 +361,31 @@ async def rag_response_fn(
             msg_history.append(HumanMessage(content=content))
         elif role == "assistant":
             msg_history.append(AIMessage(content=content))
+    
+    logger.debug("[RAG][%s] msg_history_len=%d", trace_id, len(msg_history))
 
     messages = [SystemMessage(content=system_prompt)] + msg_history + [
         HumanMessage(content=user_text + "\n<|assistant|>\n")
     ]
 
     raw = await invoke_chain_get_raw_text(messages)
+    logger.info("[RAG][%s] LLM raw output:\n%s", trace_id, _truncate(raw, 8000))
+    logger.debug("[RAG][%s] LLM raw length=%d", trace_id, len(raw or ""))
     
-    llm_struct = parse_structured_llm_response(raw, output_parser)
+    try:
+        llm_struct = parse_structured_llm_response(raw, output_parser, trace_id=trace_id)
+    except RagParseError as e:
+        _log_json_fail(trace_id, raw, e)
+        raise
 
     logger.info("LLM next_scenario: %s", llm_struct.next_scenario)
 
     rag_state["current_scenario"] = llm_struct.next_scenario
     
+    t_end = time.time()
+    logger.info("[RAG][%s] End next_scenario=%s total=%.3fs",
+                trace_id, llm_struct.next_scenario, (t_end - t0))
+        
     return {
     "text": llm_struct.assistant_response,
     "current_scenario": llm_struct.current_scenario,
