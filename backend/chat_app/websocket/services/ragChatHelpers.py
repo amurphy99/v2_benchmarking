@@ -8,6 +8,7 @@ import re
 
 from django.db.models.functions import Lower
 from django.core.exceptions import ObjectDoesNotExist
+from channels.db import database_sync_to_async
 
 from pgvector.django import CosineDistance
 
@@ -46,6 +47,7 @@ class LlmResponse(BaseModel):
 output_parser = PydanticOutputParser(pydantic_object=LlmResponse)
 _available_scenarios_logged = False
 
+@database_sync_to_async
 def resolve_instruction_owner(user):
     """
     Memory activity instructions are authored by caregiver.
@@ -115,11 +117,11 @@ def parse_llm_json(text: str) -> dict:
     logger.debug("[RAG] parse_llm_json repaired:\n%s", _truncate(repaired, 4000))
     raise RagParseError("Failed to parse/repair JSON output from LLM")
 
-
+@database_sync_to_async
 def get_activity(activity_name: str) -> Activity:
     return Activity.objects.get(name=activity_name)
 
-
+@database_sync_to_async
 def get_available_scenarios(user_id: int, activity: Activity) -> list[dict]:
     """
     Returns [{name: ..., description: ...}, ...]
@@ -156,7 +158,7 @@ def embed_query(text: str) -> list[float]:
     embeddings_model = get_embeddings_model()
     return embeddings_model.embed_query(text)
 
-
+@database_sync_to_async
 def retrieve_instruction_chunks(
     *,
     instruction_name: str,
@@ -316,18 +318,18 @@ async def rag_response_fn(
     rag_state: dict,
 ) -> dict:
     global _available_scenarios_logged
-    activity = get_activity(activity_name)
+    activity = await get_activity(activity_name)
 
     trace_id = uuid.uuid4().hex[:8]
     t0 = time.time()
-    logger.info("[RAG][%s] Start", trace_id,)
+    logger.info("[RAG][%s] Start", trace_id)
+
+    instruction_owner = await resolve_instruction_owner(user)
+
     logger.info("[RAG][%s] user=%s instruction_owner=%s activity=%s",
                 trace_id, getattr(user, "id", None), getattr(instruction_owner, "id", None), activity_name)
 
-
-    instruction_owner = resolve_instruction_owner(user)
-
-    scenarios = get_available_scenarios(instruction_owner.id, activity)
+    scenarios = await get_available_scenarios(instruction_owner.id, activity)
     available_scenarios_text = format_available_scenarios(scenarios)
 
     if not _available_scenarios_logged:
@@ -338,7 +340,7 @@ async def rag_response_fn(
     current = rag_state.get("current_scenario") or START_SCENARIO
     logger.info("[RAG][%s] current_scenario=%s", trace_id, current)
 
-    chunks = retrieve_instruction_chunks(
+    chunks = await retrieve_instruction_chunks(
         instruction_name=current,
         user_id=instruction_owner.id,
         activity_id=activity.id,
