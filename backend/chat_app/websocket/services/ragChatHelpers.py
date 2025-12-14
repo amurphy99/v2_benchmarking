@@ -395,7 +395,7 @@ async def rag_response_fn(
     logger.debug("[RAG][%s] msg_history_len=%d", trace_id, len(msg_history))
 
     messages = [SystemMessage(content=system_prompt)] + msg_history + [
-        HumanMessage(content=user_text + "\n<|assistant|>\n")
+        HumanMessage(content=user_text)
     ]
 
     raw = await invoke_chain_get_raw_text(messages)

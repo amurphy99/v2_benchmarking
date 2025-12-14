@@ -34,7 +34,7 @@ class CustomChatModel(BaseChatModel):
     # This type annotation tells Pydantic to expect the additional attributes
     client: Any = None
     max_tokens: int = 128
-    stop: List[str] = ["<|end|>", "\n"]
+    stop: List[str] = ["<|end|>"]
     echo: bool = False
 
     def __init__(
@@ -49,7 +49,7 @@ class CustomChatModel(BaseChatModel):
         super().__init__(**kwargs)
         self.client = client
         self.max_tokens = max_tokens
-        self.stop = stop or ["<|end|>", "\n"]
+        self.stop = stop or ["<|end|>"]
         self.echo = echo
 
     @property
