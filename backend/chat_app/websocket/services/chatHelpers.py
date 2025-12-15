@@ -54,7 +54,7 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
             response_fn_kwargs = response_fn_kwargs or {}
             system_utt = await response_fn(context_buffer[:-1], text, **response_fn_kwargs)
 
-    except RagParseError:
+    except RagParseError as e:
         # On parsing/structured-output failure, send a signal to frontend;
         logger.warning("[CHAT] RagParseError: %s", repr(e))
         await send_callback(json.dumps({

@@ -18,6 +18,7 @@ export default function useLiveChat({
     wsPath = "/ws/chat/",
     onDebugTurn,
     onRagParseError,
+    onChatError,
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
@@ -30,6 +31,7 @@ export default function useLiveChat({
                             state?: string;
                         }) => void;
     onRagParseError  ?: () => void;
+    onChatError      ?: () => void;
 }) {
     // Misc. setup
     const qc = useQueryClient();
@@ -72,6 +74,11 @@ export default function useLiveChat({
         onError: (msg) => {
             if (msg?.type === "rag_parse_error") {
                 onRagParseError?.();
+                return;
+            }
+            if (msg?.type === "chat_error") {
+                onChatError?.();
+                return;
             }
         },
 	});

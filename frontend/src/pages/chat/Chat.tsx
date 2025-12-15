@@ -79,7 +79,12 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
             setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),
         onRagParseError: () => {
             setBotMessage(
-            <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
+              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
+            );
+        },
+        onChatError: () => {
+            setBotMessage(
+              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
             );
         },
     });
@@ -115,7 +120,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
     <>
-        <div className="flex flex-col justify-between h-[85vh]">
+        <div className="flex flex-col">
             {/* View of the chatHistory and/or Avatar */}
             {!isMobile ? 
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
@@ -138,7 +143,11 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-            <div className={`flex flex-row mb-[5rem] mx-[20vw] gap-[4em] justify-${isMobile ? "between" : "center"}`}>
+           <div
+                className={`flex flex-row ${
+                    chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
+                } mx-[20vw] gap-[4em] justify-${isMobile ? "between" : "center"}`}
+            >
                 <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
                 <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
 
@@ -158,7 +167,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
 
             {/* Added only for debugging, will probably remove later */}
             {chatMode === "memory_activity" && (
-            <div className="border min-h-15 rounded p-3 mx-[10vw] mb-4 h-[25vh] overflow-y-auto">
+            <div className="border rounded p-4 mx-[10vw] mb-[2rem] h-[35vh] overflow-y-auto">
                 <div className="font-semibold mb-2">
                 Memory Activity Debug (testing)
                 </div>

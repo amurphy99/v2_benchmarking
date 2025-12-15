@@ -217,8 +217,8 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
     """
     llm = cf.llm_lc_wrapper.bind(
         temperature=0.1,   
-        top_p=1.0,
-        top_k=0,
+        top_p=0.1,
+        top_k=5,
         max_tokens=128,
     )
 
