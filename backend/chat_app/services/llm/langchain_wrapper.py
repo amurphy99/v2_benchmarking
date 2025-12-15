@@ -77,7 +77,6 @@ class CustomChatModel(BaseChatModel):
             repeat_penalty=kwargs.get("repeat_penalty"),
             presence_penalty=kwargs.get("presence_penalty"),
             frequency_penalty=kwargs.get("frequency_penalty"),
-            seed=kwargs.get("seed"),
         )
 
         raw_text = resp["choices"][0]["text"]
