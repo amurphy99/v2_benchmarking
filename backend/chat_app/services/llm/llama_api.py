@@ -90,7 +90,7 @@ class LlamaAPI:
                 if prompt is None:
                     raise ValueError("mode='chat' requires messages=[...] or prompt=...")
                 messages = [{"role": "user", "content": prompt}]
-
+            
             llm_json = {
                 "model": "models/Phi-3_finetuned.gguf",
                 "messages": messages,
@@ -98,6 +98,13 @@ class LlamaAPI:
                 **({"stop": stop} if stop else {}),
                 **hyperparameters,
             }
+
+            if "messages" in llm_json:
+                logger.info("Sending chat messages=%d, system_chars=%d",
+                            len(llm_json["messages"]),
+                            len(llm_json["messages"][0]["content"]) if llm_json["messages"] and llm_json["messages"][0]["role"]=="system" else -1)
+            else:
+                logger.info("Sending prompt chars=%d", len(llm_json["prompt"]))
 
         # Get a response from the API
         try:

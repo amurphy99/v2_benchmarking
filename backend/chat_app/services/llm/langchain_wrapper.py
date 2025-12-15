@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 
 from typing import Any, List, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -7,6 +8,8 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun, AsyncCallbackManagerForLLMRun
 
 from .llama_api import LlamaAPI
+
+logger = logging.getLogger(__name__)
 
 
 # def format_messages_to_phi_prompt(messages: List[BaseMessage]) -> str:
@@ -71,6 +74,10 @@ class CustomChatModel(BaseChatModel):
             elif isinstance(m, HumanMessage):
                 role = "user"
             chat_messages.append({"role": role, "content": m.content})
+
+        logger.info("LC messages count=%d first=%s", len(messages), type(messages[0]).__name__)
+        logger.info("LC messages count=%d", len(chat_messages))
+        logger.info("System msg chars=%d", len(messages[0].content) if isinstance(messages[0], SystemMessage) else -1)
 
         resp = await self.client(
             messages=chat_messages,

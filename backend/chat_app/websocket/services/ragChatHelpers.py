@@ -215,18 +215,16 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
     Run prompt -> llm only and return raw text output.
     Always prefer async chain execution.
     """
-    prompt = ChatPromptTemplate.from_messages(messages)
     llm = cf.llm_lc_wrapper.bind(
-            temperature=0.1,
-            top_p=1.0,
-            top_k=0,
-            max_tokens=256,
-        )
+        temperature=0.1,   
+        top_p=1.0,
+        top_k=0,
+        max_tokens=256,
+    )
 
-    chain = prompt | llm
+    # Call the model directly with concrete messages
+    out = await llm.ainvoke(messages)
 
-    out = await chain.ainvoke({})
-    
     if isinstance(out, AIMessage):
         return _message_content_to_text(out.content)
 
@@ -234,6 +232,7 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
         return out
 
     return str(out)
+    
 
 
 async def rag_response_fn(
