@@ -2,11 +2,15 @@ import json
 import re
 from .chatHelpers import RagParseError 
 import logging
+from pydantic import BaseModel, Field
 
-from .ragChatHelpers import LlmResponse
 from langchain_core.output_parsers import PydanticOutputParser
 
 logger = logging.getLogger(__name__)
+
+class LlmResponse(BaseModel):
+    assistant_response: str = Field(..., description="the assistant's response to the user query")
+    next_scenario: str = Field(..., description="the next scenario to move to after this response. (can be same as current if a topic change is not needed).")
 
 def _truncate(s: str, n: int = 3000) -> str:
     s = "" if s is None else str(s)

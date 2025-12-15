@@ -1,10 +1,7 @@
 # chat_app/services/ragChatHelper.py
 import time
 import uuid
-import json
-import asyncio
 import logging
-import re
 from typing import Any
 
 from django.db.models.functions import Lower
@@ -18,8 +15,7 @@ from rag_vectorstore.models import RAGInstructionChunkEmbedding
 from rag_vectorstore.services.vdb_services import get_embeddings_model
 
 from .chatHelpers import RagParseError 
-from .parsingHelpers import _log_json_fail, _truncate, parse_structured_llm_response
-from pydantic import BaseModel, Field
+from .parsingHelpers import _log_json_fail, _truncate, parse_structured_llm_response, LlmResponse
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
@@ -29,11 +25,6 @@ from ...         import config        as cf
 logger = logging.getLogger(__name__)
 
 START_SCENARIO = "start_conversation"
-
-class LlmResponse(BaseModel):
-    assistant_response: str = Field(..., description="the assistant's response to the user query")
-    next_scenario: str = Field(..., description="the next scenario to move to after this response. (can be same as current if a topic change is not needed).")
-
 
 output_parser = PydanticOutputParser(pydantic_object=LlmResponse)
 _available_scenarios_logged = False
@@ -233,7 +224,7 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
         )
 
     chain = prompt | llm
-    
+
     out = await chain.ainvoke({})
     
     if isinstance(out, AIMessage):
