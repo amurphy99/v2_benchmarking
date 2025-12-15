@@ -219,7 +219,7 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
         temperature=0.1,   
         top_p=1.0,
         top_k=0,
-        max_tokens=256,
+        max_tokens=128,
     )
 
     # Call the model directly with concrete messages
