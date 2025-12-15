@@ -216,6 +216,7 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
     Always prefer async chain execution.
     """
     llm = cf.llm_lc_wrapper.bind(
+        stop=None,
         temperature=0.1,   
         top_p=0.1,
         top_k=5,

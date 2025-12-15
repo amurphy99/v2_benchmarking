@@ -6,6 +6,14 @@ from ...services import logging_utils as lu
 
 logger = logging.getLogger(__name__)
 
+import hashlib
+
+def _truncate(s: str, n: int = 2000) -> str:
+    s = "" if s is None else str(s)
+    return s if len(s) <= n else (s[:n] + f"\n... [truncated {len(s)-n} chars]")
+
+def _sha12(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:12]
 # ================================================================================
 # Wrapper class for communicating with the LLM running on the GPU VM
 # ================================================================================
@@ -67,6 +75,22 @@ class LlamaAPI:
             "echo": echo,
             **hyperparameters,
         }
+
+        # ---- DEBUG: what we're sending ----
+        try:
+            prompt_str = llm_json.get("prompt", "")
+            logger.info(
+                "[LLM][REQ] model=%s max_tokens=%s stop=%s echo=%s prompt_chars=%d prompt_hash=%s",
+                llm_json.get("model"),
+                llm_json.get("max_tokens"),
+                llm_json.get("stop"),
+                llm_json.get("echo"),
+                len(prompt_str),
+                _sha12(prompt_str),
+            )
+            logger.debug("[LLM][REQ] prompt_tail:\n%s", _truncate(prompt_str[-1200:], 1200))
+        except Exception as _e:
+            logger.warning("[LLM][REQ] Failed to log request: %r", _e)
 
         # Get a response from the API
         try:
