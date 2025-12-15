@@ -27,8 +27,11 @@ Everything is wrapped in docker-compose.yaml and the frontend and backend APIs a
 1. Need to have copies of `new_LSA.csv` and the stanford-parser models file placed in their correct directories.
 2. Open Docker Desktop
 3. `cd` into the `backend` directory
-4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines
+4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines. Also, Uncomment the database related services, since this branch uses external database connection during deployment.
 5. `docker compose -f docker-compose.backend.yaml up --build`
+6. If this was the first time you created the volume for the vector database. Then also run-
+`docker exec -it db_vector psql -U postgres -d dementia_chat_vector_db -c "CREATE EXTENSION IF NOT EXISTS vector;"` (only required once).
+
 
 The web app can be accessed through localhost:5173 in your browser.
 
@@ -70,12 +73,35 @@ SSH:/home/user/
 +│   │   │   │   ├── stanford-parser-full-2020-11-17/stanford-parser-4.2.0-models.jar
 +│   │   │   │   ├── new_LSA.csv
  │   │   │   │   └── ...
- │   │   │   └── ...
- │   │   │
+ │   │   │   ├── websocket/services/
+ │   │   │   │   ├── audioHelpers.py
+ │   │   │   │   ├── bg_helpers.py
+ │   │   │   │   ├── chatHelpers.py # main module for default chat functionalities
++│   │   │   │   ├── parsingHelpers.py # parsers required by the ragChatHelpers.py
++│   │   │   │   ├── ragChatHelpers.py # new module for RAG-based chat activity
+ │   │   │   │   ├── speechProvider.py
+ │   │   │   │   └── ...
+ │   │   │   └── websocket/  
+ │   │   │   │   ├── consumers.py    # initialization of the chat sessions
+ │   │   │   │   └── routing.py      # routing for different chat modes
+ │   │   │   └── services/ 
+ │   │   │   │   ├── emotionHelpers.py      # Emotion analysis
+ │   │   │   │   ├── topicHelpers.py        
+ │   │   │   │   └── llm/         # LLM providers
++│   │   │   │       ├── langchain_wrapper.py # LC wrapper class for LlamaAPI Chat
+ │   │   │   │       ├── llama_api.py
+ │   │   │   │       └── dummy_LLM.py
 +│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
 +│   │   ├── .env                 # Created programmatically during startup script
  │   │   ├── requirements-web.txt
  │   │   └── ...
+ │   │
++│   │   ├── rag_vectorstore/     # Vector database app
++│   │   │   ├── models.py        # VectorStore models
++│   │   │   ├── services/
++│   │   │   │   └── vdb_services.py      # Vector DB services
++│   │   │   └── models/
++│   │   │       └── MiniLM-L6-v2/        # downloaded programmatically during deployment
  │   │
  │   ├── frontend/
  │   │   ├── Dockerfile-frontend  # Builds and serves Vite app

@@ -15,9 +15,10 @@ from pgvector.django import CosineDistance
 
 from chat_app.models import RAGInstructions, Activity
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
-from .chatHelpers import RagParseError 
 from rag_vectorstore.services.vdb_services import get_embeddings_model
 
+from .chatHelpers import RagParseError 
+from .parsingHelpers import _log_json_fail, _truncate, parse_structured_llm_response
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -27,21 +28,10 @@ from ...         import config        as cf
 
 logger = logging.getLogger(__name__)
 
-def _truncate(s: str, n: int = 3000) -> str:
-    s = "" if s is None else str(s)
-    return s if len(s) <= n else (s[:n] + f"\n... [truncated {len(s)-n} chars]")
-
-def _log_json_fail(trace_id: str, raw_text: str, err: Exception):
-    logger.error(
-        "[RAG][%s] JSON parse failed: %s\nRAW:\n%s",
-        trace_id, repr(err), _truncate(raw_text, 8000)
-    )
-
 START_SCENARIO = "start_conversation"
 
 class LlmResponse(BaseModel):
     assistant_response: str = Field(..., description="the assistant's response to the user query")
-    current_scenario: str = Field(..., description="the current scenrario (stage) of the conversation.")
     next_scenario: str = Field(..., description="the next scenario to move to after this response. (can be same as current if a topic change is not needed).")
 
 
@@ -90,58 +80,6 @@ def _message_content_to_text(content: Any) -> str:
 
     return str(content)
 
-
-def parse_llm_json(text: str) -> dict:
-    """
-    JSON extraction and light repair.
-    Handles:
-      - extra leading/trailing text
-      - trailing <|end|>
-      - trailing commas
-      - missing final '}' (common truncation case)
-    If still invalid -> raise RagParseError.
-    """
-    raw = (text or "").strip()
-    raw = raw.replace("<|end|>", "").strip()
-
-    # Extract likely JSON region
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start == -1:
-        raise RagParseError("No JSON object start found")
-    if end == -1:
-        # If no closing brace at all, try to treat full tail as JSON and fix later
-        candidate = raw[start:]
-    else:
-        candidate = raw[start:end + 1]
-
-    def try_load(s: str) -> dict | None:
-        try:
-            return json.loads(s)
-        except Exception:
-            return None
-
-    logger.debug("[RAG] parse_llm_json candidate:\n%s", _truncate(candidate, 4000))
-    # Attempt 1: direct
-    obj = try_load(candidate)
-    if obj is not None:
-        return obj
-
-    # Repair 1: remove trailing commas before } or ]
-    repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
-
-    # Repair 2: if braces look unbalanced, close them (only if it's close)
-    open_braces = repaired.count("{")
-    close_braces = repaired.count("}")
-    if close_braces < open_braces and (open_braces - close_braces) <= 2:
-        repaired = repaired + ("}" * (open_braces - close_braces))
-
-    obj = try_load(repaired)
-    if obj is not None:
-        return obj
-
-    logger.debug("[RAG] parse_llm_json repaired:\n%s", _truncate(repaired, 4000))
-    raise RagParseError("Failed to parse/repair JSON output from LLM")
 
 @database_sync_to_async
 def get_activity(activity_name: str) -> Activity:
@@ -224,7 +162,7 @@ def build_system_prompt(
     instructions_text: str,
 ) -> str:
     
-    return f"""<|system|>
+    return f"""
     You are a scenario-based conversational assistant.
 
     The conversation is structured into SCENARIOS. Scenarios are stages that help guide the flow of the conversation. 
@@ -232,7 +170,7 @@ def build_system_prompt(
     You will be given instructions for the CURRENT_SCENARIO to help you decide how to respond to the user.
     The instructions for each scenario will include:
     - The ultimate goals of the scenario
-    - signals for understanding when the goals of scenario is complete and it is time to move to a new scenario topic
+    - signals for understanding when the goals of scenario is complete and when it is time to move to a new scenario topic
     - guidelines for how to respond and how to move toward the next scenario.
     - Also, examples of user and system responses that fit within the scenario.
 
@@ -251,22 +189,33 @@ def build_system_prompt(
     Your job each turn:
     1. Read the user message and the recent conversation history.
     2. Use the scenario instructions to decide:
-    - how to respond to the user,
-    - whether to stay in the current scenario or move to a new one,
+    - how to respond to the user in the current turn,
+    - whether to stay in the current scenario or move to a new one in the next turn,
     - which scenario should come next.
     3. Produce a JSON object with the following fields:
     - "assistant_response": your resposne to the users last query (a short natural language reply),
-    - "current_scenario": the scenario you believe we are currently in *after* interpreting this message,
     - "next_scenario": the next scenario you recommend moving to. If you are not ready to change scenarios yet, set "next_scenario" equal to the current scenario. Only move to a new scenario when the goals of the current scenario have been met.
 
-    JSON OUTPUT FORMAT (very important):
-    **Return ONLY a JSON object, no extra text**. Example:
+    STRICT OUTPUT CONTRACT (must follow):
+    - Output exactly ONE JSON object and nothing else.
+    - Do not output markdown, code fences, explanations, labels, or commentary.
+    - Do not include trailing commas.
+    - Do not include comments with the output.
+    - The JSON object MUST be parseable by Python json.loads.
+    - Only these keys are allowed: "assistant_response", "next_scenario".
+    - "next_scenario" must be either the current scenario or one of AVAILABLE_SCENARIOS.
 
-    {{
-    "assistant_response": "Hi there! How has your day been so far?",
-    "current_scenario": "start_conversation",
-    "next_scenario": "initiate_smalltalk"
-    }} <|end|>
+    Example outputs (single line):
+    Example 1:
+    {{"assistant_response":"Hi there! How has your day been so far?","next_scenario":"initiate_smalltalk"}}
+    Example 2:
+    {{"assistant_response":"Nice to meet you, John. What do you enjoy doing in your free time?","next_scenario":"initiate_smalltalk"}}
+    Example 3:
+    {{"assistant_response":"That sounds fun—what got you into it?","next_scenario":"explore_user_interests"}}
+    Example 4:
+    {{"assistant_response":"That’s awesome! what got you into photography?","next_scenario":"explore_user_interests"}}
+    Example 5:
+    {{"assistant_response":"Would you like to talk about a favorite memory connected to that?","next_scenario":"initiate_memory_activity"}}
     """
 
 
@@ -276,8 +225,15 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
     Always prefer async chain execution.
     """
     prompt = ChatPromptTemplate.from_messages(messages)
-    chain = prompt | cf.llm_lc_wrapper
+    llm = cf.llm_lc_wrapper.bind(
+            temperature=0.1,
+            top_p=1.0,
+            top_k=0,
+            max_tokens=256,
+        )
 
+    chain = prompt | llm
+    
     out = await chain.ainvoke({})
     
     if isinstance(out, AIMessage):
@@ -287,54 +243,6 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
         return out
 
     return str(out)
-
-def parse_structured_llm_response(raw_text: str, output_parser: PydanticOutputParser, *, trace_id: str = "no-trace") -> "LlmResponse":
-    """
-    Cycle:
-      1) Try PydanticOutputParser.parse(raw_text)
-      2) If fail -> repair/extract JSON -> validate -> LlmResponse
-      3) If still fail -> raise RagParseError
-    """
-    # ---- PydanticOutputParser ----
-    try:
-        logger.debug("[RAG][%s] parse: trying pydantic parser", trace_id)
-        parsed = output_parser.parse(raw_text)
-        logger.debug("[RAG][%s] parse: pydantic success", trace_id)
-        return parsed
-    except Exception as e1:
-        first_err = e1
-        logger.warning("[RAG][%s] parse: pydantic failed: %s", trace_id, repr(e1))
-    
-    # ---- Try Repairing JSON ----
-    try:
-        logger.debug("[RAG][%s] parse: trying repair json", trace_id)
-        payload = parse_llm_json(raw_text)
-        logger.debug("[RAG][%s] parse: repair json success keys=%s", trace_id, list(payload.keys()))
-    except Exception as e2:
-        logger.error("[RAG][%s] parse: repair json failed: %s", trace_id, repr(e2))
-        raise RagParseError(f"Failed parsing via pydantic and repair; repair step error: {e2}") from first_err
-
-    try:
-        resp = payload.get("assistant_response")
-        cur = payload.get("current_scenario")
-        nxt = payload.get("next_scenario")
-
-        if not isinstance(resp, str) or not resp.strip():
-            raise ValueError("assistant_response missing/invalid")
-        if not isinstance(cur, str) or not cur.strip():
-            raise ValueError("current_scenario missing/invalid")
-        if not isinstance(nxt, str) or not nxt.strip():
-            raise ValueError("next_scenario missing/invalid")
-
-        logger.info("[RAG][%s] parse: validated current=%s next=%s",trace_id, cur.strip(), nxt.strip())
-
-        return LlmResponse(
-            assistant_response=resp.strip(),
-            current_scenario=cur.strip(),
-            next_scenario=nxt.strip(),
-        )
-    except Exception as e3:
-        raise RagParseError(f"Failed parsing via pydantic and repair; validation error: {e3}") from first_err
 
 
 async def rag_response_fn(
@@ -418,6 +326,6 @@ async def rag_response_fn(
         
     return {
     "text": llm_struct.assistant_response,
-    "current_scenario": llm_struct.current_scenario,
+    "current_scenario": current,
     "next_scenario": llm_struct.next_scenario,
     }

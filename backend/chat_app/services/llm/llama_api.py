@@ -12,19 +12,37 @@ logger = logging.getLogger(__name__)
 class LlamaAPI:
     """
     Expected environment variables on the CPU VM:
-      - LLM_BASE_URL       (e.g. "http://10.128.0.5:8080")
+      - LLM_BASE_URL       (e.g. "10.128.0.5")
       - LLM_GATEWAY_TOKEN  (the same token configured in nginx on the GPU VM)
     """
-
-    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 10.0,
+        mode: str = "completion",  # completion or chat
+        default_hyperparameters: dict | None = None,
+    ):
         # Default to env vars so you can configure per environment
         self.api_key  = api_key  or os.getenv("LLM_GATEWAY_TOKEN")
-        self.base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8080")
-        self.full_url = f"http://{self.base_url}:8080/v1/completions"
+        self.base_url = base_url or os.getenv("LLM_BASE_URL", "127.0.0.1")
+        self.mode     = mode
         self.timeout  = timeout
+        self.default_hyperparameters = default_hyperparameters or {}
+
+        # "completions" (legacy endpoint) or "chat/completions" (newer api endpoint)
+        # completion vs chat/completion: https://stackoverflow.com/questions/76192496/openai-v1-completions-vs-v1-chat-completions-end-points
+        if self.mode == "completion":
+            endpoint = "completions"
+            self.full_url = f"http://{self.base_url}:8080/v1/{endpoint}"
+        elif self.mode == "chat":
+            endpoint = "chat/completions"
+            self.full_url = f"http://{self.base_url}:8080/v1/{endpoint}"
+        else:
+            raise ValueError(f"Unknown mode={mode}. Use 'completion' or 'chat'.")
 
         # Log initialization
-        logger.info(f"{lu.YELLOW}Llama API LLM initialized, base URL: {self.base_url}{lu.RESET}")
+        logger.info(f"{lu.YELLOW}LLM API initialized, mode={self.mode}, base_url={self.base_url}{lu.RESET}")
         logger.info(f"{lu.YELLOW}Full URL: {self.full_url}{lu.RESET}")
 
         # API authorization key
@@ -35,15 +53,51 @@ class LlamaAPI:
     # --------------------------------------------------------------------------------
     # Call the API at '/v1/completions'
     # --------------------------------------------------------------------------------
-    async def __call__(self, prompt, max_tokens=64, stop=["<|end|>", "\n"], echo=False):
+    async def __call__(
+        self,
+        prompt: str | None = None,
+        *,
+        messages: list[dict] | None = None,
+        max_tokens: int = 64,
+        stop: list[str] | None = None,
+        echo: bool = False,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        top_k: int | None = None,
+    ):
         # Prepare input (specifying which model to use)
-        llm_json = {
-            "model"      : "models/Phi-3_finetuned.gguf",
-            "prompt"     : prompt, 
-            "max_tokens" : max_tokens, 
-            "stop"       : stop, 
-            "echo"       : echo
-        }
+
+        hyperparameters = dict(self.default_hyperparameters)
+        if temperature is not None: hyperparameters["temperature"] = temperature
+        if top_p is not None: hyperparameters["top_p"] = top_p
+        if top_k is not None: hyperparameters["top_k"] = top_k
+
+        if self.mode == "completion":
+            if prompt is None:
+                raise ValueError("mode='completion' requires prompt=...")
+
+            llm_json = {
+                "model": "models/Phi-3_finetuned.gguf", # maybe we can also make this a function attribute if we have more models in future
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "stop": stop or ["<|end|>", "\n"],
+                "echo": echo,
+                **hyperparameters,
+            }
+
+        else:  # chat/completion
+            if messages is None:
+                if prompt is None:
+                    raise ValueError("mode='chat' requires messages=[...] or prompt=...")
+                messages = [{"role": "user", "content": prompt}]
+
+            llm_json = {
+                "model": "models/Phi-3_finetuned.gguf",
+                "messages": messages,
+                "max_tokens": max_tokens,
+                **({"stop": stop} if stop else {}),
+                **hyperparameters,
+            }
 
         # Get a response from the API
         try:

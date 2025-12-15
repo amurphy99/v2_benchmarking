@@ -9,23 +9,23 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun, AsyncCall
 from .llama_api import LlamaAPI
 
 
-def format_messages_to_phi_prompt(messages: List[BaseMessage]) -> str:
-    """Convert LC messages to phi-3 prompt format."""
-    parts: list[str] = []
+# def format_messages_to_phi_prompt(messages: List[BaseMessage]) -> str:
+#     """Convert LC messages to phi-3 prompt format."""
+#     parts: list[str] = []
 
-    for m in messages:
-        if isinstance(m, SystemMessage):
-            parts.append(f"<|system|>\n{m.content}<|end|>")
-        elif isinstance(m, HumanMessage):
-            parts.append(f"\n<|user|>\n{m.content}<|end|>")
-        elif isinstance(m, AIMessage):
-            parts.append(f"\n<|assistant|>\n{m.content}<|end|>")
-        else:
-            # fallback
-            parts.append(f"\n<|user|>\n{m.content}<|end|>")
+#     for m in messages:
+#         if isinstance(m, SystemMessage):
+#             parts.append(f"<|system|>\n{m.content}<|end|>")
+#         elif isinstance(m, HumanMessage):
+#             parts.append(f"\n<|user|>\n{m.content}<|end|>")
+#         elif isinstance(m, AIMessage):
+#             parts.append(f"\n<|assistant|>\n{m.content}<|end|>")
+#         else:
+#             # fallback
+#             parts.append(f"\n<|user|>\n{m.content}<|end|>")
 
-    parts.append("\n<|assistant|>\n")  # prompt the model to answer
-    return "".join(parts)
+#     parts.append("\n<|assistant|>\n")  # prompt the model to answer
+#     return "".join(parts)
 
 
 class CustomChatModel(BaseChatModel):
@@ -34,7 +34,6 @@ class CustomChatModel(BaseChatModel):
     # This type annotation tells Pydantic to expect the additional attributes
     client: Any = None
     max_tokens: int = 128
-    stop: List[str] = ["<|end|>"]
     echo: bool = False
 
     def __init__(
@@ -42,14 +41,12 @@ class CustomChatModel(BaseChatModel):
         client: LlamaAPI,
         *,
         max_tokens: int = 128,
-        stop: Optional[list[str]] = None,
         echo: bool = False,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.client = client
         self.max_tokens = max_tokens
-        self.stop = stop or ["<|end|>"]
         self.echo = echo
 
     @property
@@ -63,21 +60,29 @@ class CustomChatModel(BaseChatModel):
         run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
-        prompt = format_messages_to_phi_prompt(messages)
+        # Convert LC messages to OpenAI-style messages
+        chat_messages: list[dict] = []
+        for m in messages:
+            role = "user"
+            if isinstance(m, SystemMessage):
+                role = "system"
+            elif isinstance(m, AIMessage):
+                role = "assistant"
+            elif isinstance(m, HumanMessage):
+                role = "user"
+            chat_messages.append({"role": role, "content": m.content})
 
         resp = await self.client(
-            prompt=prompt,
+            messages=chat_messages,
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            stop=stop or self.stop,
-            echo=kwargs.get("echo", self.echo),
+            stop=stop,  
+            temperature=kwargs.get("temperature", 0.1),
+            top_p=kwargs.get("top_p", 1.0),
+            top_k=kwargs.get("top_k", 0),
         )
 
-        raw_text = resp["choices"][0]["text"]
-
-        # If echo=True, strip everything before last assistant tag
-        completion = raw_text.split("<|assistant|>")[-1].strip()
-
-        message = AIMessage(content=completion)
+        content = resp["choices"][0]["message"]["content"]
+        message = AIMessage(content=content.strip())
         return ChatResult(generations=[ChatGeneration(message=message)])
 
     # handler for if we ever call sync methods by mistake
