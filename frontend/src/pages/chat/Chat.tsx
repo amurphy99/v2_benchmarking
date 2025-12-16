@@ -94,16 +94,15 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} model={model} /> 
+                        <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
                     </div>
                 </div>
-                :
-                    
+                :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} model={model} />
+                    <Avatar animation={animation} animCount={animCount} model={model} zoom="head"/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>

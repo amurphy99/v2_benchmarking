@@ -9,11 +9,18 @@ import { LoopOnce, LoopPingPong } from 'three';
 export default function BuddyModel({
     animation,
     animCount,
+    zoom,
     ...props
 }) {
     const { nodes, animations } = useGLTF('/models/Buddy_Robot.glb') //animations: DANCE, NOD YES, SHAKE NO, HEAD TILT, EMBARRASSED
     const group = useRef();
     const { actions, mixer } = useAnimations(animations, group);
+    console.log(zoom)
+    const zoomMap = {
+        head: {scale: 345, position: [0, -23.5, 0]},
+        body: {scale: 100, position: [0, -4, 0]},
+    }
+    const {scale, position} = zoomMap[zoom] || zoomMap['body'];
 
     useEffect(() => {
         if (!actions || !animation) return;
@@ -37,7 +44,7 @@ export default function BuddyModel({
 
 
       return (
-    <group scale={100} position={[0, -4, 0]} ref={group} {...props} dispose={null}>
+    <group scale={scale} position={position} ref={group} {...props} dispose={null}>
         <group name="Scene">
             <group name="Armature" rotation={[Math.PI / 2, 0, 0]} scale={0.01}>
                 <primitive object={nodes.bone_body} />
