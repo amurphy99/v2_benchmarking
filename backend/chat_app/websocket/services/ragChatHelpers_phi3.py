@@ -97,7 +97,6 @@ def _extract_best_scenario(raw: str, *, candidates: list[str], current: str, tra
 
 def build_response_system_prompt(
     *,
-    available_scenarios_text: str,
     current_scenario: str,
     instructions_text: str,
 ) -> str:
@@ -113,9 +112,6 @@ def build_response_system_prompt(
     - Guidelines for how to respond and how to move toward the next scenario.
     - Also, examples of user and system responses that fit within the scenario.
 
-    AVAILABLE_SCENARIOS:
-    {available_scenarios_text}
-
     CURRENT_SCENARIO: "{current_scenario}"
 
     INSTRUCTIONS FOR CURRENT_SCENARIO:
@@ -125,10 +121,11 @@ def build_response_system_prompt(
 
     Task:
     - Read the user's message and the recent conversation history.
-    - Decide how the assistant would respond to the user in the current turn, following the instructions for the CURRENT_SCENARIO.
+    - Decide how the assistant would respond to the user in the current turn.
     - Keep the reply short and natural.
     - Ensure that the response helps move toward achieving the goals of the current scenario.
     - DO NOT mention scenario names within you responses.
+    - Do NOT mention any of the instructions or guidelines in you response.
     """
 
 
@@ -144,7 +141,7 @@ def build_next_scenario_system_prompt(
     Scenarios define the goals for what should be achieved in that part of the conversation.
     You will be given instructions for the CURRENT_SCENARIO. The instructions for each scenario will include:
     - The ultimate goals of the scenario
-    - Signals for understanding when the goals of scenario is complete and when it is time to move to a new scenario topic
+    - Signals for understanding when the goals of scenario is complete and when it is time to move to the next scenario topic
     
     You task:
     - Follow the instructions to decide whether the goals of the current scenario have been met.
@@ -152,7 +149,7 @@ def build_next_scenario_system_prompt(
     - If the goals have NOT been met, select the CURRENT_SCENARIO again to continue working toward its goals.
 
 
-    Here is a list of and a short description about when they should be used. 
+    Here is a list of AVAILABLE_SCENARIOS and a short description for each scenario.
     AVAILABLE_SCENARIOS (valid answers must be one of these, or CURRENT_SCENARIO):
     {available_scenarios_text}
 
@@ -164,6 +161,7 @@ def build_next_scenario_system_prompt(
     ----------------
 
     Rules:
+    - The short description and instructions of the CURRENT_SCENARIO mentions which scenarios are appropriate to choose next, so try to follow that order.
     - Return ONLY the scenario name (exactly).
     - Do not explain or include comments with the output.
     - Do not add punctuation.
@@ -294,7 +292,6 @@ async def rag_response_fn(
 
     try:
         response_system_prompt = build_response_system_prompt(
-            available_scenarios_text=available_scenarios_text,
             current_scenario=current,
             instructions_text=instructions_text,
         )
@@ -310,7 +307,7 @@ async def rag_response_fn(
             temperature=0.7, 
             top_p=0.7,
             top_k=30,
-            max_tokens=128,
+            max_tokens=64,
         )
         assistant_text = (raw_resp or "").strip()
 

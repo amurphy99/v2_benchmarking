@@ -119,7 +119,7 @@ try:
     # Setup the LLM
     llm = LLMClass()
 
-    llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>"], echo=False) if USE_LLM else None
+    llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
     logger.info("LLM initialized successfully")
 
 except Exception as e:
