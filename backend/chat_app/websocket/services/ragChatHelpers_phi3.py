@@ -97,6 +97,7 @@ def _extract_best_scenario(raw: str, *, candidates: list[str], current: str, tra
 
 def build_response_system_prompt(
     *,
+    available_scenarios_text: str,
     current_scenario: str,
     instructions_text: str,
 ) -> str:
@@ -108,9 +109,12 @@ def build_response_system_prompt(
     You will be given instructions for the CURRENT_SCENARIO to help you decide how to respond to the user.
     The instructions for each scenario will include:
     - The ultimate goals of the scenario
-    - signals for understanding when the goals of scenario is complete and when it is time to move to a new scenario topic
-    - guidelines for how to respond and how to move toward the next scenario.
+    - Signals for understanding when the goals of scenario is complete.
+    - Guidelines for how to respond and how to move toward the next scenario.
     - Also, examples of user and system responses that fit within the scenario.
+
+    AVAILABLE_SCENARIOS:
+    {available_scenarios_text}
 
     CURRENT_SCENARIO: "{current_scenario}"
 
@@ -138,13 +142,17 @@ def build_next_scenario_system_prompt(
     You are a conversation specialist. Your job is to select the next scenario for a conversation state machine.
     The conversations are structured into SCENARIOS. Scenarios are stages that help guide the flow of the conversation. 
     Scenarios define the goals for what should be achieved in that part of the conversation.
-    You will be given instructions for the CURRENT_SCENARIO. You task:
+    You will be given instructions for the CURRENT_SCENARIO. The instructions for each scenario will include:
+    - The ultimate goals of the scenario
+    - Signals for understanding when the goals of scenario is complete and when it is time to move to a new scenario topic
     
+    You task:
     - Follow the instructions to decide whether the goals of the current scenario have been met.
     - If the objectives have been met, choose a new scenario from the AVAILABLE_SCENARIOS that is best suited to follow the current.
     - If the goals have NOT been met, select the CURRENT_SCENARIO again to continue working toward its goals.
 
 
+    Here is a list of and a short description about when they should be used. 
     AVAILABLE_SCENARIOS (valid answers must be one of these, or CURRENT_SCENARIO):
     {available_scenarios_text}
 
