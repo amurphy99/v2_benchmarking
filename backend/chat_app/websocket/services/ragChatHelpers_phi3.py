@@ -294,6 +294,7 @@ async def rag_response_fn(
 
     try:
         response_system_prompt = build_response_system_prompt(
+            available_scenarios_text=available_scenarios_text,
             current_scenario=current,
             instructions_text=instructions_text,
         )
