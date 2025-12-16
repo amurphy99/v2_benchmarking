@@ -4,6 +4,7 @@ import GoalProgress from "@/components/graphics/GoalProgress";
 import WeekTrack     from "./components/WeekTrack";
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
 import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
+import Avatar from "../common/avatar/Avatar";
 
 export function Goal() {
     const { profile } = useAuth();
@@ -12,6 +13,7 @@ export function Goal() {
         return <p>Loading goal...</p>; 
     }
     const week = getCurrentWeek(sessions, 1);
+    const model = profile.settings.modelChoice;
 
     const getMsg = () => {
         if (week.sessions.length == 0) {
@@ -32,7 +34,9 @@ export function Goal() {
     return (
         <div className="d-flex flex-col px-[5vw] md:pt-[1rem] pb-[4rem] mb-[5rem] h-full md:gap-5 gap-2">  
             <br />
-            <img className="lg:size-1/4 md:size-1/2 size-3/4 self-center" src="/images/robot_face.png"></img>
+            <div className="lg:size-1/4 md:size-1/2 size-3/4 self-center"> 
+                <Avatar animation={null} animCount={0} model={model} zoom="head" /> 
+            </div> 
             <h3 className="m-[2rem] text-center"><b>{getMsg()}</b></h3>
             <GoalProgress />
             <WeekTrack week={week} />
