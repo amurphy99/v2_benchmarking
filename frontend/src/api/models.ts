@@ -47,11 +47,17 @@ export interface User {
 
 export interface Profile {
   id        : number;
-  plwd      : User;
-  caregiver : User;
-  role?     : "Patient" | "Caregiver";
+  zipcode   : string;
+  birthDate : string;
+  locationStatus : string;
   settings  : UserSettings;
   goal      : Goal;
+}
+
+export interface Account {
+    id      : number;
+    user    : User;
+    role    : "Patient" | "Caregiver" | "Other";
 }
 
 // =======================================================================
@@ -120,22 +126,27 @@ export interface ChatSession {
 // =======================================================================
 // Signup Types -- ToDo: Not sure if these are ncessary?
 // =======================================================================
-export interface SignupPayload {
-  plwdUsername  : string;
-  plwdPassword  : string;
-  plwdFirstName : string;
-  plwdLastName  : string;
+export interface SignupPatientPayload {
+  username      : string;
+  password      : string;
+  firstName     : string;
+  lastName      : string;
+  zipcode       : string;
+  birthDate     : string;
+  locationStatus: string;
+}
 
-  caregiverUsername  : string;
-  caregiverPassword  : string;
-  caregiverFirstName : string;
-  caregiverLastName  : string;
+export interface SignupAccountPayload {
+  username      : string;
+  password      : string;
+  firstName     : string;
+  lastName      : string;
 }
 
 export interface SignupResponse {
-  success           : true;
-  plwdUsername      : string;
-  caregiverUsername : string;
+  success       : true;
+  username      : string;
+  name          : string;
 }
 
 // User verification token
