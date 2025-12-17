@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, AlbumImage
+from chat_app.models import Profile, Account, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, AlbumImage
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -68,13 +68,15 @@ class Command(BaseCommand):
         # Create user entries for both the patient and caregiver
         plwd = User.objects.create_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
         care = User.objects.create_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
-        profile = Profile.objects.create(plwd=plwd, caregiver=care)
+        profile = Profile.objects.create(zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
+        Account.objects.create(profile=profile, role="patient", profile=profile)
+        Account.objects.create(profile=profile, role="caregiver", profile=profile)
 
         # Also create settings and goal objects for the new Profile
         UserSettings.objects.create(user=profile)
         Goal        .objects.create(user=profile, target=5, start_date=two_days_ago)
         # Add sample ChatSessions
-        self.seed_chats(plwd, days_back=10)
+        self.seed_chats(profile, days_back=10)
         
         # Add sample Reminders
         self.seed_reminders(profile, num_reminders=5)
@@ -84,11 +86,13 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------
         plwd_2 = User.objects.create_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
         care_2 = User.objects.create_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
-        profile_2 = Profile.objects.create(plwd=plwd_2, caregiver=care_2)
+        profile_2 = Profile.objects.create(zipcode="9998", birthDate=timezone.now(), locationStatus="alone")
+        Account.objects.create(user=plwd_2, role="patient", profile=profile_2)
+        Account.objects.create(user=care_2, role="caregiver", profile=profile_2)
 
-        UserSettings.objects.create(user=profile_2)
-        Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
-        self.seed_chats(plwd_2, days_back=10)
+        UserSettings.objects.create(profile=profile_2)
+        Goal        .objects.create(profile=profile_2, target=5, start_date=two_days_ago)
+        self.seed_chats(profile_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
 
     # ====================================================================
@@ -102,7 +106,7 @@ class Command(BaseCommand):
     # ====================================================================
     # Seed ChatSessions into the DB for a user
     # ====================================================================
-    def seed_chats(self, plwd_user, days_back=6):
+    def seed_chats(self, profile, days_back=6):
         # Times for everything need to override "auto_now_add" field properties
         now_utc = timezone.now()
         for i in range(1, days_back+1):
@@ -114,7 +118,7 @@ class Command(BaseCommand):
             image = AlbumImage.objects.get(topic=topic)
 
             # 1) Create a ChatSession object
-            session = ChatSession.objects.create(user=plwd_user, source="webapp", is_active=False, end_ts=ended_at, 
+            session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
                                                  topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
                                                  sentiment="Positive", image=image)
             session.date = started_at
@@ -141,7 +145,7 @@ class Command(BaseCommand):
     # ====================================================================
     # Seed Reminders into the DB for a user
     # ====================================================================
-    def seed_reminders(self, plwd, num_reminders=5):
+    def seed_reminders(self, profile, num_reminders=5):
         now_utc = timezone.now()
         for i in range(1, num_reminders+1):
             day_offset = timedelta(days=i)
@@ -153,7 +157,7 @@ class Command(BaseCommand):
             title = f"Reminder {i}"
 
             # Create a Reminder object
-            reminder = Reminder.objects.create(user=plwd, title=title, start=start_day, end=end_day, 
+            reminder = Reminder.objects.create(profile=profile, title=title, start=start_day, end=end_day, 
                                                startTime=start_time, endTime=end_time, daysOfWeek=[])
             reminder.save()
             
@@ -162,7 +166,7 @@ class Command(BaseCommand):
         end_day = (now_utc + timedelta(weeks=5)).date()
         start_time = time(hour=0, minute=0, second=0)
         end_time = time(hour=2, minute=0, second=0)
-        reminder = Reminder.objects.create(user=plwd, title="Repeat reminder", start=start_day, 
+        reminder = Reminder.objects.create(profile=profile, title="Repeat reminder", start=start_day, 
                                            end=end_day, startTime=start_time, endTime=end_time,
                                            daysOfWeek=[3])
         reminder.save()
