@@ -1,5 +1,7 @@
 import { request } from "../client";
-import { SignupPayload, SignupResponse } from "../models";
+import { SignupAccountPayload, SignupPatientPayload, SignupResponse } from "../models";
 
 // POST
-export const signUp = (body: SignupPayload) => request<SignupResponse>("/signup/", { method: "POST", body: JSON.stringify(body) });
+export const signUpPatient = (body: SignupPatientPayload) => request<SignupResponse>("/signup-patient/", { method: "POST", body: JSON.stringify(body) });
+
+export const signUpAccount = (body: SignupAccountPayload) => request<SignupResponse>("/signup-account/", { method: "POST", body: JSON.stringify(body) });

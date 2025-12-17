@@ -4,7 +4,8 @@ from django.urls import path, include
 from .health import health
 from .views import (
     GoalView, UserSettingsView,              # One-off endpoints
-    ProfileView, SignupView,                 # Auth / Profile
+    ProfileView, SignupPatientView,          # Auth / Profile
+    SignupAccountView,
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
@@ -32,18 +33,19 @@ urlpatterns = [
     path("health/", health, name="health"),
 
     # Single-row resources (one per user)
-    path("goal/",             GoalView.as_view(), name="goal"    ),
-    path("settings/", UserSettingsView.as_view(), name="settings"),
-    path("download/", DownloadDataView.as_view(), name="download"),
+    path("goal/",               GoalView.as_view(), name="goal"    ),
+    path("settings/",           UserSettingsView.as_view(), name="settings"),
+    path("download/",           DownloadDataView.as_view(), name="download"),
 
     # Profile & signup
-    path("profile/", ProfileView.as_view(), name="profile"),
-    path("signup/",   SignupView.as_view(), name="signup" ),
+    path("profile/",            ProfileView.as_view(), name="profile"),
+    path("signup-patient/",     SignupPatientView.as_view(), name="signup_patient" ),
+    path("signup-account/",     SignupAccountView.as_view(), name="signup_account"),
     
     # Single-row resources (not connected to a user)
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
 
     # JWT login
-    path("token/",         MyTokenObtainPairView.as_view(), name="token"        ),
+    path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),
     path("token/refresh/",      MyTokenRefreshView.as_view(), name="token_refresh"),
 ]

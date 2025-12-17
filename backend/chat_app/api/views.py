@@ -6,8 +6,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions, Activity
-from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from ..models      import Account,          Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions, Activity
+from  .serializers import AccountSerializer, ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
@@ -154,16 +154,28 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
 # ======================================================================= ===================================
 # Profile Related Views
 # ======================================================================= ===================================
-class SignupView(generics.CreateAPIView):
+class SignupPatientView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
-    serializer_class   = SignupSerializer
+    serializer_class   = SignupPatientSerializer
+    
+class SignupAccountView(generics.CreateAPIView):
+    permission_classes = [permissions.AllowAny]
+    serializer_class   = SignupAccountSerializer
 
 class ProfileView(ProfileMixin, generics.RetrieveAPIView):
     serializer_class   = ProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.get_profile()  
+        return self.get_profile() 
+     
+class AccountView(generics.RetrieveAPIView):
+    serializer_class   = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        user = self.request.user
+        return Account.objects.get(user=user)
 
 # ======================================================================= ===================================
 # Tokens 

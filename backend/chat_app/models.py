@@ -11,6 +11,41 @@ init_args    = dict(null=True, blank=True)
 DAYS_OF_WEEK = ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday'),)
 
 # =======================================================================
+# Non-Chat Models
+# =======================================================================
+class Profile(models.Model):
+    """
+    A Profile holds all the data for a given PLwD. The main user is the PLwD and can grant Accounts access.
+    """
+    zipcode     = models.CharField(max_length=10, **init_args)
+    birthDate   = models.DateField(**init_args)
+    locationStatus = models.CharField(max_length=100, **init_args)
+    
+    def __str__(self): return f"Profile for {self.mainUser.user.username}"
+    
+class Account(models.Model):
+    ROLE_CHOICES = [("Patient", "patient"), ("Caregiver", "caregiver"), ("Other", "other")]
+    user        = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="account_user")
+    role        = models.CharField(max_length=32, choices=ROLE_CHOICES, **init_args)
+    profile     = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.SET_NULL, **init_args)
+    
+    def __str__(self): return f"Account for {self.user.username}"
+
+
+class Reminder(models.Model):
+    user       = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="reminder_user")
+    title      = models.CharField(max_length=100)
+    notes      = models.TextField    (**init_args)
+    start      = models.DateField(**init_args)
+    end        = models.DateField(**init_args)
+    startTime  = models.TimeField    (**init_args)
+    endTime    = models.TimeField    (**init_args)
+    daysOfWeek = ArrayField(models.IntegerField(**init_args), size=7, **init_args)
+    
+    def __str__(self): return f"Reminder {self.title}"
+
+
+# =======================================================================
 # AlbumImage 
 # =======================================================================
 # Every topic (from conversations) has one associated image, and every ChatSession has a main topic
@@ -35,7 +70,7 @@ class ChatSession(models.Model):
     SOURCE_CHOICES = [("webapp", "WebApp"), ("mobile", "Mobile"), ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot")]
 
     # Initialized on chat creation
-    user       = models.ForeignKey   (settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_sessions")
+    profile    = models.ForeignKey   (Profile, on_delete=models.CASCADE, related_name="chat_sessions")
     source     = models.CharField    (max_length=32, choices=SOURCE_CHOICES, default="webapp")
     date       = models.DateTimeField(auto_now_add=True)
 
@@ -122,34 +157,6 @@ class ChatBiomarkerScore(models.Model):
     def __str__(self): return f"{self.score_type:16}: {self.score:.4f}"
 
 # =======================================================================
-# Non-Chat Models
-# =======================================================================
-class Profile(models.Model):
-    """
-    ToDo:
-        Seems like linkedUser should be a Profile not a User
-        Also caregiver should maybe be ForeignKey, not OneToOne so that they can have multiple plwds
-        (maybe caregiver is supposed to be the "main" one and linkedUser is others? ...)
-    """
-    plwd       = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="PLwD")
-    caregiver  = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="primary_caregiver")
-    linkedUser = models.ForeignKey   (settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, **init_args)
-    
-    def __str__(self): return f"{self.plwd.username} is linked to {self.caregiver.username}"
-
-class Reminder(models.Model):
-    user       = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="reminder_user")
-    title      = models.CharField(max_length=100)
-    notes      = models.TextField    (**init_args)
-    start      = models.DateField(**init_args)
-    end        = models.DateField(**init_args)
-    startTime  = models.TimeField    (**init_args)
-    endTime    = models.TimeField    (**init_args)
-    daysOfWeek = ArrayField(models.IntegerField(**init_args), size=7, **init_args)
-    
-    def __str__(self): return f"Reminder {self.title}"
-
-# =======================================================================
 # One-to-one Models
 # =======================================================================
 class Goal(models.Model):
@@ -159,7 +166,7 @@ class Goal(models.Model):
     PERIOD_CHOICES = [(PERIOD_NONE, "None"), (PERIOD_WEEKLY, "Weekly"), (PERIOD_MONTHLY, "Monthly")]
 
     # Core fields
-    user        = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="goal")
+    profile     = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="goal")
     target      = models.PositiveIntegerField(default=5)
     auto_renew  = models.BooleanField(default=True)
     period      = models.CharField(max_length=1, choices=PERIOD_CHOICES, default=PERIOD_WEEKLY)
@@ -173,7 +180,7 @@ class Goal(models.Model):
     @property
     def current(self) -> int:
         start = self.current_period_start()
-        return ChatSession.objects.filter(user=self.user.plwd, is_active=False, date__gte=start).count()
+        return ChatSession.objects.filter(user=self.user, is_active=False, date__gte=start).count()
     
     @property
     def remaining(self) -> int: return max(0, self.target - self.current)
@@ -201,27 +208,27 @@ class Goal(models.Model):
             else:                      return  today.replace(day=anchor_dom)
 
     
-    def __str__(self): return f"{self.user.plwd.username} goal ({self.period})"
+    def __str__(self): return f"{self.profile.mainUser.user.username}'s goal ({self.period})"
     
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["user"], name="one_goal_per_user")]
+        constraints = [models.UniqueConstraint(fields=["profile"], name="one_goal_per_profile")]
 
 
 class UserSettings(models.Model):
     TASK_CHOICES = [("chat", "Chat"), ("chattopic", "ChatTopic"), ("chatimage", "ChatImage")]
     MODEL_CHOICES = [("buddy", "Buddy"), ("qt", "QT")]
     
-    user               = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="settings_user")
+    profile            = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="settings_user")
     patientViewOverall = models.BooleanField(default=True)
     patientCanSchedule = models.BooleanField(default=True)
     taskType           = models.CharField(max_length=32, choices=TASK_CHOICES, default="chat")
     taskSubtype        = models.CharField(max_length=32, default="N/A")
     modelChoice        = models.CharField(max_length=32, choices=MODEL_CHOICES, default="buddy")
 
-    def __str__(self): return f"{self.user.plwd.username}'s settings"
+    def __str__(self): return f"{self.profile.mainUser.user.username}'s settings"
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["user"], name="one_settings_per_user")]
+        constraints = [models.UniqueConstraint(fields=["profile"], name="one_settings_per_profile")]
 
 # =======================================================================
 # Activities and RAG Instructions Models
