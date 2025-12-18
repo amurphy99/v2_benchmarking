@@ -134,17 +134,8 @@ export interface ChatSession {
 // =======================================================================
 // Signup Types -- ToDo: Not sure if these are ncessary?
 // =======================================================================
-export interface SignupPatientPayload {
-  username      : string;
-  password      : string;
-  firstName     : string;
-  lastName      : string;
-  zipcode       : string;
-  birthDate     : string;
-  locationStatus: string;
-}
 
-export interface SignupAccountPayload {
+export interface SignupPayload {
   username      : string;
   password      : string;
   firstName     : string;

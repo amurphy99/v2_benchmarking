@@ -49,7 +49,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Profile
         fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = ("id", "birthDate") # Not sure...
+        read_only_fields = ("id",) # Not sure...
         
 class AccessSerializer(serializers.ModelSerializer):
     account     = AccountSerializer(read_only=True)
@@ -129,9 +129,6 @@ class SignupPatientSerializer(serializers.Serializer):
     password        = serializers.CharField(write_only=True)
     firstName       = serializers.CharField()
     lastName        = serializers.CharField()
-    zipcode         = serializers.CharField()
-    birthDate       = serializers.DateField()
-    locationStatus  = serializers.CharField()
 
     def validate(self, attrs):
         User = get_user_model()
@@ -151,10 +148,7 @@ class SignupPatientSerializer(serializers.Serializer):
             last_name  = validated["lastName"],
         )
         account = Account.objects.create(user=user, role="patient")
-        profile = Profile.objects.create(account=account,
-                                         zipcode=validated["zipcode"],
-                                         birthDate=validated["birthDate"],
-                                         locationStatus=validated["locationStatus"],)
+        profile = Profile.objects.create(account=account)
         UserSettings.objects.create(profile=profile)
         Goal        .objects.create(profile=profile)
         return account
@@ -173,7 +167,6 @@ class SignupAccountSerializer(serializers.Serializer):
     password        = serializers.CharField(write_only=True)
     firstName       = serializers.CharField()
     lastName        = serializers.CharField()
-    role            = serializers.CharField()
 
     def validate(self, attrs):
         User = get_user_model()
@@ -192,7 +185,7 @@ class SignupAccountSerializer(serializers.Serializer):
             first_name = validated["firstName"],
             last_name  = validated["lastName"],
         )
-        account = Account.objects.create(user=user, role=validated["role"])
+        account = Account.objects.create(user=user, role="caregiver")
         return account
 
     def to_representation(self, account: Account):

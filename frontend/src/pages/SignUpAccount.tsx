@@ -2,8 +2,9 @@ import { useState    } from "react";
 import { useNavigate } from "react-router-dom";
 import   toast         from "react-hot-toast";
 
-import { SignupAccountPayload, signUpAccount } from "@/api";
+import { SignupPayload, signUpAccount } from "@/api";
 import { h3                    } from "@/utils/styling/sharedStyles";
+import { useAuth } from "@/context/AuthProvider";
 
 
 // ====================================================================
@@ -12,10 +13,11 @@ import { h3                    } from "@/utils/styling/sharedStyles";
 // Doesn't login automatically -- we don't know if we are the caregiver or patient.
 export default function SignUpPatient() {
     const navigate = useNavigate();
+    const {login} = useAuth();
     const [loading, setLoading] = useState(false);
     
     // Local form state
-    const [formData, setFormData] = useState<SignupAccountPayload>({
+    const [formData, setFormData] = useState<SignupPayload>({
         username: "",      password: "",      firstName: "",      lastName: "",
     });
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); }
@@ -26,8 +28,9 @@ export default function SignUpPatient() {
         setLoading(true);
         try {
             await signUpAccount(formData);
-            toast.success("Account created - you can now log in.");
-            navigate("/login");
+            toast.success("Account created successfully!");
+            login(formData.username, formData.password);
+            navigate("/profile");
         } catch (err) { toast.error((err as Error).message);
         } finally     { setLoading(false); }
     };
@@ -50,7 +53,7 @@ export default function SignUpPatient() {
                 <div className="flex gap-2">
                     <input required name="firstName" placeholder="First name" value={formData.firstName} 
                         onChange={handleChange} className={nameStyle}/>
-                    <input required name="firstName"  placeholder="Last name"  value={formData.lastName } 
+                    <input required name="lastName"  placeholder="Last name"  value={formData.lastName } 
                         onChange={handleChange} className={nameStyle}/>
                 </div>
 
@@ -62,11 +65,11 @@ export default function SignUpPatient() {
             </div>
 
             {/* Submit Form */}
-            <button type="submit" disabled={loading} className="btn btn-primary"> {loading ? "Creating..." : "Sign Up"} </button>
+            <button type="submit" disabled={loading} className="btn btn-primary caregiver-button"> {loading ? "Creating..." : "Sign Up"} </button>
 
         </form>
         
-        <p>Already have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/login")}> Log In </a></p>
+        <p>Already have an account? <a className="hover:cursor-pointer caregiver-text" onClick={() => navigate("/login")}> Log In </a></p>
 
     </div>
   );

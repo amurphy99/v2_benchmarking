@@ -46,7 +46,7 @@ export default function Login() {
                 <button type="submit" className="btn btn-primary"> Log In </button>
             </div>
 
-            <p>Don't have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/signup")}>Sign Up</a></p>
+            <p>Don't have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/")}>Sign Up</a></p>
 
         </div>
     </form>
