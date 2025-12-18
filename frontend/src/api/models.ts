@@ -66,8 +66,16 @@ export interface User {
   is_staff   : boolean;
 }
 
+export type AccountRole = "Patient" | "Caregiver" | "Family" | "Physician" | "Other";
+export interface Account {
+    id      : number;
+    user    : User;
+    role    : AccountRole;
+}
+
 export interface Profile {
   id        : number;
+  account   : Account;
   zipcode   : string;
   birthDate : string;
   locationStatus : string;
@@ -75,10 +83,10 @@ export interface Profile {
   goal      : Goal;
 }
 
-export interface Account {
+export interface Access {
     id      : number;
-    user    : User;
-    role    : "Patient" | "Caregiver" | "Other";
+    account : Account;
+    profile : Profile;
 }
 
 // =======================================================================

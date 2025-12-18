@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, Account, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
+from chat_app.models import Profile, Account, Access, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -105,13 +105,16 @@ class Command(BaseCommand):
         # This could lead to dangling vector embeddings since they are linked to a separate DB using the user_id, and cascading delete won't work across DBs.
         plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
         care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
-        profile = Profile.objects.create(zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
-        Account.objects.create(profile=profile, role="patient", profile=profile)
-        Account.objects.create(profile=profile, role="caregiver", profile=profile)
+        plwd_account = Account.objects.create(user=plwd, role="patient")
+        care_account = Account.objects.create(user=care, role="caregiver")
+        profile = Profile.objects.create(account=plwd_account, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
+        
+        # Create an Access object so caregiver account can access the plwd account
+        Access.objects.create(account=care_account, profile=profile)
 
         # Also create settings and goal objects for the new Profile
-        UserSettings.objects.create(user=profile)
-        Goal        .objects.create(user=profile, target=5, start_date=two_days_ago)
+        UserSettings.objects.create(profile=profile)
+        Goal        .objects.create(profile=profile, target=5, start_date=two_days_ago)
         # Add sample ChatSessions
         self.seed_chats(profile, days_back=10)
         
@@ -123,9 +126,12 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------
         plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
         care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
-        profile_2 = Profile.objects.create(zipcode="9998", birthDate=timezone.now(), locationStatus="alone")
-        Account.objects.create(user=plwd_2, role="patient", profile=profile_2)
-        Account.objects.create(user=care_2, role="caregiver", profile=profile_2)
+        plwd_account_2 = Account.objects.create(user=plwd_2, role="patient")
+        care_account_2 = Account.objects.create(user=care_2, role="caregiver")
+        profile_2 = Profile.objects.create(account=plwd_account_2, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
+        
+        # Create an Access object so caregiver account can access the plwd account
+        Access.objects.create(account=care_account_2, profile=profile_2)
 
         UserSettings.objects.create(profile=profile_2)
         Goal        .objects.create(profile=profile_2, target=5, start_date=two_days_ago)

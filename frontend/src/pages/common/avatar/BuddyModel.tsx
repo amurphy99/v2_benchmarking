@@ -15,7 +15,6 @@ export default function BuddyModel({
     const { nodes, animations } = useGLTF('/models/Buddy_Robot.glb') //animations: DANCE, NOD YES, SHAKE NO, HEAD TILT, EMBARRASSED
     const group = useRef();
     const { actions, mixer } = useAnimations(animations, group);
-    console.log(zoom)
     const zoomMap = {
         head: {scale: 345, position: [0, -23.5, 0]},
         body: {scale: 100, position: [0, -4, 0]},

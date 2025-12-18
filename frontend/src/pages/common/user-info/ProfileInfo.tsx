@@ -14,7 +14,7 @@ import { useAuth } from "@/context/AuthProvider";
 // Profile Information 
 // ====================================================================
 export default function ProfileInfo({ profile, user } : { profile: Profile, user: User }) {
-    const isCare = profile.caregiver.id === user.id;
+    const isCare = profile.account.user.id != user.id;
     const { logout } = useAuth();
 
     // Popover controls
@@ -32,9 +32,9 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
             <Popover.Body className="flex flex-col px-[1rem] py-[0.5rem]">
                 <span className="fs-4 fw-semibold"> Profile </span>
             
-                <div className="flex flex-col border-y py-[0.5rem] gap-[0.5rem] border-gray-300">
-                    <UserInfo user={profile.plwd     } isCare={false}/>
-                    <UserInfo user={profile.caregiver} isCare={true }/>
+                <div className="flex flex-col border-y p-[0.5rem] gap-[0.5rem] border-gray-300">
+                    <UserInfo user={profile.account.user} isCare={false}/>
+                    <UserInfo user={user                } isCare={true }/>
                 </div>
                 {isCare ? <DownloadButton /> : null}
                 <button className={logoutStyle} onClick={() => logout()}>Log Out</button>

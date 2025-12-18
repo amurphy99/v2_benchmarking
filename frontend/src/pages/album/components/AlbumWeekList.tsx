@@ -6,7 +6,8 @@ import { widthStyle } from "@/utils/styling/sharedStyles";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekList({ week } : { week: ChatWeek }) {
-    const role = useAuth().profile.role.toLowerCase();
+    const { user, profile } = useAuth();
+    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
     const navigate = useNavigate();
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
     const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )

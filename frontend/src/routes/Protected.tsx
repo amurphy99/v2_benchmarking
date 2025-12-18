@@ -5,7 +5,7 @@ import { Spinner } from "react-bootstrap";
 
 // Users who are not logged in can only get to the signup or login pages
 export function Protected() {
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     if (user) {
         return (
             <Outlet />
@@ -38,10 +38,12 @@ export function Unprotected() {
 // Only caregivers can view
 export function IsCaregiver() {
     const { user, profile } = useAuth();
-    return (user.id === profile.caregiver.id) ? <Outlet /> : <Navigate to="/goal" replace />;
+    const isCare = profile.account.user != user;
+    return isCare ? <Outlet /> : <Navigate to="/goal" replace />;
 }
 // Only patients can view
 export function IsPatient() {
     const { user, profile } = useAuth();
-    return (user.id === profile.plwd.id) ? <Outlet /> : <Navigate to="/chat" replace />;
+    const isPatient = profile.account.user.id == user.id;
+    return isPatient ? <Outlet /> : <Navigate to="/chat" replace />;
 }
