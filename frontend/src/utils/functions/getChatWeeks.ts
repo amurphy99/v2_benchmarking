@@ -74,11 +74,19 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
 }
 
 export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1): ChatWeek | null {
-    const now = new Date();
-    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const weekStart  = startOfWeek(new Date(), weekStartsOn);
     const weekEnd    = endOfWeek(weekStart, weekStartsOn, true);
+    if (sessions.length == 0) {
+        return ({
+            start: weekStart,
+            end: weekEnd,
+            sessions: [],
+            prevScores: null,
+            image: null
+        })
+    }
     let bucket: ChatSession[] = [];
+    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     for (const chat of sorted) {
         const chatDate = new Date(chat.date);

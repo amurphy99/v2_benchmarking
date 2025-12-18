@@ -4,7 +4,8 @@ import { AuthProvider            } from "@/context/AuthProvider";
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage } from "@/pages";
+    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile } from "@/pages";
+import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
 import SignUpAccount   from "@/pages/SignUpAccount";
@@ -40,6 +41,7 @@ export default function App() {
 
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
+                <Route path="/"        element={<Home   />} />
                 <Route path="/login"   element={<Login  />} />
                 <Route path="/signup-patient"  element={<SignUpPatient />} />
                 <Route path="/signup"  element={<SignUpAccount />} />
@@ -63,6 +65,7 @@ export default function App() {
                 </Route>
 
                 {/* Shared */}
+                <Route path="/profile"  element={<Profile         />} />
                 <Route path="/history"  element={<History         />} />
                 <Route path="/schedule" element={<Schedule        />} />
                 <Route path="/progress" element={<ProgressSummary />} />

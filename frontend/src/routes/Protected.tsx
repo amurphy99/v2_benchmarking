@@ -21,7 +21,7 @@ export function Protected() {
         );
     } else {
         return (
-            <Navigate to="/login" replace />
+            <Navigate to="/" replace />
         );
     }
 }

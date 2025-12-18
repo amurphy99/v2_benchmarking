@@ -2,8 +2,8 @@ import { useState    } from "react";
 import { useNavigate } from "react-router-dom";
 import   toast         from "react-hot-toast";
 
-import { SignupPatientPayload, signUpPatient } from "@/api";
-import { h3                    } from "@/utils/styling/sharedStyles";
+import { SignupPayload, signUpPatient } from "@/api";
+import { useAuth } from "@/context/AuthProvider";
 
 
 // ====================================================================
@@ -12,12 +12,12 @@ import { h3                    } from "@/utils/styling/sharedStyles";
 // Doesn't login automatically -- we don't know if we are the caregiver or patient.
 export default function SignUpPatient() {
     const navigate = useNavigate();
+    const {login} = useAuth();
     const [loading, setLoading] = useState(false);
     
     // Local form state
-    const [formData, setFormData] = useState<SignupPatientPayload>({
+    const [formData, setFormData] = useState<SignupPayload>({
         username: "",      password: "",      firstName: "",      lastName: "",
-        zipcode: "",       birthDate: "",     locationStatus: "",
     });
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); }
 
@@ -27,8 +27,9 @@ export default function SignUpPatient() {
         setLoading(true);
         try {
             await signUpPatient(formData);
-            toast.success("Account created - you can now log in.");
-            navigate("/login");
+            toast.success("Account created successfully!");
+            login(formData.username, formData.password);
+            navigate("/profile");
         } catch (err) { toast.error((err as Error).message);
         } finally     { setLoading(false); }
     };
@@ -51,7 +52,7 @@ export default function SignUpPatient() {
                 <div className="flex gap-2">
                     <input required name="firstName" placeholder="First name" value={formData.firstName} 
                         onChange={handleChange} className={nameStyle}/>
-                    <input required name="firstName"  placeholder="Last name"  value={formData.lastName } 
+                    <input required name="lastName"  placeholder="Last name"  value={formData.lastName } 
                         onChange={handleChange} className={nameStyle}/>
                 </div>
 
@@ -62,32 +63,12 @@ export default function SignUpPatient() {
 
             </div>
 
-            {/* Profile Fields */}
-            <div className="flex flex-col gap-1">
-                <div className="flex gap-2">
-                    <input required name="zipCode" placeholder="Zip Code" value={formData.zipcode} 
-                        onChange={handleChange} className={nameStyle}/>
-                    <input required type="date" name="birthDate" value={formData.birthDate } 
-                        onChange={handleChange} className={nameStyle}/>
-                </div>
-
-                <select required name="locationStatus" defaultValue="default"
-                    onChange={(e) => setFormData({ ...formData, [e.target.name]: e.target.value })} className={infoStyle}>
-                    <option value="default" disabled>Select a Status</option>
-                    <option value="home">Without caregiver</option>
-                    <option value="caregiver">With caregiver</option>
-                    <option value="community">Community home</option>
-                    <option value="other">Other</option>
-                </select>
-
-            </div>
-
             {/* Submit Form */}
-            <button type="submit" disabled={loading} className="btn btn-primary"> {loading ? "Creating..." : "Sign Up"} </button>
+            <button type="submit" disabled={loading} className="btn btn-primary patient-button"> {loading ? "Creating..." : "Sign Up"} </button>
 
         </form>
         
-        <p>Already have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/login")}> Log In </a></p>
+        <p>Already have an account? <a className="hover:cursor-pointer patient-text" onClick={() => navigate("/login")}> Log In </a></p>
 
     </div>
   );
