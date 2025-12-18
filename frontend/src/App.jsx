@@ -6,7 +6,8 @@ import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/rou
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
     WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage } from "@/pages";
 import Login           from "@/pages/Login";
-import SignUp          from "@/pages/SignUp";
+import SignUpPatient   from "@/pages/SignUpPatient";
+import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
 
 import "./App.css";
@@ -40,7 +41,8 @@ export default function App() {
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
                 <Route path="/login"   element={<Login  />} />
-                <Route path="/signup"  element={<SignUp />} />
+                <Route path="/signup-patient"  element={<SignUpPatient />} />
+                <Route path="/signup"  element={<SignUpAccount />} />
             </Route>
 
             {/* Protected Routes */}

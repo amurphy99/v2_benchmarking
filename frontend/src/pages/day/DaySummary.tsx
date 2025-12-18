@@ -1,6 +1,5 @@
 import { ChatMessage, ChatSession } from "@/api";
 import { useLocation, useNavigate } from "react-router-dom";
-import MyWordCloud from "../common/WordCloud";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { useAuth } from "@/context/AuthProvider";
 import { TopicsCard } from "../common/TopicsCard";
@@ -8,11 +7,12 @@ import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
 import DropdownModal from "@/components/modals/DropdownModal";
 
 export function DaySummary() {
+    const { user, profile } = useAuth();
     const { state } = useLocation() as { state?: { chatSession?: ChatSession, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date)
-    const role = useAuth().profile.role.toLowerCase();
+    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
     const toTranscript = () => navigate("/transcript", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}});
 

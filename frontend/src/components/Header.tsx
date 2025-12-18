@@ -1,11 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
-import { GoGear               } from "react-icons/go";
-import { FaCircleUser } from "react-icons/fa6";
-import { IoMailUnreadOutline } from "react-icons/io5";
 
 import { useAuth    } from "@/context/AuthProvider";
-import { navLinkCls } from "@/utils/styling/colors";
+import { navLinkClsCaregiver, navLinkClsPatient } from "@/utils/styling/colors";
 import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
@@ -39,7 +36,7 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // ====================================================================
 export default function Header( {isMobile} : {isMobile: boolean} ) {
     const { user, profile } = useAuth();
-    const role = profile.role.toLowerCase();
+    const isCare = profile.account.user.id != user.id;
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
@@ -48,7 +45,8 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     }, [pathname])
 
     const title  = TITLES[pathname] ?? TITLES.default;
-    const isCare = user.id == profile.caregiver.id;
+
+    const navLinkCls = isCare ? navLinkClsCaregiver : navLinkClsPatient;
 
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {
