@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Account, Profile, UserSettings, Reminder, Goal, AlbumImage
+from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage
 from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
@@ -35,22 +35,29 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ("id", "username", "first_name", "last_name", "is_staff")
         read_only_fields = fields   # (all set by Django)
 
-class ProfileSerializer(serializers.ModelSerializer):
-    settings  = UserSettingsSerializer(read_only=True, source = "settings_user")
-    goal      = GoalSerializer        (read_only=True)
-    class Meta:
-        model  = Profile
-        fields = ("id", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = fields # Not sure...
-        
 class AccountSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    profile = ProfileSerializer(read_only=True)
     
     class Meta:
         model = Account
-        fields = ("id", "user", "role", "profile")
+        fields = ("id", "user", "role")
         read_only_fields = fields
+class ProfileSerializer(serializers.ModelSerializer):
+    account   = AccountSerializer(read_only=True)
+    settings  = UserSettingsSerializer(read_only=True, source="settings_user")
+    goal      = GoalSerializer        (read_only=True)
+    class Meta:
+        model  = Profile
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
+        read_only_fields = ("id", "birthDate") # Not sure...
+        
+class AccessSerializer(serializers.ModelSerializer):
+    account     = AccountSerializer(read_only=True)
+    profile     = ProfileSerializer(read_only=True)
+    
+    class Meta:
+        model   = Access
+        fields  = ("id", "account", "profile")
         
 # =======================================================================
 # ChatSession Related Data
@@ -104,7 +111,7 @@ class DownloadDataSerializer(serializers.ModelSerializer):
         fields = ("fileName", "fileContents")
     
     def get_fileName(self, obj: Profile):
-        return f"{obj.plwd.first_name}_{obj.plwd.last_name}_data"
+        return f"{obj.account.user.first_name}_{obj.account.user.last_name}_data"
     
     def get_fileContents(self, obj):
         return get_download_data(obj)
@@ -143,17 +150,18 @@ class SignupPatientSerializer(serializers.Serializer):
             first_name = validated["firstName"],
             last_name  = validated["lastName"],
         )
-        profile = Profile.objects.create(zipcode=validated["zipcode"],
+        account = Account.objects.create(user=user, role="patient")
+        profile = Profile.objects.create(account=account,
+                                         zipcode=validated["zipcode"],
                                          birthDate=validated["birthDate"],
                                          locationStatus=validated["locationStatus"],)
-        account = Account.objects.create(user=user, role="patient", profile=profile)
-        UserSettings.objects.create(user=profile)
-        Goal        .objects.create(user=profile)
+        UserSettings.objects.create(profile=profile)
+        Goal        .objects.create(profile=profile)
         return account
 
     def to_representation(self, account: Account):
         return {"success"   : True,
-                "username"  : account.username,
+                "username"  : account.user.username,
                 "name"      : f'{account.user.first_name} {account.user.last_name}',}
         
 class SignupAccountSerializer(serializers.Serializer):

@@ -14,7 +14,7 @@ import { h2            } from "@/utils/styling/sharedStyles";
 export default function ChatTranscript({ chatSession } : { chatSession: ChatSession }) {
     // Get the patients name & chat start time
     const { profile } = useAuth();
-    const patient_name = `${profile.plwd.first_name} ${profile.plwd.last_name}`;
+    const patient_name = `${profile.account.user.first_name} ${profile.account.user.last_name}`;
     const chatStart = new Date(chatSession.start_ts);
 
     // Make a copy and sort from earliest to latest

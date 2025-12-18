@@ -5,7 +5,8 @@ from .health import health
 from .views import (
     GoalView, UserSettingsView,              # One-off endpoints
     ProfileView, SignupPatientView,          # Auth / Profile
-    SignupAccountView,
+    SignupAccountView, AccountView,
+    SingleAccountView, AccessView,
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
@@ -36,8 +37,11 @@ urlpatterns = [
 
     # Profile & signup
     path("profile/",            ProfileView.as_view(), name="profile"),
+    path("account/",            AccountView.as_view(), name="account"),
+    path("account/<slug:username>/", SingleAccountView.as_view(), name="single_account"),
     path("signup-patient/",     SignupPatientView.as_view(), name="signup_patient" ),
     path("signup-account/",     SignupAccountView.as_view(), name="signup_account"),
+    path("access/",             AccessView.as_view(), name="access"),
 
     # JWT login
     path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),

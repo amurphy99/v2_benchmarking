@@ -1,10 +1,10 @@
 import { useAuth } from "@/context/AuthProvider";
 
 export default function GoalProgress () {
-    const { profile } = useAuth();
-    const role = profile.role.toLowerCase();
+    const { user, profile } = useAuth();
+    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
     const current = profile.goal.current;
-    const target  = profile.goal.target
+    const target  = profile.goal.target;
 
     const percent = Math.min(Math.round((current / target) * 100), 100);
 

@@ -3,6 +3,7 @@ from django.db.models import UniqueConstraint, Q, Avg, Min
 from django.conf      import settings
 from django.utils     import timezone
 from django.contrib.postgres.fields import ArrayField
+from rest_framework.exceptions import NotFound
 
 from datetime import date, timedelta
 
@@ -13,27 +14,32 @@ DAYS_OF_WEEK = ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday')
 # =======================================================================
 # Non-Chat Models
 # =======================================================================
+class Account(models.Model):
+    ROLE_CHOICES = [("Patient", "patient"), ("Caregiver", "caregiver"), ("Family", "family"), ("Physician", "physician"), ("Other", "other")]
+    user        = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="account_user")
+    role        = models.CharField(max_length=32, choices=ROLE_CHOICES, **init_args)
+    
+    def __str__(self): return f"Account for {self.user.username}"
+
 class Profile(models.Model):
-    """
-    A Profile holds all the data for a given PLwD. The main user is the PLwD and can grant Accounts access.
-    """
+    account     = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="profile_account")
     zipcode     = models.CharField(max_length=10, **init_args)
     birthDate   = models.DateField(**init_args)
     locationStatus = models.CharField(max_length=100, **init_args)
     
-    def __str__(self): return f"Profile for {self.mainUser.user.username}"
+    def __str__(self): return f"Profile for {self.account.user.username}"
     
-class Account(models.Model):
-    ROLE_CHOICES = [("Patient", "patient"), ("Caregiver", "caregiver"), ("Other", "other")]
-    user        = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="account_user")
-    role        = models.CharField(max_length=32, choices=ROLE_CHOICES, **init_args)
-    profile     = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.SET_NULL, **init_args)
+class Access(models.Model):
+    PERMISSIONS_CHOICES = [("Full", "full"), ("View", "view")]
+    account     = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="account_access")
+    profile     = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="profile_access")
+    permissions = models.CharField(max_length=100, choices=PERMISSIONS_CHOICES, default="full", **init_args)
     
-    def __str__(self): return f"Account for {self.user.username}"
+    def __str__(self): return f"{self.account.user.username} has {self.permissions} permissions for {self.profile.account.user.username}'s profile"
 
 
 class Reminder(models.Model):
-    user       = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="reminder_user")
+    profile    = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="reminder_user")
     title      = models.CharField(max_length=100)
     notes      = models.TextField    (**init_args)
     start      = models.DateField(**init_args)
@@ -87,7 +93,7 @@ class ChatSession(models.Model):
     image     = models.ForeignKey(AlbumImage, on_delete=models.SET_NULL, null=True)
 
     class Meta:
-        constraints = [UniqueConstraint(fields=["user"], condition=Q(is_active=True), name="unique_active_session_per_user",),] # One active session per user
+        constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile
         ordering    = ["-date", "id"]
 
     @property
@@ -135,7 +141,7 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ["-ts", "id"]
-        index_together = [("session", "ts")]
+        indexes  = [models.Index(fields=['session', 'ts'])]
     
     def __str__(self): return f"{self.role}: {self.content}"
 
@@ -180,7 +186,7 @@ class Goal(models.Model):
     @property
     def current(self) -> int:
         start = self.current_period_start()
-        return ChatSession.objects.filter(user=self.user, is_active=False, date__gte=start).count()
+        return ChatSession.objects.filter(profile=self.profile, is_active=False, date__gte=start).count()
     
     @property
     def remaining(self) -> int: return max(0, self.target - self.current)
@@ -208,7 +214,7 @@ class Goal(models.Model):
             else:                      return  today.replace(day=anchor_dom)
 
     
-    def __str__(self): return f"{self.profile.mainUser.user.username}'s goal ({self.period})"
+    def __str__(self): return f"{self.profile.account.user.username}'s goal ({self.period})"
     
     class Meta:
         constraints = [models.UniqueConstraint(fields=["profile"], name="one_goal_per_profile")]
@@ -225,7 +231,36 @@ class UserSettings(models.Model):
     taskSubtype        = models.CharField(max_length=32, default="N/A")
     modelChoice        = models.CharField(max_length=32, choices=MODEL_CHOICES, default="buddy")
 
-    def __str__(self): return f"{self.profile.mainUser.user.username}'s settings"
+    def __str__(self): return f"{self.profile.account.user.username}'s settings"
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["profile"], name="one_settings_per_profile")]
+        
+##### Helper functions
+
+def get_account(user):
+    '''
+    Gets an Account based on the given user. 
+    user: The user to get the Account for.
+    '''
+    try:
+        account = Account.objects.get(user=user)
+        return account
+    except Account.DoesNotExist:
+        raise NotFound("No matching Account for this user.")
+    
+def get_profile(user):
+    '''
+    Gets a profile based on the given user. Will first check if the given user is the owner of a Profile, then checks which Profile
+    the user has access to. Each user only has access to one Profile.
+    user: The user to get the profile for.
+    '''
+    account = get_account(user)
+    try:
+        return Profile.objects.get(account=account)
+    except Profile.DoesNotExist:
+        try:
+            access = Access.objects.get(account=account)
+            return access.profile
+        except Access.DoesNotExist:
+            raise NotFound("This Account does not have access to any Profiles.")

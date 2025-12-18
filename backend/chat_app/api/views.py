@@ -6,8 +6,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import Account,          Goal,           UserSettings,           Reminder,           ChatSession
-from  .serializers import AccountSerializer, ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer
+from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 
@@ -26,7 +26,7 @@ class GoalView(ProfileMixin, generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         profile = self.get_profile()
-        goal, _ = Goal.objects.get_or_create(user=profile)
+        goal, _ = Goal.objects.get_or_create(profile=profile)
         return goal
 
 class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
@@ -39,7 +39,7 @@ class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         profile = self.get_profile()
-        settings, _ = UserSettings.objects.get_or_create(user=profile)
+        settings, _ = UserSettings.objects.get_or_create(profile=profile)
         return settings
     
 class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
@@ -64,10 +64,10 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         profile = self.get_profile()
-        return Reminder.objects.filter(user=profile)
+        return Reminder.objects.filter(profile=profile)
     
     def perform_create(self, serializer):
-        serializer.save(user=self.get_profile())
+        serializer.save(profile=self.get_profile())
 
 # ======================================================================= ===================================
 # Read-only List & Details (messages, biomarkers)
@@ -85,9 +85,9 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self): 
         profile = self.get_profile()
         return (ChatSession.objects
-                .filter(user=profile.plwd)
+                .filter(profile=profile)
                 .filter(is_active=False)
-                .select_related("user", "image")
+                .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
 
 # ======================================================================= ===================================
@@ -115,6 +115,24 @@ class AccountView(generics.RetrieveAPIView):
     def get_object(self):
         user = self.request.user
         return Account.objects.get(user=user)
+    
+class SingleAccountView(ProfileMixin, generics.RetrieveAPIView):
+    serializer_class   = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        username = self.kwargs["username"]
+        user = get_user_model().objects.get(username=username)
+        account = Account.objects.get(user=user)
+        return account
+
+class AccessView(ProfileMixin, generics.RetrieveAPIView):
+    serializer_class    = AccessSerializer
+    permission_classes  = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        account = self.get_account
+        return Access.objects.get(account=account)
 
 # ======================================================================= ===================================
 # Tokens 

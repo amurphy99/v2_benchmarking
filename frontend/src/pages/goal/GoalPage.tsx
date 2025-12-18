@@ -7,7 +7,8 @@ import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import Avatar from "../common/avatar/Avatar";
 
 export function Goal() {
-    const { profile } = useAuth();
+    const { user, profile } = useAuth();
+    const isCare = profile.account.user.id == user.id;
     const { data: sessions, isLoading } = useChatSessions();
     if (isLoading) { 
         return <p>Loading goal...</p>; 
@@ -17,14 +18,14 @@ export function Goal() {
 
     const getMsg = () => {
         if (week.sessions.length == 0) {
-            if (profile.role == "Caregiver") {
-                return `It's time for practice, help ${profile.plwd.first_name} achieve their goal!`;
+            if (isCare) {
+                return `It's time for practice, help ${profile.account.user.first_name} achieve their goal!`;
             } else {
                 return `It's time for practice, you can do this!`;
             }
         } else {
-            if (profile.role == "Caregiver") {
-                return `${profile.plwd.first_name} is making wonderful progress! Help ${profile.plwd.first_name} continue!`;
+            if (isCare) {
+                return `${profile.account.user.first_name} is making wonderful progress! Help ${profile.account.user.first_name} continue!`;
             } else {
                 return `You're making wonderful progress! Keep going!`
             }
