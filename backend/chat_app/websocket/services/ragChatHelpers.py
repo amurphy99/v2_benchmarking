@@ -164,8 +164,8 @@ def retrieve_all_instruction_chunks(
 
 def chunks_to_text(chunks: list[RAGInstructionChunkEmbedding]) -> str:
     parts = []
-    for c in chunks:
-        parts.append(f"[name={c.name} chunk={c.chunk_index}]\n{c.content.strip()}")
+    for i, c in enumerate(chunks):
+        parts.append(f"Chunk{i+1}\n{c.content.strip()}")
     return "\n\n".join(parts)
 
 

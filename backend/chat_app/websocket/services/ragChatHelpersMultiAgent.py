@@ -407,7 +407,7 @@ async def rag_response_fn(
         user_id=instruction_owner.id,
         activity_id=activity.id,
         query_text=routing_text_call_2,
-        k=1,
+        k=2,
     )
 
     instructions_text_call_2 = chunks_to_text(chunks_call_2)
