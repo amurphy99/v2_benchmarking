@@ -347,17 +347,17 @@ async def rag_response_fn(
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] current_scenario={current}{lu.RESET}")
 
     # --- Retrieve instruction chunks for current scenario ---
-    chunks = await retrieve_instruction_chunks(
+    chunks_call_1 = await retrieve_instruction_chunks(
         instruction_name=current,
         user_id=instruction_owner.id,
         activity_id=activity.id,
         query_text=user_text,
-        k=4,
+        k=2,
     )
-    logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks)}{lu.RESET}")
-    instructions_text = chunks_to_text(chunks)
+    logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks_call_1)}{lu.RESET}")
+    instructions_text_call_1 = chunks_to_text(chunks_call_1)
 
-    if not instructions_text.strip():
+    if not instructions_text_call_1.strip():
         logger.warning(f"{lu.RED}[RAG-PHI3][{trace_id}] No instructions_text found for scenario={current} (empty chunks).{lu.RESET}")
     # --- Build message history for context ---
     msg_history: list[BaseMessage] = []
@@ -372,7 +372,7 @@ async def rag_response_fn(
     try:
         response_system_prompt = build_response_system_prompt(
             current_scenario=current,
-            instructions_text=instructions_text,
+            instructions_text=instructions_text_call_1,
         )
 
         messages_1 = [SystemMessage(content=response_system_prompt)] + msg_history + [
@@ -400,6 +400,17 @@ async def rag_response_fn(
     # CALL #2: Predict next_scenario (constrained output)
     # Schedule CALL #2 in background (do NOT block this turn’s response)
     # =============================================================================
+    routing_text_call_2 = f"signals for changing the conversation topic and Next Conversation Topic rules."
+        
+    chunks_call_2 = await retrieve_instruction_chunks(
+        instruction_name=current,
+        user_id=instruction_owner.id,
+        activity_id=activity.id,
+        query_text=routing_text_call_2,
+        k=1,
+    )
+
+    instructions_text_call_2 = chunks_to_text(chunks_call_2)
     async def _runner():
         # ensure only one CALL#2 mutates rag_state at a time
         await _predict_and_update_next_scenario(
@@ -410,7 +421,7 @@ async def rag_response_fn(
             available_scenarios_text=available_scenarios_text,
             available_names=available_names,
             current=current,
-            instructions_text=instructions_text,
+            instructions_text=instructions_text_call_2,
             rag_state=rag_state,
         )
 
