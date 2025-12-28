@@ -138,6 +138,29 @@ def retrieve_instruction_chunks(
     
     return fetched_instructions
 
+@database_sync_to_async
+def retrieve_all_instruction_chunks(
+    *,
+    instruction_name: str,
+    user_id: int,
+    activity_id: int,
+) -> list[RAGInstructionChunkEmbedding]:
+    """
+    Retrieve ALL chunks for a given scenario (instruction_name) for this user/activity,
+    """
+    q_emb = (
+        RAGInstructionChunkEmbedding.objects
+        .filter(name=instruction_name, user_id=user_id, activity_id=activity_id)
+        .order_by("chunk_index")
+    )
+
+    fetched_instructions = list(q_emb)
+    logger.info(
+        "Retrieved %d FULL instruction chunks for instruction '%s'",
+        len(fetched_instructions),
+        instruction_name,
+    )
+    return fetched_instructions
 
 def chunks_to_text(chunks: list[RAGInstructionChunkEmbedding]) -> str:
     parts = []

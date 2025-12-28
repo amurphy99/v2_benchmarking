@@ -19,6 +19,7 @@ from .ragChatHelpers import (
     get_available_scenarios,
     format_available_scenarios,
     retrieve_instruction_chunks,
+    retrieve_all_instruction_chunks,
     chunks_to_text,
     )
 
@@ -347,13 +348,12 @@ async def rag_response_fn(
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] current_scenario={current}{lu.RESET}")
 
     # --- Retrieve instruction chunks for current scenario ---
-    chunks_call_1 = await retrieve_instruction_chunks(
+    chunks_call_1 = await retrieve_all_instruction_chunks(
         instruction_name=current,
         user_id=instruction_owner.id,
         activity_id=activity.id,
-        query_text=user_text,
-        k=2,
     )
+    
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks_call_1)}{lu.RESET}")
     instructions_text_call_1 = chunks_to_text(chunks_call_1)
 
