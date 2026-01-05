@@ -31,7 +31,7 @@ export default function SignUpPatient() {
             toast.success("Account created successfully!");
             login(formData.username, formData.password);
             navigate("/profile");
-        } catch (err) { toast.error((err as Error).message);
+        } catch (err) { toast.error("Error creating account. Perhaps that username is already taken?");
         } finally     { setLoading(false); }
     };
 
