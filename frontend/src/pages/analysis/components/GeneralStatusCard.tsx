@@ -6,8 +6,8 @@ import { useAuth } from "@/context/AuthProvider";
 import { getCognitiveScore } from "@/utils/functions/getCognitiveScore";
 
 export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWeek: ChatWeek, prevWeek: ChatWeek} ) {
-    const { user, profile } = useAuth();
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const { account } = useAuth();
+    const role = account.role.toLowerCase();
 
     const curScore = getCognitiveScore(currentWeek);
     const prevScore = getCognitiveScore(prevWeek);

@@ -11,11 +11,16 @@ import GeneralStatusCard from "./components/GeneralStatusCard";
 import ImpactFactorsCard from "./components/ImpactFactorsCard";
 
 export function Analysis() {
-    const { user, profile } = useAuth();
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const { account } = useAuth();
+    const role = account.role.toLowerCase();
     const { data: sessions, isLoading } = useChatSessions();
     if (isLoading) { 
         return <p>Loading...</p>; 
+    }
+    if (sessions.length == 0) {
+        return (
+            <h1>Nothing to analyze yet!</h1>
+        )
     }
     const weeks = groupSessionsByWeek(sessions);
     const currentWeek = weeks.length ? weeks[weeks.length - 1] : null;

@@ -7,8 +7,8 @@ import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import Avatar from "../common/avatar/Avatar";
 
 export function Goal() {
-    const { user, profile } = useAuth();
-    const isCare = profile.account.user.id == user.id;
+    const { account, profile } = useAuth();
+    const isCare = account.role.toLowerCase() == "caregiver";
     const { data: sessions, isLoading } = useChatSessions();
     if (isLoading) { 
         return <p>Loading goal...</p>; 
