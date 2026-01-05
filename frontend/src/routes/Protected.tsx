@@ -37,8 +37,8 @@ export function Unprotected() {
 // =======================================================================
 // Only caregivers can view
 export function IsCaregiver() {
-    const { user, profile } = useAuth();
-    const isCare = profile.account.user != user;
+    const { account } = useAuth();
+    const isCare = account.role.toLowerCase() == "caregiver";
     return isCare ? <Outlet /> : <Navigate to="/goal" replace />;
 }
 // Only patients can view

@@ -89,6 +89,12 @@ export interface Access {
     profile : Profile;
 }
 
+export interface CreateAccessPayload {
+    profileId   : number;
+    accountId   : number;
+    permissions : string;
+}
+
 // =======================================================================
 // ChatSession Related Models
 // =======================================================================

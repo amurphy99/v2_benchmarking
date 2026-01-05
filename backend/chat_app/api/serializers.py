@@ -160,6 +160,24 @@ class AccessSerializer(serializers.ModelSerializer):
         model   = Access
         fields  = ("id", "account", "profile")
         
+class CreateAccessSerializer(serializers.Serializer):
+    # Fields from the frontend
+    profileId    = serializers.IntegerField()
+    accountId    = serializers.IntegerField()
+    permissions  = serializers.CharField()
+    
+    # Creates an Access object
+    @transaction.atomic
+    def create(self, validated):
+        print(f'\nCreating access with {validated}\n')
+        profile = Profile.objects.get(id=validated['profileId'])
+        account = Account.objects.get(id=validated['accountId'])
+        access  = Access.objects.create(profile=profile, account=account, permissions=validated['permissions'])
+        return access
+    
+    def to_representation(self, access: Access):
+        return {"success"   : True,
+                "name"      : f'Account {access.account.id} has {access.permissions} access to Profile {access.profile.id}',}
 # =======================================================================
 # ChatSession Related Data
 # =======================================================================
@@ -292,6 +310,7 @@ class SignupPatientSerializer(serializers.Serializer):
     # Can return whatever the API needs
     @transaction.atomic
     def create(self, validated):
+        print(f'\n\nCreating account with {validated}\n\n')
         User = get_user_model()
         user = User.objects.create_user(
             username   = validated["username"],
@@ -330,6 +349,7 @@ class SignupAccountSerializer(serializers.Serializer):
     # Can return whatever the API needs
     @transaction.atomic
     def create(self, validated):
+        print(f'\n\nCreating account with {validated}\n\n')
         User = get_user_model()
         user = User.objects.create_user(
             username   = validated["username"],

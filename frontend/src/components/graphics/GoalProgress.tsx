@@ -1,8 +1,8 @@
 import { useAuth } from "@/context/AuthProvider";
 
 export default function GoalProgress () {
-    const { user, profile } = useAuth();
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const { account, profile } = useAuth();
+    const role = account.role.toLowerCase();
     const current = profile.goal.current;
     const target  = profile.goal.target;
 

@@ -5,8 +5,9 @@ from .health import health
 from .views import (
     GoalView, UserSettingsView,              # One-off endpoints
     ProfileView, SignupPatientView,          # Auth / Profile
-    SignupAccountView, AccountView,
-    SingleAccountView, AccessView,
+    SignupAccountView, AccountView,          # Account views
+    SingleAccountView, AccessView,           # Access views
+    CreateAccessView, AccessViewSet,
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
@@ -21,6 +22,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r"chatsessions", ChatSessionViewSet, basename="chatsession")
 router.register(r"reminders",    ReminderViewSet,    basename="reminder"   )
+router.register(r"accesses",       AccessViewSet,      basename="accesses" )
 router.register(r"rags",          RAGInstructionsViewSet, basename="rag_instructions")
 
 # ------------------------------------------------------------------
@@ -44,7 +46,8 @@ urlpatterns = [
     path("account/<slug:username>/", SingleAccountView.as_view(), name="single_account"),
     path("signup-patient/",     SignupPatientView.as_view(), name="signup_patient" ),
     path("signup-account/",     SignupAccountView.as_view(), name="signup_account"),
-    path("access/",             AccessView.as_view(), name="access"),
+    path("access/",             AccessView.as_view(), name="access"  ),
+    path("access/create/",      CreateAccessView.as_view(), name="create_access"),
     
     # Single-row resources (not connected to a user)
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),

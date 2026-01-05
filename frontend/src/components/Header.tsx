@@ -29,14 +29,14 @@ const TITLES: Record<string, string> = {
     default         : "Cognibot",
 };
 
-const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings"]
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings", "/profile"]
 
 // ====================================================================
 // Header
 // ====================================================================
 export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, profile } = useAuth();
-    const isCare = profile?.account.user.id != user.id;
+    const { user, account, profile } = useAuth();
+    const isCare = account.role.toLowerCase() == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
@@ -52,8 +52,9 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     if (SHOW_HEADER.includes(pathname)) {
         return (
         <header className={"flex items-center gap-6 px-[2rem] py-[1rem]"}>
-            <ProfileInfo profile={profile} user={user} />
+            <ProfileInfo isCare={isCare} user={user} />
             <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
+            {profile ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
                 {/* Navigation Links */}
@@ -84,6 +85,7 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                 
                 
             </div>
+            : null}
 
             {/* Modal */}
             {isCare ? 

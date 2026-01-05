@@ -23,8 +23,8 @@ export default function BiomarkerCard({
     flaggedDays : ChatSession[],
     performance : string
 }) {
-    const { user, profile } = useAuth();
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const {account} = useAuth();
+    const role = account.role.toLowerCase();
     const navigate = useNavigate();
     const [example, setExample] = useState<string>("exemplar")
 

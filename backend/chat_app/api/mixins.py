@@ -42,4 +42,5 @@ def get_profile(user):
             access = Access.objects.get(account=account)
             return access.profile
         except Access.DoesNotExist:
-            raise NotFound("This Account does not have access to any Profiles.")
+            print("This Account does not have access to any Profiles.")
+            return None

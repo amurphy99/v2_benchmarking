@@ -1,11 +1,11 @@
 import { useAuth } from "@/context/AuthProvider";
-import { ChatWeek, getNumChatsInWeek, getCurrentWeek } from "@/utils/functions/getChatWeeks";
+import { ChatWeek, getNumChatsInWeek } from "@/utils/functions/getChatWeeks";
 
 
 export default function WeekTrack( {week} : {week: ChatWeek} ) {
-    const { user, profile } = useAuth();
+    const { account } = useAuth();
 
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const role = account.role.toLowerCase();
     const dayTracks = getNumChatsInWeek(week);
 
     return (
