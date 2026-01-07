@@ -64,7 +64,7 @@ class GoalSerializer(serializers.ModelSerializer):
 class RAGInstructionsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = RAGInstructions
-        fields = ("id", "name", "instructions", "description", "user", "activity")
+        fields = ("id", "name", "instructions", "description", "user", "activity", "instruction_order")
         read_only_fields = ("id", "user", "activity")
 
 # =======================================================================

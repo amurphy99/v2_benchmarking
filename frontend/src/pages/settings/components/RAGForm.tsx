@@ -25,6 +25,7 @@ export default function RAGForm() {
     name: string;
     description: string;
     instructions: string;
+    instruction_order: number; 
   } | null>(null);
 
   if (isLoading) {
@@ -47,6 +48,7 @@ export default function RAGForm() {
       name: rag.name,
       description: rag.description,
       instructions: rag.instructions,
+      instruction_order: rag.instruction_order,
     });
     setModalOpen(true);
   };
@@ -71,6 +73,7 @@ export default function RAGForm() {
     name: string;
     description: string;
     instructions: string;
+    instruction_order: number;
   }) => {
     try {
       if (modalMode === "create") {
@@ -87,6 +90,7 @@ export default function RAGForm() {
           name: values.name,
           description: values.description,
           instructions: values.instructions,
+          instruction_order: values.instruction_order,
         });
         toastMessage("RAG instruction created", true);
       } else if (modalMode === "edit" && activeInstruction) {
@@ -94,6 +98,7 @@ export default function RAGForm() {
           name: activeInstruction.name,   // name is not editable
           description: values.description,
           instructions: values.instructions,
+          instruction_order: values.instruction_order,
         });
         toastMessage("RAG instruction updated", true);
       }
@@ -142,7 +147,10 @@ export default function RAGForm() {
               className="flex items-center justify-between px-3 py-2"
             >
               <div>
-                <div className="text-sm font-semibold">{rag.name}</div>
+                <div className="text-sm font-semibold">
+                  {rag.name} <span className="text-xs text-gray-400">({rag.instruction_order})</span>
+                </div>
+
                 <div className="text-xs text-gray-500">
                   {rag.description || "No description"}
                 </div>
@@ -178,6 +186,7 @@ export default function RAGForm() {
                 name: activeInstruction.name,
                 description: activeInstruction.description,
                 instructions: activeInstruction.instructions,
+                instruction_order: activeInstruction.instruction_order,
               }
             : undefined
         }

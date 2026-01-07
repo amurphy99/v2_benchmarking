@@ -95,7 +95,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Only return instructions belonging to the logged-in user
-        return RAGInstructions.objects.filter(user=self.request.user)
+        return RAGInstructions.objects.filter(user=self.request.user).order_by("instruction_order", "name")
 
     def perform_create(self, serializer):
         # For now, always use the 'memory_activity'

@@ -40,18 +40,21 @@ export interface RAGInstructions {
     description : string;
     user        : number; // PK of user
     activity    : number; // PK of Activity
+    instruction_order: number;   // order of state instructions
 }
 
 export interface CreateRAGInstructionsPayload {
     name        : string;
     instructions: string;
     description : string;
+    instruction_order?: number;
 }
 
 export interface UpdateRAGInstructionsPayload {
     name?: string;
     instructions: string;
     description : string;
+    instruction_order?: number;
 }
 
 // =======================================================================
