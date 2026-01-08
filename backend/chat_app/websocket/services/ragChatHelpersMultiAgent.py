@@ -7,11 +7,14 @@ import asyncio
 from contextlib import suppress
 import difflib
 from typing import Iterable
+from django.core.exceptions import ObjectDoesNotExist
+from channels.db import database_sync_to_async
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 
 from ... import config as cf
 from chat_app.services import logging_utils as lu 
+from chat_app.models import RAGInstructions, Activity
 from .ragChatHelpers import (
     resolve_instruction_owner, 
     _message_content_to_text, 
@@ -128,30 +131,28 @@ def build_response_system_prompt(
     instructions_text: str,
 ) -> str:
     return f"""
-    Your name is QT robot. You are a scenario-based conversational assistant.
+    Your name is QT robot. You are a state-based conversational assistant.
 
-    The conversation is structured into SCENARIOS. Scenarios are stages that help guide the flow of the conversation. 
-    Scenarios define the goals for what should be achieved in that part of the conversation.
-    You will be given instructions for the CURRENT_SCENARIO to help you decide how to respond to the user.
-    The instructions for each scenario will include:
-    - The ultimate goals of the scenario
-    - Signals for understanding when the goals of the scenario are complete.
-    - Guidelines for how to respond and how to move toward the next scenario.
-    - Also, examples of user and system responses that fit within the scenario.
+    You will be given instructions for the CURRENT_STATE to help you decide how to respond to the user.
+    The instructions for each state will include:
+    - The conversational goals of the state.
+    - Signals for understanding when the goals of the state are complete.
+    - Guidelines for how to move toward the next state.
+    - Also, examples of user and system responses that fit within the state.
 
-    CURRENT_SCENARIO: "{current_scenario}"
+    You are currently in the conversation state named: "{current_scenario}".
 
-    INSTRUCTIONS FOR CURRENT_SCENARIO:
+    INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
     ----------------
 
-    Task:
-    - Read the user's message and the recent conversation history.
+    Your Task:
+    - Read the user's message, along with the provided the recent conversation history.
     - Decide how the assistant would respond to the user in the current turn.
     - Keep the reply short and natural.
-    - Ensure that the response helps move toward achieving the goals of the current scenario.
-    - DO NOT mention scenario names within your responses.
+    - Ensure that the response helps move toward achieving the goals of the current state.
+    - DO NOT mention state names within your responses.
     - DO NOT mention any of the instructions or guidelines in your response.
     """
 
@@ -163,38 +164,41 @@ def build_next_scenario_system_prompt(
     instructions_text: str,
 ) -> str:
     return f"""
-    You are a conversation specialist. Your job is to select the next scenario for a conversation state machine.
-    The conversations are structured into SCENARIOS. Scenarios are stages that help guide the flow of the conversation. 
-    Scenarios define the goals for what should be achieved in that part of the conversation.
-    You will be given instructions for the CURRENT_SCENARIO. The instructions for each scenario will include:
-    - The ultimate goals of the scenario
-    - Signals for understanding when the goals of the scenario are complete and when it is time to move to the next scenario topic
+    You are a conversation specialist. Your job is to select the next state for a conversation state machine.
+    The conversations are structured into STATES. States are stages that help guide the flow of the conversation. 
+    States define the goals for what should be achieved in that part of the conversation.
+    You will be given instructions for the CURRENT_STATE. The instructions for each state will include:
+    - The conversational goals of the state
+    - Signals for understanding when the goals of the state are complete
+    - When it is time to move to the next state topic
+    - Expected user responses that fit within the current state
+    - Expected assistant responses that fit within the current state
     
-    You task:
-    - Follow the instructions to decide whether the goals of the current scenario have been met.
-    - If the objectives have been met, choose a new scenario from the AVAILABLE_SCENARIOS that is best suited to follow the current.
-    - If the goals have NOT been met, select the CURRENT_SCENARIO again to continue working toward its goals.
 
 
-    Here is a list of AVAILABLE_SCENARIOS and a short description for each scenario.
-    AVAILABLE_SCENARIOS (valid answers must be one of these, or CURRENT_SCENARIO):
+    Here is a list of AVAILABLE_STATES and a short description for each state.
+    The short description and instructions of the CURRENT_STATE mention which states are appropriate to choose next.
+    AVAILABLE_STATES (valid answers must be one of these, or CURRENT_STATE):
     {available_scenarios_text}
 
-    CURRENT_SCENARIO: "{current_scenario}"
+    You are currently in the conversation state named: "{current_scenario}".
 
-    INSTRUCTIONS FOR CURRENT_SCENARIO:
+    INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
     ----------------
 
-    Rules:
-    - The short description and instructions of the CURRENT_SCENARIO mention which scenarios are appropriate to choose next, so try to follow that order.
-    - Return ONLY the scenario name (exactly).
+    Your task:
+    - Analyze the recent conversation history that is provided.
+    - Follow the instructions to decide whether the goals of the current state have been met.
+    - If the objectives have been met, choose a new state from the AVAILABLE_STATES that is best suited to follow the current.
+    - If the goals have NOT been met, select the CURRENT_STATE again to continue working toward its goals.
+    - Return ONLY the state name (exactly).
     - Do not explain or include comments with the output.
     - Do not add punctuation.
     - Do not add extra words.
     - Do not output markdown, code fences, explanations, labels, or commentary.
-    - The scenario name must come from one of AVAILABLE_SCENARIOS.
+    - The state name must come from one of AVAILABLE_STATES.
     """
 
     # few shot examples that I might use later
@@ -241,6 +245,32 @@ async def invoke_agent(messages: list[BaseMessage], *, trace_id: str, temperatur
 
     logger.debug(f"{lu.BG_GREEN}[RAG-PHI3][{trace_id}] invoke_agent params temp={temperature} top_p={top_p} top_k={top_k} max_tokens={max_tokens} raw_len={len(txt or '')}{lu.RESET}")
     return txt
+# =============================================================================
+# DB helper function for fetching the full instruction text from the main DB
+# =============================================================================
+@database_sync_to_async
+def get_full_instruction_text(
+    *,
+    instruction_name: str,
+    user_id: int,
+    activity_id: int,
+) -> str:
+    """
+    Retrieves the full instructions text for a given scenario (instruction_name)
+    for this user + activity from the main DB.
+
+    Raises ObjectDoesNotExist if not found.
+    """
+    try:
+        inst = RAGInstructions.objects.get(
+            user_id=user_id,
+            activity_id=activity_id,
+            name=instruction_name,
+        )
+        return inst.instructions
+    except ObjectDoesNotExist:
+        logger.info(f"{lu.BG_RED}[RAG-PHI3] No RAGInstructions row found for user_id={user_id} activity_id={activity_id} name='{instruction_name}'{lu.RESET}")
+        return ""
 
 # =============================================================================
 # Background task for predicting next scenario
@@ -269,7 +299,7 @@ async def _predict_and_update_next_scenario(
 
             # Include both the user message and the assistant reply to help the classifier decide.
             messages_2 = [SystemMessage(content=scenario_system_prompt )] + msg_history + [
-                HumanMessage(content=f'User message:\n{user_text}\n\nAssistant reply:\n{assistant_text}\n\nNext scenario:')
+                HumanMessage(content=f'Most Recent User message:\n{user_text}\n\nMost RecentAssistant reply:\n{assistant_text}')
             ]
 
             logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] CALL#2 predicting next_scenario...{lu.RESET}")
@@ -279,7 +309,7 @@ async def _predict_and_update_next_scenario(
                 temperature=0.1,  # low randomness
                 top_p=0.1,
                 top_k=1,
-                max_tokens=24,    # small output budget
+                max_tokens=10,    # small output budget
             )
             raw_next = (raw_next or "").strip()
 
@@ -348,14 +378,22 @@ async def rag_response_fn(
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] current_scenario={current}{lu.RESET}")
 
     # --- Retrieve instruction chunks for current scenario ---
-    chunks_call_1 = await retrieve_all_instruction_chunks(
+    # chunks_call_1 = await retrieve_all_instruction_chunks(
+    #     instruction_name=current,
+    #     user_id=instruction_owner.id,
+    #     activity_id=activity.id,
+    # )
+    
+    # logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks_call_1)}{lu.RESET}")
+    # instructions_text_call_1 = chunks_to_text(chunks_call_1)
+
+    instructions_text_call_1 = await get_full_instruction_text(
         instruction_name=current,
         user_id=instruction_owner.id,
         activity_id=activity.id,
     )
-    
-    logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks_call_1)}{lu.RESET}")
-    instructions_text_call_1 = chunks_to_text(chunks_call_1)
+
+    logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] instructions_text_call_1_len={len(instructions_text_call_1 or '')}{lu.RESET}")
 
     if not instructions_text_call_1.strip():
         logger.warning(f"{lu.RED}[RAG-PHI3][{trace_id}] No instructions_text found for scenario={current} (empty chunks).{lu.RESET}")
@@ -400,17 +438,17 @@ async def rag_response_fn(
     # CALL #2: Predict next_scenario (constrained output)
     # Schedule CALL #2 in background (do NOT block this turn’s response)
     # =============================================================================
-    routing_text_call_2 = f"signals for changing the conversation topic and Next Conversation Topic rules."
+    # routing_text_call_2 = f"signals for changing the conversation topic and Next Conversation Topic rules."
         
-    chunks_call_2 = await retrieve_instruction_chunks(
-        instruction_name=current,
-        user_id=instruction_owner.id,
-        activity_id=activity.id,
-        query_text=routing_text_call_2,
-        k=2,
-    )
+    # chunks_call_2 = await retrieve_instruction_chunks(
+    #     instruction_name=current,
+    #     user_id=instruction_owner.id,
+    #     activity_id=activity.id,
+    #     query_text=routing_text_call_2,
+    #     k=2,
+    # )
 
-    instructions_text_call_2 = chunks_to_text(chunks_call_2)
+    # instructions_text_call_2 = chunks_to_text(chunks_call_2)
     async def _runner():
         # ensure only one CALL#2 mutates rag_state at a time
         await _predict_and_update_next_scenario(
@@ -421,7 +459,7 @@ async def rag_response_fn(
             available_scenarios_text=available_scenarios_text,
             available_names=available_names,
             current=current,
-            instructions_text=instructions_text_call_2,
+            instructions_text=instructions_text_call_1,
             rag_state=rag_state,
         )
 
