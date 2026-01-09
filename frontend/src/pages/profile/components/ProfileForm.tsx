@@ -8,9 +8,9 @@ export default function ProfileForm() {
     const isCare = account.role.toLowerCase() == "caregiver";
     const role = isCare ? "caregiver" : "patient";
     
-    const [birthday, setBirthday] = useState(profile.birthDate);
-    const [location, setLocation] = useState(profile.locationStatus);
-    const [zipcode, setZipcode] = useState(profile.zipcode);
+    const [birthday, setBirthday] = useState(profile.birthDate ?? "");
+    const [location, setLocation] = useState(profile.locationStatus ?? "");
+    const [zipcode, setZipcode] = useState(profile.zipcode ?? "");
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 
     const onSubmit = (e: React.FormEvent) => {

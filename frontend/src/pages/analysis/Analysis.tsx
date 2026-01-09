@@ -19,7 +19,7 @@ export function Analysis() {
     }
     if (sessions.length == 0) {
         return (
-            <h1>Nothing to analyze yet!</h1>
+            <h1 className="m-[2rem]">Nothing to analyze yet!</h1>
         )
     }
     const weeks = groupSessionsByWeek(sessions);

@@ -8,8 +8,6 @@ export function Profile() {
     const { user, account, profile } = useAuth();
     const isCare = account.role.toLowerCase() == "caregiver";
     
-    const role = isCare ? "caregiver" : "patient";
-
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 
     if (!isCare) {
@@ -27,7 +25,7 @@ export function Profile() {
             </div>
         );
     } else {
-        if (!profile) {
+    if (!profile.account) {
             return (
                 <div className="m-[2rem]">
                     <h1>Not connected to a user yet.</h1>

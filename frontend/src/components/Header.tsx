@@ -51,9 +51,9 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {
         return (
-        <header className={"flex items-center gap-6 px-[2rem] py-[1rem]"}>
+        <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
             <ProfileInfo isCare={isCare} user={user} />
-            <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
+            <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
             {profile ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
@@ -74,12 +74,6 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                     isCare ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
-                    </NavLink> : null
-                }
-                {
-                    isCare ? 
-                    <NavLink to="/alert">
-                        <Icon icon="fluent-color:mail-alert-32" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
                 }
                 

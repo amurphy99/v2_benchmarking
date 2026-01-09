@@ -5,7 +5,7 @@ import   Header    from "@/components/Header";
 import FooterNav from "@/components/FooterNav";
 
 export function AppLayout( {isMobile} : {isMobile: boolean}) {
-    const { user, profile } = useAuth();
+    const { user, account, profile } = useAuth();
     const { pathname } = useLocation();
     // Header & small info bar for development
     const pageHeader = (user            ) ? (<Header isMobile={isMobile} />) : null;
@@ -17,7 +17,7 @@ export function AppLayout( {isMobile} : {isMobile: boolean}) {
             <div className="vr"></div>
 
             <span>user: {user?.username ?? "—"}</span>
-            <span>role: {profile?.role  ?? "—"}</span>     
+            <span>role: {account?.role  ?? "—"}</span>     
             <span>is_staff: {user?.is_staff ? "yes" : "no"}</span>
 
         </div>
@@ -32,7 +32,7 @@ export function AppLayout( {isMobile} : {isMobile: boolean}) {
     
         {/* Routed page component */}
         <main> <Outlet /> </main>
-        {isMobile && (pathname != "/login" && pathname != "/signup" && pathname != "/animation-test") ? <FooterNav /> : null}
+        {<FooterNav />}
 
     </>
     );
