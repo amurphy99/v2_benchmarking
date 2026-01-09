@@ -4,9 +4,7 @@ import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
 
 export default function ProfileForm() {
-    const { user, account, profile } = useAuth();
-    const isCare = account.role.toLowerCase() == "caregiver";
-    const role = isCare ? "caregiver" : "patient";
+    const { profile, role } = useAuth();
     
     const [birthday, setBirthday] = useState(profile.birthDate ?? "");
     const [location, setLocation] = useState(profile.locationStatus ?? "");

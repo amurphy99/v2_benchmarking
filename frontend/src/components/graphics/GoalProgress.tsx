@@ -1,8 +1,7 @@
 import { useAuth } from "@/context/AuthProvider";
 
 export default function GoalProgress () {
-    const { account, profile } = useAuth();
-    const role = account.role.toLowerCase();
+    const { role, profile } = useAuth();
     const current = profile.goal.current;
     const target  = profile.goal.target;
 

@@ -68,7 +68,6 @@ class CreateAccessSerializer(serializers.Serializer):
     # Creates an Access object
     @transaction.atomic
     def create(self, validated):
-        print(f'\nCreating access with {validated}\n')
         profile = Profile.objects.get(id=validated['profileId'])
         account = Account.objects.get(id=validated['accountId'])
         access  = Access.objects.create(profile=profile, account=account, permissions=validated['permissions'])
@@ -158,7 +157,6 @@ class SignupPatientSerializer(serializers.Serializer):
     # Can return whatever the API needs
     @transaction.atomic
     def create(self, validated):
-        print(f'\n\nCreating account with {validated}\n\n')
         User = get_user_model()
         user = User.objects.create_user(
             username   = validated["username"],
@@ -186,6 +184,7 @@ class SignupAccountSerializer(serializers.Serializer):
     password        = serializers.CharField(write_only=True)
     firstName       = serializers.CharField()
     lastName        = serializers.CharField()
+    role            = serializers.CharField()
 
     def validate(self, attrs):
         User = get_user_model()
@@ -197,7 +196,6 @@ class SignupAccountSerializer(serializers.Serializer):
     # Can return whatever the API needs
     @transaction.atomic
     def create(self, validated):
-        print(f'\n\nCreating account with {validated}\n\n')
         User = get_user_model()
         user = User.objects.create_user(
             username   = validated["username"],
@@ -205,7 +203,7 @@ class SignupAccountSerializer(serializers.Serializer):
             first_name = validated["firstName"],
             last_name  = validated["lastName"],
         )
-        account = Account.objects.create(user=user, role="caregiver")
+        account = Account.objects.create(user=user, role=validated["role"])
         return account
 
     def to_representation(self, account: Account):

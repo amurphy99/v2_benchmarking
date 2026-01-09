@@ -10,6 +10,7 @@ interface AuthCtx {
     user?: User; 
     account?: Account,
     profile: Profile,
+    role: string,
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
 }
@@ -24,6 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user,    setUser   ] = useState<User   >();
     const [account, setAccount] = useState<Account>();
     const [profile, setProfile] = useState<Profile | null>();
+    const [role, setRole      ] = useState<string >("");
     const [error,   setError  ] = useState<string >(); 
     const [loading, setLoading] = useState(false);
     
@@ -39,7 +41,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('authTokens', JSON.stringify(response));
             
             // Fetch user account; blocks until the account returns and we have data to populate pages
-            await getAccount().then(setAccount).catch(console.error);
+            await getAccount().then((acc) => {
+                setAccount(acc);
+                if (acc.role.toLowerCase() == "patient") {
+                    setRole("patient");
+                } else {
+                    setRole("caregiver");
+                }
+            }).catch(console.error);
 
             // Fetch user profile; if no user profile found, set profile to null
             await getProfile().then(setProfile).catch((e) => {
@@ -71,8 +80,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logout();
         } finally     { 
             try {
-                await getAccount().then(setAccount).catch(console.error);
+                await getAccount().then((acc) => {
+                    setAccount(acc);
+                    if (acc.role.toLowerCase() == "patient") {
+                        setRole("patient");
+                    } else {
+                        setRole("caregiver");
+                    }
+                }).catch(console.error);
                 await getProfile().then(setProfile).catch((e) => {
+                    console.log("No profile found for user");
+                    setProfile(null);
+                }).catch((e) => {
                     console.log("No profile found for user");
                     setProfile(null);
                 });
@@ -88,6 +107,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = () => { 
         setAccess(undefined); 
         setUser(undefined); 
+        setProfile(undefined);
+        setRole("");
         setAccount(undefined);
         localStorage.clear();
     };
@@ -97,8 +118,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!getAccess()) {
 				await refreshAccess();
 			} else {
-                await getAccount().then(setAccount).catch(console.error);
+                await getAccount().then((acc) => {
+                    setAccount(acc);
+                    if (acc.role.toLowerCase() == "patient") {
+                        setRole("patient");
+                    } else {
+                        setRole("caregiver");
+                    }
+                }).catch(console.error);
                 await getProfile().then(setProfile).catch((e) => {
+                    console.log("No profile found for user");
+                    setProfile(null);
+                }).catch((e) => {
                     console.log("No profile found for user");
                     setProfile(null);
                 });
@@ -111,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Return AuthContext
     return (
-        <AuthContext.Provider value={{ user, account, profile, login, logout }}>
+        <AuthContext.Provider value={{ user, account, profile, role, login, logout }}>
             { loading ? <Spinner/> : children }
         </AuthContext.Provider>
     );

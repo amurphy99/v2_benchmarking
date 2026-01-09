@@ -7,12 +7,11 @@ import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
 import DropdownModal from "@/components/modals/DropdownModal";
 
 export function DaySummary() {
-    const { account } = useAuth();
+    const { role } = useAuth();
     const { state } = useLocation() as { state?: { chatSession?: ChatSession, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date)
-    const role = account.role.toLowerCase();
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
     const toTranscript = () => navigate("/transcript", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}});
 

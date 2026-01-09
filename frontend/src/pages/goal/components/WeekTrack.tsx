@@ -3,9 +3,8 @@ import { ChatWeek, getNumChatsInWeek } from "@/utils/functions/getChatWeeks";
 
 
 export default function WeekTrack( {week} : {week: ChatWeek} ) {
-    const { account } = useAuth();
+    const { account, role } = useAuth();
 
-    const role = account.role.toLowerCase();
     const dayTracks = getNumChatsInWeek(week);
 
     return (

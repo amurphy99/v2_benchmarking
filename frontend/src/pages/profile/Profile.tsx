@@ -5,8 +5,8 @@ import { FaCircleUser } from "react-icons/fa6";
 import { CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
 
 export function Profile() {
-    const { user, account, profile } = useAuth();
-    const isCare = account.role.toLowerCase() == "caregiver";
+    const { user, profile, role } = useAuth();
+    const isCare = role != "patient";
     
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 
