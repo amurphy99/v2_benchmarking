@@ -13,7 +13,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 // Profile Information 
 // ====================================================================
 export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
-    const { logout } = useAuth();
+    const { logout, profile } = useAuth();
     const navigate = useNavigate();
 
     // Popover controls
@@ -41,6 +41,32 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
             </Popover.Body>
         </Popover>
     );
+
+    function DownloadButton() {
+        const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
+        const disabledStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-gray-400 border-1 border-gray-400 p-2 rounded cursor-not-allowed";
+
+        const download = async () => {
+            const { fileName, fileContents } = await downloadData();
+            // Create a temporary link element
+            const link = document.createElement('a');
+            const blob = new Blob([fileContents], { type: 'text/plain' });
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+
+            // Programmatically click the link to trigger the download
+            link.click();
+
+            // Clean up the URL object
+            URL.revokeObjectURL(link.href);
+        }
+
+        return (
+            <button disabled={!profile.account} className={profile.account ? reportStyle : disabledStyle} onClick={() => download()}>
+                Download Report
+            </button>
+        ) 
+    }
 
     // --------------------------------------------------------------------
     // UI Component
@@ -76,30 +102,4 @@ function UserInfo({ user, isCare } : { user: User, isCare: boolean }) {
         </span>
     </div>
     );
-}
-
-function DownloadButton() {
-    const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
-
-    const download = async () => {
-        const { fileName, fileContents } = await downloadData();
-        // Create a temporary link element
-        const link = document.createElement('a');
-        const blob = new Blob([fileContents], { type: 'text/plain' });
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName;
-
-        // Programmatically click the link to trigger the download
-        link.click();
-
-        // Clean up the URL object
-        URL.revokeObjectURL(link.href);
-    }
-
-    return (
-        <button className={reportStyle} onClick={() => download()}>
-            Download Report
-        </button>
-    )
-    
 }

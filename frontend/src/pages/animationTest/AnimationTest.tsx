@@ -104,7 +104,7 @@ export function AnimationTest() {
             </div>
             <div className="flex flex-col items-center">
                 <NavLink to="/animation-test" className={footerLinkChat}>
-                    <img className="aspect-square w-[2rem] " src="/images/QT_icon.svg" />
+                    <img className="aspect-square w-[2rem] " src="/images/Robot_icon.svg" />
                     Chat
                 </NavLink>
             </div>

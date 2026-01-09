@@ -6,7 +6,7 @@ import { FaCircleUser } from "react-icons/fa6";
 import CreateAccessModal from "./CreateAccessModal";
 import { useProfileAccess } from "@/hooks/queries/useAccess";
 
-const accessCardStyle = "flex flex-col justify-center gap-2 shadow-lg/20 rounded-md p-2 w-1/4 text-center aspect-square";
+const accessCardStyle = "flex flex-col justify-center gap-2 shadow-lg/20 rounded-md p-2 min-w-1/4 text-center aspect-square";
 
 export default function DisplayProfileAccess( ) {
     const [showForm, setShowForm] = useState(false);

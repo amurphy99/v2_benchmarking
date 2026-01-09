@@ -66,7 +66,7 @@ export interface User {
   is_staff   : boolean;
 }
 
-export type AccountRole = "Patient" | "Caregiver" | "Family" | "Physician" | "Other";
+export type AccountRole = "patient" | "caregiver" | "family" | "physician" | "other";
 export interface Account {
     id      : number;
     user    : User;
@@ -167,6 +167,7 @@ export interface SignupPayload {
   password      : string;
   firstName     : string;
   lastName      : string;
+  role          : string;
 }
 
 export interface SignupResponse {

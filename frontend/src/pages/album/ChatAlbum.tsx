@@ -17,7 +17,7 @@ export function ChatAlbum() {
     }
     if (sessions.length == 0) {
         return (
-            <div className="flex justify-center items-center">
+            <div className="flex justify-center items-center m-[2rem]">
                 <h1>No chat sessions available to display. Try talking to Buddy!</h1>
             </div>
         )

@@ -123,3 +123,15 @@ h1 {
     cursor: pointer;
     background-color: oklch(0.894 0.057 293.283);
 }
+
+.chat-icon:active {
+    filter: invert(42%) sepia(40%) saturate(4671%) hue-rotate(121deg) brightness(94%) contrast(101%);
+}
+
+.chat-icon:visited {
+    filter: invert(42%) sepia(40%) saturate(4671%) hue-rotate(121deg) brightness(94%) contrast(101%);
+}
+
+.chat-icon:hover {
+    filter: invert(28%) sepia(52%) saturate(2319%) hue-rotate(125deg) brightness(97%) contrast(102%);
+}
