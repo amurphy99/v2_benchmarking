@@ -6,8 +6,7 @@ import { useState } from "react";
 import { Modal } from "react-bootstrap";
 
 export default function CreateAccessModal( {showForm, onHide, refresh} ) {
-    const {profile, account} = useAuth();
-    const role = account.role.toLowerCase();
+    const {profile, role} = useAuth();
     const [username, setUsername] = useState<string>("");
     const [permissions, setPermissions] = useState<string>("default");
 

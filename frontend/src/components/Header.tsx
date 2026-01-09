@@ -35,8 +35,8 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // Header
 // ====================================================================
 export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, account, profile } = useAuth();
-    const isCare = account.role.toLowerCase() == "caregiver";
+    const { user, role, profile } = useAuth();
+    const isCare = role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
