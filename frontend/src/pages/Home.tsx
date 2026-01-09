@@ -3,8 +3,8 @@ import { NavLink } from "react-router-dom";
 export default function Home() {
     const btnStyle = "btn btn-primary w-full p-[1rem] text-xl font-bold"
     return (
-        <div className="p-[3rem]">
-            <h1>Welcome</h1>
+        <div className="mt-[1rem] md:mt-[3rem] ml-[1rem] md:ml-[3rem]">
+            <h1>Cognibot</h1>
             <div className="flex justify-center mt-[5rem]">
                 <div className="flex flex-row">
                     <div className="w-0 md:w-1/3">
