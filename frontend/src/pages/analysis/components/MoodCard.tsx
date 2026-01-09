@@ -4,8 +4,7 @@ import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 
 export default function MoodCard( { week } : { week: ChatWeek}) {
-    const {user, profile} = useAuth();
-    const role = profile.account.user.id == user.id ? "patient" : "caregiver";
+    const {profile, role} = useAuth();
 
     return (
         <div className={`${blockStyle}`}>

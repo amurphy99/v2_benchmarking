@@ -45,7 +45,7 @@ export interface User {
   is_staff   : boolean;
 }
 
-export type AccountRole = "Patient" | "Caregiver" | "Family" | "Physician" | "Other";
+export type AccountRole = "patient" | "caregiver" | "family" | "physician" | "other";
 export interface Account {
     id      : number;
     user    : User;
@@ -66,6 +66,12 @@ export interface Access {
     id      : number;
     account : Account;
     profile : Profile;
+}
+
+export interface CreateAccessPayload {
+    profileId   : number;
+    accountId   : number;
+    permissions : string;
 }
 
 // =======================================================================
@@ -134,21 +140,13 @@ export interface ChatSession {
 // =======================================================================
 // Signup Types -- ToDo: Not sure if these are ncessary?
 // =======================================================================
-export interface SignupPatientPayload {
-  username      : string;
-  password      : string;
-  firstName     : string;
-  lastName      : string;
-  zipcode       : string;
-  birthDate     : string;
-  locationStatus: string;
-}
 
-export interface SignupAccountPayload {
+export interface SignupPayload {
   username      : string;
   password      : string;
   firstName     : string;
   lastName      : string;
+  role          : string;
 }
 
 export interface SignupResponse {

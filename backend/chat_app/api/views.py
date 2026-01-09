@@ -7,7 +7,7 @@ from rest_framework_simplejwt.state import token_backend
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 
@@ -101,7 +101,7 @@ class SignupAccountView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class   = SignupAccountSerializer
 
-class ProfileView(ProfileMixin, generics.RetrieveAPIView):
+class ProfileView(ProfileMixin, generics.RetrieveUpdateAPIView):
     serializer_class   = ProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -116,7 +116,7 @@ class AccountView(generics.RetrieveAPIView):
         user = self.request.user
         return Account.objects.get(user=user)
     
-class SingleAccountView(ProfileMixin, generics.RetrieveAPIView):
+class SingleAccountView(generics.RetrieveAPIView):
     serializer_class   = AccountSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -126,13 +126,25 @@ class SingleAccountView(ProfileMixin, generics.RetrieveAPIView):
         account = Account.objects.get(user=user)
         return account
 
-class AccessView(ProfileMixin, generics.RetrieveAPIView):
+class AccessView(ProfileMixin, generics.RetrieveUpdateAPIView):
     serializer_class    = AccessSerializer
     permission_classes  = [permissions.IsAuthenticated]
     
     def get_object(self):
-        account = self.get_account
+        account = self.get_account()
         return Access.objects.get(account=account)
+    
+class CreateAccessView(generics.CreateAPIView):
+    serializer_class   = CreateAccessSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
+    serializer_class    = AccessSerializer
+    permission_classes  = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        profile = self.get_profile()
+        return Access.objects.filter(profile=profile)
 
 # ======================================================================= ===================================
 # Tokens 

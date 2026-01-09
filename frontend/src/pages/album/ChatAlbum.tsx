@@ -15,6 +15,13 @@ export function ChatAlbum() {
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
+    if (sessions.length == 0) {
+        return (
+            <div className="flex justify-center items-center m-[2rem]">
+                <h1>No chat sessions available to display. Try talking to Buddy!</h1>
+            </div>
+        )
+    }
     const weeks = groupSessionsByWeek(sessions).reverse();
 
     const changeDisplay = () => {

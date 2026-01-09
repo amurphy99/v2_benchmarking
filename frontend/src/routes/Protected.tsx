@@ -21,7 +21,7 @@ export function Protected() {
         );
     } else {
         return (
-            <Navigate to="/login" replace />
+            <Navigate to="/" replace />
         );
     }
 }
@@ -37,13 +37,13 @@ export function Unprotected() {
 // =======================================================================
 // Only caregivers can view
 export function IsCaregiver() {
-    const { user, profile } = useAuth();
-    const isCare = profile.account.user != user;
+    const { role } = useAuth();
+    const isCare = role != "patient";
     return isCare ? <Outlet /> : <Navigate to="/goal" replace />;
 }
 // Only patients can view
 export function IsPatient() {
-    const { user, profile } = useAuth();
-    const isPatient = profile.account.user.id == user.id;
+    const { role } = useAuth();
+    const isPatient = role == "patient";
     return isPatient ? <Outlet /> : <Navigate to="/chat" replace />;
 }

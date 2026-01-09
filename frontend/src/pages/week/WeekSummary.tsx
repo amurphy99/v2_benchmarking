@@ -13,7 +13,7 @@ export function WeekSummary() {
     const navigate = useNavigate();
     if (!state?.chatWeek) { navigate("/chat"); };
     const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
-    const role = useAuth().profile?.role?.toLowerCase();
+    const role = useAuth().role;
 
     const chatWeek = state.chatWeek;
     const weeklyMessages = getMessages(chatWeek.sessions);

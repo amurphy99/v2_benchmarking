@@ -39,7 +39,7 @@ function FlaggedWordAlert( { wordAlerts } : { wordAlerts: WordAlert[] } ) {
     return (
         <div className={blockStyle}>
             <h2 className={`caregiver-text mb-0`}>Flagged Words</h2>
-            <p className="text-lg mt-[1rem]">{useAuth().profile.plwd.first_name} mentioned several flagged words this week.</p>
+            <p className="text-lg mt-[1rem]">{useAuth().profile.account.user.first_name} mentioned several flagged words this week.</p>
             <div className="flex flex-col gap-2">
                 {wordAlerts.map( (alert, idx) => {
                     return(
@@ -66,7 +66,7 @@ function MoodAlert( { week, days } : { week: ChatWeek, days: Date[] } ) {
     return (
         <div className={`${blockStyle}`}>
             <h2 className={`caregiver-text mb-0`}>Mood Change</h2>
-            <p className="text-lg mt-[1rem]">{useAuth().profile.plwd.first_name} was in a bad mood on {stringifyDays(days)}. 
+            <p className="text-lg mt-[1rem]">{useAuth().profile.account.user.first_name} was in a bad mood on {stringifyDays(days)}. 
                 You might want to talk with them.</p>
             <WeeklyMoods week={week} />
         </div>

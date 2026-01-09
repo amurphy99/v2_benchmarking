@@ -29,14 +29,14 @@ const TITLES: Record<string, string> = {
     default         : "Cognibot",
 };
 
-const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings"]
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings", "/profile"]
 
 // ====================================================================
 // Header
 // ====================================================================
 export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, profile } = useAuth();
-    const isCare = profile.account.user.id != user.id;
+    const { user, role, profile } = useAuth();
+    const isCare = role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
@@ -51,9 +51,10 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {
         return (
-        <header className={"flex items-center gap-6 px-[2rem] py-[1rem]"}>
-            <ProfileInfo profile={profile} user={user} />
-            <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
+        <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
+            <ProfileInfo isCare={isCare} user={user} />
+            <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
+            {profile ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
                 {/* Navigation Links */}
@@ -75,15 +76,10 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
                 }
-                {
-                    isCare ? 
-                    <NavLink to="/alert">
-                        <Icon icon="fluent-color:mail-alert-32" width={"3rem"} height={"3rem"} />
-                    </NavLink> : null
-                }
                 
                 
             </div>
+            : null}
 
             {/* Modal */}
             {isCare ? 

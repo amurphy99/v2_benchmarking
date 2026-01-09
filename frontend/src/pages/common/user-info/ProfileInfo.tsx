@@ -1,21 +1,20 @@
 import { useState                } from "react";
 import { OverlayTrigger, Popover } from "react-bootstrap";
-import { FaUser       } from "react-icons/fa";
 import { FaCircleUser } from "react-icons/fa6";
-import { Profile, User              } from "@/api";
+import { User              } from "@/api";
 import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
-import { toastMessage               } from "@/utils/functions/toast_helper";
 import { downloadData } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
+import { NavLink, useNavigate } from "react-router-dom";
 
 
 
 // ====================================================================
 // Profile Information 
 // ====================================================================
-export default function ProfileInfo({ profile, user } : { profile: Profile, user: User }) {
-    const isCare = profile.account.user.id != user.id;
-    const { logout } = useAuth();
+export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
+    const { logout, profile } = useAuth();
+    const navigate = useNavigate();
 
     // Popover controls
     const [show, setShow] = useState(false);
@@ -30,17 +29,44 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
     const popover = (
         <Popover id="profile-popover" onMouseEnter={open} onMouseLeave={close} style={{ maxWidth: "none", width: "max-content" }}> 
             <Popover.Body className="flex flex-col px-[1rem] py-[0.5rem]">
-                <span className="fs-4 fw-semibold"> Profile </span>
+                <span className="fs-4 fw-semibold"> {user.first_name} {user.last_name} </span>
             
                 <div className="flex flex-col border-y p-[0.5rem] gap-[0.5rem] border-gray-300">
-                    <UserInfo user={profile.account.user} isCare={false}/>
-                    <UserInfo user={user                } isCare={true }/>
+                    <NavLink to="/profile">
+                        <button className="text-lg hover:text-blue-600">Profile Settings</button>
+                    </NavLink>
+                    <button className="text-left text-blue-500 hover:text-blue-600 text-lg" onClick={() => logout()}>Log Out</button>
                 </div>
                 {isCare ? <DownloadButton /> : null}
-                <button className={logoutStyle} onClick={() => logout()}>Log Out</button>
             </Popover.Body>
         </Popover>
     );
+
+    function DownloadButton() {
+        const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
+        const disabledStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-gray-400 border-1 border-gray-400 p-2 rounded cursor-not-allowed";
+
+        const download = async () => {
+            const { fileName, fileContents } = await downloadData();
+            // Create a temporary link element
+            const link = document.createElement('a');
+            const blob = new Blob([fileContents], { type: 'text/plain' });
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+
+            // Programmatically click the link to trigger the download
+            link.click();
+
+            // Clean up the URL object
+            URL.revokeObjectURL(link.href);
+        }
+
+        return (
+            <button disabled={!profile.account} className={profile.account ? reportStyle : disabledStyle} onClick={() => download()}>
+                Download Report
+            </button>
+        ) 
+    }
 
     // --------------------------------------------------------------------
     // UI Component
@@ -76,30 +102,4 @@ function UserInfo({ user, isCare } : { user: User, isCare: boolean }) {
         </span>
     </div>
     );
-}
-
-function DownloadButton() {
-    const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
-
-    const download = async () => {
-        const { fileName, fileContents } = await downloadData();
-        // Create a temporary link element
-        const link = document.createElement('a');
-        const blob = new Blob([fileContents], { type: 'text/plain' });
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName;
-
-        // Programmatically click the link to trigger the download
-        link.click();
-
-        // Clean up the URL object
-        URL.revokeObjectURL(link.href);
-    }
-
-    return (
-        <button className={reportStyle} onClick={() => download()}>
-            Download Report
-        </button>
-    )
-    
 }
