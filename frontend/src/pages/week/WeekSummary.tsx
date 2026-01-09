@@ -7,27 +7,19 @@ import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 import { IoIosArrowForward, IoIosArrowDown } from "react-icons/io";
 import DropdownModal from "@/components/modals/DropdownModal";
+import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
+import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 
 export function WeekSummary() {
     const { state } = useLocation() as { state?: { chatWeek?: ChatWeek, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatWeek) { navigate("/chat"); };
-    const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
     const role = useAuth().role;
 
     const chatWeek = state.chatWeek;
     const weeklyMessages = getMessages(chatWeek.sessions);
 
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
-    
-    function ChatSummaryCard() {
-        return (
-            <div className={blockStyle}>
-                <h2 className={`${role}-text`}>Weekly Chat Summary</h2>
-                <p className="text-lg">To do: Add a summary of the weekly chats.</p>
-            </div>
-        )
-    }
 
     return (
         <div>
@@ -36,7 +28,8 @@ export function WeekSummary() {
             </div>
             <div className={colStyle}>
                 <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
-                <ChatSummaryCard />
+                <ChatSummaryCard role={role} sessions={chatWeek.sessions} />
+                {role == "patient" ? null : <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} /> }
                 <DropdownModal title="Weekly Analysis" content={content} />
             </div>
         </div>

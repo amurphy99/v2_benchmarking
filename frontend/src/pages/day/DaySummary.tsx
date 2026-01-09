@@ -5,6 +5,8 @@ import { useAuth } from "@/context/AuthProvider";
 import { TopicsCard } from "../common/TopicsCard";
 import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
 import DropdownModal from "@/components/modals/DropdownModal";
+import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
+import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 
 export function DaySummary() {
     const { role } = useAuth();
@@ -13,17 +15,6 @@ export function DaySummary() {
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date)
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
-    const toTranscript = () => navigate("/transcript", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}});
-
-    function ChatSummaryCard() {
-        return (
-            <div className={`${blockStyle}`}>
-                <h2 className={`${role}-text`}>Chat Summary</h2>
-                <p className="text-lg">To do: Add a summary of the chat.</p>
-                <button className={`${role}-button-outline p-[1rem] text-xl rounded-md w-full`} onClick={() => {toTranscript()}}> View Full Transcript </button>
-            </div>
-        )
-    }
 
     function getSessionMessages(session: ChatSession) : ChatMessage[] {
         var messages: ChatMessage[] = [];
@@ -41,7 +32,8 @@ export function DaySummary() {
             </div>
             <div className={colStyle}>
                 <TopicsCard messages={getSessionMessages(state?.chatSession)} type="Daily" role={role} />
-                <ChatSummaryCard />
+                <ChatSummaryCard role={role} sessions={[state.chatSession]}/>
+                {role == "patient" ? null : <ChatLengthCard role={role} sessions={[state.chatSession]} type="" /> }
                 <DropdownModal title="Speech Analysis" content={content} />
                 <button className={`${role}-button p-[1rem] text-xl rounded-md sm:w-3/4 ${widthStyle}`}>
                     Download as PDF
