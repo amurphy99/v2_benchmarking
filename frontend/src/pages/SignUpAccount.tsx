@@ -50,7 +50,7 @@ export default function SignUpPatient() {
     // --------------------------------------------------------------------
     return (
     <div className="mt-[1rem] md:mt-[3rem] ml-[1rem] md:ml-[3rem]">
-        <h1>Welcome</h1>
+        <h1>Cognibot</h1>
         <div className="flex justify-center">
             <div className="flex flex-row">
                 <div className="w-0 md:w-1/3 mt-[3rem]">
