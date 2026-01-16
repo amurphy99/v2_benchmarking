@@ -9,7 +9,6 @@ import { getAccount } from "@/api/endpoints/account";
 interface AuthCtx { 
     user?: User; 
     account?: Account,
-    profile: Profile,
     role: string,
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
@@ -24,7 +23,6 @@ const AuthContext = createContext<AuthCtx>(null!);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user,    setUser   ] = useState<User   >();
     const [account, setAccount] = useState<Account>();
-    const [profile, setProfile] = useState<Profile | null>();
     const [role, setRole      ] = useState<string >("");
     const [error,   setError  ] = useState<string >(); 
     const [loading, setLoading] = useState(false);
@@ -49,12 +47,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setRole("caregiver");
                 }
             }).catch(console.error);
-
-            // Fetch user profile; if no user profile found, set profile to null
-            await getProfile().then(setProfile).catch((e) => {
-                console.log("No profile found for user");
-                setProfile(null);
-            });
         } catch (err) { 
             setError((err as Error).message); 
             console.log((err as Error).message); 
@@ -88,13 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setRole("caregiver");
                     }
                 }).catch(console.error);
-                await getProfile().then(setProfile).catch((e) => {
-                    console.log("No profile found for user");
-                    setProfile(null);
-                }).catch((e) => {
-                    console.log("No profile found for user");
-                    setProfile(null);
-                });
             } catch (err) {
                 console.error("Error getting profile: ", err);
             } finally {
@@ -107,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = () => { 
         setAccess(undefined); 
         setUser(undefined); 
-        setProfile(undefined);
         setRole("");
         setAccount(undefined);
         localStorage.clear();
@@ -126,13 +110,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setRole("caregiver");
                     }
                 }).catch(console.error);
-                await getProfile().then(setProfile).catch((e) => {
-                    console.log("No profile found for user");
-                    setProfile(null);
-                }).catch((e) => {
-                    console.log("No profile found for user");
-                    setProfile(null);
-                });
             }
 			setLoading(false);
 		};
@@ -142,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Return AuthContext
     return (
-        <AuthContext.Provider value={{ user, account, profile, role, login, logout }}>
+        <AuthContext.Provider value={{ user, account, role, login, logout }}>
             { loading ? <Spinner/> : children }
         </AuthContext.Provider>
     );

@@ -1,5 +1,6 @@
 import { updateGoal } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
 import { borderStyle, disabledStyle, formText, h4, rowThree, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
@@ -9,7 +10,7 @@ const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "S
 type PeriodOptions = "N" | "W" | "M";
 
 export default function GoalForm() {
-    const { profile } = useAuth();
+    const { data: profile } = useProfile();
     const [autoRenew, setAutoRenew] = useState<boolean        >(profile.goal.auto_renew);
     const [target,    setTarget   ] = useState<number         >(profile.goal.target);
     const [period,    setPeriod   ] = useState<"N" | "W" | "M">(profile.goal.period);

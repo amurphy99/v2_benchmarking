@@ -1,5 +1,6 @@
 import { updateUserSettings } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
@@ -7,8 +8,7 @@ import { useState } from "react";
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
 
 export default function ChatTypeForm() {
-    const { profile } = useAuth();
-
+    const { data: profile } = useProfile();
     const [taskType,  setTaskType ]         = useState<string     >(profile.settings.taskType);
     const [taskSubtype, setTaskSubtype]     = useState<string     >(profile.settings.taskSubtype);
     const [selectedFile, setSelectedFile]   = useState<File | null>(null);

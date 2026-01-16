@@ -14,6 +14,3 @@ export const useUpdateUserSettings = () => {
         onSettled  : () => qc.invalidateQueries({ queryKey: ["goal"] }),
     });
 };
-
-
-

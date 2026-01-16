@@ -1,10 +1,12 @@
 import { updateProfile } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
 
 export default function ProfileForm() {
-    const { profile, role } = useAuth();
+    const { role } = useAuth();
+    const { data: profile, refetch } = useProfile();
     
     const [birthday, setBirthday] = useState(profile.birthDate ?? "");
     const [location, setLocation] = useState(profile.locationStatus ?? "");
@@ -18,6 +20,7 @@ export default function ProfileForm() {
             locationStatus: location,
             zipcode: zipcode,
         });
+        refetch();
         toastMessage("Profile updated successfully!", true);
     }
 
