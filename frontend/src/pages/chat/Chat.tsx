@@ -9,6 +9,7 @@ import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 
 // ====================================================================
@@ -18,13 +19,14 @@ import { useAuth } from "@/context/AuthProvider";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat( {isMobile} : {isMobile: boolean}) {
     const navigate = useNavigate();
-    const model = useAuth().profile.settings.modelChoice;
+    const { data: profile, isLoading } = useProfile();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
     const [animation, setAnimation] = useState();
     const [animCount, setAnimCount] = useState(0);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
+    
     const onUserUtterance   = (text: string) => { 
         pushMessage("user",      text); 
         setBotMessage( 
@@ -76,6 +78,13 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
 			pauseChat();
 		}
 	};
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
+
+    const model = profile.settings.modelChoice;
+
 	const saveChat = () => {
 		save();
 		setShowModal(false);
@@ -91,7 +100,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
         <div className="flex flex-col justify-between h-[85vh]">
             {/* View of the chatHistory and/or Avatar */}
             {!isMobile ? 
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
+                <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
                         <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 

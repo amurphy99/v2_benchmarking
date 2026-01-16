@@ -1,12 +1,14 @@
 import { createAccess } from "@/api/endpoints/access";
 import { getSingleAccount } from "@/api/endpoints/account";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
 import { Modal } from "react-bootstrap";
 
-export default function CreateAccessModal( {showForm, onHide, refresh} ) {
-    const {profile, role} = useAuth();
+export default function CreateAccessModal( {showForm, onHide, refetch} ) {
+    const { role } = useAuth();
+    const { data: profile } = useProfile();
     const [username, setUsername] = useState<string>("");
     const [permissions, setPermissions] = useState<string>("default");
 
@@ -21,7 +23,7 @@ export default function CreateAccessModal( {showForm, onHide, refresh} ) {
                 permissions: permissions
             }).then(() => {
                 toastMessage(`Successfully shared profile with ${username}`, true);
-                refresh();
+                refetch();
                 onHide();
             })
         }).catch((error) => {

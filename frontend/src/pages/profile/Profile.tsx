@@ -3,10 +3,12 @@ import ProfileForm from "./components/ProfileForm";
 import DisplayProfileAccess from "./components/DisplayProfileAccess";
 import { FaCircleUser } from "react-icons/fa6";
 import { CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 export function Profile() {
-    const { user, profile, role } = useAuth();
+    const { user, role } = useAuth();
     const isCare = role != "patient";
+    const { data: profile } = useProfile();
     
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 

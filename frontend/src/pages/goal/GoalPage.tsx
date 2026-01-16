@@ -5,12 +5,14 @@ import WeekTrack     from "./components/WeekTrack";
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
 import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import Avatar from "../common/avatar/Avatar";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 export function Goal() {
-    const { profile, role } = useAuth();
+    const { role } = useAuth();
     const isCare = role != "patient";
     const { data: sessions, isLoading } = useChatSessions();
-    if (isLoading) { 
+    const { data: profile, isLoading: isLoadingProfile } = useProfile();
+    if (isLoading || isLoadingProfile) { 
         return <p>Loading goal...</p>; 
     }
     const week = getCurrentWeek(sessions, 1);
@@ -39,7 +41,7 @@ export function Goal() {
                 <Avatar animation={null} animCount={0} model={model} zoom="head" /> 
             </div> 
             <h3 className="m-[2rem] text-center"><b>{getMsg()}</b></h3>
-            <GoalProgress />
+            <GoalProgress current={profile.goal.current} target={profile.goal.target} />
             <WeekTrack week={week} />
         </div>
     );

@@ -1,7 +1,6 @@
 import toast from "react-hot-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { UserSettings, getUserSettings, updateUserSettings } from "@/api";
-import { useModelQuery } from "@/hooks/queries/common";
+import { updateUserSettings } from "@/api";
 
 
 
@@ -15,6 +14,3 @@ export const useUpdateUserSettings = () => {
         onSettled  : () => qc.invalidateQueries({ queryKey: ["goal"] }),
     });
 };
-
-
-

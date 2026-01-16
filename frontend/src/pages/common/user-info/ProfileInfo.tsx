@@ -6,6 +6,7 @@ import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/ut
 import { downloadData } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 
 
@@ -13,13 +14,18 @@ import { NavLink, useNavigate } from "react-router-dom";
 // Profile Information 
 // ====================================================================
 export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
-    const { logout, profile } = useAuth();
+    const { logout } = useAuth();
+    const { data: profile, isLoading } = useProfile();
     const navigate = useNavigate();
 
     // Popover controls
     const [show, setShow] = useState(false);
     const open  = () => setShow(true);
     const close = () => setShow(false);
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
 
     const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"
 

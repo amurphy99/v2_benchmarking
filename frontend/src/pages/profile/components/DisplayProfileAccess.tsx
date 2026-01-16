@@ -11,7 +11,7 @@ const accessCardStyle = "flex flex-col justify-center gap-2 shadow-lg/20 rounded
 export default function DisplayProfileAccess( ) {
     const [showForm, setShowForm] = useState(false);
 
-    const {data: access, isLoading, refresh} = useProfileAccess();
+    const {data: access, isLoading, refetch} = useProfileAccess();
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
@@ -25,7 +25,7 @@ export default function DisplayProfileAccess( ) {
             hover:cursor-pointer hover:shadow-lg/50`} onClick={() => setShowForm(true)}>
                 <FaPlus size={50} />
             </div>
-            <CreateAccessModal showForm={showForm} onHide={() => setShowForm(false)} refresh={refresh} />
+            <CreateAccessModal showForm={showForm} onHide={() => setShowForm(false)} refetch={refetch} />
         </div>
     );
 }
