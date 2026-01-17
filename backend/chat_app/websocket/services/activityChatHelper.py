@@ -202,7 +202,7 @@ async def rag_response_fn(
     activity_name: str,
     rag_state: dict,
     # --- scoring config knobs ---
-    transition_threshold: float = 0.65,
+    transition_threshold: float = 0.50,
     max_turns: int = 5,
 ) -> dict:
     """
@@ -295,7 +295,7 @@ async def rag_response_fn(
         )
         raw_text = (raw_resp or "").strip()
 
-        clean_text = clean_llm_response(raw_text)
+        clean_text = clean_llm_response(raw_text) # I might need to improve this logic later.
 
         assistant_text = clean_text
         logger.info(f"[ACT-RULE][{trace_id}] CALL#1 final_response:\n{assistant_text[:1200]}")
@@ -351,7 +351,7 @@ async def rag_response_fn(
     }
 
     logger.info(
-        f"{lu.BLUE}[ACT-RULE][{trace_id}] transition score={t_score:.3f} threshold={transition_threshold:.3f} "
+        f"{lu.CYAN}[ACT-RULE][{trace_id}] transition score={t_score:.3f} threshold={transition_threshold:.3f} "
         f"next_candidate={next_name} applied={transitioned} new_current={rag_state['current_scenario']}{lu.RESET}"
     )
 

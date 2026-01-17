@@ -178,27 +178,13 @@ def organize_message_history(msg_history: list) -> str:
     return "".join(parts)
 
 
-def clean_llm_response(raw: str) -> str:
-    if not raw:
-        return ""
-
-    text = str(raw).strip()
-    if not text:
-        return ""
-
-    # Cut when structure starts
-    m = re.search(r"\n\s*\n|\n\s*[-*•]|\n\s*\d+[.)]|\n\s*```|\n\s*#{1,6}\s", text)
-    if m:
-        text = text[:m.start()].strip()
-
-    # Normalize newlines to spaces
-    text = re.sub(r"\s*\n\s*", " ", text).strip()
-
-    # If it doesn't end with a sentence terminator, trim to last one
-    if not re.search(r"[.!?]$", text):
-        m2 = re.search(r"^(.+?[.!?])", text)
-        if m2:
-            text = m2.group(1).strip()
-        # else: keep as-is (maybe it's a short imperative like "Sure" or "Okay")
-
-    return text
+def clean_llm_response(text: str) -> str:
+    # Pattern explanation:
+    # (.*[.!?])  -> Captures any character (including newlines via re.DOTALL) 
+    #               until the LAST occurrence of ., !, or ?
+    # ["']?      -> Optionally matches a closing quote if the sentence ended in one
+    match = re.search(r'(.*[.!?]["\']?)', text, re.DOTALL)
+    
+    if match:
+        return match.group(1)
+    return "" # Return empty if no complete sentence exists
