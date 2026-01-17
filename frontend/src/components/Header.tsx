@@ -7,6 +7,7 @@ import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
 import { Icon } from "@iconify/react/dist/iconify.js";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -34,8 +35,9 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // ====================================================================
 // Header
 // ====================================================================
-export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, role, profile } = useAuth();
+export default function Header() {
+    const { user, role } = useAuth();
+    const { data: profile, isLoading } = useProfile();
     const isCare = role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
@@ -43,6 +45,10 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
     useEffect(() => {
         window.scrollTo(0, 0)
     }, [pathname])
+
+    if (isLoading) {
+        return null;
+    }
 
     const title  = TITLES[pathname] ?? TITLES.default;
 
@@ -57,19 +63,7 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
             {profile ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
-                {/* Navigation Links */}
-                <nav className={`${isMobile? "hidden" : "block"} flex gap-4 text-xl`}>
-                    <NavLink to="/goal"      className={navLinkCls}> Goal      </NavLink>
-                    <NavLink to="/album"     className={navLinkCls}> Album     </NavLink>
-                    {isCare ? 
-                        <NavLink to="/practice"   className={navLinkCls}> Practice  </NavLink> :
-                        <NavLink to="/chat"      className={navLinkCls}> Chat      </NavLink>
-                    }
-                    <NavLink to="/analysis" className={navLinkCls}> Analysis  </NavLink>
-                </nav>
-
                 {/* Right Side Icons */}
-                <div className={`vr`}></div>
                 {
                     isCare ? 
                     <NavLink to="/settings">

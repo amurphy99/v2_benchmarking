@@ -17,7 +17,7 @@ import { useProfile } from "@/hooks/queries/useProfile";
 // ====================================================================
 // ToDo: Move speech providers folder to utils, fix the index
 // ToDo: Might need to add the user/token stuff to the websocket
-export function Chat( {isMobile} : {isMobile: boolean}) {
+export function Chat() {
     const navigate = useNavigate();
     const { data: profile, isLoading } = useProfile();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
@@ -97,9 +97,9 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
     <>
-        <div className="flex flex-col justify-between h-[85vh]">
+        <div className="flex flex-col h-[85vh]">
             {/* View of the chatHistory and/or Avatar */}
-            {!isMobile ? 
+            {!window.isMobile ? 
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
@@ -119,7 +119,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-            <div className={`flex flex-row mb-[5rem] mx-[20vw] gap-[4em] justify-${isMobile ? "between" : "center"}`}>
+            <div className={`flex flex-row mb-[5rem] mx-[20vw] gap-[4em] justify-around`}>
                 <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
                 <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
             </div>

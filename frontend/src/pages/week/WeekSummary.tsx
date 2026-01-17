@@ -28,8 +28,8 @@ export function WeekSummary() {
             </div>
             <div className={colStyle}>
                 <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
-                <ChatSummaryCard role={role} sessions={chatWeek.sessions} />
-                {role == "patient" ? null : <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} /> }
+                <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
+                <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
                 <DropdownModal title="Weekly Analysis" content={content} />
             </div>
         </div>

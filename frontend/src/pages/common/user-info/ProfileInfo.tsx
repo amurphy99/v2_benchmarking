@@ -24,7 +24,7 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
     const close = () => setShow(false);
 
     if (isLoading) {
-        return <div>Loading...</div>;
+        return null;
     }
 
     const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"

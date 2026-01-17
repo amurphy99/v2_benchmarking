@@ -1,5 +1,6 @@
 import { flaggedMoods } from "@/utils/functions/getAlerts";
 import { ChatWeek, getChatsInWeek } from "@/utils/functions/getChatWeeks";
+import getMoodIcon from "@/utils/functions/getMoodIcon";
 import { Icon } from "@iconify/react/dist/iconify.js";
 
 export default function WeeklyMoods( { week } : { week: ChatWeek } ) {
@@ -26,18 +27,7 @@ export default function WeeklyMoods( { week } : { week: ChatWeek } ) {
 }
 
 function getEmote(sentiment : string) {
-    const emoteMap = {
-            Happy: "fluent-emoji:beaming-face-with-smiling-eyes",
-            Sad: "fluent-emoji:sad-but-relieved-face",
-            Surprised: "fluent-emoji:astonished-face",
-            Scared: "fluent-emoji:anguished-face",
-            Angry: "fluent-emoji:angry-face",
-            Neutral: "fluent-emoji:face-with-diagonal-mouth",
-            Negative: "fluent-emoji:confused-face",
-            Positive: "fluent-emoji:beaming-face-with-smiling-eyes",
-            NA: "fluent-color:question-circle-48"
-        };
-    const icon = emoteMap[sentiment] || emoteMap["NA"];
+    const icon = getMoodIcon(sentiment)
     
     return (
         <Icon icon={icon} width={"100%"} height={"100%"} />
