@@ -4,7 +4,7 @@ import BuddyModel from "./BuddyModel"
 import QTModel from "./QTModel";
 
 // Avatar Model
-export default function Avatar( { animation, animCount, model, zoom } : { animation: string, animCount: number, model: string, zoom: string}) {
+export default function Avatar( { animation, animCount, model, zoom } : { animation?: string, animCount?: number, model: string, zoom?: string}) {
     return (
         <div className="h-full w-full">
             <Canvas>

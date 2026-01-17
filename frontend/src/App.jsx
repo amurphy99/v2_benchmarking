@@ -33,11 +33,12 @@ export default function App() {
     }, []);
 
     const isMobile = width <= 768;
+    window.isMobile = isMobile;
 
   return (
     <AuthProvider>
       <Routes>
-        <Route element={<AppLayout isMobile={isMobile} />}> 
+        <Route element={<AppLayout />}> 
 
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
@@ -51,7 +52,7 @@ export default function App() {
             <Route element={ <Protected/> }>
                 {/* Patient */}
                 <Route element={ <IsPatient/> }>
-                    <Route path="/chat" element={<Chat isMobile={isMobile}/>} />
+                    <Route path="/chat" element={<Chat />} />
                 </Route>
 
                 {/* Caregiver */}

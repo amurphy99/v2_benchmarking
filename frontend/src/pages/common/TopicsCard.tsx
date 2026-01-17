@@ -8,7 +8,7 @@ export function TopicsCard( { messages, type, role } : { messages: ChatMessage[]
         <div className={blockStyle}>
             <h2 className={`${role}-text`}>{type} Topics</h2>
             <p className="text-lg">The larger the font size, the more frequently you talked about it during chats.</p>
-            <div className="h-fit w-full place-self-center rounded-lg">
+            <div className="h-fit w-full md:w-3/4 place-self-center rounded-lg">
                 <MyWordCloud messages={messages} />
             </div>
         </div>

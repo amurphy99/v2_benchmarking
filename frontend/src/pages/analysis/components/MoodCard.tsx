@@ -1,10 +1,16 @@
 import WeeklyMoods from "@/components/graphics/WeeklyMoods";
 import { useAuth } from "@/context/AuthProvider";
+import { useProfile } from "@/hooks/queries/useProfile";
 import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 
 export default function MoodCard( { week } : { week: ChatWeek}) {
-    const {profile, role} = useAuth();
+    const {role} = useAuth();
+    const {data: profile, isLoading} = useProfile();
+
+    if (isLoading) {
+        return null;
+    }
 
     return (
         <div className={`${blockStyle}`}>

@@ -30,7 +30,7 @@ export function Transcript() {
                     <option value="prosody">Prosody</option>
                     <option value="turnTaking">Turn Taking</option>
                 </select>
-                <button className={`${widthStyle} py-2 px-4 rounded-full mt-1 shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] hover:bg-violet-200`}>
+                <button className={`${widthStyle} py-2 px-4 rounded-full mt-1 hover:bg-gray-200 shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)]`}>
                     Play Audio
                 </button>
                 <div className={blockStyle}>

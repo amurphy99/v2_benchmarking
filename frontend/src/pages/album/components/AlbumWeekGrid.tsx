@@ -45,7 +45,7 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
                             style={{ backgroundImage: `url(${session?.image?.url})`}}
                         > 
                             {new Date(session.date).toLocaleDateString("en-US", dateFormatOptionsShort)} 
-                            <a href={session?.image?.photographer_url} className="text-[8px] text-white m-0 font-thin">
+                            <a href={session?.image?.photographer_url} className="text-[8px] text-white m-0 font-thin text-nowrap">
                                 Image credit: {session?.image?.photographer} at Pexels
                             </a>
                         </div>

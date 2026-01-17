@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthProvider";
 import { ChatSession, ChatMessage } from "@/api";
 import { formatElapsed } from "@/utils/styling/numFormatting";
 import { h2            } from "@/utils/styling/sharedStyles";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 // ====================================================================
 // Chat Transcription
@@ -13,7 +14,11 @@ import { h2            } from "@/utils/styling/sharedStyles";
 // ToDo: Timestamp should be time from start of the chat in seconds
 export default function ChatTranscript({ chatSession } : { chatSession: ChatSession }) {
     // Get the patients name & chat start time
-    const { profile } = useAuth();
+    const { data: profile, isLoading } = useProfile();
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
     const patient_name = `${profile.account.user.first_name} ${profile.account.user.last_name}`;
     const chatStart = new Date(chatSession.start_ts);
 

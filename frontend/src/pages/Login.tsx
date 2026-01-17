@@ -36,9 +36,9 @@ export default function Login() {
     return (
     <div className="mt-[1rem] md:mt-[3rem] ml-[1rem] md:ml-[3rem]">
         <h1>Cognibot</h1>
-        <div className="flex justify-center">
+        <div className="flex justify-center mt-[5rem]">
             <div className="flex flex-row w-full">
-                <div className="w-0 sm:w-1/3 mt-[3rem]">
+                <div className="w-0 sm:w-1/3">
                     <img src="/images/robot_face.png"></img>
                 </div>
                 <div className="flex flex-col w-full sm:w-2/3 mb-[2rem] text-center">

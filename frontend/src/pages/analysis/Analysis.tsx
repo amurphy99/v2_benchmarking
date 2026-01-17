@@ -42,8 +42,10 @@ export function Analysis() {
 
     return (
         <div className={colStyle}>
-            <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
-            <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+            <div className={`flex flex-col gap-[2rem] md:flex-row md:gap-[1rem]`}>
+                <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
+                <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+            </div>
             <MoodCard week={currentWeek} />
             <p id="factors" className="h-0 w-0 p-0 m-0"/>
             <h2 className={`flex ${widthStyle} mt-[-2rem]`}>Flagged Signs</h2>
