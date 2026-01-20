@@ -56,7 +56,7 @@ export function DaySummary() {
                     ← {chatDate.toLocaleDateString("en-US", dateFormatOptions)}
                 </div>
                 <div className={colStyle}>
-                    <div className="grid grid-cols-4 gap-[1rem]">
+                    <div className="grid grid-cols-4 gap-[1rem] w-full">
                         <div className={`rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow}`}>
                             <h2 className={`${role}-text`}>Mood</h2>
                             <div className="flex flex-col justify-center items-center mt-[4rem]">

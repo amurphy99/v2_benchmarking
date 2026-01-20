@@ -3,12 +3,14 @@ import { ChatWeek, getMessages } from "@/utils/functions/getChatWeeks";
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { useLocation, useNavigate } from "react-router-dom";
 import { TopicsCard } from "../common/TopicsCard";
-import { blockStyle, colStyle, widthStyle } from "@/utils/styling/sharedStyles";
+import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 import { IoIosArrowForward, IoIosArrowDown } from "react-icons/io";
 import DropdownModal from "@/components/modals/DropdownModal";
 import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
 import ChatLengthCard from "@/components/graphics/ChatLengthCard";
+import { Icon } from "@iconify/react/dist/iconify.js";
+import getMoodIcon from "@/utils/functions/getMoodIcon";
 
 export function WeekSummary() {
     const { state } = useLocation() as { state?: { chatWeek?: ChatWeek, albumDisplay: string } };
@@ -21,7 +23,8 @@ export function WeekSummary() {
 
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
 
-    return (
+    if (window.isMobile) {
+        return (
         <div>
             <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
                 ← {chatWeek.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {chatWeek.end.toLocaleDateString("en-US", dateFormatOptionsShort)}
@@ -33,7 +36,38 @@ export function WeekSummary() {
                 <DropdownModal title="Weekly Analysis" content={content} />
             </div>
         </div>
-    )
+        )
+    } else {
+        return (
+                    <div>
+                        <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
+                            ← {chatWeek.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {chatWeek.end.toLocaleDateString("en-US", dateFormatOptionsShort)}
+                        </div>
+                        <div className={colStyle}>
+                            <div className="grid grid-cols-4 gap-[1rem] w-full">
+                                <div className={`rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow}`}>
+                                    <h2 className={`${role}-text`}>Mood (Most Recent)</h2>
+                                    <div className="flex flex-col justify-center items-center mt-[4rem]">
+                                        <Icon icon={getMoodIcon(chatWeek.sessions[0].sentiment)} width={"full"}/>
+                                        <h2>{chatWeek.sessions[0].sentiment}</h2>
+                                    </div>
+                                </div>
+                                <div className="flex col-span-2">
+                                    <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+                                </div>
+                                <div className="flex h-full">
+                                    <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
+                                </div>
+                            </div>
+                            <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
+                            <DropdownModal title="Speech Analysis" content={content} />
+                            <button className={`${role}-button p-[1rem] text-xl rounded-md w-full`}>
+                                Download as PDF
+                            </button>
+                        </div>
+                    </div>
+                )
+    }
 }
 
 const content = [`Here would be an analysis of this week's speech.`,
