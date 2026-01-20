@@ -16,7 +16,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
 
     return (
         <div className="flex flex-col gap-[1rem]">
-            <h2 className="items-start hover:cursor-pointer underline z-10" 
+            <h2 className="items-start hover:cursor-pointer underline z-1" 
             onClick={() => {toWeeklySummary(week)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()} </h2>
             <div>

@@ -13,7 +13,7 @@ export default function FooterNav() {
     }
     if (account.role == "caregiver") {
         return (
-            <div className="fixed bottom-0 left-0 right-0 shadow-inner flex flex-row justify-around items-center p-4 bg-white">
+            <div className="fixed bottom-0 left-0 right-0 shadow-inner flex flex-row justify-around items-center p-4 bg-white z-10">
                 <div className="flex flex-col items-center">
                     <NavLink to="/goal" className={footerLinkCaregiverCls}>
                         <GiAlliedStar size={"2rem"} />
@@ -48,7 +48,7 @@ export default function FooterNav() {
         );
     } else {
         return (
-            <div className="fixed bottom-0 left-0 right-0 shadow-inner flex flex-row justify-around items-center p-4 bg-white">
+            <div className="fixed bottom-0 left-0 right-0 shadow-inner flex flex-row justify-around items-center p-4 bg-white z-10">
                 <div className="flex flex-col items-center">
                     <NavLink to="/chat" className={footerLinkPatientCls}>
                         <img className="aspect-square w-[2rem] chat-icon" src="/images/Robot_icon.svg" />
