@@ -1,9 +1,8 @@
 import   ProgressBar   from "react-bootstrap/ProgressBar";
 import { useAuth     } from "@/context/AuthProvider";
-import { PATIENT_HEX } from "@/utils/styling/colors";
 
 // Patient Goal Progress Bar
-export default function GoalProgress () {
+export default function GoalProgressBar () {
     const { profile } = useAuth();
     const current = profile.goal.current;
     const target  = profile.goal.target

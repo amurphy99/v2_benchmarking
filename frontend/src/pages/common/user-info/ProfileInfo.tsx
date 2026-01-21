@@ -1,26 +1,33 @@
 import { useState                } from "react";
 import { OverlayTrigger, Popover } from "react-bootstrap";
-import { FaUser       } from "react-icons/fa";
 import { FaCircleUser } from "react-icons/fa6";
-import { Profile, User              } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
-import { toastMessage               } from "@/utils/functions/toast_helper";
+import { User              } from "@/api";
+import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
+import { downloadData } from "@/api";
+import { useAuth } from "@/context/AuthProvider";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useProfile } from "@/hooks/queries/useProfile";
+
 
 
 // ====================================================================
 // Profile Information 
 // ====================================================================
-export default function ProfileInfo({ profile, user } : { profile: Profile, user: User }) {
-    const isCare = profile.caregiver.id === user.id;
+export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
+    const { logout } = useAuth();
+    const { data: profile, isLoading } = useProfile();
+    const navigate = useNavigate();
 
     // Popover controls
     const [show, setShow] = useState(false);
     const open  = () => setShow(true);
     const close = () => setShow(false);
 
-    // Download report utility
-    const downloadReport = () => { toastMessage("downloadReport() not implemented yet...", false); }
-    const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
+    if (isLoading) {
+        return null;
+    }
+
+    const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"
 
     // --------------------------------------------------------------------
     // Popover 
@@ -28,17 +35,44 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
     const popover = (
         <Popover id="profile-popover" onMouseEnter={open} onMouseLeave={close} style={{ maxWidth: "none", width: "max-content" }}> 
             <Popover.Body className="flex flex-col px-[1rem] py-[0.5rem]">
-                <span className="fs-4 fw-semibold"> Profile </span>
+                <span className="fs-4 fw-semibold"> {user.first_name} {user.last_name} </span>
             
-                <div className="flex flex-col border-y py-[0.5rem] gap-[0.5rem] border-gray-300">
-                    <UserInfo user={profile.plwd     } isCare={false}/>
-                    <UserInfo user={profile.caregiver} isCare={true }/>
+                <div className="flex flex-col border-y p-[0.5rem] gap-[0.5rem] border-gray-300">
+                    <NavLink to="/profile">
+                        <button className="text-lg hover:text-blue-600">Profile Settings</button>
+                    </NavLink>
+                    <button className="text-left text-blue-500 hover:text-blue-600 text-lg" onClick={() => logout()}>Log Out</button>
                 </div>
-
-                <button onClick={downloadReport} className={reportStyle}> Download Report </button>
+                {isCare ? <DownloadButton /> : null}
             </Popover.Body>
         </Popover>
     );
+
+    function DownloadButton() {
+        const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
+        const disabledStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-gray-400 border-1 border-gray-400 p-2 rounded cursor-not-allowed";
+
+        const download = async () => {
+            const { fileName, fileContents } = await downloadData();
+            // Create a temporary link element
+            const link = document.createElement('a');
+            const blob = new Blob([fileContents], { type: 'text/plain' });
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+
+            // Programmatically click the link to trigger the download
+            link.click();
+
+            // Clean up the URL object
+            URL.revokeObjectURL(link.href);
+        }
+
+        return (
+            <button disabled={!profile.account} className={profile.account ? reportStyle : disabledStyle} onClick={() => download()}>
+                Download Report
+            </button>
+        ) 
+    }
 
     // --------------------------------------------------------------------
     // UI Component
@@ -47,8 +81,7 @@ export default function ProfileInfo({ profile, user } : { profile: Profile, user
     return (
     <OverlayTrigger show={show} placement="bottom" overlay={popover} trigger={[]} delay={{show: 250, hide: 400}}>
         <button onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} className={overlayStyle}>
-            <FaUser size={25} color={isCare ? CAREGIVER_HEX : PATIENT_HEX}/>
-            <span className="text-nowrap align-middle">{user.first_name} {user.last_name}</span>
+            <FaCircleUser size={"2.5rem"} color={isCare ? CAREGIVER_OKLCH : PATIENT_OKLCH}/>
         </button>
     </OverlayTrigger>
     );

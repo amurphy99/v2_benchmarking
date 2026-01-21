@@ -5,7 +5,7 @@ import { h3       } from "@/utils/styling/sharedStyles";
 import ScoreTrackGraph from "./ScoreTrackGraph";
 // ToDo: Biomarker graph
 
-import GoalProgress from "./GoalProgress";
+import GoalProgressBar from "./GoalProgress";
 
 // ====================================================================
 // Performance Track Panel (shown on Dashboard)
@@ -28,7 +28,7 @@ export default function PerformanceTrack() {
 
             {/* Text Section */}
             <div className="d-flex flex-col mt-[1rem] gap-[0.5rem] fs-6">
-                <GoalProgress/>
+                <GoalProgressBar />
                 <p className="fst-italic"><b>ToDo:</b> "Biomarkers chart" with individual selection; automatic performance evaluation in the paragraphs below.</p>
                 <p>Good days: A list of days with higher biomarker scores.</p>
                 <p>Bad days: A list of days with lower biomarker scores.</p>

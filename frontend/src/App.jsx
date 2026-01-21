@@ -3,17 +3,38 @@ import { AuthProvider            } from "@/context/AuthProvider";
 
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
-import { Dashboard, History, ChatDetails, Chat, ProgressSummary } from "@/pages";
+import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
+    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile } from "@/pages";
+import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
-import SignUp          from "@/pages/SignUp";
+import SignUpPatient   from "@/pages/SignUpPatient";
+import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
 
+import "./App.css";
+import { useEffect, useState } from "react";
 
 // --------------------------------------------------------------------
 // Routes and Pages
 // --------------------------------------------------------------------
 // ToDo: Almost all of them are shared, we just don't show everything to patients... ?
 export default function App() {
+    const [width, setWidth] = useState(window.innerWidth);
+
+    function handleWindowSizeChange() {
+        setWidth(window.innerWidth);
+    }
+
+    useEffect(() => {
+        window.addEventListener('resize', handleWindowSizeChange);
+        return () => {
+            window.removeEventListener('resize', handleWindowSizeChange);
+        }
+    }, []);
+
+    const isMobile = width <= 768;
+    window.isMobile = isMobile;
+
   return (
     <AuthProvider>
       <Routes>
@@ -21,8 +42,10 @@ export default function App() {
 
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
+                <Route path="/"        element={<Home   />} />
                 <Route path="/login"   element={<Login  />} />
-                <Route path="/signup"  element={<SignUp />} />
+                <Route path="/signup-patient"  element={<SignUpPatient />} />
+                <Route path="/signup"  element={<SignUpAccount />} />
             </Route>
 
             {/* Protected Routes */}
@@ -33,18 +56,33 @@ export default function App() {
                 </Route>
 
                 {/* Caregiver */}
-                <Route path="/dashboard"   element={<Dashboard   />} />
-                <Route path="/chatdetails" element={<ChatDetails />} />
+                <Route element={ <IsCaregiver /> } >
+                    <Route path="/dashboard"   element={<Dashboard   />} />
+                    <Route path="/chatdetails" element={<ChatDetails />} />
+                    <Route path="/alert"       element={<Alert       />} />
+                    <Route path="/practice"    element={<Practice    />} />
+                    <Route path="/settings"    element={<Settings    />} />
+                    <Route path="/practice-page" element={<PracticePage />} />
+                </Route>
 
                 {/* Shared */}
+                <Route path="/profile"  element={<Profile         />} />
                 <Route path="/history"  element={<History         />} />
                 <Route path="/schedule" element={<Schedule        />} />
                 <Route path="/progress" element={<ProgressSummary />} />
+                <Route path="/goal"     element={<Goal            />} />
+                <Route path="/album"    element={<ChatAlbum       />} />
+                <Route path="/week"     element={<WeekSummary     />} />
+                <Route path="/day"      element={<DaySummary      />} />
+                <Route path="/analysis" element={<Analysis        />} />
+                <Route path="/transcript" element={<Transcript    />} />
                 
             </Route>
 
+            <Route path="/animation-test" element={<AnimationTest />} />
+
             {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/goal" replace />} />
             
         </Route>
 

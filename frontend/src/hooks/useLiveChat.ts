@@ -14,20 +14,25 @@ export default function useLiveChat({
     onUserUtterance,
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
+    onEmotion         = (         ) => {},
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
+    onEmotion         : (emotion: string) => void;
 }) {
     // Misc. setup
     const qc = useQueryClient();
-    const onLLMres = (text: string) => {
-		logText(`[LLM] Response:   ${text}`);
-		onSystemUtterance(text);
+    const onLLMres = (response) => {
+		logText(`[LLM] Response:   ${response.data}`);
+		onSystemUtterance(response.data);
+        if (response.emotion) {
+            onEmotion(response.emotion)
+        }
 	};
     const [recording, setRecording] = useState(false);
 
-    const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 32, bufferAhead: 0.2})
+    const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16, bufferAhead: 0.2})
 
 	const { send } = useChatSocket({
 		recording,

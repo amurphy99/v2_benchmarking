@@ -8,7 +8,6 @@ whitenoise
 librosa
 numpy
 pandas
-three
 certifi==2024.8.30
 cffi==1.17.1
 charset-normalizer==3.3.2
@@ -70,3 +69,4 @@ keyboard
 google-genai
 google-cloud-texttospeech
 google-cloud-speech
+pexels-api

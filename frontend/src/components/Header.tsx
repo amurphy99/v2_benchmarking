@@ -1,12 +1,13 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { useState             } from "react";
-import { GoGear               } from "react-icons/go";
+import { useEffect, useState             } from "react";
 
 import { useAuth    } from "@/context/AuthProvider";
-import { navLinkCls } from "@/utils/styling/colors";
+import { navLinkClsCaregiver, navLinkClsPatient } from "@/utils/styling/colors";
 import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
+import { Icon } from "@iconify/react/dist/iconify.js";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -17,42 +18,62 @@ const TITLES: Record<string, string> = {
     "/chat"         : "Chat",
     "/history"      : "Chat History",
     "/schedule"     : "Schedule",
+    "/goal"         : "Goal",
+    "/album"        : "Chat Album",
+    "/week"         : "Weekly Summary",
+    "/day"          : "Daily Summary",
+    "/settings"     : "Settings",
+    "/analysis"     : "Analysis",
+    "/transcript"   : "Transcript",
+    "/practice"     : "Practice",
+    "/alert"        : "Alerts",
     default         : "Cognibot",
 };
+
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings", "/profile"]
 
 // ====================================================================
 // Header
 // ====================================================================
 export default function Header() {
-    const { user, profile, logout } = useAuth();
+    const { user, role } = useAuth();
+    const { data: profile, isLoading } = useProfile();
+    const isCare = role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
+    useEffect(() => {
+        window.scrollTo(0, 0)
+    }, [pathname])
+
+    if (isLoading) {
+        return null;
+    }
+
     const title  = TITLES[pathname] ?? TITLES.default;
-    const isCare = user.id == profile.caregiver.id;
+
+    const navLinkCls = isCare ? navLinkClsCaregiver : navLinkClsPatient;
 
     // Return UI component
-    const logOutStyle = "flex items-center gap-2 rounded bg-violet-600 px-3 py-1 text-white hover:bg-violet-700";
-    return (
-        <header className="flex items-center gap-6 px-[2rem] pt-[1rem]">
-            <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
-            <div className="ml-auto flex items-center gap-3">
-
-                {/* Navigation Links */}
-                <nav className="flex gap-4 text-xl">
-                    {isCare ? null : <NavLink to="/chat" className={navLinkCls}> Chat </NavLink>}
-                    <NavLink to="/dashboard" className={navLinkCls}> Dashboard </NavLink>
-                    <NavLink to="/history"   className={navLinkCls}> History   </NavLink>
-                    <NavLink to="/progress"  className={navLinkCls}> Progress  </NavLink>
-                    <NavLink to="/schedule"  className={navLinkCls}> Schedule  </NavLink>
-                </nav>
+    if (SHOW_HEADER.includes(pathname)) {
+        return (
+        <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
+            <ProfileInfo isCare={isCare} user={user} />
+            <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
+            {profile ? 
+            <div className={`ml-auto flex items-center gap-3`}>
 
                 {/* Right Side Icons */}
-                <div className="vr"></div>
-                <ProfileInfo profile={profile} user={user}/>
-                <button onClick={() => setShowModal(true)}> <GoGear size={22}/> </button>
-                <button onClick={() => logout()} className={logOutStyle}> Log out </button>
+                {
+                    isCare ? 
+                    <NavLink to="/settings">
+                        <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
+                    </NavLink> : null
+                }
+                
+                
             </div>
+            : null}
 
             {/* Modal */}
             {isCare ? 
@@ -61,5 +82,7 @@ export default function Header() {
             }
 
         </header>
-    );
+    );} else {
+        return (null);
+    }
 }
