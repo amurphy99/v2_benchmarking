@@ -32,7 +32,6 @@ ALLOWED_HOSTS = [
     "cognibot.org",            "www.cognibot.org", 
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
-    "sandbox2.cognibot.org",   "www.sandbox2.cognibot.org",
     "10.0.2.2", # for android dev
 ]
 
@@ -87,10 +86,10 @@ REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES'  : ('rest_framework_simplejwt
                   'DEFAULT_PERMISSION_CLASSES'      : ('rest_framework.permissions.IsAuthenticated',                ),}
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME"     : timedelta(days=5),
-    "REFRESH_TOKEN_LIFETIME"    : timedelta(days=30),
+    "ACCESS_TOKEN_LIFETIME"     : timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME"    : timedelta(days=15),
     "ROTATE_REFRESH_TOKENS"     : True,
-    "BLACKLIST_AFTER_ROTATION"  : False,
+    "BLACKLIST_AFTER_ROTATION"  : True,
     "UPDATE_LAST_LOGIN"         : False,
 
     "ALGORITHM"     : "HS256",
@@ -115,8 +114,8 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME"         : timedelta(days=15),
-    "SLIDING_TOKEN_REFRESH_LIFETIME" : timedelta(days=30),
+    "SLIDING_TOKEN_LIFETIME"         : timedelta(days=1),
+    "SLIDING_TOKEN_REFRESH_LIFETIME" : timedelta(days=5),
 
     "TOKEN_OBTAIN_SERIALIZER"           : "rest_framework_simplejwt.serializers.MyTokenObtainPairSerializer",
     "TOKEN_REFRESH_SERIALIZER"          : "rest_framework_simplejwt.serializers.TokenRefreshSerializer",

@@ -1,12 +1,9 @@
 from django.db    import transaction
 from django.utils import timezone
-from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
+from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore
 
 from .  import logging_utils as lu
-from .topicHelpers import get_topics
-from .emotionHelpers import classify_emotion_with_vader
-from ..api.mixins import get_profile
-from .imageHelpers import get_images
+from .db_helpers import get_sentiment_topics
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,6 +14,34 @@ logger = logging.getLogger(__name__)
 # --- ToDo: Need to add topic/sentiment fields, probably on close ---
 # --- ToDo: If chat hasn't been modified in X time, save it and remake one automatically ---
 # Later on may need to specifically add start/end timestamps to chats/messages
+"""
+
+        sentiment = "N/A"
+        topics = "N/A"
+        message_text = get_message_text(messages)
+        try:
+            sentiment = sentiment_scores(message_text)
+            topics = get_topics(message_text)
+        except Exception as e:
+            print(e)
+            pass  # If there is an error in extracting sentiment or topics, we will return "N/A"
+        
+
+        
+def get_sentiment_topics(data_messages):
+    message_text = get_message_text(data_messages)
+
+    # Sentiment
+    try:    sentiment = sentiment_scores(message_text)
+    except: sentiment = "N/A"
+
+    # Topics
+    try:    topics = get_topics(message_text)
+    except: topics = "N/A"
+
+    return sentiment, topics
+
+"""
 
 class ChatService:
     # -----------------------------------------------------------------------
@@ -47,45 +72,16 @@ class ChatService:
         # ----------------------------------------------------------------------- 
         msgs = (ChatMessage.objects
            .filter(session=session)             # could also stack .filter(role="user")
-           .filter(role="user")
            .order_by("ts")                      # or "start_ts", "id" ?
            .values_list("content", flat=True))  # returns a queryset of strings
-        messages = [msg for msg in msgs]
-        message_text = " ".join(messages)
-        topics = get_topics(message_text)
-        sentiment = classify_emotion_with_vader(message_text)
+        
+        sentiment, topics = get_sentiment_topics(msgs)
 
         # ToDo: Probably should calculate the topics and sentiment right here using helper functions
         # Topics and sentiment won't be sent as arguments, they will be calculated here
         if notes     is not None: session.notes     = notes
+        if topics    is not None: session.topics    = topics
         if sentiment is not None: session.sentiment = sentiment
-        
-        if topics    is not None and len(topics) > 0: 
-            session.topics    = str(topics).strip()
-            try: # See if there is already an image for the topic
-                album_image = AlbumImage.objects.get(topic=topics[0])
-                session.image = album_image
-            except AlbumImage.DoesNotExist: # If there is not already an image for the topic, get a new one from Pexels
-                image = get_images(topics[0], "pexels", 1)
-                if image is None:
-                    image = get_images(topics[1], "pexels", 1)
-                    if image is None:
-                        image = {
-                            "id": -1,
-                            "topic": "N/A",
-                            "url": "https://images.pexels.com/photos/356079/pexels-photo-356079.jpeg",
-                            "photographer": "Pixabay",
-                            "photographer_url": "https://www.pexels.com/@pixabay/"
-                        }
-                album_image = AlbumImage.objects.create(topic=image["topic"], url=image["url"], photographer=image["photographer"], photographer_url=image["photographer_url"])
-                album_image.save()
-                session.image = album_image
-        
-        profile = get_profile(user)
-        if profile is not None:
-            settings = UserSettings.objects.get(user=profile)
-            session.taskType    = settings.taskType
-            session.taskSubtype = settings.taskSubtype
         session.save()
        
         logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")

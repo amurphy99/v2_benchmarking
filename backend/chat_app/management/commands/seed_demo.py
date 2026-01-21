@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from datetime        import timedelta, date, time
 from random          import random
-from chat_app.models import Profile, Account, Access, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, AlbumImage
+from chat_app.models import Profile, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -16,35 +16,8 @@ DEMO_MESSAGES = [
     "I'm doing well, thank you!", 
     "Can you tell me about your day?", 
     "Sure. This morning I went for a walk.",
-    "Did you enjoy your walk?",
-    "Yes, I enjoyed my walk.",
 ]
-DEMO_IMAGES = [
-    {
-        "topic": "Moon Landing",
-        "url": "https://images.pexels.com/photos/41162/moon-landing-apollo-11-nasa-buzz-aldrin-41162.jpeg",
-        "photographer": "Pixabay",
-        "photographer_url": "https://www.pexels.com/@pixabay/"
-    },
-    {
-        "topic": "Gardening",
-        "url": "https://images.pexels.com/photos/5905352/pexels-photo-5905352.jpeg",
-        "photographer": "Vanessa P",
-        "photographer_url": "https://www.pexels.com/@vanessa-p-273294/"
-    },
-    {
-        "topic": "Grandchildren",
-        "url": "https://images.pexels.com/photos/6148876/pexels-photo-6148876.jpeg",
-        "photographer": "RDNE Stock Project",
-        "photographer_url": "https://www.pexels.com/@rdne/"
-    },
-    {
-        "topic": "Walk",
-        "url": "https://images.pexels.com/photos/631986/pexels-photo-631986.jpeg",
-        "photographer": "Tobi",
-        "photographer_url": "https://www.pexels.com/@pripicart/"
-    }
-]
+
 
 class Command(BaseCommand):
     help = "Seeds demo users and a sample ChatSession with messages+biomarkers."
@@ -54,10 +27,6 @@ class Command(BaseCommand):
     # ====================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
-        # Delete and recreate AlbumImages first
-        AlbumImage.objects.all().delete()
-        self.seed_images()
-
         # Delete and recreate the user data
         User = get_user_model()
         User.objects.filter(username__in=USERNAMES).delete()
@@ -68,18 +37,14 @@ class Command(BaseCommand):
         # Create user entries for both the patient and caregiver
         plwd = User.objects.create_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
         care = User.objects.create_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
-        plwd_account = Account.objects.create(user=plwd, role="patient")
-        care_account = Account.objects.create(user=care, role="caregiver")
-        profile = Profile.objects.create(account=plwd_account, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
-        
-        # Create an Access object so caregiver account can access the plwd account
-        Access.objects.create(account=care_account, profile=profile)
+        profile = Profile.objects.create(plwd=plwd, caregiver=care)
 
         # Also create settings and goal objects for the new Profile
-        UserSettings.objects.create(profile=profile)
-        Goal        .objects.create(profile=profile, target=5, start_date=two_days_ago)
+        UserSettings.objects.create(user=profile)
+        Goal        .objects.create(user=profile, target=5, start_date=two_days_ago)
+
         # Add sample ChatSessions
-        self.seed_chats(profile, days_back=10)
+        self.seed_chats(plwd, days_back=10)
         
         # Add sample Reminders
         self.seed_reminders(profile, num_reminders=5)
@@ -89,44 +54,27 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------
         plwd_2 = User.objects.create_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
         care_2 = User.objects.create_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
-        plwd_account_2 = Account.objects.create(user=plwd_2, role="patient")
-        care_account_2 = Account.objects.create(user=care_2, role="caregiver")
-        profile_2 = Profile.objects.create(account=plwd_account_2, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
-        
-        # Create an Access object so caregiver account can access the plwd account
-        Access.objects.create(account=care_account_2, profile=profile_2)
+        profile_2 = Profile.objects.create(plwd=plwd_2, caregiver=care_2)
 
-        UserSettings.objects.create(profile=profile_2)
-        Goal        .objects.create(profile=profile_2, target=5, start_date=two_days_ago)
-        self.seed_chats(profile_2, days_back=10)
+        UserSettings.objects.create(user=profile_2)
+        Goal        .objects.create(user=profile_2, target=5, start_date=two_days_ago)
+        self.seed_chats(plwd_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
 
-    # ====================================================================
-    # Seed AlbumImages into the DB
-    # ====================================================================
-    def seed_images(self):
-        for img in DEMO_IMAGES:
-            album_image = AlbumImage.objects.create(topic=img["topic"], url=img["url"], photographer=img["photographer"], photographer_url=img["photographer_url"])
-            album_image.save()
-            
+
     # ====================================================================
     # Seed ChatSessions into the DB for a user
     # ====================================================================
-    def seed_chats(self, profile, days_back=6):
+    def seed_chats(self, plwd_user, days_back=6):
         # Times for everything need to override "auto_now_add" field properties
         now_utc = timezone.now()
         for i in range(1, days_back+1):
             day_offset = timedelta(days=i)
             started_at = (now_utc - day_offset).replace(hour=9, minute=0, second=0, microsecond=0)
             ended_at   = started_at + timedelta(minutes=5)
-            
-            topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
-            image = AlbumImage.objects.get(topic=topic)
 
             # 1) Create a ChatSession object
-            session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
-                                                 topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
-                                                 sentiment="Positive", image=image)
+            session = ChatSession.objects.create(user=plwd_user, source="webapp", is_active=False, end_ts=ended_at)
             session.date = started_at
             session.save(update_fields=["date"])
 
@@ -148,10 +96,10 @@ class Command(BaseCommand):
 
             #print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")
             
-    # ====================================================================
+     # ====================================================================
     # Seed Reminders into the DB for a user
     # ====================================================================
-    def seed_reminders(self, profile, num_reminders=5):
+    def seed_reminders(self, plwd, num_reminders=5):
         now_utc = timezone.now()
         for i in range(1, num_reminders+1):
             day_offset = timedelta(days=i)
@@ -163,7 +111,7 @@ class Command(BaseCommand):
             title = f"Reminder {i}"
 
             # Create a Reminder object
-            reminder = Reminder.objects.create(profile=profile, title=title, start=start_day, end=end_day, 
+            reminder = Reminder.objects.create(user=plwd, title=title, start=start_day, end=end_day, 
                                                startTime=start_time, endTime=end_time, daysOfWeek=[])
             reminder.save()
             
@@ -172,7 +120,7 @@ class Command(BaseCommand):
         end_day = (now_utc + timedelta(weeks=5)).date()
         start_time = time(hour=0, minute=0, second=0)
         end_time = time(hour=2, minute=0, second=0)
-        reminder = Reminder.objects.create(profile=profile, title="Repeat reminder", start=start_day, 
+        reminder = Reminder.objects.create(user=plwd, title="Repeat reminder", start=start_day, 
                                            end=end_day, startTime=start_time, endTime=end_time,
                                            daysOfWeek=[3])
         reminder.save()

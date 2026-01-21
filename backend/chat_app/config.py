@@ -18,7 +18,7 @@ THIS_LANGUAGE = "en-US"
 MAX_LENGTH = 128 # 256
 #PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
 
-DEVICE_CONTEXT = "You could be in the user's phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
+DEVICE_CONTEXT = "You could be in the users phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
 PROMPT = f"""
 You are Buddy, a warm, calm conversational assistant for people living with memory problems or dementia.
 

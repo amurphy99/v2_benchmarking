@@ -16,27 +16,6 @@ export const dateFormatShort = new Intl.DateTimeFormat("en-US", {
     day   : "2-digit" 
 });
 
-export const dateFormatOptionsMonth: Intl.DateTimeFormatOptions = {
-    month   : "short",
-};
-
-export const dateFormatOptionsShort: Intl.DateTimeFormatOptions = {
-    month   : "short",
-    day     : "numeric",
-};
-
-export const dateFormatOptionsMed: Intl.DateTimeFormatOptions = {
-    weekday : "short",
-    month   : "short",
-    day     : "numeric",
-};
-
-export const dateFormatOptions: Intl.DateTimeFormatOptions = {
-    month   : "short",
-    day     : "numeric",
-    year    : "numeric",
-};
-
 export const dateFormatLong = new Intl.DateTimeFormat("en-US", {
     year   : "numeric",
     month  : "short", 

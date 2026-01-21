@@ -3,15 +3,13 @@
 # =======================================================================
 from django.apps import apps
 
-import json, asyncio, logging, base64, os
+import json, asyncio, logging, base64
 logger = logging.getLogger(__name__)
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async
 
 from time     import time
-from datetime import datetime, timezone
-from math     import ceil
 
 # From this project
 from ..services              import logging_utils as lu 
@@ -135,9 +133,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if   data["type"] == "overlapped_speech" : await self._handle_overlap(data=data)
         elif data["type"] == "audio_data"        : await self._handle_audio_data(data)
         elif data["type"] == "transcription"     : await handle_transcription(data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
-        elif data["type"] == "end_chat"          : 
-                    self.stt_provider.stop()
-                    await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)        
+        elif data["type"] == "end_chat"          : await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)
         elif data["type"] == "toggle_stream": self._toggle_stream(data)
 
     # -----------------------------------------------------------------------
@@ -196,8 +192,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count += 1
         self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
         
-    async def _toggle_stream(self, data):
-        if data["data"] == "start":
-            self.stt_provider.start()
-        elif data["data"] == "stop":
-            self.stt_provider.stop()
+        
+    def _toggle_stream(self, data):
+        cmd = data["data"]
+        if   cmd == "start": self.stt_provider.start()
+        elif cmd == "stop" : self.stt_provider.stop()
+        
