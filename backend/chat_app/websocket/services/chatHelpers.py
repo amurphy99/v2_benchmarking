@@ -23,17 +23,21 @@ CHUNK_SIZE = 8_192 # How many bytes of audio we can send at a time
 # Process the users message & reply with the LLM ASAP
 # ======================================================================= ===================================
 async def handle_transcription(data, msg_callback, send_callback, bio_callback):
-    """ Takes three callbacks from the consumers object """
     t0 = time()
+    # -----------------------------------------------------------------------
+    # 1) Process the input (User Speech OR Rejoin Trigger)
+    # -----------------------------------------------------------------------
+    is_rejoin = (data.get("type") == "rejoin")
     
-    # -----------------------------------------------------------------------
-    # 1) Process the users message
-    # -----------------------------------------------------------------------
-    text = data["data"].lower()
-    logger.info(f"{lu.YELLOW}[LLM] User utt received: \n{lu.USER_MSG}{text} {lu.RESET}")
+    # If rejoin, use "system" role so it doesn't look like the user said this. The text becomes an instruction to the LLM.
+    role = "system" if is_rejoin else "user"
+    text = data["data"] 
 
-    # Fire-and-forget DB write for the "user" message & update in-memory context
-    context_buffer = await msg_callback(role="user", text=data['data'], time=time())
+    if is_rejoin: logger.info(f"{lu.YELLOW}[LLM] Rejoin trigger received. Injecting context prompt.{lu.RESET}")
+    else:         logger.info(f"{lu.YELLOW}[LLM] User utt received: \n{lu.USER_MSG}{text} {lu.RESET}")
+
+    # Update context and DB
+    context_buffer = await msg_callback(role=role, text=text, time=time())
 
     # -----------------------------------------------------------------------
     # 2) Get the LLMs response (awaited since it is the most important/longest process)
@@ -44,7 +48,6 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
 
     # Immediately send the response back through the websocket
     await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
-    t3 = time(); logger.info(f"{lu.YELLOW}[LLM] Response sent {(t3-t2):.4f}s ({(t3-t0):.4f}s total). {lu.RESET}")
 
     # -----------------------------------------------------------------------
     # 3) Background persistence & biomarkers
@@ -53,9 +56,13 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback):
     await msg_callback(role="assistant", text=system_utt, time=time())
 
     # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
-    asyncio.create_task(bio_callback())
-    return system_utt
+    if not is_rejoin: asyncio.create_task(bio_callback()) # Only if it was an actual user utterance
     
+    return system_utt
+
+
+
+
 async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
     user_utt = data['data']
     
@@ -79,6 +86,8 @@ async def handle_speech(audio_bytes: bytes, send_callback) -> None:
                 "type": "audio_chunk", 
                 "data": json.dumps({"data": base64.b64encode(chunk).decode('utf-8')})
             }))
+
+
 # ======================================================================= ===================================
 # Generate LLM Response
 # ======================================================================= ===================================

@@ -115,7 +115,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
         
         logger.info(f"{lu.RLINE_1}{lu.RED}[WS] ChatSession opened for {self.user} from {self.source} {lu.RESET}{lu.RLINE_2}")
-                
+
+
+        # Send an initial message if we rejoined
+        if self.source == "rejoin":
+            start_data = {"type": "rejoin", "data": "(The user has resumed the session. Welcome them back based on the context.)"}
+            await handle_transcription(start_data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
+
+                            
 
     # -----------------------------------------------------------------------
     # Close Connection 
