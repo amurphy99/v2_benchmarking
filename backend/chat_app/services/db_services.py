@@ -104,4 +104,63 @@ class ChatService:
     def add_biomarkers_bulk(session, scores: dict):
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
 
+
+    # ================================================================================
+    # Service for working with chat data
+    # ================================================================================
+    @staticmethod
+    @transaction.atomic
+    def resume_session(user, session_id):
+        """
+        Reactivates an old session. 
+        Handles the 'unique_active_session_per_user' constraint by closing or deleting the currently active session first.
+        """
+        # 1. Get the session we want to resume
+        try:                             target_session = ChatSession.objects.get(id=session_id, user=user)
+        except ChatSession.DoesNotExist: return None # Or raise an error
+
+        # If it's already active, just return it
+        if target_session.is_active: return target_session
+
+        # 2. Handle the CURRENT active session (if any)
+        # We must clear the 'active' slot to satisfy the UniqueConstraint
+        current_active = ChatSession.objects.filter(user=user, is_active=True).first()
+        
+        if current_active:
+            # Check if the current active session is "empty"
+            has_messages = ChatMessage.objects.filter(session=current_active).exists()
+            
+            # If it's an empty placeholder, just delete it to keep DB clean
+            # If it has content, close it gracefully so it saves to history
+            if not has_messages: current_active.delete()
+            else: ChatService.close_session(user, current_active)
+
+        # 3. Reactivate the target session
+        target_session.is_active = True
+        
+        # 4. Clear the "Finalized" metadata (since the chat is open again, the previous end time and analysis are invalid)
+        target_session.end_ts    = None
+        target_session.sentiment = "N/A" # Reset to default
+        target_session.topics    = "N/A" # Reset to default
+        
+        target_session.save()
+        
+        logger.info(f"Resumed session {target_session.id} for user {user.username}")
+        return target_session
+    
+    @staticmethod
+    def get_last_closed_session_with_content(user):
+        """
+        Finds the most recent INACTIVE session that actually has messages.
+        Useful for a 'Resume Last Chat' button.
+        """
+        last_session = (ChatSession.objects
+            .filter(user=user, is_active=False)  # Only look at history (closed chats)
+            .filter(messages__isnull=False)      # MUST have related messages (excludes empty chats)
+            .distinct()                          # Required because filtering across a join can create duplicates
+            .order_by("-date")                   # Newest first
+            .first()                             # Return the top one or None
+        )
+        return last_session
+
   

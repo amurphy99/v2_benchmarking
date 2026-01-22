@@ -12,11 +12,11 @@ from channels.db                import database_sync_to_async
 from time     import time
 
 # From this project
-from ..services              import logging_utils as lu 
-from ..services.db_services  import ChatService
-from .services.bg_helpers    import fire_and_log
-from .services.chatHelpers   import handle_transcription, handle_stt_output
-from .services.audioHelpers  import extract_audio_biomarkers, extract_text_biomarkers
+from ..services               import logging_utils as lu 
+from ..services.db_services   import ChatService
+from .services.bg_helpers     import fire_and_log
+from .services.chatHelpers    import handle_transcription, handle_stt_output
+from .services.audioHelpers   import extract_audio_biomarkers, extract_text_biomarkers
 from .services.speechProvider import SpeechToTextProvider
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
@@ -69,18 +69,33 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # I don't think any frontend uses these during the chat right now, but I'll leave this option in
         self.return_biomarkers = False # (self.source in ["webapp"])
 
-        # -----------------------------------------------------------------------
+        # --------------------------------------------------------------------------------
         # 2) Load or create an active session
-        # -----------------------------------------------------------------------
-        self.session = await database_sync_to_async(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        # --------------------------------------------------------------------------------
+        if self.source == "rejoin":
+            # 1. Try to find the last real conversation (we need to await this because it hits the DB)
+            last_session = await database_sync_to_async(ChatService.get_last_closed_session_with_content)(self.user)
+
+            # 2. If found, resume it (this handles the swap logic); if they have no history, just make a new one
+            if last_session: self.session = await database_sync_to_async(ChatService.resume_session              )(self.user, last_session.id)
+            else:            self.session = await database_sync_to_async(ChatService.get_or_create_active_session)(self.user, source="webapp")
+
+        else:
+            # Standard flow: Get or create the current active session
+            self.session = await database_sync_to_async(ChatService.get_or_create_active_session)(self.user, source=self.source)
+
+        # --------------------------------------------------------------------------------
+        # Load Context 
+        # --------------------------------------------------------------------------------
+        # Whether we rejoined an old chat or started a new one, we need to load the recent messages into the context
         recent = await database_sync_to_async(lambda: list(self.session.messages.all().order_by("-start_ts")[: self.MAX_CONTEXT])[::-1])()
 
+
         # TODO: I added the timestamps in just now for biomarker scores, but I actually don't really like how this works at the moment...
-        # Actually since I want to remove the "resume" chat thing, probably don't need to do this with the context buffer (loading in old data)
         self.context_buffer = [(m.role, m.content, m.ts.timestamp()) for m in recent]
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
-        self.context_buffer = [("assistant", "How can I help you today?", time())] + self.context_buffer
+        if len(self.context_buffer) == 0: self.context_buffer = [("assistant", "How can I help you today?", time())] + self.context_buffer
         
         # Other misc. setup
         self.overlapped_speech_count  = 0.0
