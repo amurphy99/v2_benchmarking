@@ -25,6 +25,8 @@ export default function CreateAccessModal( {showForm, onHide, refetch} ) {
                 toastMessage(`Successfully shared profile with ${username}`, true);
                 refetch();
                 onHide();
+            }).catch((error) => {
+                toastMessage(`Error fetching account: ${error}`, false)
             })
         }).catch((error) => {
             toastMessage(`Error fetching account: ${error}`, false)

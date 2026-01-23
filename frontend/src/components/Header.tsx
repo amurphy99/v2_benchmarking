@@ -65,7 +65,7 @@ export default function Header() {
 
                 {/* Right Side Icons */}
                 {
-                    isCare ? 
+                    isCare && profile?.account ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
@@ -82,7 +82,8 @@ export default function Header() {
             }
 
         </header>
-    );} else {
+        );
+    } else {
         return (null);
     }
 }

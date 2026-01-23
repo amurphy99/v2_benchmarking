@@ -27,7 +27,7 @@ export function Profile() {
             </div>
         );
     } else {
-    if (!profile.account) {
+    if (!profile || !profile.account) {
             return (
                 <div className="m-[2rem]">
                     <h1>Not connected to a user yet.</h1>

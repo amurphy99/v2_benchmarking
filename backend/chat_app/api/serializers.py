@@ -29,106 +29,11 @@ class GoalSerializer(serializers.ModelSerializer):
 
     def get_remaining(self, obj): return obj.remaining
     
-class UserSerializer(serializers.ModelSerializer):
+class RAGInstructionsSerializer(serializers.ModelSerializer):
     class Meta:
-        model  = get_user_model()
-        fields = ("id", "username", "first_name", "last_name", "is_staff")
-        read_only_fields = fields   # (all set by Django)
-
-class ProfileSerializer(serializers.ModelSerializer):
-    settings  = UserSettingsSerializer(read_only=True, source = "settings_user")
-    goal      = GoalSerializer        (read_only=True)
-    class Meta:
-        model  = Profile
-        fields = ("id", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = fields # Not sure...
-        
-class AccountSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    profile = ProfileSerializer(read_only=True)
-    
-    class Meta:
-        model = Account
-        fields = ("id", "user", "role", "profile")
-        read_only_fields = fields
-        
-# =======================================================================
-# Profiles and Profile-related Data
-# =======================================================================
-class UserSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
-        
-class ReminderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = Reminder
-        fields = ("id", "title", "notes", "start", "end", "startTime", "endTime", "daysOfWeek")
-        read_only_fields = ("id",)
-        
-class GoalSerializer(serializers.ModelSerializer):
-    current   = serializers.IntegerField(read_only=True)
-    remaining = serializers.IntegerField(read_only=True)
-    class Meta:
-        model  = Goal
-        fields = ("id", "target", "auto_renew", "period", "start_date", "start_dow", "current", "remaining")
-        read_only_fields = ("id", "current", "remaining")
-
-    def get_remaining(self, obj): return obj.remaining
-    
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = get_user_model()
-        fields = ("id", "username", "first_name", "last_name", "is_staff")
-        read_only_fields = fields   # (all set by Django)
-
-class AccountSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    
-    class Meta:
-        model = Account
-        fields = ("id", "user", "role")
-        read_only_fields = fields
-class ProfileSerializer(serializers.ModelSerializer):
-    account   = AccountSerializer(read_only=True)
-    settings  = UserSettingsSerializer(read_only=True, source="settings_user")
-    goal      = GoalSerializer        (read_only=True)
-    class Meta:
-        model  = Profile
-        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = ("id", "birthDate") # Not sure...
-        
-class AccessSerializer(serializers.ModelSerializer):
-    account     = AccountSerializer(read_only=True)
-    profile     = ProfileSerializer(read_only=True)
-    
-    class Meta:
-        model   = Access
-        fields  = ("id", "account", "profile")
-        
-# =======================================================================
-# Profiles and Profile-related Data
-# =======================================================================
-class UserSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
-        
-class ReminderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = Reminder
-        fields = ("id", "title", "notes", "start", "end", "startTime", "endTime", "daysOfWeek")
-        read_only_fields = ("id",)
-        
-class GoalSerializer(serializers.ModelSerializer):
-    current   = serializers.IntegerField(read_only=True)
-    remaining = serializers.IntegerField(read_only=True)
-    class Meta:
-        model  = Goal
-        fields = ("id", "target", "auto_renew", "period", "start_date", "start_dow", "current", "remaining")
-        read_only_fields = ("id", "current", "remaining")
-
-    def get_remaining(self, obj): return obj.remaining
+        model  = RAGInstructions
+        fields = ("id", "name", "instructions", "description", "user", "activity", "instruction_order")
+        read_only_fields = ("id", "user", "activity")
     
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -220,57 +125,6 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 # =======================================================================
 # Other Data
 # =======================================================================
-class UserSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
-        
-class ReminderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = Reminder
-        fields = ("id", "title", "notes", "start", "end", "startTime", "endTime", "daysOfWeek")
-        read_only_fields = ("id",)
-        
-class GoalSerializer(serializers.ModelSerializer):
-    current   = serializers.IntegerField(read_only=True)
-    remaining = serializers.IntegerField(read_only=True)
-    class Meta:
-        model  = Goal
-        fields = ("id", "target", "auto_renew", "period", "start_date", "start_dow", "current", "remaining")
-        read_only_fields = ("id", "current", "remaining")
-
-    def get_remaining(self, obj): return obj.remaining
-    
-class RAGInstructionsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = RAGInstructions
-        fields = ("id", "name", "instructions", "description", "user", "activity")
-        read_only_fields = ("id", "user", "activity")
-
-# =======================================================================
-# Profiles
-# =======================================================================
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = get_user_model()
-        fields = ("id", "username", "first_name", "last_name", "is_staff")
-        read_only_fields = fields   # (all set by Django)
-
-class ProfileSerializer(serializers.ModelSerializer):
-    plwd      = UserSerializer        (read_only=True)
-    caregiver = UserSerializer        (read_only=True)
-    settings  = UserSettingsSerializer(read_only=True, source = "settings_user")
-    goal      = GoalSerializer        (read_only=True)
-    role      = serializers.SerializerMethodField()
-    class Meta:
-        model  = Profile
-        fields = ("id", "plwd", "caregiver", "settings", "goal", "role")
-        read_only_fields = fields # Not sure...
-
-    def get_role(self, obj):
-        req_user = self.context["request"].user
-        return "Patient" if obj.plwd == req_user else "Caregiver"
-    
 class DownloadDataSerializer(serializers.ModelSerializer):
     fileName = serializers.SerializerMethodField()
     fileContents = serializers.SerializerMethodField()
