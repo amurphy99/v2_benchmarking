@@ -10,6 +10,7 @@ interface RAGInstructionModalProps {
     name: string;
     description: string;
     instructions: string;
+    instruction_order: number;
   };
   // All existing instruction names for this user (used for duplicate check in create mode)
   existingNames: string[];
@@ -18,6 +19,7 @@ interface RAGInstructionModalProps {
     name: string;
     description: string;
     instructions: string;
+    instruction_order: number; 
   }) => void;
 }
 
@@ -32,6 +34,7 @@ export default function RAGInstructionModal({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [instructionOrder, setInstructionOrder] = useState<string>("1");
   const [error, setError] = useState<string | null>(null);
 
   // Reset fields whenever the modal is opened or the mode/initialValues change
@@ -41,6 +44,7 @@ export default function RAGInstructionModal({
     setName(initialValues?.name ?? "");
     setDescription(initialValues?.description ?? "");
     setInstructions(initialValues?.instructions ?? "");
+    setInstructionOrder(initialValues?.instruction_order?.toString() ?? "1");
     setError(null);
   }, [isOpen, initialValues, mode]);
 
@@ -77,8 +81,15 @@ export default function RAGInstructionModal({
       return;
     }
 
+    const orderNum = Number(instructionOrder);
+
+    if (!Number.isInteger(orderNum) || orderNum < 1) {
+    setError("Instruction order must be a whole number (1 or higher).");
+    return;
+    }
+
     setError(null);
-    onSubmit({ name, description, instructions });
+    onSubmit({ name, description, instructions, instruction_order: orderNum });
   };
 
   const title =
@@ -121,6 +132,16 @@ export default function RAGInstructionModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="1–2 lines describing when this instruction is used"
+          />
+
+          <label className={formText}>Instruction Order</label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            className={borderStyle}
+            value={instructionOrder}
+            onChange={(e) => setInstructionOrder(e.target.value)}
           />
 
           <label className={formText}>Instructions</label>

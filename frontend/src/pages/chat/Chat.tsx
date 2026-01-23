@@ -56,8 +56,41 @@ export function Chat() {
         setAnimCount((t) => t + 1);
     }
 
+    // selecting the type of chat
+    type ChatMode = "default" | "memory_activity";
+    const [chatMode, setChatMode] = useState<ChatMode>("default");
+
+    type DebugTurn = {
+        ts: number;
+        role: "user" | "assistant";
+        text: string;
+        state?: string;
+    };
+
+    const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
+
     // Live-chat hook
-    const { start, stop, save } = useLiveChat({ onUserUtterance, onSystemUtterance, onScores: () => {}, onEmotion});
+    // const { start, stop, save } = useLiveChat({ onUserUtterance, onSystemUtterance, onScores: () => {}, onEmotion});
+
+    const { start, stop, save } = useLiveChat({
+        onUserUtterance,
+        onSystemUtterance,
+        onScores: () => {},
+        onEmotion,
+        wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
+        onDebugTurn: (t) =>
+            setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),
+        onRagParseError: () => {
+            setBotMessage(
+              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
+            );
+        },
+        onChatError: () => {
+            setBotMessage(
+              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
+            );
+        },
+    });
     
     // Separate recording flag that we control ourselves
     const [recording, setRecording ] = useState(false);
@@ -119,16 +152,53 @@ export function Chat() {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-            <div className={`flex flex-row mb-[5rem] mx-[20vw] gap-[4em] justify-around`}>
+           <div
+                className={`flex flex-row ${
+                    chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
+                } mx-[20vw] gap-[4em] justify-around`}
+            >
                 <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
                 <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+
+                <select
+                value={chatMode}
+                onChange={(e) => {
+                    setChatMode(e.target.value as ChatMode);
+                    setDebugTurns([]);
+                }}
+                disabled={recording}
+                className="border max-h-1/2 rounded px-2 py-2"
+                >
+                <option value="default">default</option>
+                <option value="memory_activity">memory_activity</option>
+                </select>
             </div>
+
+            {/* Added only for debugging, will probably remove later */}
+            {chatMode === "memory_activity" && (
+            <div className="border rounded p-4 mx-[10vw] mb-[2rem] h-[35vh] overflow-y-auto">
+                <div className="font-semibold mb-2">
+                Memory Activity Debug (testing)
+                </div>
+
+                {debugTurns.map((t, i) => (
+                <div key={i} className="mb-2">
+                    <div className="text-xs text-gray-500">
+                    {t.role}
+                    {t.state ? ` · state: ${t.state}` : ""}
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">
+                    {t.text}
+                    </div>
+                </div>
+                ))}
+            </div>
+            )}
         </div>
         
 
         {/* SaveChatModal, controlled with props */}
         <SaveChatModal show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat}/>
-
     </>
     );
 }

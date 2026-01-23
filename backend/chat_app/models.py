@@ -293,6 +293,7 @@ class RAGInstructions(models.Model):
     name = models.CharField(max_length=100)
     instructions = models.TextField()
     description = models.TextField()
+    instruction_order = models.PositiveIntegerField(default=1, db_index=True)
 
     class Meta:
         constraints = [

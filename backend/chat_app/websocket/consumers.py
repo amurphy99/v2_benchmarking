@@ -20,6 +20,7 @@ from .services.bg_helpers    import fire_and_log
 from .services.chatHelpers   import handle_transcription, handle_stt_output
 from .services.audioHelpers  import extract_audio_biomarkers, extract_text_biomarkers
 from .services.speechProvider import SpeechToTextProvider
+from .services.activityChatHelper import rag_response_fn, START_SCENARIO
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
 
@@ -70,6 +71,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # I don't think any frontend uses these during the chat right now, but I'll leave this option in
         self.return_biomarkers = False # (self.source in ["webapp"])
+
+        # close any currently-active session for this user (to avoid clashes between multiple connections)
+        await database_sync_to_async(ChatService.close_any_active_session)(self.user)
 
         # -----------------------------------------------------------------------
         # 2) Load or create an active session
@@ -196,8 +200,77 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count += 1
         self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
         
-    async def _toggle_stream(self, data):
-        if data["data"] == "start":
-            self.stt_provider.start()
-        elif data["data"] == "stop":
-            self.stt_provider.stop()
+        
+    def _toggle_stream(self, data):
+        cmd = data["data"]
+        if   cmd == "start": self.stt_provider.start()
+        elif cmd == "stop" : self.stt_provider.stop()
+
+# ======================================================================= ===================================
+# ActivityChatConsumer
+# ======================================================================= ===================================
+
+class ActivityChatConsumer(ChatConsumer):
+    """
+    Same session handling + persistence + biomarkers as ChatConsumer (through inheritance),
+    but swaps response generation to the scenario-based RAG pipeline.
+    """
+
+    ACTIVITY_NAME = "memory_activity"
+
+    async def connect(self):
+        await super().connect()
+
+        self.rag_state = {"current_scenario": START_SCENARIO}
+
+        # Override the STT provider callback so backend-ASR uses RAG
+        loop_stt = asyncio.get_event_loop()
+        self.stt_provider = SpeechToTextProvider(
+            self._handle_stt_output_activity,
+            self._add_message_CB,
+            self.send,
+            self._utt_bio,
+            None,
+            loop_stt,
+        )
+
+    async def _handle_stt_output_activity(self, data, msg_callback, send_callback, bio_callback):
+        # mirror handle_stt_output(), but pass response_fn
+        user_utt = data["data"]
+        await send_callback(json.dumps({
+            "type": "user_utt",
+            "data": user_utt,
+            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+        }))
+
+        await handle_transcription(
+            data,
+            msg_callback=msg_callback,
+            send_callback=send_callback,
+            bio_callback=bio_callback,
+            response_fn=rag_response_fn,
+            response_fn_kwargs={
+                "user": self.user,
+                "activity_name": self.ACTIVITY_NAME,
+                "rag_state": self.rag_state,
+            },
+        )
+
+    async def receive_json(self, data, **kwargs):
+        if data["type"] == "transcription":
+            await handle_transcription(
+                data,
+                msg_callback=self._add_message_CB,
+                send_callback=self.send,
+                bio_callback=self._utt_bio,
+                response_fn=rag_response_fn,
+                response_fn_kwargs={
+                    "user": self.user,
+                    "activity_name": self.ACTIVITY_NAME,
+                    "rag_state": self.rag_state,
+                },
+            )
+            return
+
+        # Everything else is identical to normal chat
+        return await super().receive_json(data, **kwargs)

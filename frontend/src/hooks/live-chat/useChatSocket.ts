@@ -8,11 +8,13 @@ import { getAccess } from "@/api";
 // ws://localhost:8000/ws/chat/?token=<ACCESS>&source=webapp
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
 export default function useChatSocket({ 
-    recording, 
+    recording,
+    wsPath        = "/ws/chat/", 
     onLLMResponse = (unknown)   => {}, 
     onScores      = (WSMessage) => {},
     onUserUtt     = (text) => {},
     onAudio       = (data) => {},
+    onError       = (_) => {},
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -26,8 +28,8 @@ export default function useChatSocket({
     */
     const wsUrlBase =
         location.hostname === "localhost"
-            ? `ws://localhost:8000/ws/chat/`
-            : `wss://${location.host}/ws/chat/`;
+            ? `ws://localhost:8000${wsPath}`
+            : `wss://${location.host}${wsPath}`;
     const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
 
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
@@ -53,8 +55,11 @@ export default function useChatSocket({
             onAudio(data);
         } else if (type === "lipsync_data") {
             console.log("Received lipsync data")
+        } else if (type === "rag_parse_error" || type === "chat_error") {
+            console.log("Json Parsing Error Occured")
+            onError(response);
         }
-    }, [onLLMResponse, onScores]);
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onError]);
 
     // Open and close the websocket connection on change of the "recording" flag
     const wsRef = useRef<WebSocket | null>(null); 

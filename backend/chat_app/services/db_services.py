@@ -91,6 +91,12 @@ class ChatService:
         logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")
         return session
     
+    @staticmethod
+    @transaction.atomic
+    def close_any_active_session(user):
+        qs = ChatSession.objects.select_for_update().filter(user=user, is_active=True)
+        for s in qs:
+            ChatService.close_session(user, s, source=s.source)
     # -----------------------------------------------------------------------
     # Message & Biomarker Score Helpers
     # -----------------------------------------------------------------------
