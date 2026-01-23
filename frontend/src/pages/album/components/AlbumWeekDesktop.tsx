@@ -20,7 +20,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
             onClick={() => {toWeeklySummary(week)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()} </h2>
             <div>
-                <div className="carousel-container">
+                <div className="carousel-container w-[95%]">
                     { sessions.map( (session, idx) => {
                         if (!session.image) {
                             session.image = defaultImage
@@ -44,7 +44,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                                     </a>
                                 </div>
                                 <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics[0]}</p>
-                                <p className="m-0 mx-auto">{session.duration} minutes</p>
+                                <p className="m-0 mx-auto">{session.duration / 60} minutes</p>
                             </div>
                         )
                     })}

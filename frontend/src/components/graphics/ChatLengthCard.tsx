@@ -8,7 +8,7 @@ export default function ChatLengthCard({role, sessions, type} : {role: string, s
                 <h2 className={`${role}-text`}>{type} Chat Length</h2>
                 <div className="flex flex-row text-lg">
                     <b>{type} Total Length</b>
-                    <p className="text-right ml-auto">{(sessions.reduce((acc, session) => acc + session.duration, 0) / sessions.length)} mins </p>
+                    <p className="text-right ml-auto">{(sessions.reduce((acc, session) => acc + session.duration, 0) / sessions.length) / 60} mins </p>
                 </div>
                 <div className="flex flex-row text-lg">
                     <b>{type} Time Spent Speaking</b>
@@ -23,7 +23,7 @@ export default function ChatLengthCard({role, sessions, type} : {role: string, s
                     <div className="mt-[5rem]">
                         <div className="flex flex-col text-lg text-center">
                             <b>{type} Total Length</b>
-                            <p>{(sessions.reduce((acc, session) => acc + session.duration, 0) / sessions.length)} mins </p>
+                            <p>{(sessions.reduce((acc, session) => acc + session.duration, 0) / sessions.length) / 60} mins </p>
                         </div>
                         <div className="flex flex-col text-lg text-center">
                             <b>{type} Time Spent Speaking</b>

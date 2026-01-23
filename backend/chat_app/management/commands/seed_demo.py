@@ -19,6 +19,12 @@ DEMO_MESSAGES = [
     "Did you enjoy your walk?",
     "Yes, I enjoyed my walk.",
 ]
+DEMO_MESSAGES_ALERT = [
+    "Hi, I'm the user. I was feeling sad today.",
+    "Why were you feeling sad today?",
+    "I was feeling lonely and down.",
+    "I'm sorry to hear that."
+]
 DEMO_RAG_NAMES = [
     "start_conversation",
     "end_conversation",
@@ -94,8 +100,8 @@ class Command(BaseCommand):
         self.seed_images()
 
         # Delete and recreate the user data, RAG instructions
-        User = get_user_model()
-        User.objects.filter(username__in=USERNAMES).delete()
+        # User = get_user_model()
+        # User.objects.filter(username__in=USERNAMES).delete()
 
         # Setup for Goal creation
         two_days_ago = timezone.localdate() - timedelta(days=2)
@@ -139,6 +145,30 @@ class Command(BaseCommand):
         self.seed_reminders(profile_2, num_reminders=5)
         self.seed_activities()
         self.seed_rag_instructions()
+    
+    # ====================================================================
+    # Helper: Deletes all data associated with a user, such as Account, Profile, Settings, etc
+    # ====================================================================
+    def delete_user_data(self, user):
+        account = Account.objects.get(user=user)
+        RAGInstructions.objects.filter(user=user).delete()
+        try: # The case where this user's account is the main account of a Profile object
+            profile = Profile.objects.get(account=account)
+            Goal.objects.get(profile=profile).delete()
+            UserSettings.objects.get(profile=profile).delete()
+            ChatSession.objects.filter(profile=profile).delete()
+            profile.delete()
+        except Profile.DoesNotExist: # The case where this user's account is a secondary account of a Profile object
+            try: # The case where this user's account is linked to a Profile
+                access = Access.objects.get(account=account)
+                profile = access.profile
+                Goal.objects.get(profile=profile).delete()
+                UserSettings.objects.get(profile=profile).delete()
+                ChatSession.objects.filter(profile=profile).delete()
+                profile.delete()
+            except Access.DoesNotExist: # The case where this user's account is not linked to anything; do nothing
+                pass
+        account.delete()
 
     # ====================================================================
     # Helper: Get user if exists (cleaning their data), or create new
@@ -156,15 +186,11 @@ class Command(BaseCommand):
             user.set_password(kwargs.get('password', '1'))
             user.save()
             
-            # Delete Profiles linked to this user
-            Profile.objects.filter(plwd=user).delete()
-            Profile.objects.filter(caregiver=user).delete()
-            
-            # Delete other direct relations
-            ChatSession.objects.filter(user=user).delete()
-            RAGInstructions.objects.filter(user=user).delete()
+            # Delete data linked to this user
+            self.delete_user_data(user)
             
         return user
+        
 
     # Seed AlbumImages into the DB
     # ====================================================================
@@ -209,7 +235,32 @@ class Command(BaseCommand):
                     score = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3), ts=ts)
                     score.ts = ts
                     score.save(update_fields=["ts"])
+        # Seed the alert chat
+        topic = DEMO_IMAGES[0]['topic']
+        image = AlbumImage.objects.get(topic=topic)
 
+        # 1) Create a ChatSession object
+        session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
+                                                topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
+                                                sentiment="Negative", image=image)
+        session.date = (now_utc).replace(hour=9, minute=0, second=0, microsecond=0)
+        session.save(update_fields=["date"])
+
+        # 2) Add ChatMessages to the ChatSession (message timestamps spaced 20 seconds apart)
+        for idx, text in enumerate(DEMO_MESSAGES_ALERT):
+            ts   = started_at + timedelta(seconds=20 * idx)
+            role = "user" if idx % 2 == 0 else "assistant"
+            message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=ts, end_ts=(ts + timedelta(seconds=20)))
+            message.ts = ts
+            message.save(update_fields=["ts"])
+
+        # 3) Add ChatBiomarkerScores to the ChatSession (random scores)
+        for j in range(3):
+            ts = started_at + timedelta(seconds=40 * j + 20)
+            for score_type in BIOMARKERS:
+                score = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3), ts=ts)
+                score.ts = ts
+                score.save(update_fields=["ts"])
             #print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")
             
     # ====================================================================
