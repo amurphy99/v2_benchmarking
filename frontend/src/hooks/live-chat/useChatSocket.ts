@@ -1,6 +1,5 @@
+import { getAccess } from "@/context/AuthProvider";
 import { useRef, useEffect, useState, useCallback } from "react";
-
-import { getAccess } from "@/api";
 
 // ====================================================================
 // Handle the WebSocket Connection to the Backend

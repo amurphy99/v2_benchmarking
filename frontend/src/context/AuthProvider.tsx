@@ -1,30 +1,31 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Spinner } from "../components/Spinner";
 
-import { getAccess, setAccess, User, Profile, getProfile, Account } from "@/api"
+import { User, Account } from "@/api"
 import * as authApi  from "@/api/auth";
 import { getAccount } from "@/api/endpoints/account";
 
 // Create the context (describes what any component will get when it calls useAuth())
 interface AuthCtx { 
-    user?: User; 
     account?: Account,
-    role: string,
+    loading: boolean,
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
 }
 
 const AuthContext = createContext<AuthCtx>(null!);
 
+export const getAccess = () => {
+    const tokens = localStorage.getItem("authTokens");
+    return tokens ? JSON.parse(tokens).access : null;
+};
+
 // ====================================================================
 // AuthProvider 
 // ====================================================================
 // Local state only holds User & Profile data
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user,    setUser   ] = useState<User   >();
     const [account, setAccount] = useState<Account>();
-    const [role, setRole      ] = useState<string >("");
-    const [error,   setError  ] = useState<string >(); 
     const [loading, setLoading] = useState(false);
     
     // Login
@@ -33,25 +34,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // POST to /token/ & get Token/User information
             setLoading(true);
             const response = await authApi.login(username, password);  // { access, user }
-            setAccess(response.access);
-            setUser  (response.user  ); 
-            localStorage.clear();
+            localStorage.removeItem('authTokens');
             localStorage.setItem('authTokens', JSON.stringify(response));
             
             // Fetch user account; blocks until the account returns and we have data to populate pages
-            await getAccount().then((acc) => {
-                setAccount(acc);
-                if (acc.role.toLowerCase() == "patient") {
-                    setRole("patient");
-                } else {
-                    setRole("caregiver");
-                }
-            }).catch(console.error);
+            await getAccount().then(setAccount).catch(console.error);
         } catch (err) { 
-            setError((err as Error).message); 
             console.log((err as Error).message); 
             throw err; // ToDo: Add toast back here
-        } finally     { setLoading(false); }
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const refreshAccess = async () => {
@@ -61,57 +54,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
         try {
-            setLoading(true);
             const newAuthTokens = await authApi.refreshToken(authTokens.refresh);
-            setUser(newAuthTokens.user);
-            setAccess(newAuthTokens.access);
             localStorage.setItem('authTokens', JSON.stringify(newAuthTokens));
+            await getAccount().then(setAccount).catch(console.error);
         } catch (err) {
-            setError((err as Error).message); 
             console.log((err as Error).message);
             logout();
-        } finally     { 
-            try {
-                await getAccount().then((acc) => {
-                    setAccount(acc);
-                    if (acc.role.toLowerCase() == "patient") {
-                        setRole("patient");
-                    } else {
-                        setRole("caregiver");
-                    }
-                }).catch(console.error);
-            } catch (err) {
-                console.error("Error getting profile: ", err);
-            } finally {
-                setLoading(false); 
-            }
         }
     }
 
     // Logout (reset the User and Profile to undefined)
     const logout = () => { 
-        setAccess(undefined); 
-        setUser(undefined); 
-        setRole("");
         setAccount(undefined);
         localStorage.clear();
     };
 
     useEffect(() => {
 		const initAuth = async () => {
-            if (!getAccess()) {
-				await refreshAccess();
-			} else {
-                await getAccount().then((acc) => {
-                    setAccount(acc);
-                    if (acc.role.toLowerCase() == "patient") {
-                        setRole("patient");
-                    } else {
-                        setRole("caregiver");
-                    }
-                }).catch(console.error);
-            }
-			setLoading(false);
+            setLoading(true);
+            try {
+                if (!getAccess()) {
+                    await refreshAccess();
+                } else {
+                    await getAccount().then(setAccount).catch(console.error);
+                }
+            } catch (err) {
+                console.log((err as Error).message);
+                logout();
+            } finally {
+                setLoading(false);
+            } 
 		};
 
 		initAuth();
@@ -119,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Return AuthContext
     return (
-        <AuthContext.Provider value={{ user, account, role, login, logout }}>
+        <AuthContext.Provider value={{ account, loading, login, logout }}>
             { loading ? <Spinner/> : children }
         </AuthContext.Provider>
     );

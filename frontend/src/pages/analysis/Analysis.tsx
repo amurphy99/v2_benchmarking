@@ -11,7 +11,7 @@ import GeneralStatusCard from "./components/GeneralStatusCard";
 import ImpactFactorsCard from "./components/ImpactFactorsCard";
 
 export function Analysis() {
-    const { role } = useAuth();
+    const role = useAuth().account.role == "patient" ? "patient" : "caregiver";
     const { data: sessions, isLoading } = useChatSessions();
     if (isLoading) { 
         return <p>Loading...</p>; 
