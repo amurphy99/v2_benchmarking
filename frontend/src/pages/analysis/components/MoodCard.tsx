@@ -5,7 +5,7 @@ import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 
 export default function MoodCard( { week } : { week: ChatWeek}) {
-    const {role} = useAuth();
+    const role = useAuth().account.role;
     const {data: profile, isLoading} = useProfile();
 
     if (isLoading) {

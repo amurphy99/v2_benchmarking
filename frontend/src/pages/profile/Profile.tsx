@@ -9,8 +9,11 @@ export function Profile() {
     const { account } = useAuth();
     const role = account.role == "patient" ? "patient" : "caregiver";
     const isCare = role != "patient";
-    const { data: profile } = useProfile();
+    const { data: profile, isLoading } = useProfile();
     
+    if (isLoading) {
+        return null;
+    }
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 
     if (!isCare) {
