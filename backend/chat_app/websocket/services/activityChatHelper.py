@@ -1,4 +1,5 @@
 
+from curses import raw
 import time
 import uuid
 import logging
@@ -25,6 +26,9 @@ from .utils.chatUtils import (
     construct_transition_criteria_text,
     organize_message_history,
     clean_llm_response,
+    tail_messages,
+    organize_full_conversation, 
+    parse_yes_no,
 )
 
 from .utils.transitionScoreUtils import (
@@ -158,8 +162,14 @@ def build_response_system_prompt(
     current_scenario: str,
     instructions_text: str,
     state_history: List[BaseMessage],
+    previous_state_context: str = "",
 ) -> str:
     chat_history = organize_message_history(state_history)
+
+    prev_block = ""
+    if previous_state_context.strip():
+        prev_block = f"\nConversation history from the previous state (for continuity only):\n{previous_state_context}\n"
+
     return f"""
 Your name is QT robot. You are a state-based conversational assistant.
 
@@ -176,12 +186,15 @@ INSTRUCTIONS FOR CURRENT_STATE:
 ----------------
 {instructions_text}
 ----------------
-Recent chat history (most recent last):
+{prev_block}
+
+Recent conversation history in the CURRENT_STATE:
 {chat_history}
 
 Your Task:
-- Analyze the recent chat history (for the current state) with the user provided above.
-- Respond to the user in the current turn.
+- Analyze the recent conversation history provided above.
+- Use the previous-state history only to maintain continuity.
+- Follow the CURRENT_STATE instructions strictly  and respond to the user.
 - **Remember, your response should guide** the conversation toward achieving the goals of the current state.
 - Keep the reply short and natural.
 - Do not explain or include comments with the output.
@@ -189,6 +202,16 @@ Your Task:
 - DO NOT mention any of the instructions or guidelines in your response.
 """
 
+def build_summary_system_prompt() -> str:
+    return f"""
+Summarize the conversation below in a short, concise way.
+
+Rules:
+- Reply with a single paragraph with 2 to 4 sentences max.
+- Only focus on the topics discussed within the conversation.
+- Only reply in plain language.
+- **Do not include any special formatting such as headings, bullet points, lists or newlines.**
+"""
 
 # =============================================================================
 # MAIN ENTRYPOINT
@@ -211,6 +234,63 @@ async def rag_response_fn(
     trace_id = uuid.uuid4().hex[:8]
     t0 = time.time()
     logger.info(f"{lu.RLINE_1}{lu.MAGENTA}[ACT-RULE][{trace_id}] Start{lu.RESET}{lu.RLINE_2}")
+
+    # --- handle summary choice if pending ---
+    if rag_state.get("awaiting_summary_choice"):
+        chat_state: Optional[ChatState] = rag_state.get("_chat_state")
+        # If for some reason chat_state is missing, fail gracefully
+        if not chat_state:
+            rag_state["awaiting_summary_choice"] = False
+            return {
+                "text": "I can’t access the conversation history right now. Sorry about that! It was nice talking with you. Have a great day!",
+                "current_scenario": "close_chat",
+                "next_scenario": "",
+            }
+
+        feedback = parse_yes_no(user_text)
+        if feedback is None:
+            # If parser fails to extract a yes or a no. Ask again (don’t end conversation)
+            return {
+                "text": "I am sorry, I didn't quite catch that. Would you like a short summary of the conversation? Please simply reply by saying yes or no.",
+                "current_scenario": rag_state.get("current_scenario"),
+                "next_scenario": "",
+            }
+
+        # Clear the flag either way
+        rag_state["awaiting_summary_choice"] = False
+
+        if feedback is False:
+            return {
+                "text": "Got it. It was nice talking with you. Have a great rest of your day!",
+                "current_scenario": "close_chat",
+                "next_scenario": "",
+            }
+
+        # feedback is True → generate summary
+        full_hist = organize_full_conversation(chat_state)
+        system_prompt = build_summary_system_prompt()
+        human_prompt = f"""\nConversation: \n{full_hist}\n"""
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=human_prompt),
+        ]
+
+        raw_summary = await invoke_agent(
+            messages,
+            trace_id=trace_id,
+            temperature=0.3,
+            top_p=0.9,
+            top_k=20,
+            max_tokens=128,
+        )
+        raw = (raw_summary or "").strip()
+        summary_text = clean_llm_response(raw) or raw
+
+        return {
+            "text": summary_text,
+            "current_scenario": "close_chat",
+            "next_scenario": "",
+        }
 
     # --- resolve activity + instruction owner ---
     activity = await get_activity(activity_name)
@@ -271,12 +351,28 @@ async def rag_response_fn(
     # --- build state-specific history (No longer from context_buffer) ---
     current_state_history: List[BaseMessage] = chat_state.get_state_history(current)
 
+    # --- previous-state context ---
+    previous_state_context = ""
+    MAX_PREV_MSGS = 6
+
+    cur_msg_count = len(current_state_history)
+    # Calculate how many previous state messages to include
+    prev_msgs_to_include = max(0, MAX_PREV_MSGS - cur_msg_count)
+
+    if prev_msgs_to_include > 0 and chat_state.state_trace:
+        prev_state = chat_state.state_trace[-1]  # most recent previous state
+        prev_state_history = chat_state.get_state_history(prev_state)
+        prev_tail = tail_messages(prev_state_history, prev_msgs_to_include)
+        if prev_tail:
+            previous_state_context = organize_message_history(prev_tail)
+
     # --- CALL #1: assistant response ---
     try:
         system_prompt = build_response_system_prompt(
             current_scenario=current,
             instructions_text=instructions_text,
             state_history=current_state_history,
+            previous_state_context=previous_state_context,
         )
 
         messages = [
@@ -337,6 +433,19 @@ async def rag_response_fn(
         rag_state["current_scenario"] = next_name
         t_scorer.reset_cache()
         transitioned = True
+
+    is_final_state = (current == ordered_names[-1])
+    if transition_now and is_final_state:
+        if not rag_state.get("awaiting_summary_choice"):
+            rag_state["awaiting_summary_choice"] = True
+            assistant_text = assistant_text.rstrip() + "\n\nWould you like a summary of this conversation? Please reply by simply saying yes or no."
+            # update last assistant message in chat history
+            chat_state.history_by_state[current][-1] = AIMessage(content=assistant_text)
+            rag_state["current_scenario"] = "ask_for_summary"
+            current = "ask_for_summary"
+            t_scorer.reset_cache()
+            transitioned = True
+
 
     rag_state["_last_transition_debug"] = {
         "trace_id": trace_id,
