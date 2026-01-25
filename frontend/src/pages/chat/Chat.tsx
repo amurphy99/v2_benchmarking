@@ -87,6 +87,11 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
               <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
             );
         },
+        onChatClosed: () => {
+            setRecording(false);
+            setShowModal(false);
+            navigate("/goal");
+        },
     });
     
     // Separate recording flag that we control ourselves
