@@ -1,6 +1,7 @@
 import { updateUserSettings } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { useProfile } from "@/hooks/queries/useProfile";
+import { useUserSettings } from "@/hooks/queries/useUserSettings";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
@@ -8,11 +9,11 @@ import { useState } from "react";
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
 
 export default function ChatTypeForm() {
-    const { data: profile } = useProfile();
-    const [taskType,  setTaskType ]         = useState<string     >(profile.settings.taskType);
-    const [taskSubtype, setTaskSubtype]     = useState<string     >(profile.settings.taskSubtype);
+    const { data: settings } = useUserSettings();
+    const [taskType,  setTaskType ]         = useState<string     >(settings.taskType);
+    const [taskSubtype, setTaskSubtype]     = useState<string     >(settings.taskSubtype);
     const [selectedFile, setSelectedFile]   = useState<File | null>(null);
-    const [model, setModel]                 = useState<string     >(profile.settings.modelChoice);
+    const [model, setModel]                 = useState<string     >(settings.modelChoice);
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();

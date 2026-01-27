@@ -16,7 +16,7 @@ export function WeekSummary() {
     const { state } = useLocation() as { state?: { chatWeek?: ChatWeek, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatWeek) { navigate("/chat"); };
-    const role = useAuth().role;
+    const role = useAuth().account.role;
 
     const chatWeek = state.chatWeek;
     const weeklyMessages = getMessages(chatWeek.sessions);

@@ -6,16 +6,20 @@ import { CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
 import { useProfile } from "@/hooks/queries/useProfile";
 
 export function Profile() {
-    const { user, role } = useAuth();
+    const { account } = useAuth();
+    const role = account.role == "patient" ? "patient" : "caregiver";
     const isCare = role != "patient";
-    const { data: profile } = useProfile();
+    const { data: profile, isLoading } = useProfile();
     
+    if (isLoading) {
+        return null;
+    }
     const labelStyle = "w-1/4 flex justify-end text-right text-xl";
 
     if (!isCare) {
         return (
             <div className="m-[2rem]">
-                <h1 className="flex justify-center">{user.first_name} {user.last_name}</h1>
+                <h1 className="flex justify-center">{account.user.first_name} {account.user.last_name}</h1>
                 <FaCircleUser size={"5rem"} className={`mx-auto mb-[1rem]`} color={PATIENT_OKLCH}/>
 
                 <ProfileForm />
@@ -36,7 +40,7 @@ export function Profile() {
         }
         return (
             <div className="m-[1rem] sm:m-[2rem] md:m-[3rem] lg:m-[4rem]">
-                <h1 className="flex justify-center">{user.first_name} {user.last_name}</h1>
+                <h1 className="flex justify-center">{account.user.first_name} {account.user.last_name}</h1>
                 <FaCircleUser size={"5rem"} className={`mx-auto mb-[1rem]`} color={CAREGIVER_OKLCH}/>
                 <p className="text-lg text-center">{profile.account.user.first_name} is currently sharing their information with you.
                     Is there anyone else with whom you'd like to share {profile.account.user.first_name}'s profile?

@@ -11,7 +11,7 @@ import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
 
 export function DaySummary() {
-    const { role } = useAuth();
+    const role = useAuth().account.role;
     const { state } = useLocation() as { state?: { chatSession?: ChatSession, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };

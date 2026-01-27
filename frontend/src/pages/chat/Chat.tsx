@@ -8,7 +8,6 @@ import SaveChatModal from "@/components/modals/SaveChatModal";
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
-import { useAuth } from "@/context/AuthProvider";
 import { useProfile } from "@/hooks/queries/useProfile";
 
 

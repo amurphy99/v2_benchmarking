@@ -8,7 +8,7 @@ import Avatar from "../common/avatar/Avatar";
 import { useProfile } from "@/hooks/queries/useProfile";
 
 export function Goal() {
-    const { role } = useAuth();
+    const role = useAuth().account.role;
     const isCare = role != "patient";
     const { data: sessions, isLoading } = useChatSessions();
     const { data: profile, isLoading: isLoadingProfile } = useProfile();

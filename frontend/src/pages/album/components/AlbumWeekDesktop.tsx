@@ -7,7 +7,7 @@ import { smallShadow } from "@/utils/styling/sharedStyles";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
-    const { role } = useAuth();
+    const role = useAuth().account.role;
     const navigate = useNavigate();
 
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
