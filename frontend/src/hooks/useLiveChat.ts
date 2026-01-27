@@ -19,6 +19,7 @@ export default function useLiveChat({
     onDebugTurn,
     onRagParseError,
     onChatError,
+    onChatClosed,
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
@@ -32,6 +33,7 @@ export default function useLiveChat({
                         }) => void;
     onRagParseError  ?: () => void;
     onChatError      ?: () => void;
+    onChatClosed     ?: () => void; 
 }) {
     // Misc. setup
     const qc = useQueryClient();
@@ -52,6 +54,14 @@ export default function useLiveChat({
 
         if (response.emotion) {
             onEmotion(response.emotion)
+        }
+
+        if (state === "close_chat") {
+            setTimeout(() => {
+                setRecording(false);
+                send({ type: "end_chat", data: Date.now() });
+                onChatClosed?.();
+            }, 500);
         }
 	};
     const [recording, setRecording] = useState(false);

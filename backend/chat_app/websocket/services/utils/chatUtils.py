@@ -177,6 +177,30 @@ def organize_message_history(msg_history: list) -> str:
             
     return "".join(parts)
 
+def organize_full_conversation(state: ChatState) -> str:
+    """
+    Fetch all state histories in the order they were visited.
+    state.state_trace contains completed/visited states.
+    """
+    ordered_states = []
+    for s in state.state_trace:
+        if s not in ordered_states:
+            ordered_states.append(s)
+    if state.current_scenario not in ordered_states:
+        ordered_states.append(state.current_scenario)
+
+    parts: list[str] = []
+    for s in ordered_states:
+        parts.append(organize_message_history(state.get_state_history(s)))
+
+    return "".join(parts)
+
+
+def tail_messages(msg_history: List[BaseMessage], max_messages: int) -> List[BaseMessage]:
+    if max_messages <= 0:
+        return []
+    return msg_history[-max_messages:]
+
 
 def clean_llm_response(text: str) -> str:
     # Pattern explanation:
@@ -188,3 +212,13 @@ def clean_llm_response(text: str) -> str:
     if match:
         return match.group(1)
     return "" # Return empty if no complete sentence exists
+
+
+def parse_yes_no(text: str) -> Optional[bool]:
+    t = (text or "").strip().lower()
+
+    if re.search(r"\b(yes|yep|yeah|sure|okay)\b", t):
+        return True
+    if re.search(r"\b(no|nope|nah)\b", t):
+        return False
+    return None
