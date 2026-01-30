@@ -28,6 +28,7 @@ export function IsCaregiver() {
     const { account, loading } = useAuth();
 
     if (loading) return <Spinner />
+
     const role = account.role == "patient" ? "patient" : "caregiver";
     const isCare = role != "patient";
     return isCare ? <Outlet /> : <Navigate to="/goal" replace />;

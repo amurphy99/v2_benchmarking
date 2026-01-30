@@ -1,19 +1,25 @@
-import { updateUserSettings } from "@/api";
-import { useAuth } from "@/context/AuthProvider";
-import { useProfile } from "@/hooks/queries/useProfile";
+import { getUserSettings, updateUserSettings } from "@/api";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Spinner } from "react-bootstrap";
 
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
 
 export default function ChatTypeForm() {
-    const { data: settings } = useUserSettings();
-    const [taskType,  setTaskType ]         = useState<string     >(settings.taskType);
-    const [taskSubtype, setTaskSubtype]     = useState<string     >(settings.taskSubtype);
+    const [taskType,  setTaskType ]         = useState<string     >("");
+    const [taskSubtype, setTaskSubtype]     = useState<string     >("");
     const [selectedFile, setSelectedFile]   = useState<File | null>(null);
-    const [model, setModel]                 = useState<string     >(settings.modelChoice);
+    const [model, setModel]                 = useState<string     >("");
+    
+    useEffect(() => {
+        getUserSettings().then(settings => {
+            setTaskType(settings.taskType);
+            setTaskSubtype(settings.taskSubtype);
+            setModel(settings.modelChoice);
+        });
+    }, [])
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();

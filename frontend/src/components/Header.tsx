@@ -36,9 +36,9 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // Header
 // ====================================================================
 export default function Header() {
-    const { user, role } = useAuth();
+    const { account } = useAuth();
     const { data: profile, isLoading } = useProfile();
-    const isCare = role == "caregiver";
+    const isCare = account.role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
@@ -58,7 +58,7 @@ export default function Header() {
     if (SHOW_HEADER.includes(pathname)) {
         return (
         <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
-            <ProfileInfo isCare={isCare} user={user} />
+            <ProfileInfo isCare={isCare} user={account.user} />
             <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
             {profile ? 
             <div className={`ml-auto flex items-center gap-3`}>

@@ -3,7 +3,6 @@ import { RAGInstructions } from "@/api/models";
 import { useRAGInstructions } from "@/hooks/queries/useRAGInstructions";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { h4 } from "@/utils/styling/sharedStyles";
-import { useAuth } from "@/context/AuthProvider";
 import { useState } from "react";
 import RAGInstructionModal from "@/components/modals/RAGInstructionModal";
 import { useProfile } from "@/hooks/queries/useProfile";

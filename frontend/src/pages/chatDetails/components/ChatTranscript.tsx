@@ -2,10 +2,8 @@ import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
 
-import { useAuth } from "@/context/AuthProvider";
 import { ChatSession, ChatMessage } from "@/api";
 import { formatElapsed } from "@/utils/styling/numFormatting";
-import { h2            } from "@/utils/styling/sharedStyles";
 import { useProfile } from "@/hooks/queries/useProfile";
 
 // ====================================================================
