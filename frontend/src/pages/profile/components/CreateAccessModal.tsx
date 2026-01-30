@@ -4,13 +4,17 @@ import { useAuth } from "@/context/AuthProvider";
 import { useProfile } from "@/hooks/queries/useProfile";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
-import { Modal } from "react-bootstrap";
+import { Modal, Spinner } from "react-bootstrap";
 
 export default function CreateAccessModal( {showForm, onHide, refetch} ) {
-    const { role } = useAuth();
-    const { data: profile } = useProfile();
+    const role = useAuth().account.role;
+    const { data: profile, isLoading } = useProfile();
     const [username, setUsername] = useState<string>("");
     const [permissions, setPermissions] = useState<string>("default");
+
+    if (isLoading) {
+        return <Spinner />
+    }
 
     const labelStyle = "text-lg w-1/3 flex justify-end text-right align-middle mb-0";
 
