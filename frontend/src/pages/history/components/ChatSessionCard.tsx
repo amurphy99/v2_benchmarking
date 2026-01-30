@@ -23,7 +23,7 @@ export default function ChatSessionCard({ session, sessions } : { session: ChatS
     const prevScores = averageScore(getSessionsBefore(sessions, chatDate));
 
     // Setup
-    const duration = Math.ceil(session.duration / 60);
+    const duration = Math.round((session.duration / 60) * 100) / 100;
 
     // --------------------------------------------------------------------
     // Return UI component 
@@ -45,7 +45,7 @@ export default function ChatSessionCard({ session, sessions } : { session: ChatS
 
             {/* Topics, Sentiment, & Composite Score  -- border-y border-gray-300 */}
             <div className="flex flex-col my-[0.25rem] py-[0.5rem] gap-[0.5rem] items-start">
-                <span> <b>Topics covered:</b> {session.topics} </span>
+                <span className="text-left"> <b>Topics covered:</b> {session.topics} </span>
                 <span> <b>Sentiment:</b> {session.sentiment} </span>
                 <span className="fst-italic"> <b>ToDo:</b> Composite score </span>
             </div>

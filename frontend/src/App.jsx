@@ -10,6 +10,7 @@ import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
 import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
+import Admin            from "@/pages/Admin";
 
 import "./App.css";
 import { useEffect, useState } from "react";
@@ -76,6 +77,8 @@ export default function App() {
                 <Route path="/day"      element={<DaySummary      />} />
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/transcript" element={<Transcript    />} />
+
+                <Route path="/admin" element={<Admin />} />
                 
             </Route>
 
