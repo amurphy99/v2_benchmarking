@@ -29,7 +29,7 @@ export default function ChatSessionCard({ session, sessions } : { session: ChatS
     // Return UI component 
     // --------------------------------------------------------------------
     return (
-    <button key={session.id} onClick={toChatDetails} className="flex flex-col border-1 px-[2rem] py-[1.5rem] border-gray-300 rounded hover:shadow-xl">
+    <button key={session.id} onClick={toChatDetails} className="flex flex-col border-1 px-[2rem] py-[1.5rem] border-gray-300 rounded h-full hover:shadow-xl">
         {/* Header/Title */}
         <div className="d-flex justify-between">
             <div className="d-flex align-items-center gap-[0.5rem]">
