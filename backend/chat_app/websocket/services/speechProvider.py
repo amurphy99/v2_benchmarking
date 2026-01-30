@@ -30,15 +30,23 @@ class SpeechToTextProvider:
         self.ts_callback = on_timestamps_callback # The function to call when word-level timestamps are received
         self._loop = loop or asyncio.get_event_loop()
         self._recent_transcript = None
+        self._transcript = ""
+        self._word_timestamps = []
 
     def _audio_generator(self):
         '''Generates audio requests from the audio buffer.'''
-        while self._streaming or self._audio_buffer:
+        while self._audio_buffer:
+            # If there is more data in the buffer, keep yielding streaming requests
             if self._audio_buffer:
                 data = self._audio_buffer.get()
+                # If we hit a None object, that means the stop method was called. Reset the audio buffer and send the transcript.
                 if data is None:
-                    break
-                yield speech.StreamingRecognizeRequest(audio_content=data)
+                    self._streaming = False
+                    self._audio_buffer = Queue()
+                    if self._transcript and len(self._transcript) > 1:   
+                        self.send_transcript()
+                else:
+                    yield speech.StreamingRecognizeRequest(audio_content=data)            
 
     def start(self):
         '''Starts the streaming process. Initializes the configs and starts a new thread to handle the streaming without blocking.'''
@@ -62,7 +70,6 @@ class SpeechToTextProvider:
         
     def stop(self):
         '''Stops the streaming process.'''
-        self._streaming = False
         self._audio_buffer.put(None)
         
     def send_audio(self, data):
@@ -95,23 +102,8 @@ class SpeechToTextProvider:
                     self._recent_transcript = transcript
                     logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript}")
                     word_timestamps = self._get_word_timestamps(datetime.now(), result.alternatives[0].words)
-                    if self._transcript_callback:
-                        data = {"type": "user_utt", "data": transcript}
-                        if asyncio.iscoroutinefunction(self._transcript_callback):
-                            asyncio.run_coroutine_threadsafe(
-                                self._transcript_callback(data, self._msg_callback, self._send_callback, self._bio_callback),
-                                self._loop
-                            )
-                        else:
-                            self._transcript_callback(data)
-                    if self.ts_callback:
-                        if asyncio.iscoroutinefunction(self.ts_callback):
-                            asyncio.run_coroutine_threadsafe(
-                                self.ts_callback,
-                                self._loop
-                            )
-                        else:
-                            self.ts_callback(word_timestamps)
+                    self._word_timestamps.append(word_timestamps)
+                    self._transcript += transcript
                             
     def _get_word_timestamps(self, now, words):
         ''' Gets word-level timestamps of an array of WordInfo objects. Will return an array of dictionaries
@@ -122,6 +114,28 @@ class SpeechToTextProvider:
             "end": now + word.end_time
         } for word in words]
         return timestamps
+    
+    def send_transcript(self):
+        '''Calls the defined transcript callback and word timestamps callback and resets the transcript and word timestamps variables.'''
+        if self._transcript_callback:
+            data = {"type": "user_utt", "data": self._transcript}
+            if asyncio.iscoroutinefunction(self._transcript_callback):
+                asyncio.run_coroutine_threadsafe(
+                    self._transcript_callback(data, self._msg_callback, self._send_callback, self._bio_callback),
+                    self._loop
+                )
+            else:
+                self._transcript_callback(data)
+        self._transcript = ""
+        if self.ts_callback:
+            if asyncio.iscoroutinefunction(self.ts_callback):
+                asyncio.run_coroutine_threadsafe(
+                    self.ts_callback,
+                    self._loop
+                )
+            else:
+                self.ts_callback(self._word_timestamps)
+        self._word_timestamps = []
             
 
 class TextToSpeechProvider:

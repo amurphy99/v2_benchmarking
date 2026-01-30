@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Spinner } from "../components/Spinner";
 
-import { User, Account } from "@/api"
+import { Account } from "@/api"
 import * as authApi  from "@/api/auth";
 import { getAccount } from "@/api/endpoints/account";
+import toast from "react-hot-toast";
 
 // Create the context (describes what any component will get when it calls useAuth())
 interface AuthCtx { 
@@ -43,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log((err as Error).message); 
             throw err; // ToDo: Add toast back here
         } finally { 
+            toast("Logged in!");
             setLoading(false); 
         }
     };
@@ -92,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Return AuthContext
     return (
         <AuthContext.Provider value={{ account, loading, login, logout }}>
-            { loading ? <Spinner/> : children }
+            { loading || account == undefined ? <Spinner/> : children }
         </AuthContext.Provider>
     );
 };

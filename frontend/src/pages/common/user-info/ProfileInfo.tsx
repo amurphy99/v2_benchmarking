@@ -1,5 +1,5 @@
 import { useState                } from "react";
-import { OverlayTrigger, Popover } from "react-bootstrap";
+import { OverlayTrigger, Popover, Spinner } from "react-bootstrap";
 import { FaCircleUser } from "react-icons/fa6";
 import { User              } from "@/api";
 import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
@@ -14,9 +14,8 @@ import { useProfile } from "@/hooks/queries/useProfile";
 // Profile Information 
 // ====================================================================
 export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
-    const { logout } = useAuth();
-    const { data: profile, isLoading } = useProfile();
-    const navigate = useNavigate();
+    const { account, logout } = useAuth();
+    const {data: profile, isLoading} =  useProfile();
 
     // Popover controls
     const [show, setShow] = useState(false);
@@ -24,7 +23,7 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
     const close = () => setShow(false);
 
     if (isLoading) {
-        return null;
+        return <Spinner />
     }
 
     const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"
@@ -35,7 +34,7 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
     const popover = (
         <Popover id="profile-popover" onMouseEnter={open} onMouseLeave={close} style={{ maxWidth: "none", width: "max-content" }}> 
             <Popover.Body className="flex flex-col px-[1rem] py-[0.5rem]">
-                <span className="fs-4 fw-semibold"> {user.first_name} {user.last_name} </span>
+                <span className="fs-4 fw-semibold"> {account.user.first_name} {account.user.last_name} </span>
             
                 <div className="flex flex-col border-y p-[0.5rem] gap-[0.5rem] border-gray-300">
                     <NavLink to="/profile">
@@ -43,7 +42,7 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
                     </NavLink>
                     <button className="text-left text-blue-500 hover:text-blue-600 text-lg" onClick={() => logout()}>Log Out</button>
                 </div>
-                {isCare ? <DownloadButton /> : null}
+                {isCare && profile ? <DownloadButton /> : null}
             </Popover.Body>
         </Popover>
     );
@@ -68,7 +67,7 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
         }
 
         return (
-            <button disabled={!profile.account} className={profile.account ? reportStyle : disabledStyle} onClick={() => download()}>
+            <button className={reportStyle} onClick={() => download()}>
                 Download Report
             </button>
         ) 
@@ -84,28 +83,5 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
             <FaCircleUser size={"2.5rem"} color={isCare ? CAREGIVER_OKLCH : PATIENT_OKLCH}/>
         </button>
     </OverlayTrigger>
-    );
-}
-
-
-// --------------------------------------------------------------------
-// Icon, First+Last Name, & Username
-// --------------------------------------------------------------------
-function UserInfo({ user, isCare } : { user: User, isCare: boolean }) { 
-    return (
-    <div className="flex gap-[1rem] fs-6">
-        <span className="w-1/4 text-nowrap fs-6 fw-semibold"> 
-            {isCare ? "Care Partner" : "User"} 
-        </span>
-
-        <div className="w-1/3 flex gap-[0.5rem]"> 
-            <FaCircleUser size={25} color={isCare ? CAREGIVER_HEX : PATIENT_HEX}/>
-            <span className="text-nowrap"> {user.first_name} {user.last_name} </span>
-        </div>
-
-        <span className="w-1/3 text-nowrap fw-light font-monospace px-[0.5rem] rounded bg-gray-200"> 
-            {user.username} 
-        </span>
-    </div>
     );
 }

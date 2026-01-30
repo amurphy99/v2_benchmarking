@@ -106,11 +106,11 @@ export default function useLiveChat({
 	};
 	const stop = () => {
 		stopAud();
-        stopPlayer();
         send({ type: "toggle_stream", data: "stop" });
 	};
     const  save = () => {
         setRecording(false); 
+        stopPlayer();
         send({ type: "end_chat", data: Date.now() }); 
         qc.invalidateQueries({ queryKey: ["chatSessions"] });
     };

@@ -5,10 +5,10 @@ import   Header    from "@/components/Header";
 import FooterNav from "@/components/FooterNav";
 
 export function AppLayout() {
-    const { user, account } = useAuth();
+    const { account, loading } = useAuth();
     const { pathname } = useLocation();
     // Header & small info bar for development
-    const pageHeader = (user            ) ? (<Header />) : null;
+    const pageHeader = (account) ? (<Header />) : null;
 
     // Return UI component
     return (

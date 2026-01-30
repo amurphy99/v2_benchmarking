@@ -140,8 +140,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif data["type"] == "audio_data"        : await self._handle_audio_data(data)
         elif data["type"] == "transcription"     : await handle_transcription(data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
         elif data["type"] == "end_chat"          : 
-                    self.stt_provider.stop()
-                    await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)        
+            self.stt_provider.stop()
+            await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)        
         elif data["type"] == "toggle_stream": self._toggle_stream(data)
 
     # -----------------------------------------------------------------------

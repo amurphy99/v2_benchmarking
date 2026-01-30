@@ -1,7 +1,14 @@
 import { Button, Modal } from "react-bootstrap";
 
 // Modal for saving the current live chat
-export default function SaveChatModal({ show, onClose, saveChat }: { show: boolean; onClose: () => void; saveChat: () => void; }) {
+export default function SaveChatModal({ recording, show, onClose, saveChat }: { recording: boolean, show: boolean; onClose: () => void; saveChat: () => void; }) {
+    if (recording) {
+        return (
+            <Modal show={show} onHide={onClose} backdrop="static" keyboard={false}centered>
+                <Modal.Header closeButton><Modal.Title>Please stop recording before you end this chat.</Modal.Title></Modal.Header>
+            </Modal>
+        )
+    }
     return (
         <Modal show={show} onHide={onClose} backdrop="static" keyboard={false} centered >
 

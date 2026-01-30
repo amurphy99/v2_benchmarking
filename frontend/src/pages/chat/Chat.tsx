@@ -202,7 +202,7 @@ export function Chat() {
         
 
         {/* SaveChatModal, controlled with props */}
-        <SaveChatModal show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat}/>
+        <SaveChatModal recording={recording} show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat}/>
     </>
     );
 }
@@ -213,7 +213,7 @@ function RecordButton({ recording, stopRecording, startRecording } : { recording
     const style = "flex flex-col gap-2 items-center";
 
     const icon    = recording ? <BsPauseCircle size={"8vh"} style={{color: "black"}}/> : <BsPlayCircle size={"8vh"} style={{color: "black"}}/>;
-    const text    = recording ? "Pause Chat" : "Start Chat";
+    const text    = recording ? "End Recording" : "Start Recording";
     const onClick = recording ? stopRecording : startRecording;
 
     return <button className={style} onClick={onClick}> {icon} {text} </button>;
