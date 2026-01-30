@@ -29,7 +29,8 @@ class ChatService:
         Returns the single active ChatSession for the user or creates one if needed.
         Wrapped in a transaction to avoid problems from things like two cuncurrent requests.
         """
-        session, created = (ChatSession.objects.select_for_update().get_or_create(user=user, source=source, is_active=True))
+        profile = get_profile(user)
+        session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
     
     @staticmethod
@@ -41,7 +42,6 @@ class ChatService:
         """
         session.is_active = False
         session.end_ts    = timezone.now()
-
         # -----------------------------------------------------------------------
         # Get all messages for this session
         # ----------------------------------------------------------------------- 
@@ -83,7 +83,7 @@ class ChatService:
         
         profile = get_profile(user)
         if profile is not None:
-            settings = UserSettings.objects.get(user=profile)
+            settings = UserSettings.objects.get(profile=profile)
             session.taskType    = settings.taskType
             session.taskSubtype = settings.taskSubtype
         session.save()
@@ -94,7 +94,8 @@ class ChatService:
     @staticmethod
     @transaction.atomic
     def close_any_active_session(user):
-        qs = ChatSession.objects.select_for_update().filter(user=user, is_active=True)
+        profile = get_profile(user)
+        qs = ChatSession.objects.select_for_update().filter(profile=profile, is_active=True)
         for s in qs:
             ChatService.close_session(user, s, source=s.source)
     # -----------------------------------------------------------------------
@@ -113,5 +114,3 @@ class ChatService:
     @staticmethod
     def add_biomarkers_bulk(session, scores: dict):
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
-
-  
