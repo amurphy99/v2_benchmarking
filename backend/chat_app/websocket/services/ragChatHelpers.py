@@ -244,10 +244,10 @@ def build_system_prompt(
 
     Return ONLY this JSON:
 
-    {
+    {{
     "assistant_response": "...",
     "next_state": "..."
-    }
+    }}
 
     No markdown.
     No extra text.
