@@ -1,6 +1,7 @@
 # chat_app/services/ragChatHelper.py
 import time
 import uuid
+import json
 import logging
 from typing import Any
 
@@ -11,11 +12,12 @@ from channels.db import database_sync_to_async
 from pgvector.django import CosineDistance
 
 from chat_app.models import RAGInstructions, Activity
+from chat_app.services import logging_utils as lu
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
 from rag_vectorstore.services.vdb_services import get_embeddings_model
 
 from .chatHelpers import RagParseError 
-from .parsingHelpers import _log_json_fail, _truncate, parse_structured_llm_response, LlmResponse
+from .utils.jsonParsingUtils import _log_json_fail, _truncate, parse_structured_llm_response, LlmResponse
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
@@ -46,7 +48,6 @@ def resolve_instruction_owner(user):
     # Otherwise treat them as caregiver (or unpaired)
     return user
 
-
 def _message_content_to_text(content: Any) -> str:
     """Normalize LangChain message content to plain text."""
     if isinstance(content, str):
@@ -71,21 +72,36 @@ def _message_content_to_text(content: Any) -> str:
 
     return str(content)
 
+def _lc_messages_to_openai(messages: list[BaseMessage]) -> list[dict]:
+    out: list[dict] = []
+    for m in messages:
+        if isinstance(m, SystemMessage):
+            role = "system"
+        elif isinstance(m, HumanMessage):
+            role = "user"
+        elif isinstance(m, AIMessage):
+            role = "assistant"
+        else:
+            role = "user"
+        
+        out.append({"role": role, "content": _message_content_to_text(m.content)})
+    return out
+
 
 @database_sync_to_async
 def get_activity(activity_name: str) -> Activity:
     return Activity.objects.get(name=activity_name)
 
 @database_sync_to_async
-def get_available_scenarios(user_id: int, activity: Activity) -> list[dict]:
+def get_available_scenarios(user_id: int, activity_id: int) -> list[dict]:
     """
     Returns [{name: ..., description: ...}, ...]
     """
     qs = (
         RAGInstructions.objects
-        .filter(user=user_id, activity=activity)
-        .values("name", "description")
-        .order_by(Lower("name"))
+        .filter(user_id=user_id, activity_id=activity_id)
+        .order_by("instruction_order", "name")
+        .values("name", "instructions", "instruction_order")
     )
     return list(qs)
 
@@ -134,33 +150,36 @@ def retrieve_instruction_chunks(
         .order_by("distance")[:k]
     )
 
-    logger.info("Retrieved %d instruction chunks for instruction '%s'", len(fetched_instructions), instruction_name)
+    logger.info(f"{lu.CYAN}Retrieved %d instruction chunks for instruction '%s'{lu.RESET}", len(fetched_instructions), instruction_name)
     
     return fetched_instructions
 
+# =============================================================================
+# DB helper function for fetching the full instruction text from the main DB
+# =============================================================================
 @database_sync_to_async
-def retrieve_all_instruction_chunks(
+def get_full_instruction_text(
     *,
     instruction_name: str,
     user_id: int,
     activity_id: int,
-) -> list[RAGInstructionChunkEmbedding]:
+) -> str:
     """
-    Retrieve ALL chunks for a given scenario (instruction_name) for this user/activity,
-    """
-    q_emb = (
-        RAGInstructionChunkEmbedding.objects
-        .filter(name=instruction_name, user_id=user_id, activity_id=activity_id)
-        .order_by("chunk_index")
-    )
+    Retrieves the full instructions text for a given scenario (instruction_name)
+    for this user + activity from the main DB.
 
-    fetched_instructions = list(q_emb)
-    logger.info(
-        "Retrieved %d FULL instruction chunks for instruction '%s'",
-        len(fetched_instructions),
-        instruction_name,
-    )
-    return fetched_instructions
+    Raises ObjectDoesNotExist if not found.
+    """
+    try:
+        inst = RAGInstructions.objects.get(
+            user_id=user_id,
+            activity_id=activity_id,
+            name=instruction_name,
+        )
+        return inst.instructions
+    except ObjectDoesNotExist:
+        logger.info(f"{lu.BG_RED}[RAG-PHI3] No RAGInstructions row found for user_id={user_id} activity_id={activity_id} name='{instruction_name}'{lu.RESET}")
+        return ""
 
 def chunks_to_text(chunks: list[RAGInstructionChunkEmbedding]) -> str:
     parts = []
@@ -232,30 +251,33 @@ def build_system_prompt(
     {{"assistant_response":"Would you like to talk about a favorite memory connected to that?","next_scenario":"initiate_memory_activity"}}
     """
 
-
 async def invoke_chain_get_raw_text(messages: list) -> str:
     """
-    Run prompt -> llm only and return raw text output.
-    Always prefer async chain execution.
+    Instructor-based call to OpenAI-compatible /v1/chat/completions.
+    Returns JSON text so your existing parse_structured_llm_response() stays unchanged.
     """
-    llm = cf.llm_lc_wrapper.bind(
-        stop=None,
-        temperature=0.1,   
-        top_p=0.1,
-        top_k=5,
+    if cf.instructor_client is None:
+        raise RuntimeError("Instructor client is not initialized (USE_LLM is false or init failed).")
+
+    model = cf.INSTRUCTOR_MODEL_NAME
+    openai_messages = _lc_messages_to_openai(messages)
+
+    # Instructor returns a parsed Pydantic object when response_model is provided.
+    resp_obj = await cf.instructor_client.chat.completions.create(
+        model=model,
+        messages=openai_messages,
+        response_model=LlmResponse,
+        temperature=0.3,
         max_tokens=128,
     )
 
-    # Call the model directly with concrete messages
-    out = await llm.ainvoke(messages)
-
-    if isinstance(out, AIMessage):
-        return _message_content_to_text(out.content)
-
-    if isinstance(out, str):
-        return out
-
-    return str(out)
+    try:
+        # Return as string if its a valid JSON object
+        return json.dumps(resp_obj.model_dump(), ensure_ascii=False)
+    except Exception:
+        # Fallback: return raw text content
+        logger.warning(f"{lu.BG_RED}Failed to serialize Instructor LLM response to JSON, returning str() fallback.{lu.RESET}")
+        return str(resp_obj)
     
 
 
@@ -272,33 +294,32 @@ async def rag_response_fn(
 
     trace_id = uuid.uuid4().hex[:8]
     t0 = time.time()
-    logger.info("[RAG][%s] Start", trace_id)
+    logger.info(f"{lu.MAGENTA}[RAG][{trace_id}] Start{lu.RESET}")
 
     instruction_owner = await resolve_instruction_owner(user)
 
-    logger.info("[RAG][%s] user=%s instruction_owner=%s activity=%s",
-                trace_id, getattr(user, "id", None), getattr(instruction_owner, "id", None), activity_name)
+    logger.info(f"{lu.CYAN}[RAG][{trace_id}] user={getattr(user, 'id', None)} instruction_owner={getattr(instruction_owner, 'id', None)} activity={activity_name}{lu.RESET}")
 
-    scenarios = await get_available_scenarios(instruction_owner.id, activity)
+    scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
     available_scenarios_text = format_available_scenarios(scenarios)
 
     if not _available_scenarios_logged:
-        logger.debug("[RAG][%s] scenarios_count=%d", trace_id, len(scenarios))
-        logger.info("Available scenarios:\n%s", available_scenarios_text)
+        logger.debug(f"{lu.YELLOW}[RAG][{trace_id}] scenarios_count={len(scenarios)}{lu.RESET}")
+        logger.info(f"{lu.MAGENTA}Available scenarios:\n{available_scenarios_text}{lu.RESET}")
         _available_scenarios_logged = True
 
     current = rag_state.get("current_scenario") or START_SCENARIO
-    logger.info("[RAG][%s] current_scenario=%s", trace_id, current)
+    logger.info(f"{lu.CYAN}[RAG][{trace_id}] current_scenario={current}{lu.RESET}")
 
-    chunks = await retrieve_instruction_chunks(
+    instructions_text = await get_full_instruction_text(
         instruction_name=current,
         user_id=instruction_owner.id,
         activity_id=activity.id,
-        query_text=user_text,
-        k=4,
     )
-    logger.info("[RAG][%s] retrieved_chunks=%d", trace_id, len(chunks))
-    instructions_text = chunks_to_text(chunks)
+
+    logger.info(f"{lu.CYAN}[RAG][{trace_id}] retrieved_instructions_text_len={len(instructions_text)}{lu.RESET}")
+    if not instructions_text.strip():
+        logger.warning(f"{lu.RED}[RAG][{trace_id}] No instructions_text found for scenario={current} (empty chunks).{lu.RESET}")
 
     system_prompt = build_system_prompt(
         available_scenarios_text=available_scenarios_text,
@@ -314,15 +335,14 @@ async def rag_response_fn(
         elif role == "assistant":
             msg_history.append(AIMessage(content=content))
     
-    logger.debug("[RAG][%s] msg_history_len=%d", trace_id, len(msg_history))
+    logger.debug(f"{lu.MAGENTA}[RAG][{trace_id}] msg_history_len={len(msg_history)}{lu.RESET}")
 
     messages = [SystemMessage(content=system_prompt)] + msg_history + [
         HumanMessage(content=user_text)
     ]
 
     raw = await invoke_chain_get_raw_text(messages)
-    logger.info("[RAG][%s] LLM raw output:\n%s", trace_id, _truncate(raw, 8000))
-    logger.debug("[RAG][%s] LLM raw length=%d", trace_id, len(raw or ""))
+    logger.debug(f"{lu.MAGENTA}[RAG][{trace_id}] LLM raw length={len(raw or '')}{lu.RESET}")
     
     try:
         llm_struct = parse_structured_llm_response(raw, output_parser, trace_id=trace_id)
@@ -330,13 +350,12 @@ async def rag_response_fn(
         _log_json_fail(trace_id, raw, e)
         raise
 
-    logger.info("LLM next_scenario: %s", llm_struct.next_scenario)
+    logger.info(f"{lu.GREEN}LLM next_scenario: {llm_struct.next_scenario}{lu.RESET}")
 
     rag_state["current_scenario"] = llm_struct.next_scenario
     
     t_end = time.time()
-    logger.info("[RAG][%s] End next_scenario=%s total=%.3fs",
-                trace_id, llm_struct.next_scenario, (t_end - t0))
+    logger.info(f"{lu.GREEN}[RAG][{trace_id}] End next_scenario={llm_struct.next_scenario} total={(t_end - t0):.3f}s{lu.RESET}")
         
     return {
     "text": llm_struct.assistant_response,

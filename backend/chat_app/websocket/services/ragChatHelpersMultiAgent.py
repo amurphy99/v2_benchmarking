@@ -21,8 +21,8 @@ from .ragChatHelpers import (
     get_activity,
     get_available_scenarios,
     format_available_scenarios,
+    get_full_instruction_text,
     retrieve_instruction_chunks,
-    retrieve_all_instruction_chunks,
     chunks_to_text,
     )
 
@@ -245,32 +245,6 @@ async def invoke_agent(messages: list[BaseMessage], *, trace_id: str, temperatur
 
     logger.debug(f"{lu.BG_GREEN}[RAG-PHI3][{trace_id}] invoke_agent params temp={temperature} top_p={top_p} top_k={top_k} max_tokens={max_tokens} raw_len={len(txt or '')}{lu.RESET}")
     return txt
-# =============================================================================
-# DB helper function for fetching the full instruction text from the main DB
-# =============================================================================
-@database_sync_to_async
-def get_full_instruction_text(
-    *,
-    instruction_name: str,
-    user_id: int,
-    activity_id: int,
-) -> str:
-    """
-    Retrieves the full instructions text for a given scenario (instruction_name)
-    for this user + activity from the main DB.
-
-    Raises ObjectDoesNotExist if not found.
-    """
-    try:
-        inst = RAGInstructions.objects.get(
-            user_id=user_id,
-            activity_id=activity_id,
-            name=instruction_name,
-        )
-        return inst.instructions
-    except ObjectDoesNotExist:
-        logger.info(f"{lu.BG_RED}[RAG-PHI3] No RAGInstructions row found for user_id={user_id} activity_id={activity_id} name='{instruction_name}'{lu.RESET}")
-        return ""
 
 # =============================================================================
 # Background task for predicting next scenario
@@ -376,16 +350,6 @@ async def rag_response_fn(
     # --- Determine current scenario ---
     current = rag_state.get("current_scenario") or START_SCENARIO
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] current_scenario={current}{lu.RESET}")
-
-    # --- Retrieve instruction chunks for current scenario ---
-    # chunks_call_1 = await retrieve_all_instruction_chunks(
-    #     instruction_name=current,
-    #     user_id=instruction_owner.id,
-    #     activity_id=activity.id,
-    # )
-    
-    # logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] retrieved_chunks={len(chunks_call_1)}{lu.RESET}")
-    # instructions_text_call_1 = chunks_to_text(chunks_call_1)
 
     instructions_text_call_1 = await get_full_instruction_text(
         instruction_name=current,

@@ -1,6 +1,6 @@
 import json
 import re
-from .chatHelpers import RagParseError 
+from ..chatHelpers import RagParseError 
 import logging
 from pydantic import BaseModel, Field
 
