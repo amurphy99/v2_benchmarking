@@ -196,60 +196,53 @@ def build_system_prompt(
 ) -> str:
     
     return f"""
-    You are a scenario-based conversational assistant.
+    Your name is QT robot. You are a warm and calm conversational assistant for people living with memory problems or dementia.
 
-    The conversation is structured into SCENARIOS. Scenarios are stages that help guide the flow of the conversation. 
-    Scenarios define the goals for what should be achieved in that part of the conversation.
-    You will be given instructions for the CURRENT_SCENARIO to help you decide how to respond to the user.
-    The instructions for each scenario will include:
-    - The ultimate goals of the scenario
-    - signals for understanding when the goals of scenario is complete and when it is time to move to a new scenario topic
-    - guidelines for how to respond and how to move toward the next scenario.
-    - Also, examples of user and system responses that fit within the scenario.
+    You will be given instructions for the CURRENT_STATE to help you decide how to respond to the user.
+    The instructions for each state will include:
+    - The conversational goals of the state.
+    - Signals for understanding when the goals of the state are complete.
+    - Guidelines for how to move toward the next state.
+    - Also, examples of user and system responses that fit within the state.
 
-    Here are the AVAILABLE_SCENARIOS:
+    Here are the AVAILABLE_STATES:
     {available_scenarios_text}
 
-    Here is the CURRENT_SCENARIO: "{current_scenario}"
+    Here is the CURRENT_STATE: "{current_scenario}"
 
-    Below are the INSTRUCTIONS for the CURRENT_SCENARIO.
+    Below are the INSTRUCTIONS for the CURRENT_STATE.
 
-    INSTRUCTIONS FOR CURRENT_SCENARIO:
+    INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
     ----------------
 
-    Your job each turn:
+    Your Task:
     1. Read the user message and the recent conversation history.
-    2. Use the scenario instructions to decide:
-    - how to respond to the user in the current turn,
-    - whether to stay in the current scenario or move to a new one in the next turn,
-    - which scenario should come next.
-    3. Produce a JSON object with the following fields:
+    2. Produce a JSON object with the following fields:
     - "assistant_response": your resposne to the users last query (a short natural language reply),
-    - "next_scenario": the next scenario you recommend moving to. If you are not ready to change scenarios yet, set "next_scenario" equal to the current scenario. Only move to a new scenario when the goals of the current scenario have been met.
+    - "next_state": the next state you recommend moving to. If you are not ready to change states yet, set "next_state" equal to the current state. Only move to a new state when the goals of the current state have been met.   "next_state" must be either the current state or one of AVAILABLE_STATES.
 
-    STRICT OUTPUT CONTRACT (must follow):
+    Guidelines for your response:
     - Output exactly ONE JSON object and nothing else.
     - Do not output markdown, code fences, explanations, labels, or commentary.
     - Do not include trailing commas.
     - Do not include comments with the output.
-    - The JSON object MUST be parseable by Python json.loads.
-    - Only these keys are allowed: "assistant_response", "next_scenario".
-    - "next_scenario" must be either the current scenario or one of AVAILABLE_SCENARIOS.
-
-    Example outputs (single line):
-    Example 1:
-    {{"assistant_response":"Hi there! How has your day been so far?","next_scenario":"initiate_smalltalk"}}
-    Example 2:
-    {{"assistant_response":"Nice to meet you, John. What do you enjoy doing in your free time?","next_scenario":"initiate_smalltalk"}}
-    Example 3:
-    {{"assistant_response":"That sounds fun—what got you into it?","next_scenario":"explore_user_interests"}}
-    Example 4:
-    {{"assistant_response":"That’s awesome! what got you into photography?","next_scenario":"explore_user_interests"}}
-    Example 5:
-    {{"assistant_response":"Would you like to talk about a favorite memory connected to that?","next_scenario":"initiate_memory_activity"}}
+    - Do not add emojis or emoticons.
     """
+
+#     Example outputs (single line):
+#     Example 1:
+#     {{"assistant_response":"Hi there! How has your day been so far?","next_state":"initiate_smalltalk"}}
+#     Example 2:
+#     {{"assistant_response":"Nice to meet you, John. What do you enjoy doing in your free time?","next_state":"initiate_smalltalk"}}
+#     Example 3:
+#     {{"assistant_response":"That sounds fun—what got you into it?","next_state":"explore_user_interests"}}
+#     Example 4:
+#     {{"assistant_response":"That’s awesome! what got you into photography?","next_state":"explore_user_interests"}}
+#     Example 5:
+#     {{"assistant_response":"Would you like to talk about a favorite memory connected to that?","next_state":"initiate_memory_activity"}}
+
 
 async def invoke_chain_get_raw_text(messages: list) -> str:
     """
@@ -350,15 +343,15 @@ async def rag_response_fn(
         _log_json_fail(trace_id, raw, e)
         raise
 
-    logger.info(f"{lu.GREEN}LLM next_scenario: {llm_struct.next_scenario}{lu.RESET}")
+    logger.info(f"{lu.GREEN}LLM next_state: {llm_struct.next_state}{lu.RESET}")
 
-    rag_state["current_scenario"] = llm_struct.next_scenario
+    rag_state["current_scenario"] = llm_struct.next_state
     
     t_end = time.time()
-    logger.info(f"{lu.GREEN}[RAG][{trace_id}] End next_scenario={llm_struct.next_scenario} total={(t_end - t0):.3f}s{lu.RESET}")
+    logger.info(f"{lu.GREEN}[RAG][{trace_id}] End next_state={llm_struct.next_state} total={(t_end - t0):.3f}s{lu.RESET}")
         
     return {
     "text": llm_struct.assistant_response,
     "current_scenario": current,
-    "next_scenario": llm_struct.next_scenario,
+    "next_scenario": llm_struct.next_state,
     }

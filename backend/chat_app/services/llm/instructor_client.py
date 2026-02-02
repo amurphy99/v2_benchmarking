@@ -1,7 +1,12 @@
 # chat_app/services/llm/instructor_client.py
 import os
+import json
+import logging
 import instructor
 from openai import AsyncOpenAI
+from ...services import logging_utils as lu
+
+logger = logging.getLogger(__name__)
 
 def build_instructor_client():
     """
@@ -22,5 +27,25 @@ def build_instructor_client():
         timeout=timeout,
     )
 
+     # Wrap with Instructor and add response hook for logging
+    instructor_client = instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
+    
+    # Add a hook to log raw responses
+    original_create = instructor_client.chat.completions.create
+    
+    async def logged_create(*args, **kwargs):
+        response = await original_create(*args, **kwargs)
+        try:
+            response_dict = response.model_dump() if hasattr(response, 'model_dump') else response.__dict__
+            pretty = json.dumps(response_dict, indent=2, ensure_ascii=False)
+            logger.info(f"{lu.BRIGHT_YELLOW}---------- INSTRUCTOR RAW RESPONSE ----------{lu.RESET}")
+            logger.info(pretty)
+            logger.info(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}")
+        except Exception as e:
+            logger.warning(f"{lu.BG_RED}Failed to log Instructor response: {e}{lu.RESET}")
+        return response
+    
+    instructor_client.chat.completions.create = logged_create
+
     # return Instructor client wrapping the OpenAI client in JSON mode
-    return instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
+    return instructor_client
