@@ -101,7 +101,7 @@ def get_available_scenarios(user_id: int, activity_id: int) -> list[dict]:
         RAGInstructions.objects
         .filter(user_id=user_id, activity_id=activity_id)
         .order_by("instruction_order", "name")
-        .values("name", "instructions", "instruction_order")
+        .values("name",  "description", "instructions", "instruction_order")
     )
     return list(qs)
 
