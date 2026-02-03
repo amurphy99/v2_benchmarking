@@ -35,7 +35,7 @@ export default function SignUpPatient() {
             });
             toast.success("Account created successfully!");
             login(username, password);
-            navigate("/profile");
+            navigate("/profile-select");
         } catch (err) { toast.error("Error creating account. Perhaps that username is already taken?");
         } finally     { setLoading(false); }
     };

@@ -16,6 +16,15 @@ class ProfileMixin:
     def get_account(self):
         user = self.request.user
         return get_profile(user)
+    
+    def validate_profile(self, profileid):
+        profile = Profile.objects.get(id=profileid)
+        try:
+            Access.objects.filter(profile=profile).get(account__user=self.request.user)
+        except Access.DoesNotExist:
+            raise NotFound("No access to the requested profile.")
+        return profile
+        
             
 def get_account(user):
     '''

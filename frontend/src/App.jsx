@@ -10,6 +10,7 @@ import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
 import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
+import ProfileSelect   from "@/pages/ProfileSelect";
 
 import "./App.css";
 import { useEffect, useState } from "react";
@@ -66,6 +67,7 @@ export default function App() {
                 </Route>
 
                 {/* Shared */}
+                <Route path="/profile-select"  element={<ProfileSelect   />} />
                 <Route path="/profile"  element={<Profile         />} />
                 <Route path="/history"  element={<History         />} />
                 <Route path="/schedule" element={<Schedule        />} />

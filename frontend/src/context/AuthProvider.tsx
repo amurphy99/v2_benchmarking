@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Spinner } from "../components/Spinner";
 
-import { Account } from "@/api"
+import { Account, getProfile, Profile } from "@/api"
 import * as authApi  from "@/api/auth";
 import { getAccount } from "@/api/endpoints/account";
 import toast from "react-hot-toast";
@@ -9,8 +9,10 @@ import { useNavigate } from "react-router-dom";
 
 // Create the context (describes what any component will get when it calls useAuth())
 interface AuthCtx { 
-    account?: Account,
-    loading: boolean,
+    account?: Account;
+    loading: boolean;
+    profile?: Profile;
+    setProfile?: (profile: Profile) => void;
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
 }
@@ -29,6 +31,7 @@ export const getAccess = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [account, setAccount] = useState<Account>();
     const [loading, setLoading] = useState(false);
+    const [profile, setProfile] = useState<Profile>();
     const navigate = useNavigate();
     
     // Login
@@ -96,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Return AuthContext
     return (
-        <AuthContext.Provider value={{ account, loading, login, logout }}>
+        <AuthContext.Provider value={{ account, loading, profile, setProfile, login, logout }}>
             { loading || account == undefined ? <Spinner/> : children }
         </AuthContext.Provider>
     );

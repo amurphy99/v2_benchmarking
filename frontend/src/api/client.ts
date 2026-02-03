@@ -1,6 +1,5 @@
-import { getAccess } from "@/context/AuthProvider";
+import { getAccess, useAuth } from "@/context/AuthProvider";
 import { API_URL } from "../utils/constants";
-import { refreshToken } from "./auth";
 
 // --------------------------------------------------------------------
 // Fetch/request wrapper with token auto-refresh
@@ -8,8 +7,9 @@ import { refreshToken } from "./auth";
 export async function request<T> (path: string, opts: RequestInit={}): Promise<T> {
     // Define the fetch call so it can be wrapped with a retry
     const access = getAccess();
+    const profileId = useAuth().profile?.id;
     const doFetch = (token = access) => 
-        fetch(`${API_URL}${path}`, {
+        fetch(`${API_URL}/${profileId}/${path}`, {
             ...opts,
             headers     : {...(opts.headers || {}), "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }),},
             credentials : "include", // send refresh cookie

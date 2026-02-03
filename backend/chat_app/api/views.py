@@ -26,7 +26,8 @@ class GoalView(ProfileMixin, generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        profile = self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
         goal, _ = Goal.objects.get_or_create(profile=profile)
         return goal
 
@@ -39,7 +40,8 @@ class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        profile = self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
         settings, _ = UserSettings.objects.get_or_create(profile=profile)
         return settings
     
@@ -49,7 +51,9 @@ class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
-        return self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
+        return profile
     
 class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     """
@@ -80,11 +84,14 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        profile = self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
         return Reminder.objects.filter(profile=profile)
     
     def perform_create(self, serializer):
-        serializer.save(profile=self.get_profile())
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
+        serializer.save(profile=profile)
         
 class RAGInstructionsViewSet(viewsets.ModelViewSet):
     """
@@ -144,7 +151,8 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
-        profile = self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
         return (ChatSession.objects
                 .filter(profile=profile)
                 .filter(is_active=False)
@@ -167,7 +175,9 @@ class ProfileView(ProfileMixin, generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.get_profile() 
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
+        return profile
      
 class AccountView(generics.RetrieveAPIView):
     serializer_class   = AccountSerializer
@@ -204,7 +214,8 @@ class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
     permission_classes  = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        profile = self.get_profile()
+        profileid = self.kwargs["profileid"]
+        profile = self.validate_profile(profileid)
         return Access.objects.filter(profile=profile)
 
 # ======================================================================= ===================================

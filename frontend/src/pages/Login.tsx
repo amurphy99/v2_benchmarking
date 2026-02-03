@@ -21,7 +21,7 @@ export default function Login() {
             setLoading(true);
             await login(form.username, form.password);
             toast.success("Logged in!"); 
-            navigate("/goal");
+            navigate("/profile-select");
         } catch (err) { 
             toast.error((err as Error).message); 
             console.log((err as Error).message);
