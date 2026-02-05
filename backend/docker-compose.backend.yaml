@@ -9,29 +9,29 @@ services:
   # (Not needed anymore because because of separate VM for the databases)
   # Uncomment to run the database container locally during development
   # --------------------------------------------------------------------
-#   db:
-#     image: postgres:17 #ankane/pgvector:latest
-#     container_name: db
-#     env_file: [.env]
-#     networks: [appnet]
-#     ports:
-#       - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
-#     volumes:
-#       - db_data:/var/lib/postgresql/data
+  db:
+    image: postgres:17 #ankane/pgvector:latest
+    container_name: db
+    env_file: [.env]
+    networks: [appnet]
+    ports:
+      - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
+    volumes:
+      - db_data:/var/lib/postgresql/data
 
-#   db_vector:
-#     image: ankane/pgvector:latest
-#     container_name: db_vector
-#     env_file: [.env]
-#     environment:
-#       POSTGRES_DB: ${VECTOR_DB_NAME}
-#       POSTGRES_USER: ${VECTOR_DB_USER}
-#       POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
-#     networks: [appnet]
-#     ports:
-#       - "5434:5432"   # expose main DB on localhost:5433
-#     volumes:
-#       - vector_db_data:/var/lib/postgresql/data
+  db_vector:
+    image: ankane/pgvector:latest
+    container_name: db_vector
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${VECTOR_DB_NAME}
+      POSTGRES_USER: ${VECTOR_DB_USER}
+      POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
+    networks: [appnet]
+    ports:
+      - "5434:5432"   # expose main DB on localhost:5433
+    volumes:
+      - vector_db_data:/var/lib/postgresql/data
     
   # -------------------------------------------------------------------- 
   # 2) Django Backend Server
