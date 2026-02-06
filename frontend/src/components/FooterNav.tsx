@@ -3,14 +3,13 @@ import { GiAlliedStar } from "react-icons/gi";
 import { LuImage } from "react-icons/lu";
 import { FaChartBar, FaRegBell, FaRegCompass } from "react-icons/fa";
 import { footerLinkPatientCls, footerLinkCaregiverCls } from "@/utils/styling/colors";
-import { useProfile } from "@/hooks/queries/useProfile";
 import { useAuth } from "@/context/AuthProvider";
+import { Profile } from "@/api";
 
-export default function FooterNav() {
+export default function FooterNav({ profile } : { profile: Profile }) {
     const { account } = useAuth();
-    const { data: profile, isLoading } = useProfile();
 
-    if (isLoading || !account || !profile.account) {
+    if (!account || !profile.account) {
         return null;
     }
     if (account.role == "caregiver") {

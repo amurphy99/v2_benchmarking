@@ -1,15 +1,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Spinner } from "../components/Spinner";
+import toast from "react-hot-toast";
 
+import { Spinner } from "../components/Spinner";
 import { Account } from "@/api"
 import * as authApi  from "@/api/auth";
 import { getAccount } from "@/api/endpoints/account";
-import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
 
 // Create the context (describes what any component will get when it calls useAuth())
 interface AuthCtx { 
-    account?: Account,
+    account: Account,
     loading: boolean,
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
@@ -27,9 +26,8 @@ export const getAccess = () => {
 // ====================================================================
 // Local state only holds User & Profile data
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [account, setAccount] = useState<Account>();
+    const [account, setAccount] = useState<Account>({} as Account);
     const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
     
     // Login
     const login  = async (username: string, password: string) => {
@@ -52,11 +50,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const refreshAccess = async () => {
-        const authTokens = JSON.parse(localStorage.getItem('authTokens'));
-        if (!authTokens) {
+        const tokens = localStorage.getItem('authTokens');
+        if (!tokens) {
             logout();
             return;
         }
+        const authTokens = JSON.parse(tokens);
         try {
             const newAuthTokens = await authApi.refreshToken(authTokens.refresh);
             localStorage.setItem('authTokens', JSON.stringify(newAuthTokens));
@@ -69,9 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Logout (reset the User and Profile to undefined)
     const logout = () => { 
-        setAccount(undefined);
-        localStorage.clear();
-        navigate("/");
+        setAccount({} as Account);
+        localStorage.removeItem('authTokens');
     };
 
     useEffect(() => {

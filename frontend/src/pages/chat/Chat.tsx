@@ -8,7 +8,7 @@ import SaveChatModal from "@/components/modals/SaveChatModal";
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
-import { useProfile } from "@/hooks/queries/useProfile";
+import { useUserSettings } from "@/hooks/queries/useUserSettings";
 
 
 // ====================================================================
@@ -18,10 +18,10 @@ import { useProfile } from "@/hooks/queries/useProfile";
 // ToDo: Might need to add the user/token stuff to the websocket
 export function Chat() {
     const navigate = useNavigate();
-    const { data: profile, isLoading } = useProfile();
+    const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [animation, setAnimation] = useState();
-    const [animCount, setAnimCount] = useState(0);
+    const [animation, setAnimation] = useState<string>();
+    const [animCount, setAnimCount] = useState<number>(0);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
@@ -42,7 +42,7 @@ export function Chat() {
     };
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
-        const map = {
+        const map: Record<string, string> = {
             Happy: "DANCE",
             Sad: "SHAKE NO",
             Surprised: "EMBARRASSED",
@@ -120,7 +120,7 @@ export function Chat() {
         return <div>Loading...</div>;
     }
 
-    const model = profile.settings.modelChoice;
+    const model = settings.modelChoice;
 
 	const saveChat = () => {
 		save();

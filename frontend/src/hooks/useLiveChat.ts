@@ -3,8 +3,6 @@ import { useQueryClient      } from "@tanstack/react-query";
 import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
 import { useAudioPlayer } from "./live-chat/useAudioPlayer";
 
-import { logText } from '@/utils/loggingHelpers';
-
 // --------------------------------------------------------------------
 // Hook that handles everything involved with the chat
 // --------------------------------------------------------------------
@@ -37,7 +35,7 @@ export default function useLiveChat({
 }) {
     // Misc. setup
     const qc = useQueryClient();
-    const onLLMres = (response) => {
+    const onLLMres = (response: any) => {
 		const payload = response.data;
 
         const text = typeof payload === "string" ? payload : payload?.text ?? "";

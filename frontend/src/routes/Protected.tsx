@@ -7,7 +7,7 @@ export function Protected() {
     const { account, loading } = useAuth();
 
     if (loading) return <Spinner />
-    if (!account) <Navigate to="/" replace />
+    if (!account.user) return <Navigate to="/" replace />
 
     return <Outlet />
 }
@@ -17,7 +17,7 @@ export function Unprotected() {
     const { account, loading } = useAuth();
 
     if (loading) return <Spinner />
-    return account ? <Navigate to="/goal" replace /> : <Outlet />;
+    return account.user ? <Navigate to="/goal" replace /> : <Outlet />;
 }
 
 // =======================================================================

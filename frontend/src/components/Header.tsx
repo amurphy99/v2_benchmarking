@@ -2,12 +2,11 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
 
 import { useAuth    } from "@/context/AuthProvider";
-import { navLinkClsCaregiver, navLinkClsPatient } from "@/utils/styling/colors";
 import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
 import { Icon } from "@iconify/react/dist/iconify.js";
-import { useProfile } from "@/hooks/queries/useProfile";
+import { Profile } from "@/api";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -35,9 +34,8 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // ====================================================================
 // Header
 // ====================================================================
-export default function Header() {
+export default function Header( {profile} : {profile: Profile} ) {
     const { account } = useAuth();
-    const { data: profile, isLoading } = useProfile();
     const isCare = account.role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
@@ -46,13 +44,7 @@ export default function Header() {
         window.scrollTo(0, 0)
     }, [pathname])
 
-    if (isLoading) {
-        return null;
-    }
-
     const title  = TITLES[pathname] ?? TITLES.default;
-
-    const navLinkCls = isCare ? navLinkClsCaregiver : navLinkClsPatient;
 
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {

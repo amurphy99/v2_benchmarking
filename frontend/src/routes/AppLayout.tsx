@@ -1,24 +1,27 @@
-import { Outlet, useLocation  } from "react-router-dom";
+import { Outlet  } from "react-router-dom";
 import { useAuth } from "@/context/AuthProvider";
-import { RUN_ENV } from "@/utils/constants";
 import   Header    from "@/components/Header";
 import FooterNav from "@/components/FooterNav";
+import { Spinner } from "react-bootstrap";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 export function AppLayout() {
     const { account, loading } = useAuth();
-    const { pathname } = useLocation();
-    // Header & small info bar for development
-    const pageHeader = (account) ? (<Header />) : null;
+    const { data: profile, isLoading } = useProfile();
+
+    if (loading || isLoading) {
+        return <Spinner />
+    }
 
     // Return UI component
     return (
     <>
         {/* Headers */}
-        {pathname != "/animation-test" ? pageHeader : null}
+        {account.user ? <Header profile={profile} /> : null}
     
         {/* Routed page component */}
         <main> <Outlet /> </main>
-        {<FooterNav />}
+        {account ? <FooterNav profile={profile} /> : null}
 
     </>
     );

@@ -11,7 +11,7 @@ export const DEFAULT_STALE = 1000 * 60 * 5; // Cache cleared 5 min after compone
 interface ModelQueryOptions<T> {
     queryKey   : string;            // ["goal"] / ["chatSessions"]
     queryFn    : () => Promise<T>;  // fetcher that returns T
-    empty?     : T;                 // default fallback
+    empty      : T;                 // default fallback
     staleTime? : number;            // override
 }
 
