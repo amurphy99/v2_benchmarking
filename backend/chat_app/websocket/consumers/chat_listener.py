@@ -101,7 +101,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
         # Log an update about connecting
         session_owner = self.session_info["user"].username
-        logger.info(f"{lu.Y_LINE_1}{lu.CL_MAIN} {self.user.username} listening to: {session_owner} {lu.RESET}{lu.Y_LINE_2}")
+        logger.info(f"{lu.Y_LINE_1}{lu.CL_MAIN} {lu.BOLD}{self.user.username}{lu.RESET}{lu.YELLOW} listening to: {lu.BOLD}{session_owner} {lu.RESET}{lu.Y_LINE_2}")
         
         # 7) Join groups
         # Listener joins: messages & biomarker groups to get updates about those
@@ -171,4 +171,4 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         )
 
         # Log update
-        logger.info(f"{lu.CL_MAIN} Client ommand relayed: {lu.GREEN} {payload} {lu.RESET}")
+        logger.info(f"{lu.CL_MAIN} Client command relayed: {lu.GREEN} {payload} {lu.RESET}")
