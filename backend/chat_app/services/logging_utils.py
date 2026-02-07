@@ -1,13 +1,17 @@
-# ================================================================================
-# Logging Utilities
-# ================================================================================
-RESET = '\033[0m'
+"""
+Logging utilities for the project.
+--------------------------------------------------------------------------------
+backend.chat_app.services.logging_utils
 
+Maybe set some colors aside for distinct activities...
+* Dark Yellow => for updates from the ChatListener consumer class
+
+"""
 # Standard (Dark) Colors
 BLACK    = '\033[30m'
 RED      = '\033[31m'
 GREEN    = '\033[32m'
-YELLOW   = '\033[33m'
+YELLOW   = '\033[33m' # ChatListener consumer class updates
 BLUE     = '\033[34m'
 MAGENTA  = '\033[35m'
 CYAN     = '\033[36m' # we were using bright cyan here before
@@ -33,6 +37,7 @@ LIME         = '\033[38;5;154m'
 SKY_BLUE     = '\033[38;5;39m'
 
 # Formatting
+RESET        = '\033[0m'
 BOLD         = '\033[1m'
 DIM          = '\033[2m'
 ITALIC       = '\033[3m'
@@ -72,3 +77,7 @@ Y_LINE_2 = f"\n{YELLOW}{HLINE}{RESET}"
 # --------------------------------------------------------------------------------
 USER_MSG = f"{RESET}{BG_BRIGHT_GREEN  }"
 ROBO_MSG = f"{RESET}{BG_BRIGHT_MAGENTA}"
+
+# ChatListener
+CL_MAIN = f"{YELLOW}[ChatListener]"
+
