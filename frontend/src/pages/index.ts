@@ -16,3 +16,5 @@ export { PracticePage    } from "@/pages/practice-page/PracticePage";
 export { Settings        } from "@/pages/settings/Settings";
 export { AnimationTest   } from "@/pages/animationTest/AnimationTest";
 export { Profile         } from "@/pages/profile/Profile";
+export { Admin           } from "@/pages/admin/Admin";
+export { AdminChat       } from "@/pages/admin/AdminChat";

@@ -4,13 +4,13 @@ import { AuthProvider            } from "@/context/AuthProvider";
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile } from "@/pages";
+    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile, 
+    Admin, AdminChat } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
 import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
-import Admin            from "@/pages/Admin";
 
 import "./App.css";
 import { useEffect, useState } from "react";
@@ -78,7 +78,9 @@ export default function App() {
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/transcript" element={<Transcript    />} />
 
+                {/* Admin */}
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/chat/:id" element={<AdminChat />} />
                 
             </Route>
 

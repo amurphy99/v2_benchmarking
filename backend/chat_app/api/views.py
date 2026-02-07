@@ -150,6 +150,16 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
                 .filter(is_active=False)
                 .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
+        
+class ActiveChatSessionViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): 
+        return (ChatSession.objects
+                .filter(is_active=True)
+                .select_related("profile", "image")
+                .prefetch_related("messages", "biomarker_scores"))
 
 # ======================================================================= ===================================
 # Profile Related Views
