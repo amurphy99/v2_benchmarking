@@ -5,6 +5,7 @@ backend.chat_app.services.logging_utils
 
 Maybe set some colors aside for distinct activities...
 * Dark Yellow => for updates from the ChatListener consumer class
+* Dark Green  => for updates from the ChatConsumer consumer class 
 
 """
 # Standard (Dark) Colors
@@ -71,12 +72,19 @@ RLINE_2 = f"\n{RED}{HLINE}{RESET}"
 Y_LINE_1 = f"\n{YELLOW}{HLINE}{RESET}\n"
 Y_LINE_2 = f"\n{YELLOW}{HLINE}{RESET}"
 
+G_LINE_1 = f"\n{GREEN}{HLINE}{RESET}\n"
+G_LINE_2 = f"\n{GREEN}{HLINE}{RESET}"
+
+
 
 # --------------------------------------------------------------------------------
 # Specific presets TODO: These are hideous...
 # --------------------------------------------------------------------------------
 USER_MSG = f"{RESET}{BG_BRIGHT_GREEN  }"
 ROBO_MSG = f"{RESET}{BG_BRIGHT_MAGENTA}"
+
+# ChatConsumer
+CC_MAIN = f"{GREEN}[ChatConsumer]"
 
 # ChatListener
 CL_MAIN = f"{YELLOW}[ChatListener]"
