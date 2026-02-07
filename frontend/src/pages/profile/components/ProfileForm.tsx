@@ -5,7 +5,7 @@ import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
 
 export default function ProfileForm() {
-    const { role } = useAuth();
+    const role = useAuth().account.role;
     const { data: profile, refetch } = useProfile();
     
     const [birthday, setBirthday] = useState(profile.birthDate ?? "");

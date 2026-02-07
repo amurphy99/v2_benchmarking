@@ -11,7 +11,7 @@ import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
 
 export function WeekSummary() {
-    const { state } = useLocation() as { state?: { chatWeek?: ChatWeek, albumDisplay: string } };
+    const { state } = useLocation() as { state: { chatWeek: ChatWeek, albumDisplay?: string } };
     const navigate = useNavigate();
     if (!state?.chatWeek) { navigate("/chat"); };
     const role = useAuth().account.role;

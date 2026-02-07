@@ -7,6 +7,8 @@ import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import { Profile } from "@/api";
+import { useProfile } from "@/hooks/queries/useProfile";
+import { Spinner } from "react-bootstrap";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -36,6 +38,7 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // ====================================================================
 export default function Header() {
     const { account } = useAuth();
+    const { data: profile, isLoading } = useProfile();
     const isCare = account.role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
@@ -43,6 +46,10 @@ export default function Header() {
     useEffect(() => {
         window.scrollTo(0, 0)
     }, [pathname])
+
+    if (isLoading) {
+        return <Spinner />;
+    }
 
     const title  = TITLES[pathname] ?? TITLES.default;
 
@@ -57,7 +64,7 @@ export default function Header() {
 
                 {/* Right Side Icons */}
                 {
-                    isCare && account.user ? 
+                    isCare && profile.account ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
                     </NavLink> : null

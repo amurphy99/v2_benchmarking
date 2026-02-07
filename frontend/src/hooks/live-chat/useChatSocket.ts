@@ -75,7 +75,7 @@ export default function useChatSocket({
     }, [recording]);
 
     // Send helper
-    const send = useCallback((msg) => {
+    const send = useCallback((msg: any) => {
         const ws = wsRef.current;
         if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg));                         }
         else                                   { console.warn("WebSocket not open; message not sent"); }

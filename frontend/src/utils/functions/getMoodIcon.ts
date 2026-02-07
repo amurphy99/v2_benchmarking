@@ -1,5 +1,5 @@
 export default function getMoodIcon(sentiment: string) {
- const emoteMap = {
+ const emoteMap: Record<string, string> = {
         Happy: "fluent-emoji:beaming-face-with-smiling-eyes",
         Sad: "fluent-emoji:sad-but-relieved-face",
         Surprised: "fluent-emoji:astonished-face",

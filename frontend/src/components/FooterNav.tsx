@@ -5,12 +5,13 @@ import { FaChartBar, FaRegBell, FaRegCompass } from "react-icons/fa";
 import { footerLinkPatientCls, footerLinkCaregiverCls } from "@/utils/styling/colors";
 import { useAuth } from "@/context/AuthProvider";
 import { Profile } from "@/api";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 export default function FooterNav() {
     const { account } = useAuth();
+    const { data: profile, isLoading } = useProfile();
 
-
-    if (!account) {
+    if (!account || !profile.account || isLoading) {
         return null;
     }
     if (account.role == "caregiver") {

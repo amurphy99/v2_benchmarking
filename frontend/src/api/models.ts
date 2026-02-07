@@ -146,11 +146,11 @@ export interface ChatSession {
 
   start_ts  : string;
   end_ts    : string | null;
-  duration? : number;          // in seconds
+  duration  : number;          // in seconds
 
   topics    : string;        // stored as an unparsed list string
   image     : AlbumImage;
-  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | null;
+  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | string;
   notes     : string | null;
 
   taskType  : string;
@@ -158,7 +158,7 @@ export interface ChatSession {
 
   messages        : ChatMessage[];
   biomarkers      : ChatBiomarkerScore[];
-  average_scores? : Record<string, number>;
+  average_scores  : Record<string, number>;
 }
 
 // =======================================================================

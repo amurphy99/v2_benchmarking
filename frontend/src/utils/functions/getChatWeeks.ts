@@ -73,7 +73,7 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
     return result;
 }
 
-export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1): ChatWeek | null {
+export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1): ChatWeek {
     const weekStart  = startOfWeek(new Date(), weekStartsOn);
     const weekEnd    = endOfWeek(weekStart, weekStartsOn, true);
     if (sessions.length == 0) {
@@ -81,7 +81,7 @@ export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1)
             start: weekStart,
             end: weekEnd,
             sessions: [],
-            prevScores: null,
+            prevScores: {},
             image: null
         })
     }
@@ -102,7 +102,7 @@ export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1)
         start: weekStart,
         end: weekEnd,
         sessions: bucket,
-        prevScores: null,
+        prevScores: {},
         image: matchImage(bucket, getMainTopic(bucket)),
     })
 }

@@ -7,9 +7,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 export function PracticePage() {
     const navigate = useNavigate();
-    const { state } = useLocation() as { state?: { biomarker: string } };
+    const { state } = useLocation() as { state: { biomarker: string } };
     const [cardNum, setCardNum] = useState<number>(0);
-    const biomarker = state?.biomarker;
+    const biomarker = state.biomarker;
     const cards = getBiomarkerCards(biomarker);
     const description = getBiomarkerDescription(biomarker);
 

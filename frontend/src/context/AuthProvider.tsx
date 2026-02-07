@@ -12,6 +12,7 @@ interface AuthCtx {
     loading: boolean,
     login(username: string, password: string): Promise<void>; 
     logout(): void; 
+    authComplete: boolean;
 }
 
 const AuthContext = createContext<AuthCtx>(null!);
@@ -28,6 +29,7 @@ export const getAccess = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [account, setAccount] = useState<Account>({} as Account);
     const [loading, setLoading] = useState(false);
+    const [authComplete, setAuthComplete] = useState(false);
     
     // Login
     const login  = async (username: string, password: string) => {
@@ -85,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log((err as Error).message);
                 logout();
             } finally {
+                setAuthComplete(true);
                 setLoading(false);
             } 
 		};
@@ -94,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Return AuthContext
     return (
-        <AuthContext.Provider value={{ account, loading, login, logout }}>
+        <AuthContext.Provider value={{ account, loading, login, logout, authComplete }}>
             { loading || account == undefined ? <Spinner/> : children }
         </AuthContext.Provider>
     );
