@@ -6,10 +6,11 @@ import { footerLinkPatientCls, footerLinkCaregiverCls } from "@/utils/styling/co
 import { useAuth } from "@/context/AuthProvider";
 import { Profile } from "@/api";
 
-export default function FooterNav({ profile } : { profile: Profile }) {
+export default function FooterNav() {
     const { account } = useAuth();
 
-    if (!account || !profile.account) {
+
+    if (!account) {
         return null;
     }
     if (account.role == "caregiver") {

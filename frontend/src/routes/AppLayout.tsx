@@ -7,9 +7,8 @@ import { useProfile } from "@/hooks/queries/useProfile";
 
 export function AppLayout() {
     const { account, loading } = useAuth();
-    const { data: profile, isLoading } = useProfile();
 
-    if (loading || isLoading) {
+    if (loading) {
         return <Spinner />
     }
 
@@ -17,11 +16,11 @@ export function AppLayout() {
     return (
     <>
         {/* Headers */}
-        {account.user ? <Header profile={profile} /> : null}
+        {account.user ? <Header /> : null}
     
         {/* Routed page component */}
         <main> <Outlet /> </main>
-        {account ? <FooterNav profile={profile} /> : null}
+        {account.user ? <FooterNav /> : null}
 
     </>
     );

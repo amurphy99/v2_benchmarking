@@ -34,7 +34,7 @@ const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practi
 // ====================================================================
 // Header
 // ====================================================================
-export default function Header( {profile} : {profile: Profile} ) {
+export default function Header() {
     const { account } = useAuth();
     const isCare = account.role == "caregiver";
     const { pathname } = useLocation();
@@ -52,12 +52,12 @@ export default function Header( {profile} : {profile: Profile} ) {
         <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
             <ProfileInfo isCare={isCare} user={account.user} />
             <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
-            {profile ? 
+            {account ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
                 {/* Right Side Icons */}
                 {
-                    isCare && profile?.account ? 
+                    isCare && account.user ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
