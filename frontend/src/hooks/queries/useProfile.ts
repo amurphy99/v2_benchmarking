@@ -6,4 +6,5 @@ export const useProfile = () =>
     useModelQuery<Profile>({
         queryKey: "goal",
         queryFn : getProfile,
+        empty   : {} as Profile
     });

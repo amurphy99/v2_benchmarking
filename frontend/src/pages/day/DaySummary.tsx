@@ -12,7 +12,7 @@ import getMoodIcon from "@/utils/functions/getMoodIcon";
 
 export function DaySummary() {
     const role = useAuth().account.role;
-    const { state } = useLocation() as { state?: { chatSession?: ChatSession, albumDisplay: string } };
+    const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date)

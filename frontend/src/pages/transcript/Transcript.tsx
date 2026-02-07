@@ -14,7 +14,7 @@ import { BsPlayCircle } from "react-icons/bs";
 
 export function Transcript() {
     const role = useAuth().account.role;
-    const { state } = useLocation() as { state?: { chatSession?: ChatSession, albumDisplay: string } };
+    const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay?: string } };
     const [biomarker, setBiomarker] = useState<string>("");
     const navigate = useNavigate();
     const toDaySummary = () => {navigate("/day", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}})}

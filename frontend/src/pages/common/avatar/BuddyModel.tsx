@@ -11,11 +11,11 @@ export default function BuddyModel({
     animCount,
     zoom,
     ...props
-}) {
+} : {animation: string, animCount: number, zoom: string }) {
     const { nodes, animations } = useGLTF('/models/Buddy_Robot.glb') //animations: DANCE, NOD YES, SHAKE NO, HEAD TILT, EMBARRASSED
-    const group = useRef();
+    const group = useRef(null);
     const { actions, mixer } = useAnimations(animations, group);
-    const zoomMap = {
+    const zoomMap: Record<string, any> = {
         head: {scale: 345, position: [0, -23.5, 0]},
         body: {scale: 100, position: [0, -4, 0]},
     }
@@ -24,7 +24,7 @@ export default function BuddyModel({
     useEffect(() => {
         if (!actions || !animation) return;
 
-        Object.values(actions).forEach((a) => a.stop());
+        Object.values(actions).forEach((a) => a?.stop());
         const action = actions[animation];
         if (!action) return;
 

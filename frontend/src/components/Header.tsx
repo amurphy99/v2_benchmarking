@@ -2,12 +2,13 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
 
 import { useAuth    } from "@/context/AuthProvider";
-import { navLinkClsCaregiver, navLinkClsPatient } from "@/utils/styling/colors";
 import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
 import { Icon } from "@iconify/react/dist/iconify.js";
+import { Profile } from "@/api";
 import { useProfile } from "@/hooks/queries/useProfile";
+import { Spinner } from "react-bootstrap";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -47,12 +48,10 @@ export default function Header() {
     }, [pathname])
 
     if (isLoading) {
-        return null;
+        return <Spinner />;
     }
 
     const title  = TITLES[pathname] ?? TITLES.default;
-
-    const navLinkCls = isCare ? navLinkClsCaregiver : navLinkClsPatient;
 
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {
@@ -60,12 +59,12 @@ export default function Header() {
         <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
             <ProfileInfo isCare={isCare} user={account.user} />
             <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
-            {profile ? 
+            {account ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
                 {/* Right Side Icons */}
                 {
-                    isCare && profile?.account ? 
+                    isCare && profile.account ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
                     </NavLink> : null

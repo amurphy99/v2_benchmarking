@@ -5,4 +5,5 @@ export const useDownload = () =>
     useModelQuery<Download>({
         queryKey: "download",
         queryFn : downloadData,
+        empty   : {} as Download,
     });

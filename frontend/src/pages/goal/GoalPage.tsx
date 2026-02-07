@@ -38,7 +38,7 @@ export function Goal() {
         <div className="d-flex flex-col px-[5vw] md:pt-[1rem] pb-[4rem] mb-[5rem] h-full md:gap-5 gap-2">  
             <br />
             <div className="lg:size-1/4 md:size-1/2 size-3/4 self-center"> 
-                <Avatar animation={null} animCount={0} model={model} zoom="head" /> 
+                <Avatar animation={undefined} animCount={0} model={model} zoom="head" /> 
             </div> 
             <h3 className="m-[2rem] text-center"><b>{getMsg()}</b></h3>
             <GoalProgress current={profile.goal.current} target={profile.goal.target} />

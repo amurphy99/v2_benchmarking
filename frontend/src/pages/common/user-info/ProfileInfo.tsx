@@ -2,10 +2,10 @@ import { useState                } from "react";
 import { OverlayTrigger, Popover, Spinner } from "react-bootstrap";
 import { FaCircleUser } from "react-icons/fa6";
 import { User              } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX, CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
+import { CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
 import { downloadData } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useProfile } from "@/hooks/queries/useProfile";
 
 
@@ -25,8 +25,6 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
     if (isLoading) {
         return <Spinner />
     }
-
-    const logoutStyle = "fs-6 my-2 text-white border-1 bg-blue-500 p-2 rounded hover:bg-blue-700"
 
     // --------------------------------------------------------------------
     // Popover 
@@ -49,7 +47,6 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
 
     function DownloadButton() {
         const reportStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-violet-600 border-1 border-violet-600 p-2 rounded hover:bg-violet-600 hover:text-white";
-        const disabledStyle = "fs-6 mt-[1rem] mb-[0.5rem] text-gray-400 border-1 border-gray-400 p-2 rounded cursor-not-allowed";
 
         const download = async () => {
             const { fileName, fileContents } = await downloadData();

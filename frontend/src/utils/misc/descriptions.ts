@@ -5,7 +5,15 @@ export interface Message {
     text    : string
 }
 
-const biomarkerDetails = {
+interface BiomarkerDetails {
+    name: string,
+    description: string,
+    definition: string,
+    exemplarExample: Message[], 
+    flaggedExample: Message[]
+}
+
+const biomarkerDetails: Record<string, BiomarkerDetails> = {
     "anomia": {
         "name": "Anomia",
         "description": "Ability to Find Words",

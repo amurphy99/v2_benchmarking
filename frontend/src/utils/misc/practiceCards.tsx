@@ -1,11 +1,15 @@
 import { BiomarkerType } from "@/api";
+import { JSX } from "@fullcalendar/core/preact.js";
 
 interface Card {
     content: JSX.Element;
     caption: string;
 }
+interface BiomarkerCard {
+    practiceCards: Card[];
+}
 
-const cards = {
+const cards: Record<string, BiomarkerCard> = {
     "anomia": {
         practiceCards: [
             {

@@ -6,16 +6,16 @@ import { useEffect, useRef } from "react";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { LoopOnce, LoopPingPong, Mesh, Material, AnimationClip } from "three";
 
-export default function QTModel({ animation, animCount, zoom, ...props }) {
+export default function QTModel({ animation, animCount, zoom, ...props } : {animation: string, animCount: number, zoom: string }) {
 	const { nodes, materials, animations } = useGLTF("/models/QT_Robot.glb") as unknown as { 
         nodes: Record<string, Mesh>, 
         materials: Record<string, Material>, 
         animations: AnimationClip[] 
     }; //animations:
-	const group = useRef();
+	const group = useRef(null);
 	const { actions, mixer } = useAnimations(animations, group);
 
-    const zoomMap = {
+    const zoomMap: Record<string, any> = {
         head: {scale: 5.25, position: [0, -12.75, 0]},
         body: {scale: 1.75, position: [0, -2, 0]},
     }
@@ -24,7 +24,7 @@ export default function QTModel({ animation, animCount, zoom, ...props }) {
 	useEffect(() => {
 		if (!actions || !animation) return;
 
-		Object.values(actions).forEach((a) => a.stop());
+		Object.values(actions).forEach((a) => a?.stop());
 		const action = actions[animation];
 		if (!action) return;
 

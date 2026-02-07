@@ -16,7 +16,7 @@ export default function WeekTrack( {week} : {week: ChatWeek} ) {
     )
 }
 
-const DayTrack = ({ day, chats, role }) => {
+const DayTrack = ({ day, chats, role } : {day: string, chats: number, role: string}) => {
     return (
         <div className="flex flex-col items-center gap-2"> 
             {day === "Today" ? 
