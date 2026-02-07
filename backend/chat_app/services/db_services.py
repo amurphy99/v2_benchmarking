@@ -82,6 +82,7 @@ class ChatService:
         if notes     is not None: session.notes     = notes
         if topics    is not None: session.topics    = topics
         if sentiment is not None: session.sentiment = sentiment
+
         session.save()
        
         logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")
@@ -103,6 +104,9 @@ class ChatService:
     @staticmethod
     def add_biomarkers_bulk(session, scores: dict):
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+
+
+
 
 
     # ================================================================================
