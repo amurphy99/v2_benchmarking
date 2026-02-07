@@ -43,7 +43,7 @@ export default function BiomarkerGraph( {biomarker, sessions} : {biomarker: Biom
             grid        : { show: false},
             dataLabels: {
                 enabled: true,
-                formatter: function (val) {
+                formatter: function (val: any) {
                   return val;
                 },
                 offsetY: -20,

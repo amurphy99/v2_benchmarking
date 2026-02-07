@@ -44,7 +44,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                                     </a>
                                 </div>
                                 <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics[0]}</p>
-                                <p className="m-0 mx-auto">{session.duration / 60} minutes</p>
+                                <p className="m-0 mx-auto">{Math.round(session.duration / 60 * 100)/100} minutes</p>
                             </div>
                         )
                     })}

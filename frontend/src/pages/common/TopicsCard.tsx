@@ -1,6 +1,5 @@
-import { ChatMessage, ChatSession } from "@/api";
+import { ChatMessage } from "@/api";
 import MyWordCloud from "./WordCloud";
-import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 
 export function TopicsCard( { messages, type, role } : { messages: ChatMessage[], type: string, role: string } ) {

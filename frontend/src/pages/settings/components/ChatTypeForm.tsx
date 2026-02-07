@@ -33,7 +33,7 @@ export default function ChatTypeForm() {
         toastMessage("Chat Settings updated", true); 
     };
 
-    const handleFileChange = (e) => {
+    const handleFileChange = (e: any) => {
         console.log("Changed file")
         const file = e.target.files[0];
         setSelectedFile(file);
@@ -81,7 +81,7 @@ export default function ChatTypeForm() {
                 className={` ${taskType != "chatImage" ? plainButtonStyleDisabled : plainButtonStyle} `}
                 onClick={(e) => {
                     if (taskType !== "chatimage") {
-                    e.preventDefault(); // stop the file picker from opening
+                        e.preventDefault(); // stop the file picker from opening
                     }
                 }}
             >

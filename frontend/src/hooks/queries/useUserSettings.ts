@@ -9,6 +9,7 @@ export const useUserSettings = () =>
     useModelQuery<UserSettings>({
         queryKey: "settings",
         queryFn : getUserSettings,
+        empty   : {} as UserSettings,
     });
 
 // [POST] Hook to wrap useQueryClient for updating UserSettings object

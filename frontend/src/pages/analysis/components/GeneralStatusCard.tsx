@@ -9,7 +9,7 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
     const role = useAuth().account.role;
 
     const curScore = getCognitiveScore(currentWeek);
-    const prevScore = getCognitiveScore(prevWeek);
+    const prevScore = prevWeek.start ? getCognitiveScore(prevWeek) : 0;
     const scoreDiff = prevScore ? curScore - prevScore : 0;
     
     return (
@@ -21,7 +21,7 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
                     <div className="aspect-square min-w-[10rem]">
                         <CircularProgress score={curScore} role={role} />
                     </div>
-                    {prevWeek ? 
+                    {prevWeek.start ? 
                     <span className="p-2 mx-2 mt-[-10vw] lg:mt-[-5vw] gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
                         <p className="mb-0 text-center">From last week:</p>
                         {scoreDiff >= 0 ? 

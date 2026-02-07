@@ -10,6 +10,7 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
     const navigate = useNavigate();
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
     const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )
+    const sessions = week.sessions.slice().reverse();
 
     const SessionCard = ( {session} : {session: ChatSession } ) => {
         const date = new Date(session.date);
@@ -47,7 +48,7 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
                 {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}
             </a>
             <div className="grid grid-rows-1 w-full gap-3">
-                { week.sessions.map( (session, idx) => {
+                { sessions.map( (session, idx) => {
                     return (
                         <SessionCard key={idx} session={session} />
                     )

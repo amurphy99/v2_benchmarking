@@ -6,7 +6,7 @@ import { toastMessage } from "@/utils/functions/toast_helper";
 import { useState } from "react";
 import { Modal, Spinner } from "react-bootstrap";
 
-export default function CreateAccessModal( {showForm, onHide, refetch} ) {
+export default function CreateAccessModal( {showForm, onHide, refetch} : {showForm: boolean, onHide: () => void, refetch: () => void} ) {
     const role = useAuth().account.role;
     const { data: profile, isLoading } = useProfile();
     const [username, setUsername] = useState<string>("");

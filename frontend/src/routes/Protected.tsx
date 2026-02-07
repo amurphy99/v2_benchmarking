@@ -4,20 +4,20 @@ import { Spinner } from "react-bootstrap";
 
 // Users who are not logged in can only get to the signup or login pages
 export function Protected() {
-    const { account, loading } = useAuth();
+    const { account, loading, authComplete } = useAuth();
 
-    if (loading) return <Spinner />
-    if (!account) <Navigate to="/" replace />
+    if (loading || !authComplete) return <Spinner />
+    if (!account.user) return <Navigate to="/" replace />
 
     return <Outlet />
 }
 
 // Users who are logged in already can't get to the signup or login pages
 export function Unprotected() {
-    const { account, loading } = useAuth();
+    const { account, loading, authComplete } = useAuth();
 
-    if (loading) return <Spinner />
-    return account ? <Navigate to="/goal" replace /> : <Outlet />;
+    if (loading || !authComplete) return <Spinner />
+    return account.user ? <Navigate to="/profile" replace /> : <Outlet />;
 }
 
 // =======================================================================
@@ -31,7 +31,7 @@ export function IsCaregiver() {
 
     const role = account.role == "patient" ? "patient" : "caregiver";
     const isCare = role != "patient";
-    return isCare ? <Outlet /> : <Navigate to="/goal" replace />;
+    return isCare ? <Outlet /> : <Navigate to="/profile" replace />;
 }
 // Only patients can view
 export function IsPatient() {
@@ -40,5 +40,5 @@ export function IsPatient() {
     if (loading) return <Spinner />
     const role = account.role == "patient" ? "patient" : "caregiver";
     const isPatient = role == "patient";
-    return isPatient ? <Outlet /> : <Navigate to="/chat" replace />;
+    return isPatient ? <Outlet /> : <Navigate to="/profile" replace />;
 }
