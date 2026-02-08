@@ -119,12 +119,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # --------------------------------------------------------------------------------
         # 4) Handle STT Setup
         # --------------------------------------------------------------------------------
-        # Create new speech provider instances
-        loop_stt = asyncio.get_event_loop()
-
-        # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
-        self.stt_provider = SpeechToTextProvider(handle_stt_output, self._add_message_CB, self.send, self._utt_bio, None, loop_stt)
+        # Create new audio buffer & speech provider instances
         self.audio_buffer = bytearray()
+    
+        # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
+        self.stt_provider = SpeechToTextProvider(
+            transcript_callback    = handle_stt_output, 
+            msg_callback           = self._add_message_CB, 
+            send_callback          = self.send, 
+            bio_callback           = self._utt_bio, 
+            on_timestamps_callback = None, 
+            loop                   = asyncio.get_event_loop(),
+        )
 
         # --------------------------------------------------------------------------------
         # 5) Send misc information to the frontend (ToDo: biomarkers, etc)
@@ -236,13 +242,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if len(self.context_buffer) > self.MAX_CONTEXT: self.context_buffer.pop(0)
         logger.log(f"{lu.CC_MAIN} context buffer, next is broadcast call")
 
+        # Broadcast updates to any listeners
+        await self._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
+        logger.log(f"{lu.CC_MAIN} broadcasted")
 
         # Return the updated context (if the message was from the user, this will be used for the LLM)
         if role == "user": return self.context_buffer
 
-        # Broadcast updates to any listeners
-        await self._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
-        logger.log(f"{lu.CC_MAIN} broadcasted")
+
         
     # --------------------------------------------------------------------------------
     # Audio Data
