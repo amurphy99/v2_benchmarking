@@ -45,6 +45,7 @@ ITALIC       = '\033[3m'
 UNDERLINE    = '\033[4m'
 BLINK        = '\033[5m'
 REVERSE      = '\033[7m'
+UNBOLD       = '\033[22m'
 
 # Background Colors
 BG_BLACK    = "\033[40m"
