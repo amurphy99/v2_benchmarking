@@ -71,6 +71,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         # 1) Authenticate before accepting connection
         if not self.scope["user"].is_authenticated:
+            logger.info(f"{lu.CL_MAIN} Not authenticated (stage 1) {lu.RESET}")
             await self.close(code=4001); return
         
         self.user = self.scope["user"]
@@ -84,7 +85,9 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         self.session = await database_sync_to_async(ChatSession.objects.get)(id=self.session_id)
 
         # 4) Authorize (session owner can listen, admin users can listen)
-        if (getattr(self.session, "user_id", None) != self.user.id) and (not self.user.is_staff):
+        # TODO: Make this so you have to be like the associated user?
+        if (not self.user.is_staff):
+            logger.info(f"{lu.CL_MAIN} {self.user} not authorized (stage 2) {lu.RESET}")
             await self.close(code=4003); return
         
         # 5) Define group ("room") names
@@ -97,11 +100,11 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # 6) Accept the websocket (must be done before send_json / receiving messages)
         await self.accept()
 
-        # Session info dict with: {"session", "profile", "account", "user"} # TODO: idk, maybe don't need session twice here?
-        self.session_info = ChatService.get_session_info(self.session_id)
+        # Session info dict with: {"session", "profile", "account", "user"}
+        self.session_info = await database_sync_to_async(ChatService.get_session_info)(self.session_id)
 
         # Log an update about connecting
-        log.log_connect(self.user.username, self.session_info["user"].username)
+        log.log_connect(self.user.username, self.session_info["user"].username, self.session_id)
 
         # 7) Join groups
         # Listener joins: messages & biomarker groups to get updates about those
