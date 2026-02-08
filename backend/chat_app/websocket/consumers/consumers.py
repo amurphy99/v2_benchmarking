@@ -31,10 +31,13 @@ from channels.db                import database_sync_to_async
 # From this project
 from ...services                   import logging_utils as lu 
 from ...services.db_services       import ChatService
-from ..services.bg_helpers         import fire_and_log
-from ..services.chatHelpers        import handle_transcription, handle_stt_output
-from ..services.audioHelpers       import extract_audio_biomarkers, extract_text_biomarkers
-from ..services.speechProvider     import SpeechToTextProvider
+from  ..services.bg_helpers        import fire_and_log
+from  ..services.chatHelpers       import handle_transcription, handle_stt_output
+from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
+from  ..services.speechProvider    import SpeechToTextProvider
+from    .utils  .logging           import ChatConsumerLogging as log
+
+
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
 
@@ -78,7 +81,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Accept the connection
         await self.accept()
-        logger.info(f"{lu.G_LINE_1}{lu.CC_MAIN} {self.user} opened ChatSession from {self.source} {lu.RESET}{lu.G_LINE_2}")
+        log.log_connect(self.user, self.source)
         
         # I don't think any frontend uses these during the chat right now, but I'll leave this option in
         self.return_biomarkers = False # (self.source in ["webapp"])
@@ -130,8 +133,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
         
         # Log the successful connection
-        logger.info(f"{lu.CC_MAIN} All setup steps for {self.user} succeeded. {lu.RESET}")
-                
+        log.log_connect_done(self.user, self.session.id)
+        
     # --------------------------------------------------------------------------------
     # Disconnect
     # --------------------------------------------------------------------------------

@@ -41,6 +41,7 @@ from django.apps                import apps
 # Imports from this project
 from ...services              import logging_utils as lu
 from ...services.db_services  import ChatService
+from   .utils  .logging       import ChatListenerLogging as log
 
 
 # ================================================================================
@@ -100,9 +101,8 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         self.session_info = ChatService.get_session_info(self.session_id)
 
         # Log an update about connecting
-        session_owner = self.session_info["user"].username
-        logger.info(f"{lu.Y_LINE_1}{lu.CL_MAIN} {lu.BOLD}{self.user.username}{lu.RESET}{lu.YELLOW} listening to: {lu.BOLD}{session_owner} {lu.RESET}{lu.Y_LINE_2}")
-        
+        log.log_connect(self.user.username, self.session_info["user"].username)
+
         # 7) Join groups
         # Listener joins: messages & biomarker groups to get updates about those
         # Only the primary consumer will join the control group so it can receive commands
@@ -124,7 +124,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Disconnect (listener does NOT close the session in DB)
     # --------------------------------------------------------------------------------
     async def disconnect(self, code):
-        logger.info(f"{lu.Y_LINE_1}{lu.CL_MAIN} {self.user.username} disconnected (code: {code}) {lu.RESET}{lu.Y_LINE_2}")
+        log.log_disconnect(self.user.username, code)
 
         # Leave all groups
         for group in [getattr(self, "room_group", None), getattr(self, "monitor_group", None)]:
