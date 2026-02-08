@@ -12,16 +12,17 @@ Later on may need to specifically add start/end timestamps to chats/messages...
 
 from django.db    import transaction
 from django.utils import timezone
-from ..models     import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
-
-from .  import logging_utils as lu
-from .topicHelpers import get_topics
-from .emotionHelpers import classify_emotion_with_vader
-from ..api.mixins import get_profile
-from .imageHelpers import get_images
 
 import logging
 logger = logging.getLogger(__name__)
+
+# From this project
+from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
+from ..api.mixins     import get_profile
+from  .topicHelpers   import get_topics
+from  .emotionHelpers import classify_emotion_with_vader
+from  .imageHelpers   import get_images
+from  .               import logging_utils as lu
 
 # ================================================================================
 # ChatService
@@ -118,7 +119,7 @@ class ChatService:
             session.taskSubtype = settings.taskSubtype
         session.save()
        
-        logger.info(f"{lu.RLINE_1}{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}{lu.RLINE_2}")
+        logger.info(f"{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}")
         return session
     
     # --------------------------------------------------------------------------------
@@ -168,3 +169,12 @@ class ChatService:
             "account": session.profile.account,
             "user"   : session.profile.account.user,
         }
+    
+    # Get a list of all the messages for a ChatSession
+    @staticmethod
+    def get_session_messages(session):
+        msgs = (ChatMessage.objects
+                .filter(session=session)
+                .filter(role="user")
+                .order_by("ts")                      # or "start_ts", "id" ?
+                .values_list("content", flat=True))  # returns a queryset of strings
