@@ -28,7 +28,51 @@ class RagParseError(Exception):
 # ======================================================================= ===================================
 # Process the users message & reply with the LLM ASAP
 # ======================================================================= ===================================
-async def handle_transcription(data, msg_callback, send_callback, bio_callback, *, response_fn=None, response_fn_kwargs=None):
+async def handle_transcription(data, msg_callback, send_callback, bio_callback):
+    t0 = time()
+    # -----------------------------------------------------------------------
+    # 1) Process the input (User Speech OR Rejoin Trigger)
+    # -----------------------------------------------------------------------
+    is_rejoin = (data.get("type") == "rejoin")
+    
+    # If rejoin, use "system" role so it doesn't look like the user said this. The text becomes an instruction to the LLM.
+    role = "system" if is_rejoin else "user"
+    text = data["data"] 
+
+    if is_rejoin: logger.info(f"{lu.CYAN}[LLM] Rejoin trigger received. Injecting context prompt.{lu.RESET}")
+    else:         logger.info(f"{lu.CYAN}[LLM] User utt received: \n{lu.USER_MSG}{text} {lu.RESET}")
+
+    # Update context and DB
+    context_buffer = await msg_callback(role=role, text=text, time=t0)
+
+    # -----------------------------------------------------------------------
+    # 2) Get the LLMs response (awaited since it is the most important/longest process)
+    # -----------------------------------------------------------------------
+    t1 = time(); logger.info(f"{lu.CYAN}[LLM] Sending LLM request... {lu.RESET}")
+    system_utt = await generate_LLM_response(context_buffer)
+    t2 = time(); logger.info(f"{lu.CYAN}[LLM] LLM response received: (in {(t2-t1):.4f}) \n{lu.ROBO_MSG}{system_utt} {lu.RESET}")
+
+    # Immediately send the response back through the websocket
+    await send_callback(json.dumps({'type': 'llm_response', 'data': system_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
+
+    # -----------------------------------------------------------------------
+    # 3) Background persistence & biomarkers
+    # -----------------------------------------------------------------------
+    # Fire-and-forget DB write for the "assistant" message & update in-memory context
+    await msg_callback(role="assistant", text=system_utt, time=time())
+
+    # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
+    if not is_rejoin: asyncio.create_task(bio_callback()) # Only if it was an actual user utterance
+    
+    return system_utt
+
+
+
+
+
+
+
+async def handle_transcription0(data, msg_callback, send_callback, bio_callback, *, response_fn=None, response_fn_kwargs=None):
     """ Takes three callbacks from the consumers object """
     t0 = time()
     
@@ -102,20 +146,27 @@ async def handle_transcription(data, msg_callback, send_callback, bio_callback, 
     asyncio.create_task(bio_callback())
     return system_utt
     
+
+
 async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
     user_utt = data['data']
     
     await send_callback(json.dumps({'type': 'user_utt', 'data': user_utt, 'time': datetime.now(timezone.utc).strftime("%H:%M:%S")}))
-    logger.info(f"{lu.YELLOW}[LLM] Sent user utterance to frontend: {user_utt} {lu.RESET}")
+    logger.info(f"{lu.CYAN}[LLM] Sent user utterance to frontend: {user_utt} {lu.RESET}")
     
     system_utt = await handle_transcription(data, msg_callback, send_callback, bio_callback)
     
+    logger.info(f"{lu.CYAN}[LLM] Handle transcription called with: {user_utt} and {system_utt}  {lu.RESET}")
+
     # Synthesize the speech 
-    tts_provider = TextToSpeechProvider()
-    speech = tts_provider.synthesize_speech(system_utt)
-    fire_and_log(handle_speech(speech, send_callback))
-    logger.info(f"{lu.YELLOW}[LLM] Response sent to frontend. {lu.RESET}")
+    #tts_provider = TextToSpeechProvider()
+    #speech = tts_provider.synthesize_speech(system_utt)
+    #fire_and_log(handle_speech(speech, send_callback))
+    #logger.info(f"{lu.YELLOW}[LLM] Response sent to frontend. {lu.RESET}")
     
+
+
+
 async def handle_speech(audio_bytes: bytes, send_callback) -> None:
         # Splits audio data into smaller chunks so we can send it to the frontend
         n_chunks = ceil(len(audio_bytes) / CHUNK_SIZE)
@@ -125,6 +176,8 @@ async def handle_speech(audio_bytes: bytes, send_callback) -> None:
                 "type": "audio_chunk", 
                 "data": json.dumps({"data": base64.b64encode(chunk).decode('utf-8')})
             }))
+
+
 # ======================================================================= ===================================
 # Generate LLM Response
 # ======================================================================= ===================================
@@ -191,3 +244,4 @@ async def classify_llm_text_emotion_async(text: str, emo_classifier_type: str="v
     except Exception as e:
         logger.exception(f"Emotion classification failed (returning 'Neutral'): {e}")
         return "Neutral"
+    
