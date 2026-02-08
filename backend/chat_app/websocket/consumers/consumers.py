@@ -56,8 +56,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     * self.return_biomarkers => should we return the biomarkers to the client? (right now, no)
 
     """
-    MAX_CONTEXT = 8  # How many recent messages to keep for the LLM
-    SECONDS     = 3  # How often we want to send audio to calculate biomarkers
+    MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
+    SECONDS     = 10  # How often we want to send audio to calculate biomarkers
 
     # ================================================================================
     # Connect
@@ -156,7 +156,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
 
-        logger.info(f"Client disconnected:  {code}") 
+        log.log_disconnect(self.user, code)
 
     # ================================================================================
     # Group Event Handlers | Handle all messages send from consumer-to-consumer
@@ -225,18 +225,24 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         Add messages to the database & update the local context.
             - Role must be "user" or "assistant"
         """
+        logger.log(f"{lu.CC_MAIN} _add_message_CB called with: {role}, {text}, {ts}")
+
         # Fire-and-forget DB write for the user message
         fire_and_log(database_sync_to_async(ChatService.add_message)(self.session, role, text))
+        logger.log(f"{lu.CC_MAIN} fire and log")
 
         # Update in memory context
         self.context_buffer.append((role, text, ts))
         if len(self.context_buffer) > self.MAX_CONTEXT: self.context_buffer.pop(0)
+        logger.log(f"{lu.CC_MAIN} context buffer, next is broadcast call")
+
 
         # Return the updated context (if the message was from the user, this will be used for the LLM)
         if role == "user": return self.context_buffer
 
         # Broadcast updates to any listeners
         await self._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
+        logger.log(f"{lu.CC_MAIN} broadcasted")
         
     # --------------------------------------------------------------------------------
     # Audio Data
