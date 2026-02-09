@@ -33,6 +33,132 @@ Django based backend. Provides database access via an API and provides the chat 
 2. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines
 3. `docker compose -f docker-compose.backend.yaml up --build`
 
+<details closed> <summary>Local version of `docker-compose.backend.yaml` to change to locally</summary>
+
+```yaml
+# Backend Services (Postgres database & Django server)
+services:
+  # -------------------------------------------------------------------------------- 
+  # 1) Postgres Databases
+  # --------------------------------------------------------------------------------
+  db_vector:
+    image: ankane/pgvector:latest
+    container_name: db_vector
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${VECTOR_DB_NAME}
+      POSTGRES_USER: ${VECTOR_DB_USER}
+      POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
+    networks: [appnet]
+    ports: ["5434:5434"]
+    volumes: [vector_db_data:/var/lib/postgresql/data]
+
+  db:
+    image: postgres:17 #ankane/pgvector:latest
+    container_name: db
+    env_file: [.env]
+    networks: [appnet]
+    ports: ["5433:5432"]   # expose main DB on localhost:5433 (for local testing)
+    volumes: [db_data:/var/lib/postgresql/data]
+
+  # -------------------------------------------------------------------------------- 
+  # 2) Django Backend Server
+  # --------------------------------------------------------------------------------
+  # Database is only accessable through the backend Django server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile-backend
+    container_name: backend
+    command: |
+      sh -c "
+        python manage.py makemigrations --noinput &&
+        python manage.py migrate --database=default --noinput &&
+        python manage.py migrate --database=vector  --noinput &&
+        python manage.py seed_demo &&
+        daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+      "
+    env_file: [.env]
+    volumes: [.:/app ]               # general project mount
+    #depends_on: [db, db_vector]
+    networks: [appnet]
+    ports: ["8000:8000"] # expose 8000 to host for Vite
+
+# --------------------------------------------------------------------------------
+# Declared, not created. Root file will create these.
+# --------------------------------------------------------------------------------
+# Docker will also create them automatically if this file is run individually.
+volumes:
+  db_data:
+    #external: true
+  vector_db_data:
+    #external: true
+networks:
+  appnet:
+    #external: true
+```
+</details>
+
+
+<details closed> <summary>Deployed (original) version of `docker-compose.backend.yaml` to switch back to for merging:</summary>
+
+```yaml
+# Backend Services (Postgres database & Django server)
+services:
+  # -------------------------------------------------------------------------------- 
+  # 1) Postgres Databases
+  # --------------------------------------------------------------------------------
+  # Database is only accessable through the backend Django server 
+  #db_vector:
+  #db:
+
+  # -------------------------------------------------------------------------------- 
+  # 2) Django Backend Server
+  # --------------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile-backend
+    container_name: backend
+    command: |
+      sh -c "
+        python manage.py makemigrations --noinput &&
+        python manage.py migrate --database=default --noinput &&
+        python manage.py migrate --database=vector  --noinput &&
+        python manage.py seed_demo &&
+        daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+      "
+    env_file: [.env]
+    volumes: [.:/app ]            # general project mount
+    depends_on: [db, db_vector]
+    networks: [appnet]
+    ports: ["8000:8000"]          # expose 8000 to host for Vite
+
+# --------------------------------------------------------------------------------
+# Declared, not created. Root file will create these.
+# --------------------------------------------------------------------------------
+# Docker will also create them automatically if this file is run individually.
+volumes:
+  db_data:
+    external: true
+  vector_db_data:
+    external: true
+networks:
+  appnet:
+    external: true
+```
+</details>
+
+
+
+
+
+
+
+
+
+
+
 <br>
 
 
