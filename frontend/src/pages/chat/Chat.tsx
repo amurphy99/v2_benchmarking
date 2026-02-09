@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
 import useLiveChat   from "@/hooks/useLiveChat";
-import LiveChatView  from "./components/LiveChatView";
 import SaveChatModal from "@/components/modals/SaveChatModal";
 
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
+import { useUserSettings } from "@/hooks/queries/useUserSettings";
 
 
 // ====================================================================
@@ -16,14 +16,16 @@ import { Spinner } from "react-bootstrap";
 // ====================================================================
 // ToDo: Move speech providers folder to utils, fix the index
 // ToDo: Might need to add the user/token stuff to the websocket
-export function Chat( {isMobile} : {isMobile: boolean}) {
+export function Chat() {
     const navigate = useNavigate();
+    const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [animation, setAnimation] = useState();
-    const [animCount, setAnimCount] = useState(0);
+    const [animation, setAnimation] = useState<string>();
+    const [animCount, setAnimCount] = useState<number>(0);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
+    
     const onUserUtterance   = (text: string) => { 
         pushMessage("user",      text); 
         setBotMessage( 
@@ -40,7 +42,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
     };
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
-        const map = {
+        const map: Record<string, string> = {
             Happy: "DANCE",
             Sad: "SHAKE NO",
             Surprised: "EMBARRASSED",
@@ -113,6 +115,13 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
 			pauseChat();
 		}
 	};
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
+
+    const model = settings.modelChoice;
+
 	const saveChat = () => {
 		save();
 		setShowModal(false);
@@ -125,22 +134,21 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
     <>
-        <div className="flex flex-col">
+        <div className="flex flex-col h-[85vh]">
             {/* View of the chatHistory and/or Avatar */}
-            {!isMobile ? 
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
+            {!window.isMobile ? 
+                <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} /> 
+                        <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
                     </div>
                 </div>
-                :
-                    
+                :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} />
+                    <Avatar animation={animation} animCount={animCount} model={model} zoom="head"/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
@@ -151,7 +159,7 @@ export function Chat( {isMobile} : {isMobile: boolean}) {
            <div
                 className={`flex flex-row ${
                     chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
-                } mx-[20vw] gap-[4em] justify-${isMobile ? "between" : "center"}`}
+                } mx-[20vw] gap-[4em] justify-around`}
             >
                 <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
                 <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>

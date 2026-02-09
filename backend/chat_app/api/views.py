@@ -4,10 +4,11 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.state import token_backend
+from rest_framework.exceptions import PermissionDenied
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import                    Goal,           UserSettings,           Reminder,           ChatSession, RAGInstructions, Activity
-from  .serializers import ProfileSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
@@ -27,7 +28,7 @@ class GoalView(ProfileMixin, generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         profile = self.get_profile()
-        goal, _ = Goal.objects.get_or_create(user=profile)
+        goal, _ = Goal.objects.get_or_create(profile=profile)
         return goal
 
 class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
@@ -40,7 +41,7 @@ class UserSettingsView(ProfileMixin, generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         profile = self.get_profile()
-        settings, _ = UserSettings.objects.get_or_create(user=profile)
+        settings, _ = UserSettings.objects.get_or_create(profile=profile)
         return settings
     
 class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
@@ -81,10 +82,10 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         profile = self.get_profile()
-        return Reminder.objects.filter(user=profile)
+        return Reminder.objects.filter(profile=profile)
     
     def perform_create(self, serializer):
-        serializer.save(user=self.get_profile())
+        serializer.save(profile=self.get_profile())
         
 class RAGInstructionsViewSet(viewsets.ModelViewSet):
     """
@@ -93,11 +94,24 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _require_caregiver(self):
+        """
+        Ensure only caregivers can create/update/delete RAG instructions.
+        """
+        try:
+            if self.request.user.account_user.role.lower() != "caregiver":
+                raise PermissionDenied("Only caregivers can manage RAG instructions.")
+        except Exception:
+            raise PermissionDenied("Only caregivers can manage RAG instructions.")
+
     def get_queryset(self):
+        self._require_caregiver()
         # Only return instructions belonging to the logged-in user
         return RAGInstructions.objects.filter(user=self.request.user).order_by("instruction_order", "name")
 
     def perform_create(self, serializer):
+        # Only caregivers should be able to create RAG instructions, since they are the ones configuring the activities for the PLWD. Enforce this at the API level.
+        self._require_caregiver()
         # For now, always use the 'memory_activity'
         activity = Activity.objects.get(name="memory_activity")
         instance = serializer.save(user=self.request.user, activity=activity)
@@ -109,6 +123,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to index new instruction {instance.id}: {e}")
 
     def perform_update(self, serializer):
+        self._require_caregiver()
         # Save the updated instruction to the default DB
         instance = serializer.save()
 
@@ -119,6 +134,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to update embedding for instruction {instance.id}: {e}")
 
     def perform_destroy(self, instance):
+        self._require_caregiver()
         inst_id = instance.id
 
         # Delete chunks from vector DB first
@@ -146,24 +162,66 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self): 
         profile = self.get_profile()
         return (ChatSession.objects
-                .filter(user=profile.plwd)
+                .filter(profile=profile)
                 .filter(is_active=False)
-                .select_related("user")
+                .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
 
 # ======================================================================= ===================================
 # Profile Related Views
 # ======================================================================= ===================================
-class SignupView(generics.CreateAPIView):
+class SignupPatientView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
-    serializer_class   = SignupSerializer
+    serializer_class   = SignupPatientSerializer
+    
+class SignupAccountView(generics.CreateAPIView):
+    permission_classes = [permissions.AllowAny]
+    serializer_class   = SignupAccountSerializer
 
-class ProfileView(ProfileMixin, generics.RetrieveAPIView):
+class ProfileView(ProfileMixin, generics.RetrieveUpdateAPIView):
     serializer_class   = ProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.get_profile()  
+        return self.get_profile() 
+     
+class AccountView(generics.RetrieveAPIView):
+    serializer_class   = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        user = self.request.user
+        return Account.objects.get(user=user)
+    
+class SingleAccountView(generics.RetrieveAPIView):
+    serializer_class   = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        username = self.kwargs["username"]
+        user = get_user_model().objects.get(username=username)
+        account = Account.objects.get(user=user)
+        return account
+
+class AccessView(ProfileMixin, generics.RetrieveUpdateAPIView):
+    serializer_class    = AccessSerializer
+    permission_classes  = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        account = self.get_account()
+        return Access.objects.get(account=account)
+    
+class CreateAccessView(generics.CreateAPIView):
+    serializer_class   = CreateAccessSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
+    serializer_class    = AccessSerializer
+    permission_classes  = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        profile = self.get_profile()
+        return Access.objects.filter(profile=profile)
 
 # ======================================================================= ===================================
 # Tokens 

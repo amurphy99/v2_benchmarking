@@ -23,7 +23,7 @@ export default function BiomarkerCard({
     flaggedDays : ChatSession[],
     performance : string
 }) {
-    const role = useAuth().profile.role.toLowerCase();
+    const role = useAuth().account.role;
     const navigate = useNavigate();
     const [example, setExample] = useState<string>("exemplar")
 
@@ -36,7 +36,7 @@ export default function BiomarkerCard({
             <p>{getBiomarkerDefinition(biomarker)}</p>
             <SpeechExample biomarker={biomarker} role={role} example={example} setExample={setExample} />
             <div className="text-lg border-t border-solid border-gray-300 py-2">
-                <p><b>{role == "patient" ? "Your" : useAuth().user.first_name + "'s"} Performance</b></p>
+                <p><b>{role == "patient" ? "Your" : useAuth().account.user.first_name + "'s"} Performance</b></p>
                 <ul className={`list-disc marker:text-${role == "patient" ? "green" : "violet"}-600`}>
                     <li><p>This past week: <b>{performance}</b></p></li>
                     <li>

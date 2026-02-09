@@ -6,10 +6,11 @@ import { widthStyle } from "@/utils/styling/sharedStyles";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekList({ week } : { week: ChatWeek }) {
-    const role = useAuth().profile.role.toLowerCase();
+    const role = useAuth().account.role;
     const navigate = useNavigate();
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
     const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )
+    const sessions = week.sessions.slice().reverse();
 
     const SessionCard = ( {session} : {session: ChatSession } ) => {
         const date = new Date(session.date);
@@ -18,7 +19,8 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
             <div className="flex flex-row gap-2 rounded-md bg-white shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] 
             hover:cursor-pointer hover:shadow-[0px_0px_4px_4px_rgba(0,0,0,0.15)]"
             onClick={() => {toDaySummary(session)}}>
-                <div className="bg-blue-200 px-10 overflow-hidden rounded-l-md flex items-center">Image</div>
+                <div className="bg-cover bg-purple-200 bg-center px-10 overflow-hidden rounded-l-md flex items-center"
+                style={{ backgroundImage: `url(${session?.image?.url})`}}/>
                 <div className="flex flex-col w-full p-[0.5rem]">
                     <div className="flex justify-between w-full">
                         <b className="no-underline text-xl font-semibold">{date.toLocaleDateString("en-US", {month: "short", day: "numeric"})}</b>
@@ -46,7 +48,7 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
                 {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}
             </a>
             <div className="grid grid-rows-1 w-full gap-3">
-                { week.sessions.map( (session, idx) => {
+                { sessions.map( (session, idx) => {
                     return (
                         <SessionCard key={idx} session={session} />
                     )

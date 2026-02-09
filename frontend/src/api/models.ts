@@ -9,6 +9,7 @@ export interface UserSettings {
   patientCanSchedule: boolean;
   taskType          : string;
   taskSubtype       : string;
+  modelChoice       : string;
 }
 
 export interface Reminder {
@@ -68,13 +69,33 @@ export interface User {
   is_staff   : boolean;
 }
 
+export type AccountRole = "patient" | "caregiver" | "family" | "physician" | "other";
+export interface Account {
+    id      : number;
+    user    : User;
+    role    : AccountRole;
+}
+
 export interface Profile {
   id        : number;
-  plwd      : User;
-  caregiver : User;
-  role?     : "Patient" | "Caregiver";
+  account   : Account;
+  zipcode   : string;
+  birthDate : string;
+  locationStatus : string;
   settings  : UserSettings;
   goal      : Goal;
+}
+
+export interface Access {
+    id      : number;
+    account : Account;
+    profile : Profile;
+}
+
+export interface CreateAccessPayload {
+    profileId   : number;
+    accountId   : number;
+    permissions : string;
 }
 
 // =======================================================================
@@ -107,6 +128,14 @@ export interface ChatBiomarkerScore {
   ts         : string;
 }
 
+export interface AlbumImage {
+    id              : number;
+    topic           : string;
+    url             : string;
+    photographer    : string;
+    photographer_url: string;
+}
+
 // ChatSessions
 export interface ChatSession {
   id        : number;
@@ -117,10 +146,11 @@ export interface ChatSession {
 
   start_ts  : string;
   end_ts    : string | null;
-  duration? : number;          // in seconds
+  duration  : number;          // in seconds
 
   topics    : string;        // stored as an unparsed list string
-  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | null;
+  image     : AlbumImage;
+  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | string;
   notes     : string | null;
 
   taskType  : string;
@@ -128,28 +158,25 @@ export interface ChatSession {
 
   messages        : ChatMessage[];
   biomarkers      : ChatBiomarkerScore[];
-  average_scores? : Record<string, number>;
+  average_scores  : Record<string, number>;
 }
 
 // =======================================================================
 // Signup Types -- ToDo: Not sure if these are ncessary?
 // =======================================================================
-export interface SignupPayload {
-  plwdUsername  : string;
-  plwdPassword  : string;
-  plwdFirstName : string;
-  plwdLastName  : string;
 
-  caregiverUsername  : string;
-  caregiverPassword  : string;
-  caregiverFirstName : string;
-  caregiverLastName  : string;
+export interface SignupPayload {
+  username      : string;
+  password      : string;
+  firstName     : string;
+  lastName      : string;
+  role          : string;
 }
 
 export interface SignupResponse {
-  success           : true;
-  plwdUsername      : string;
-  caregiverUsername : string;
+  success       : true;
+  username      : string;
+  name          : string;
 }
 
 // User verification token

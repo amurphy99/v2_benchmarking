@@ -2,11 +2,9 @@ import { WordCloud } from "@isoterik/react-word-cloud";
 import { ChatMessage } from "@/api";
 
 function MyWordCloud( { messages } : { messages: ChatMessage[] }) {
-
     const tokenize = () => {
         // Initialize an empty object to store word frequencies
-        const wordFrequency = {};
-
+        const wordFrequency: Record<string, number> = {};
         // Iterate over each message in the data array
         messages.forEach(item => {
             // Split the message into words, remove punctuation, and convert to lowercase
@@ -25,13 +23,11 @@ function MyWordCloud( { messages } : { messages: ChatMessage[] }) {
                 });
             }
         });
-
         // Convert the wordFrequency object into an array of objects with 'text' and 'value' properties
         const result = Object.keys(wordFrequency).map(word => ({
             text: word,
             value: wordFrequency[word]
         }));
-
         const minOccurences = Math.min(...result.map(w => w.value));
         const maxOccurences = Math.max(...result.map(w => w.value)) + 1;
 
@@ -40,7 +36,7 @@ function MyWordCloud( { messages } : { messages: ChatMessage[] }) {
 
     const {words, minOccurences, maxOccurences} = tokenize();
 
-    const resolveFontSize = (word) => {
+    const resolveFontSize = (word: any) => {
         const minFontSize = 8;
         const maxFontSize = 36;
         const normalizedValue = (word.value - minOccurences) / (maxOccurences - minOccurences);

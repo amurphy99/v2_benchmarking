@@ -1,5 +1,5 @@
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
-import { getWeeklyMessages, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
+import { ChatWeek, getMessages, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
 import { useAuth } from "@/context/AuthProvider";
 
 import { TopicsCard } from "../common/TopicsCard";
@@ -11,17 +11,23 @@ import GeneralStatusCard from "./components/GeneralStatusCard";
 import ImpactFactorsCard from "./components/ImpactFactorsCard";
 
 export function Analysis() {
-    const role = useAuth().profile.role.toLowerCase();
+    const role = useAuth().account.role == "patient" ? "patient" : "caregiver";
     const { data: sessions, isLoading } = useChatSessions();
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
+    if (sessions.length == 0) {
+        return (
+            <h1 className="m-[2rem]">Nothing to analyze yet!</h1>
+        )
+    }
+
     const weeks = groupSessionsByWeek(sessions);
-    const currentWeek = weeks.length ? weeks[weeks.length - 1] : null;
-    const prevWeek = weeks.length > 1 ? weeks[weeks.length - 2] : null;
+    const currentWeek = weeks[weeks.length - 1];
+    const prevWeek = weeks.length > 1 ? weeks[weeks.length - 2] : {} as ChatWeek;
     const avg = averageScore(currentWeek.sessions);
 
-    const weeklyMessages = getWeeklyMessages(currentWeek);
+    const weeklyMessages = getMessages(currentWeek.sessions);
 
     const getPerformance = (score: number) : string => {
         if (score <= 0.30) {
@@ -37,8 +43,10 @@ export function Analysis() {
 
     return (
         <div className={colStyle}>
-            <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
-            <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+            <div className={`flex flex-col gap-[2rem] md:flex-row md:gap-[1rem]`}>
+                <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
+                <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+            </div>
             <MoodCard week={currentWeek} />
             <p id="factors" className="h-0 w-0 p-0 m-0"/>
             <h2 className={`flex ${widthStyle} mt-[-2rem]`}>Flagged Signs</h2>

@@ -4,9 +4,11 @@ import { AuthProvider            } from "@/context/AuthProvider";
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage } from "@/pages";
+    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile } from "@/pages";
+import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
-import SignUp          from "@/pages/SignUp";
+import SignUpPatient   from "@/pages/SignUpPatient";
+import SignUpAccount   from "@/pages/SignUpAccount";
 import Schedule        from "@/pages/Schedule";
 
 import "./App.css";
@@ -31,23 +33,26 @@ export default function App() {
     }, []);
 
     const isMobile = width <= 768;
+    window.isMobile = isMobile;
 
   return (
     <AuthProvider>
       <Routes>
-        <Route element={<AppLayout isMobile={isMobile} />}> 
+        <Route element={<AppLayout />}> 
 
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
+                <Route path="/"        element={<Home   />} />
                 <Route path="/login"   element={<Login  />} />
-                <Route path="/signup"  element={<SignUp />} />
+                <Route path="/signup-patient"  element={<SignUpPatient />} />
+                <Route path="/signup"  element={<SignUpAccount />} />
             </Route>
 
             {/* Protected Routes */}
             <Route element={ <Protected/> }>
                 {/* Patient */}
                 <Route element={ <IsPatient/> }>
-                    <Route path="/chat" element={<Chat isMobile={isMobile}/>} />
+                    <Route path="/chat" element={<Chat />} />
                 </Route>
 
                 {/* Caregiver */}
@@ -61,6 +66,7 @@ export default function App() {
                 </Route>
 
                 {/* Shared */}
+                <Route path="/profile"  element={<Profile         />} />
                 <Route path="/history"  element={<History         />} />
                 <Route path="/schedule" element={<Schedule        />} />
                 <Route path="/progress" element={<ProgressSummary />} />
@@ -76,7 +82,7 @@ export default function App() {
             <Route path="/animation-test" element={<AnimationTest />} />
 
             {/* Fallback */}
-            <Route path="*" element={<Navigate to="/goal" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
             
         </Route>
 

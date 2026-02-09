@@ -9,7 +9,7 @@ export function Practice() {
     const biomarkerDescriptions = getAllBiomarkerDescriptions();
     return (
         <>
-            <div className={`${colStyle} mb-[5vh]`}>
+            <div className={`${colStyle} pb-[5vh]`}>
                 {biomarkers.map( (biomarker, idx) => {
                     return (
                         <Block key={idx} biomarker={biomarker} name={biomarkerNames[idx]} description={biomarkerDescriptions[idx]}></Block>

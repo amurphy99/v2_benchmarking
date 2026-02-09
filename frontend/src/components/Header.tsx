@@ -1,15 +1,14 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
-import { GoGear               } from "react-icons/go";
-import { FaCircleUser } from "react-icons/fa6";
-import { IoMailUnreadOutline } from "react-icons/io5";
 
 import { useAuth    } from "@/context/AuthProvider";
-import { navLinkCls } from "@/utils/styling/colors";
 import GoalModal              from "@/components/modals/GoalModal";
 import CaregiverSettingsModal from "@/components/modals/CaregiverSettingsModal";
 import ProfileInfo            from "@/pages/common/user-info/ProfileInfo";
 import { Icon } from "@iconify/react/dist/iconify.js";
+import { Profile } from "@/api";
+import { useProfile } from "@/hooks/queries/useProfile";
+import { Spinner } from "react-bootstrap";
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -32,14 +31,15 @@ const TITLES: Record<string, string> = {
     default         : "Cognibot",
 };
 
-const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings"]
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/goal", "/practice", "/schedule", "/alert", "/settings", "/profile"]
 
 // ====================================================================
 // Header
 // ====================================================================
-export default function Header( {isMobile} : {isMobile: boolean} ) {
-    const { user, profile } = useAuth();
-    const role = profile.role.toLowerCase();
+export default function Header() {
+    const { account } = useAuth();
+    const { data: profile, isLoading } = useProfile();
+    const isCare = account.role == "caregiver";
     const { pathname } = useLocation();
     const [showModal, setShowModal] = useState(false);
 
@@ -47,45 +47,32 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
         window.scrollTo(0, 0)
     }, [pathname])
 
+    if (isLoading) {
+        return <Spinner />;
+    }
+
     const title  = TITLES[pathname] ?? TITLES.default;
-    const isCare = user.id == profile.caregiver.id;
 
     // Return UI component
     if (SHOW_HEADER.includes(pathname)) {
         return (
-        <header className={"flex items-center gap-6 px-[2rem] py-[1rem]"}>
-            <ProfileInfo profile={profile} user={user} />
-            <h1 className="text-4xl whitespace-nowrap"><b> {title} </b></h1>
+        <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
+            <ProfileInfo isCare={isCare} user={account.user} />
+            <h1 className="text-3xl md:text-4xl whitespace-nowrap"><b> {title} </b></h1>
+            {account ? 
             <div className={`ml-auto flex items-center gap-3`}>
 
-                {/* Navigation Links */}
-                <nav className={`${isMobile? "hidden" : "block"} flex gap-4 text-xl`}>
-                    <NavLink to="/goal"      className={navLinkCls}> Goal      </NavLink>
-                    <NavLink to="/album"     className={navLinkCls}> Album     </NavLink>
-                    {isCare ? 
-                        <NavLink to="/practice"   className={navLinkCls}> Practice  </NavLink> :
-                        <NavLink to="/chat"      className={navLinkCls}> Chat      </NavLink>
-                    }
-                    <NavLink to="/analysis" className={navLinkCls}> Analysis  </NavLink>
-                </nav>
-
                 {/* Right Side Icons */}
-                <div className={`vr`}></div>
                 {
-                    isCare ? 
+                    isCare && profile.account ? 
                     <NavLink to="/settings">
                         <Icon icon="fluent-color:settings-28" width={"3rem"} height={"3rem"} />
-                    </NavLink> : null
-                }
-                {
-                    isCare ? 
-                    <NavLink to="/alert">
-                        <Icon icon="fluent-color:mail-alert-32" width={"3rem"} height={"3rem"} />
                     </NavLink> : null
                 }
                 
                 
             </div>
+            : null}
 
             {/* Modal */}
             {isCare ? 
@@ -94,7 +81,8 @@ export default function Header( {isMobile} : {isMobile: boolean} ) {
             }
 
         </header>
-    );} else {
+        );
+    } else {
         return (null);
     }
 }

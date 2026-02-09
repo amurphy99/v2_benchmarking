@@ -1,11 +1,10 @@
 import { useAuth } from "@/context/AuthProvider";
-import { ChatWeek, getNumChatsInWeek, getCurrentWeek } from "@/utils/functions/getChatWeeks";
+import { ChatWeek, getNumChatsInWeek } from "@/utils/functions/getChatWeeks";
 
 
 export default function WeekTrack( {week} : {week: ChatWeek} ) {
-    const { profile } = useAuth();
+    const role = useAuth().account.role;
 
-    const role = profile.role.toLowerCase();
     const dayTracks = getNumChatsInWeek(week);
 
     return (
@@ -17,7 +16,7 @@ export default function WeekTrack( {week} : {week: ChatWeek} ) {
     )
 }
 
-const DayTrack = ({ day, chats, role }) => {
+const DayTrack = ({ day, chats, role } : {day: string, chats: number, role: string}) => {
     return (
         <div className="flex flex-col items-center gap-2"> 
             {day === "Today" ? 

@@ -1,21 +1,33 @@
-import { updateGoal } from "@/api";
-import { useAuth } from "@/context/AuthProvider";
+import { getGoal, getProfile, updateGoal } from "@/api";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
-import { borderStyle, disabledStyle, formText, h4, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
-import { useState } from "react";
+import { borderStyle, disabledStyle, formText, h4, rowThree, switchLabel, switchStyle } from "@/utils/styling/sharedStyles";
+import { useEffect, useState } from "react";
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 type PeriodOptions = "N" | "W" | "M";
 
 export default function GoalForm() {
-    const { profile } = useAuth();
-    const [autoRenew, setAutoRenew] = useState<boolean        >(profile.goal.auto_renew);
-    const [target,    setTarget   ] = useState<number         >(profile.goal.target);
-    const [period,    setPeriod   ] = useState<"N" | "W" | "M">(profile.goal.period);
-    const [startDay,  setStartDay ] = useState<string         >(profile.goal.start_date);
-    const [startDOW,  setStartDOW ] = useState<number         >(profile.goal.start_dow);
-    const { windowLabel, todayIdx } = getWindowLabel(startDOW);
+    const [autoRenew, setAutoRenew] = useState<boolean        >();
+    const [target,    setTarget   ] = useState<number         >();
+    const [period,    setPeriod   ] = useState<"N" | "W" | "M">("N");
+    const [startDay,  setStartDay ] = useState<string         >("");
+    const [startDOW,  setStartDOW ] = useState<number         >();
+    const [windowLabel, setWindowLabel] = useState<string     >();
+    const [todayIdx, setTodayIdx  ] = useState<number         >();
+
+    useEffect(() => {
+        getGoal().then((goal) => {
+            setAutoRenew(goal.auto_renew);
+            setTarget(goal.target);
+            setPeriod(goal.period);
+            setStartDay(goal.start_date);
+            setStartDOW(goal.start_dow);
+            const { windowLabel: wlabel, todayIdx: tidx } = getWindowLabel(goal.start_dow);
+            setWindowLabel(wlabel);
+            setTodayIdx(tidx);
+        })
+    }, [])
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,10 +41,8 @@ export default function GoalForm() {
         toastMessage("User goal updated", true); 
     };
 
-    const rowThree      = "flex flex-col justify-around gap-0 w-50";
-
     return (
-        <form onSubmit={onSubmit} className="flex flex-col m-[1rem]">
+        <form onSubmit={onSubmit} className="flex flex-col px-[1rem] w-full max-w-[50rem]">
         <div className={h4}> Patient Goal </div>
     
         {/*   Auto Renew   */}
@@ -51,12 +61,12 @@ export default function GoalForm() {
                 <select disabled className={`w-40 ${disabledStyle}`}> <option>Daily Chat</option> </select>
 
                 {/* Goal number */}
-                <input type="number" min={1} className={`w-15 ${borderStyle}`} value={target} 
+                <input type="number" min={1} className={`w-15 ${borderStyle}`} defaultValue={target} 
                     onChange={(e) => setTarget(+e.target.value)} />
 
                 {/* Time unit */}
                 <span className="w-20"> Times Per </span>
-                <select className={`w-25 ${borderStyle}`} value={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
+                <select className={`w-25 ${borderStyle}`} defaultValue={period} onChange={(e) => setPeriod(e.target.value as PeriodOptions)}>
                     <option value="Week" > Week  </option>
                     <option value="Month"> Month </option>
                 </select>
@@ -67,13 +77,21 @@ export default function GoalForm() {
         {/*   Start Day & Window   */}
         <div className="flex items-center gap-2">
             {/* Start day */}
-            <div className={rowThree}>
+            <div className={`w-1/2 ${rowThree}`}>
                 <label className={formText}>Start Day</label>
-                <select className={`mt-1 ${borderStyle}`} value={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
+                <select className={`mt-1 ${borderStyle}`} defaultValue={startDOW} onChange={(e) => setStartDOW(+e.target.value)} >
                     {weekdayNames.map((day, i) => (<option key={i} value={i}> {day} {i === todayIdx && "(Today)"} </option>))}
                 </select>
             </div>
+
+            {/* Current window preview */}
+            <div className={`w-1/2 ${rowThree}`}>
+                <label className={formText}>Current Goal Window</label>
+                <span className={`mt-1 ${disabledStyle}`}> {windowLabel} </span>
+            </div>
         </div>
+
+        <button type="submit" className="btn btn-primary w-fit my-2">Save Goal</button>
 
         </form>
     )

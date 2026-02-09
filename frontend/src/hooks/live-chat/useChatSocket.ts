@@ -1,6 +1,5 @@
+import { getAccess } from "@/context/AuthProvider";
 import { useRef, useEffect, useState, useCallback } from "react";
-
-import { getAccess } from "@/api";
 
 // ====================================================================
 // Handle the WebSocket Connection to the Backend
@@ -76,7 +75,7 @@ export default function useChatSocket({
     }, [recording]);
 
     // Send helper
-    const send = useCallback((msg) => {
+    const send = useCallback((msg: any) => {
         const ws = wsRef.current;
         if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg));                         }
         else                                   { console.warn("WebSocket not open; message not sent"); }

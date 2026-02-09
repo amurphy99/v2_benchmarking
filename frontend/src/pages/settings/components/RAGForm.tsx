@@ -3,14 +3,14 @@ import { RAGInstructions } from "@/api/models";
 import { useRAGInstructions } from "@/hooks/queries/useRAGInstructions";
 import { toastMessage } from "@/utils/functions/toast_helper";
 import { h4 } from "@/utils/styling/sharedStyles";
-import { useAuth } from "@/context/AuthProvider";
 import { useState } from "react";
 import RAGInstructionModal from "@/components/modals/RAGInstructionModal";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 type Mode = "create" | "edit";
 
 export default function RAGForm() {
-  const { profile } = useAuth();
+  const { data: profile, isLoading: profileLoading } = useProfile();
 
   const {
     data: ragInstructions = [],
@@ -28,7 +28,7 @@ export default function RAGForm() {
     instruction_order: number; 
   } | null>(null);
 
-  if (isLoading) {
+  if (isLoading || profileLoading) {
     return <p>Loading...</p>;
   }
 

@@ -4,11 +4,10 @@ from ..models import Profile, Goal, UserSettings, Reminder, ChatSession, ChatMes
 
 
 def get_download_data(profile: Profile):
-    user = profile.plwd
-    goal = Goal.objects.get(user=profile)
-    settings = UserSettings.objects.get(user=profile)
-    reminders = Reminder.objects.filter(user=profile)
-    chat_sessions = ChatSession.objects.filter(user=user).order_by("-date")
+    user = profile.account.user
+    goal = Goal.objects.get(profile=profile)
+    settings = UserSettings.objects.get(profile=profile)
+    chat_sessions = ChatSession.objects.filter(profile=profile).order_by("-date")
 
     data_str = f"""{user.first_name} {user.last_name}'s data
     
@@ -17,9 +16,7 @@ def get_download_data(profile: Profile):
     {format_goal(goal)}
     
     {format_settings(settings)}
-    
-    {format_reminders(reminders)}
-    
+        
     {format_sessions(chat_sessions)}"""
     return data_str
 
@@ -64,21 +61,6 @@ def format_settings(settings: UserSettings):
         """
     return settings_str
 
-def format_reminders(reminders):
-    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    reminders_str = """
-    =========================================================
-                            Reminders                       
-    =========================================================
-    """
-    for reminder in reminders:
-        reminders_str += f"""Title: {reminder.title}"
-        Start: {reminder.start}T{reminder.startTime}
-        End: {reminder.end}T{reminder.endTime}
-        Repeats every {[days[day] for day in reminder.daysOfWeek]}
-        """
-    return reminders_str
-
 # ChatSession formatting helpers
 def format_messages(messages):
     messages_str = "            Messages:"
@@ -99,7 +81,7 @@ def format_session(session: ChatSession):
     scores = ChatBiomarkerScore.objects.filter(session=session).order_by("ts")
     
     session_str = f"""
-    Chat Session on {session.date} -- {session.end_ts} ({session.duration} seconds)
+    Chat Session on {session.date} -- {session.end_ts} ({session.duration} minutes)
     Source: {session.source}
     Notes: {session.notes} 
     Topics: {session.topics} 

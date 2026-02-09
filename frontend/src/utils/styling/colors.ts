@@ -10,10 +10,15 @@ export const PATIENT_OKLCH   = "#00a63e";
 
 
 // Helper to style navigation links
-export const navLinkCls = ({ isActive }: { isActive: boolean }) =>
+export const navLinkClsCaregiver = ({ isActive }: { isActive: boolean }) =>
     isActive
         ? "underline decoration-2 text-violet-600"
         : "no-underline text-gray-500 hover:text-violet-500 visited:text-gray-500";
+
+export const navLinkClsPatient = ({ isActive }: { isActive: boolean }) =>
+    isActive
+        ? "underline decoration-2 text-green-600"
+        : "no-underline text-gray-500 hover:text-green-500 visited:text-gray-500";
 
 export const footerLinkPatientCls = ({ isActive }: { isActive: boolean }) =>
     isActive

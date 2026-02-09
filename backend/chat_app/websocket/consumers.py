@@ -3,7 +3,7 @@
 # =======================================================================
 from django.apps import apps
 
-import json, asyncio, logging, base64
+import json, asyncio, logging, base64, os
 logger = logging.getLogger(__name__)
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer

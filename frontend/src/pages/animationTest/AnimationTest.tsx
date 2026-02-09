@@ -8,10 +8,10 @@ import { IoCalendarOutline } from "react-icons/io5";
 import { FaChartBar } from "react-icons/fa";
 
 export function AnimationTest() {
-    const [botMessage, setBotMessage] = useState("Chat with me!");
-    const [animation, setAnimation] = useState();
-    const [animCount, setAnimCount] = useState(0);
-    const [emotion, setEmotion] = useState("Neutral");
+    const [botMessage, setBotMessage] = useState<string>("Chat with me!");
+    const [animation, setAnimation] = useState<string>();
+    const [animCount, setAnimCount] = useState<number>(0);
+    const [emotion, setEmotion] = useState<string>("Neutral");
 
     const [width, setWidth] = useState(window.innerWidth);
     
@@ -29,7 +29,7 @@ export function AnimationTest() {
     const isMobile = width <= 768;
 
     useEffect(() =>{
-        const mapAnim = {
+        const mapAnim: Record<string, string> = {
             Happy: "DANCE",
             Sad: "SHAKE NO",
             Surprised: "EMBARRASSED",
@@ -37,7 +37,7 @@ export function AnimationTest() {
             Angry: "EMBARRASSED",
             Neutral: "HEAD TILT",
         };
-        const mapMsg = {
+        const mapMsg: Record<string, string> = {
             Happy: "This is a happy message!",
             Sad: "This is a sad message.",
             Surprised: "This is a surprised message!",
@@ -45,8 +45,8 @@ export function AnimationTest() {
             Angry: "This is an angry message.",
             Neutral: "This is a neutral message.",
         }
-        const animVal = mapAnim[emotion] || "NOD YES";
-        const msgVal = mapMsg[emotion] || "This is a neutral message.";
+        const animVal: string = mapAnim[emotion] || "NOD YES";
+        const msgVal: string = mapMsg[emotion] || "This is a neutral message.";
         setAnimation(animVal);
         setBotMessage(msgVal);
         setAnimCount((t) => t + 1);
@@ -73,7 +73,7 @@ export function AnimationTest() {
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} /> 
+                        <Avatar animation={animation} animCount={animCount} model={"buddy"} /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -82,7 +82,7 @@ export function AnimationTest() {
                 :
                     
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} />
+                    <Avatar animation={animation} animCount={animCount} model={"buddy"} />
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
@@ -104,7 +104,7 @@ export function AnimationTest() {
             </div>
             <div className="flex flex-col items-center">
                 <NavLink to="/animation-test" className={footerLinkChat}>
-                    <img className="aspect-square w-[2rem] " src="/images/QT_icon.svg" />
+                    <img className="aspect-square w-[2rem] " src="/images/Robot_icon.svg" />
                     Chat
                 </NavLink>
             </div>
