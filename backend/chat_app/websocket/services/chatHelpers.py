@@ -61,15 +61,19 @@ class ChatHandler:
         logger.info(f"{LLM_MAIN}[LLM] User utt received: {USER_MSG}{user_text}{RESET}")
 
         # Update context and DB for the new *user* message
-        context_buffer = await msg_callback(role="user", text=user_text, ts=user_ts)
+        #context_buffer = await msg_callback(role="user", text=user_text, ts=user_ts)
+        context_buffer = await trace_await("msg_callback(user)",  msg_callback(role="user", text=user_text, ts=user_ts))
 
         # 2) Get the LLMs response
-        system_resp = await get_LLM_response(context_buffer)
+        #system_resp = await get_LLM_response(context_buffer)
+        system_resp = await trace_await("get_LLM_response", get_LLM_response(context_buffer), timeout=10)
         system_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
 
         # Immediately send the response back through the websocket & update the DB + chat context
-        await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
-        await msg_callback(role="assistant", text=system_resp, ts=system_ts)
+        #await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
+        #await msg_callback(role="assistant", text=system_resp, ts=system_ts)
+        await trace_await("send_callback(llm_response)", send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts})))
+        await trace_await("msg_callback(assistant)", msg_callback(role="assistant", text=system_resp, ts=system_ts))
 
         # 3) On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
         fire_and_log(bio_callback(), name="handle_transcription::bio_callback")
@@ -81,10 +85,17 @@ class ChatHandler:
     # ================================================================================
     @staticmethod
     async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
+        user_text = data["data"] 
+        user_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+        await send_callback(json.dumps({'type': 'user_utt', 'data': user_text, 'time': user_ts}))
+        logger.info(f"{LLM_MAIN}[LLM] Sent user utterance to frontend: {user_text} {RESET}")
+        
         # Forward the user's utterance to `handle_transcription` (and grab the system's response)
         system_resp = await ChatHandler.handle_transcription(data, msg_callback, send_callback, bio_callback)
-        
-        # Synthesize system's response to speech 
+        logger.info(f"{LLM_MAIN}[LLM] Handle transcription called with: {user_text} and {system_resp}  {RESET}")
+
+        # Synthesize to speech 
         await ChatHandler.synthesize_speech(system_resp, send_callback)
 
     # --------------------------------------------------------------------------------
