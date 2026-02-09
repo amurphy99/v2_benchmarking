@@ -9,7 +9,8 @@ import logging, asyncio, time
 logger = logging.getLogger(__name__)
 
 # From this project
-from ...config         import PROMPT, MAX_LENGTH, llm
+from ...config         import PROMPT, MAX_LENGTH
+from ...config         import llm as query_llm
 from  ..logging_utils  import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG
 from  ..emotionHelpers import classify_emotion_with_vader
 
@@ -22,9 +23,9 @@ ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your reque
 # Wrapper method for sending *standard* requests to the LLM
 # --------------------------------------------------------------------------------
 async def get_LLM_response(context_buffer):
-    t1 = time(); logger.info(f"{LLM_MAIN}[LLM] Sending LLM request... {RESET}")
+    t1 = time.time(); logger.info(f"{LLM_MAIN}[LLM] Sending LLM request... {RESET}")
     system_resp = await generate_LLM_response(context_buffer)
-    t2 = time(); logger.info(f"{LLM_MAIN}[LLM] Response received: (in {(t2-t1):.4f}) {ROBO_MSG}{system_resp}{RESET}")
+    t2 = time.time(); logger.info(f"{LLM_MAIN}[LLM] Response received: (in {(t2-t1):.4f}) {ROBO_MSG}{system_resp}{RESET}")
     return system_resp
 
 # ================================================================================
@@ -42,7 +43,7 @@ async def generate_LLM_response(context_buffer):
 
     # 2a) Get a response from the LLM (hosted on a webserver)
     try:
-        output = await llm(full_prompt, max_tokens=MAX_LENGTH, stop=["<|end|>", "\n"], echo=True) 
+        output = await query_llm(full_prompt, max_tokens=MAX_LENGTH, stop=["<|end|>", "\n"], echo=True) 
         system_resp = (output["choices"][0]["text"].split("<|assistant|>")[-1]).strip()
 
     # 2b) On error, report in the logs & return a default response
@@ -73,7 +74,7 @@ def prepare_LLM_input(context_buffer):
 
 
 
-# NOT INTEGREATED 
+# NOT INTEGRATED 
 # --------------------------------------------------------------------------------
 # Classify the LLM text using vader or zero-shot (not integrated right now)
 # --------------------------------------------------------------------------------
