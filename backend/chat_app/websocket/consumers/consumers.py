@@ -1,9 +1,12 @@
 """
 Live user chat controller.
 --------------------------------------------------------------------------------
-backend.chat_app.websocket.consumers.consumers
+`backend.chat_app.websocket.consumers.consumers`
 
 Processes incoming messages, scores them, and responds.
+
+TODO: Might need to add arguments in the URL (like source) for if the backend should
+      handle STT and/or TTS.
 
 
 1) Authentication Block -> user information, chat source
@@ -32,10 +35,10 @@ from channels.db                import database_sync_to_async
 from ...services                   import logging_utils as lu 
 from ...services.db_services       import ChatService
 from  ..services.bg_helpers        import fire_and_log
-from  ..services.chatHelpers       import handle_transcription, handle_stt_output
+from  ..services.chatHelpers       import ChatHandler
 from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
 from  ..services.speechProvider    import SpeechToTextProvider
-from    .utils  .logging           import ChatConsumerLogging as log
+from   .utils   .logging           import ChatConsumerLogging as log
 
 
 
@@ -124,7 +127,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     
         # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
         self.stt_provider = SpeechToTextProvider(
-            transcript_callback    = handle_stt_output, 
+            transcript_callback    = ChatHandler.handle_stt_output, 
             msg_callback           = self._add_message_CB, 
             send_callback          = self.send, 
             bio_callback           = self._utt_bio, 
@@ -202,7 +205,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, data, **kwargs):
         if   data["type"] == "overlapped_speech" : await self._handle_overlap(data=data)
         elif data["type"] == "audio_data"        : await self._handle_audio_data(data)
-        elif data["type"] == "transcription"     : await handle_transcription(data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
+        elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
         elif data["type"] == "end_chat"          : 
                     self.stt_provider.stop()
                     await database_sync_to_async(ChatService.close_session)(self.user, self.session, source=self.source)        
