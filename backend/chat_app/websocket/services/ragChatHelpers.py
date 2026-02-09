@@ -11,7 +11,7 @@ from channels.db import database_sync_to_async
 
 from pgvector.django import CosineDistance
 
-from chat_app.models import RAGInstructions, Activity
+from chat_app.models import RAGInstructions, Activity, Account, Profile, Access
 from chat_app.services import logging_utils as lu
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
 from rag_vectorstore.services.vdb_services import get_embeddings_model
@@ -34,19 +34,43 @@ _available_scenarios_logged = False
 @database_sync_to_async
 def resolve_instruction_owner(user):
     """
-    Memory activity instructions are authored by caregiver.
-    The `user` is actually a patient (plwd), so we need to use their paired caregiver's id to fetch
-    instructions.
+    If `user` is a patient, pick ONE caregiver (alphabetical by username)
+    from the caregivers who have Access to the patient's Profile.
+    Otherwise return `user` (treat as caregiver/unpaired).
     """
-    # If the user is a patient, they should have a Profile via related_name="PLwD"
     try:
-        profile = user.PLwD  # Profile where this user is the patient (plwd)
-        return profile.caregiver
-    except ObjectDoesNotExist:
-        pass
+        account = Account.objects.select_related("user").get(user=user)
+    except Account.DoesNotExist:
+        return None
 
-    # Otherwise treat them as caregiver (or unpaired)
-    return user
+    # If the logged-in user is not a patient, just use them directly
+    if (account.role or "").lower() != "patient":
+        logger.info("Logged-in user_id=%s is not a patient", getattr(user, "id", None))
+        return None
+
+    # Patient -> Profile
+    try:
+        profile = Profile.objects.get(account=account)
+    except Profile.DoesNotExist:
+        logger.warning("No profile found for patient account_id=%s user_id=%s", account.id, getattr(user, "id", None))
+        return None
+
+    # Profile -> caregiver Access rows -> pick first caregiver alphabetically
+    caregiver_access = (
+        Access.objects
+        .select_related("account__user")
+        .filter(profile=profile, account__role__isnull=False)
+        .filter(account__role__iexact="Caregiver")  
+        .order_by(Lower("account__user__username"))
+        .first()
+    )
+
+    if caregiver_access:
+        return caregiver_access.account.user
+
+    # No caregiver linked yet
+    return None
+
 
 def _message_content_to_text(content: Any) -> str:
     """Normalize LangChain message content to plain text."""
@@ -302,7 +326,23 @@ async def rag_response_fn(
 
     instruction_owner = await resolve_instruction_owner(user)
 
-    logger.info(f"{lu.CYAN}[RAG][{trace_id}] user={getattr(user, 'id', None)} instruction_owner={getattr(instruction_owner, 'id', None)} activity={activity_name}{lu.RESET}")
+    # If patient has no caregiver instructions yet, directly send a friendly message
+    if instruction_owner is None:
+        logger.info(
+            f"[RAG][{trace_id}] No caregiver instructions found for user={getattr(user, 'id', None)} activity={activity_name}"
+        )
+
+        return {
+            "text": (
+                "I’m sorry - your caregiver hasn’t added any guidance for this activity yet. "
+                "Once they do, I’ll be able to help you here."
+            ),
+            "current_scenario": rag_state.get("current_scenario") or START_SCENARIO,
+            "next_scenario": rag_state.get("current_scenario") or START_SCENARIO,
+        }
+
+    logger.info("[RAG][%s] user=%s instruction_owner=%s activity=%s",
+                trace_id, getattr(user, "id", None), getattr(instruction_owner, "id", None), activity_name)
 
     scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
     available_scenarios_text = format_available_scenarios(scenarios)
