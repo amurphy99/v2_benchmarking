@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from datetime        import timedelta, date, time
 from random          import random
 from chat_app.models import Profile, Account, Access, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
+from rag_vectorstore.services.vdb_services import index_single_instruction
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -179,22 +180,28 @@ class Command(BaseCommand):
     # ====================================================================
     def get_or_create_demo_user(self, username, **kwargs):
         User = get_user_model()
-        # Try to fetch the existing user to preserve their ID
+        password = kwargs.pop("password", "1")
+
         user, created = User.objects.get_or_create(username=username, defaults=kwargs)
-        
-        if not created:
-            # If user exists, update their details just in case they changed
-            for k, v in kwargs.items():
-                if k != 'password':
-                    setattr(user, k, v)
-            user.set_password(kwargs.get('password', '1'))
+
+        # Always ensure password is hashed and details are correct
+        changed = False
+        for k, v in kwargs.items():
+            if getattr(user, k, None) != v:
+                setattr(user, k, v)
+                changed = True
+
+        user.set_password(password)  # hashes properly
+        changed = True
+
+        if changed:
             user.save()
-            
-            # Delete data linked to this user
+
+        # If user already existed, delete linked demo data (resetting the user but keeping the same user_id to avoid dangling vector DB entries)
+        if not created:
             self.delete_user_data(user)
-            
+
         return user
-        
 
     # Seed AlbumImages into the DB
     # ====================================================================
@@ -314,13 +321,18 @@ class Command(BaseCommand):
         for idx, name in enumerate(DEMO_RAG_NAMES):
             description = DEMO_RAG_DESCRIPTIONS[idx]
             instructions = DEMO_RAG_INSTRUCTIONS[idx]
-            RAGInstructions.objects.update_or_create(
-                name=name,
-                user=demo_user,
-                activity=memory_activity,
-                defaults={
-                    "description": description,
-                    "instructions": instructions,
-                    "instruction_order": 1,
-                },
-            )
+            obj, _ = RAGInstructions.objects.update_or_create(
+                        name=name,
+                        user=demo_user,
+                        activity=memory_activity,
+                        defaults={
+                            "description": description,
+                            "instructions": instructions,
+                            "instruction_order": 1,
+                        },
+                    )
+
+            try:
+                index_single_instruction(obj)
+            except Exception as e:
+                print(f"[VectorDB] Failed to index seeded instruction {obj.id}: {e}")
