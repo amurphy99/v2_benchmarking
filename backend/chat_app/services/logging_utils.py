@@ -1,7 +1,7 @@
 """
 Logging utilities for the project.
 --------------------------------------------------------------------------------
-backend.chat_app.services.logging_utils
+`backend.chat_app.services.logging_utils`
 
 Maybe set some colors aside for distinct activities...
 * Dark Yellow => For updates from the ChatListener consumer class
@@ -78,7 +78,7 @@ BG_BRIGHT_GREEN   = "\033[0;102m"
 # --------------------------------------------------------------------------------
 # Horizontal line break
 # --------------------------------------------------------------------------------
-HLINE   = "-----------------------------------------------------------------------"
+HLINE   = "-" * 80
 
 # Colored line breaks
 RLINE_1 = f"\n{RED}{HLINE}{RESET}\n"
@@ -95,8 +95,8 @@ G_LINE_2 = f"\n{GREEN}{HLINE}{RESET}"
 # --------------------------------------------------------------------------------
 # Specific Presets
 # --------------------------------------------------------------------------------
-USER_MSG = f"{RESET}{ITALIC}{GREEN  }{RESET}"
-ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}{RESET}"
+USER_MSG = f"{RESET}{ITALIC}{GREEN  }"
+ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}"
 
 # ChatConsumer
 CC_MAIN = f"{GREEN}[ChatConsumer]"
