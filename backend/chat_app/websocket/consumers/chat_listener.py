@@ -59,6 +59,16 @@ from ...services              import logging_utils as lu
 from ...services.db_services  import ChatService
 from   .utils  .logging       import ChatListenerLogging as log
 
+# --------------------------------------------------------------------------------
+# History Helper
+# --------------------------------------------------------------------------------
+def format_message_history(messages):
+    return [{
+        "type": "message",
+        "role": m.role,
+        "text": m.content,
+        "ts"  : m.ts.timestamp(),
+    } for m in messages]
 
 # ================================================================================
 # ChatListenerConsumer
@@ -136,11 +146,15 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
             lambda: list(self.session.messages.all().order_by("start_ts"))
         )()
 
-        # Frontend will expect messages to come in this format
-        history = [(m.role, m.content, m.ts.timestamp()) for m in messages]
-        await self.send_json({"type": "history", "messages": history})
+        # Frontend will expect messages/biomarkers to come in this format
+        message_history = format_message_history(messages)
+        await self.send_json({"type": "history", "messages": message_history})
 
-        logger.info(f"{lu.CL_MAIN} Loaded {lu.BOLD}{len(history)}{lu.RESET}{lu.YELLOW} existing messages{lu.RESET}")
+        # TODO: Biomarker equivalent of the message history
+        #biomarker_history = format_message_history(messages)
+        #await self.send_json({"type": "history", "messages": message_history})
+
+        logger.info(f"{lu.CL_MAIN} Loaded {lu.BOLD}{len(message_history)}{lu.RESET}{lu.YELLOW} existing messages{lu.RESET}")
 
     # --------------------------------------------------------------------------------
     # Disconnect (listener does NOT close the session in DB)
