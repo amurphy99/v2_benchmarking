@@ -5,7 +5,7 @@ Utilities for processing chat messages & getting LLM responses.
 
 Process the users message & reply with the LLM ASAP.
 
-TODO: Rejoining needs to be handled differently...
+TODO: Rejoining a chat needs to be handled differently...
 TODO: I'll delete everything we had here for it and then add it back in from a separate branch later
 
 """
@@ -13,11 +13,12 @@ import json, logging, base64
 logger = logging.getLogger(__name__)
 
 from math     import ceil
+from time     import time as now_ts
 from datetime import datetime, timezone
 
 # From this project
 from   .speechProvider              import TextToSpeechProvider
-from   .bg_helpers                  import fire_and_log
+from   .bg_helpers                  import fire_and_log, trace_await
 from ...services.logging_utils      import RESET, LLM_MAIN, STT_TTS_MAIN, USER_MSG
 from ...services.llm.chat_utilities import get_LLM_response
 
@@ -55,20 +56,20 @@ class ChatHandler:
     ):
         # 1) Process the input TODO: Eventually we might receive timestamps directly within the WS data
         user_text = data["data"] 
-        user_ts   = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        user_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
 
         logger.info(f"{LLM_MAIN}[LLM] User utt received: {USER_MSG}{user_text}{RESET}")
 
         # Update context and DB for the new *user* message
-        context_buffer = await msg_callback(role="user", text=user_text, time=user_ts)
-        
+        context_buffer = await msg_callback(role="user", text=user_text, ts=user_ts)
+
         # 2) Get the LLMs response
         system_resp = await get_LLM_response(context_buffer)
-        system_ts   = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        system_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
-        await msg_callback(role="assistant", text=system_resp, time=system_ts)
+        await msg_callback(role="assistant", text=system_resp, ts=system_ts)
 
         # 3) On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
         fire_and_log(bio_callback(), name="handle_transcription::bio_callback")
@@ -80,17 +81,10 @@ class ChatHandler:
     # ================================================================================
     @staticmethod
     async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
-        user_text = data["data"] 
-        user_ts   = datetime.now(timezone.utc).strftime("%H:%M:%S")
-
-        await send_callback(json.dumps({'type': 'user_utt', 'data': user_text, 'time': user_ts}))
-        logger.info(f"{LLM_MAIN}[LLM] Sent user utterance to frontend: {user_text} {RESET}")
-        
+        # Forward the user's utterance to `handle_transcription` (and grab the system's response)
         system_resp = await ChatHandler.handle_transcription(data, msg_callback, send_callback, bio_callback)
         
-        logger.info(f"{LLM_MAIN}[LLM] Handle transcription called with: {user_text} and {system_resp}  {RESET}")
-
-        # Synthesize to speech 
+        # Synthesize system's response to speech 
         await ChatHandler.synthesize_speech(system_resp, send_callback)
 
     # --------------------------------------------------------------------------------
@@ -122,11 +116,22 @@ class ChatHandler:
 
 
 
-"""
-# OLD METHOD, NOT UPDATED YET
 
+
+
+
+# --------------------------------------------------------------------------------
+# TODO: Stuff from old version that needs to finish being factored out
+# --------------------------------------------------------------------------------
 class RagParseError(Exception):
-    # Raised when the RAG LLM output cannot be parsed into the expected JSON schema.
+    """Raised when the RAG LLM output cannot be parsed into the expected JSON schema."""
+
+import asyncio, traceback
+from time import time
+
+from ...services      import logging_utils as lu
+from ...services.llm.chat_utilities import generate_LLM_response, classify_llm_text_emotion_async
+
 
 async def handle_transcription0(data, msg_callback, send_callback, bio_callback, *, response_fn=None, response_fn_kwargs=None):
     # Takes three callbacks from the consumers object
@@ -202,4 +207,3 @@ async def handle_transcription0(data, msg_callback, send_callback, bio_callback,
     asyncio.create_task(bio_callback())
     return system_utt
     
-"""
