@@ -217,14 +217,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         utterance_biomarkers = await extract_text_biomarkers(self.context_buffer)
 
         # Save biomarkers to the DB & send them to any listeners
-        fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(self.session, utterance_biomarkers))
+        fire_and_log(
+            db_s2a(ChatService.add_biomarkers_bulk)(self.session, utterance_biomarkers),
+            name="_utt_bio::add_biomarkers_bulk"    
+        )
         await self._broadcast_monitor({"type": "biomarker_scores", "data": utterance_biomarkers})
     
     # Add messages to the database & update the local context (role must be "user" or "assistant").
     async def _add_message_CB(self, role, text, ts):
         # Fire-and-forget DB write for the user message
-        fire_and_log(db_s2a(ChatService.add_message)(self.session, role, text), "_add_message_CB")
-        logger.info(f"{lu.CC_MAIN} fire and log")
+        fire_and_log(db_s2a(ChatService.add_message)(self.session, role, text), name="_add_message_CB")
 
         # Update in memory context
         self.context_buffer.append((role, text, ts))
