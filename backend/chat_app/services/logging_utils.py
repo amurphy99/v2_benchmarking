@@ -99,10 +99,10 @@ USER_MSG = f"{RESET}{ITALIC}{GREEN  }"
 ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}"
 
 # ChatConsumer
-CC_MAIN = f"{GREEN}[ChatConsumer]"
+CC_MAIN = f"{BRIGHT_GREEN}[{GREEN}ChatConsumer{BRIGHT_GREEN}]"
 
 # ChatListener
-CL_MAIN = f"{YELLOW}[ChatListener]"
+CL_MAIN = f"{BRIGHT_YELLOW}[{YELLOW}ChatListener{BRIGHT_YELLOW}]"
 
 # LLM Updates
 LLM_MAIN = f"{CYAN}"

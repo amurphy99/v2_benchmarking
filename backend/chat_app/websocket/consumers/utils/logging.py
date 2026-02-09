@@ -17,7 +17,7 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD
 # --------------------------------------------------------------------------------
 # ChatConsumer Utilities
 # --------------------------------------------------------------------------------
-from ....services.logging_utils import CC_MAIN, GREEN, G_LINE_1, G_LINE_2
+from ....services.logging_utils import CC_MAIN, BRIGHT_GREEN, G_LINE_1, G_LINE_2
 
 class ChatConsumerLogging:
     @staticmethod
@@ -30,7 +30,7 @@ class ChatConsumerLogging:
 
     @staticmethod
     def log_disconnect(user, code):
-        logger.info(f"{G_LINE_1}{CC_MAIN} {BOLD}{user}{UNBOLD} {lu.RED}disconnected{GREEN} (code: {BOLD}{code}{UNBOLD}) {RESET}{G_LINE_2}")
+        logger.info(f"{G_LINE_1}{CC_MAIN} {BOLD}{user}{UNBOLD} {lu.RED}disconnected{BRIGHT_GREEN} (code: {BOLD}{code}{UNBOLD}) {RESET}{G_LINE_2}")
 
 # --------------------------------------------------------------------------------
 # ChatListener Utilities
