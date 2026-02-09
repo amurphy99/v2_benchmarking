@@ -1,7 +1,7 @@
 """
 Consumer for chats with built-in "activities"
 --------------------------------------------------------------------------------
-backend.chat_app.websocket.consumers.chat_activities
+`backend.chat_app.websocket.consumers.chat_activities`
 
 
 """
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # From this project
 from  .consumers                   import ChatConsumer
-from ..services.chatHelpers        import handle_transcription
+from ..services.chatHelpers        import handle_transcription0
 from ..services.speechProvider     import SpeechToTextProvider
 from ..services.activityChatHelper import rag_response_fn, START_SCENARIO
 
@@ -55,7 +55,7 @@ class ActivityChatConsumer(ChatConsumer):
             "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
         }))
 
-        await handle_transcription(
+        await handle_transcription0(
             data,
             msg_callback=msg_callback,
             send_callback=send_callback,
@@ -70,7 +70,7 @@ class ActivityChatConsumer(ChatConsumer):
 
     async def receive_json(self, data, **kwargs):
         if data["type"] == "transcription":
-            await handle_transcription(
+            await handle_transcription0(
                 data,
                 msg_callback=self._add_message_CB,
                 send_callback=self.send,
