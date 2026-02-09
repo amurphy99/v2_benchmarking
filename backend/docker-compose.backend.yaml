@@ -42,9 +42,10 @@ services:
       context: .
       dockerfile: Dockerfile-backend
     container_name: backend
+    # track migrations from now on
     command: |
       sh -c "
-        python manage.py makemigrations --noinput &&
+        python manage.py makemigrations --check --dry-run && 
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py seed_demo &&
@@ -53,7 +54,7 @@ services:
     env_file: [.env]
     volumes:
       - .:/app                # general project mount
-    #depends_on: [db, db_vector]
+    # depends_on: [db, db_vector] # uncomment for local development with DB containers
     networks: [appnet]
     ports:                    # expose 8000 to host for Vite
       - "8000:8000"
