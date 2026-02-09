@@ -28,12 +28,28 @@ TODO: Future possibilities:
 * Manually trigger messages from the LLM (e.g. the "puppet" system they already had at Indiana)
 * Manually trigger behaviors (animations, emotions)
 
+--------------------------------------------------------------------------------
+TODO: To completely finish this on the backend
+--------------------------------------------------------------------------------
+* Add biomarkers to the initial history that gets sent to the user as well
+
+* Add functionality for the commands
+    - pause/resume automatic responses (STT based responding)
+        > this may require a bunch of logic for concatenating consecutive, uninterrupted user utterances
+    - manually trigger a response from the system
+        > may need a "cooldown" option in the case of rapid successive clicks
+
+* Re-enable the biomarker logging thing, but that might need to wait for until I finish updating the biomarker code...
+
+* Probably some other stuff... need to look back through each file again
+
 """
 
-import json, logging
+import logging
 logger = logging.getLogger(__name__)
 
 # Django 
+from django.core.exceptions     import ObjectDoesNotExist
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async
 from django.apps                import apps
@@ -80,9 +96,12 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # Session ID is passed via URL:  "ws/chat/<session_id>/listen/"
         self.session_id = self.scope["url_route"]["kwargs"]["session_id"]
 
-        # 3) Load the session from the DB
+        # 3) Load the session from the DB (wrapped in try-except for if the given ID is not valid)
         ChatSession = apps.get_model("chat_app", "ChatSession")
-        self.session = await database_sync_to_async(ChatSession.objects.get)(id=self.session_id)
+        try: self.session = await database_sync_to_async(ChatSession.objects.get)(id=self.session_id)
+        except ChatSession.DoesNotExist:
+            logger.info("[WS] listener connect: invalid session_id=%s user=%s", self.session_id, self.scope["user"])
+            await self.close(code=4404); return # custom "not found" code
 
         # 4) Authorize (session owner can listen, admin users can listen)
         # TODO: Make this so you have to be like the associated user?
