@@ -25,7 +25,7 @@ ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your reque
 async def get_LLM_response(context_buffer):
     t1 = time.time(); logger.info(f"{LLM_MAIN}[LLM] Sending LLM request... {RESET}")
     system_resp = await generate_LLM_response(context_buffer)
-    t2 = time.time(); logger.info(f"{LLM_MAIN}[LLM] Response received: (in {(t2-t1):.4f}) {ROBO_MSG}{system_resp}{RESET}")
+    t2 = time.time(); logger.info(f"{LLM_MAIN}[LLM] Response received (in {(t2-t1):.4f}): {ROBO_MSG}\"{system_resp}\"{RESET}")
     return system_resp
 
 # ================================================================================
