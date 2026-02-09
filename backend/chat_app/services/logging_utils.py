@@ -4,10 +4,24 @@ Logging utilities for the project.
 backend.chat_app.services.logging_utils
 
 Maybe set some colors aside for distinct activities...
-* Dark Yellow => for updates from the ChatListener consumer class
-* Dark Green  => for updates from the ChatConsumer consumer class 
+* Dark Yellow => For updates from the ChatListener consumer class
+* Dark Green  => For updates from the ChatConsumer consumer class 
+* Dark Cyan   => For LLM updates
+
+* Magenta => LLM speech
+* Green   => User speech
+
+* Blue => STT & TTS
 
 """
+# ================================================================================
+# Specific Config (for controlling how much detail is logged)
+# ================================================================================
+LOG_LLM_TIMING = True
+
+# ================================================================================
+# Colors & Formatting Modifiers
+# ================================================================================
 # Standard (Dark) Colors
 BLACK    = '\033[30m'
 RED      = '\033[31m'
@@ -79,10 +93,10 @@ G_LINE_2 = f"\n{GREEN}{HLINE}{RESET}"
 
 
 # --------------------------------------------------------------------------------
-# Specific presets TODO: These are hideous...
+# Specific Presets
 # --------------------------------------------------------------------------------
-USER_MSG = f"{RESET}{BG_BRIGHT_GREEN  }"
-ROBO_MSG = f"{RESET}{BG_BRIGHT_MAGENTA}"
+USER_MSG = f"{RESET}{ITALIC}{GREEN  }{RESET}"
+ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}{RESET}"
 
 # ChatConsumer
 CC_MAIN = f"{GREEN}[ChatConsumer]"
@@ -90,3 +104,8 @@ CC_MAIN = f"{GREEN}[ChatConsumer]"
 # ChatListener
 CL_MAIN = f"{YELLOW}[ChatListener]"
 
+# LLM Updates
+LLM_MAIN = f"{CYAN}"
+
+# STT & TTS
+STT_TTS_MAIN = f"{BLUE}"
