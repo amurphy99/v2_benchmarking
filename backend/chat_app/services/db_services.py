@@ -1,7 +1,7 @@
 """
 Service for working with chat data
 --------------------------------------------------------------------------------
-backend.chat_app.services.db_services
+`backend.chat_app.services.db_services`
 
 TODO: Need to add topic/sentiment fields, probably on close ?
 TODO: If chat hasn't been modified in X time, save it and remake one automatically
