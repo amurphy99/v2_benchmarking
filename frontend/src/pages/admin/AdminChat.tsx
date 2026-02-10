@@ -1,8 +1,14 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState  }   from "react";
+import { useParams }   from "react-router-dom";
 import BasicTranscript from "./components/BasicTranscript";
-import LiveBiomarkers from "./components/LiveBiomarkers";
+import LiveBiomarkers  from "./components/LiveBiomarkers";
 
+// Hook for handling the WebSocket connection
+import useChatListener from "@/hooks/chat-listener/useChatListener";
+
+// --------------------------------------------------------------------------------
+// WebSocket message type interfaces
+// --------------------------------------------------------------------------------
 interface ChatMessage {
     role: string;
     text: string;
@@ -10,19 +16,34 @@ interface ChatMessage {
 }
 
 interface BiomarkerScoreSet {
-    anomia?      : number;
-    grammar?     : number;
-    pragmatic?   : number;
+    anomia?       : number;
+    grammar?      : number;
+    pragmatic?    : number;
     pronunciation?: number;
-    prosody?     : number;
-    turntaking?  : number;
+    prosody?      : number;
+    turntaking?   : number;
 }
 
+// ================================================================================
+// AdminChat
+// ================================================================================
+// Monitor a participant's ChatSession in real time
 export function AdminChat() {
+    // Setup
     const { id } = useParams();
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messages,        setMessages       ] = useState<ChatMessage      []>([]);
     const [biomarkerScores, setBiomarkerScores] = useState<BiomarkerScoreSet[]>([]);
 
+    // WebSocket Setup
+    const { send, connected } = useChatListener({
+        recording   : true,
+        session_id  : id,
+        onWSMessage : handleWsMessage,
+    });
+
+    // --------------------------------------------------------------------------------
+    // Handle Incoming Data
+    // --------------------------------------------------------------------------------
     function addMessage(message: ChatMessage) {
         setMessages((prevMessages) => [...prevMessages, message]);
     }
@@ -31,16 +52,15 @@ export function AdminChat() {
         const data = JSON.parse(event);
         if (data.type == "history") {
             const messages: ChatMessage[] = data.messages;
-            for (const msg of messages) {
-                addMessage(msg);
-            }
-        } else if (data.type == "biomarker_scores") {
-            setBiomarkerScores((prevScores) => [...prevScores, data.data]);
-        } else if (data.type == "message") {
-            addMessage(data)
-        }
+            for (const msg of messages) { addMessage(msg); }
+        } 
+        else if (data.type == "biomarker_scores") { setBiomarkerScores((prevScores) => [...prevScores, data.data]); } 
+        else if (data.type == "message"         ) { addMessage(data); }
     }
 
+    // --------------------------------------------------------------------------------
+    // Sample Methods 
+    // --------------------------------------------------------------------------------
     function addSampleMessage() {
         const sampleMessage = `{
             "type": "message",
@@ -66,6 +86,9 @@ export function AdminChat() {
         handleWsMessage(sampleScore);
     }
 
+    // ================================================================================
+    // Page Components
+    // ================================================================================
     return (
         <div>
             <h1 className="m-[2rem]">Admin Page For Chat {id}</h1>
