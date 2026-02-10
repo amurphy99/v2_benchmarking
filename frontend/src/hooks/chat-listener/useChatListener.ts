@@ -5,11 +5,30 @@ import { useRef, useEffect, useState, useCallback } from "react";
 // Handle the WebSocket Connection to the Backend
 // ================================================================================
 export default function useChatListener({ 
-    recording,
     session_id,
-    onWSMessage = (event: any) => {},
+    enabled        = true,
+    pingIntervalMs = 3_000,
+
+    // Updates from the backend
+    setSessionInfo    = (data : any) => {},
+    setHistMessages   = (data : any) => {},
+    setHistBiomarkers = (data : any) => {},
+    addNewMessage     = (data : any) => {},
+    addNewBiomarkers  = (data : any) => {},
 }) {
-    // WebSocket setup    
+    // --------------------------------------------------------------------------------
+    // Timing
+    // --------------------------------------------------------------------------------
+    // For header UI
+    const [lastEventAt, setLastEventAt] = useState<Date   | null>(null);
+    const [latencyMs,   setLatencyMs  ] = useState<number | null>(null);
+
+    // Keep the last ping timestamp so pong can compute RTT
+    const lastPingAtRef = useRef<number | null>(null);
+
+    // --------------------------------------------------------------------------------
+    // WebSocket Setup
+    // --------------------------------------------------------------------------------
     const [connected, setConnected] = useState(false);
 
     // Backend WebSocket URL 
@@ -20,47 +39,95 @@ export default function useChatListener({
     const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
 
     // --------------------------------------------------------------------------------
-    // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
+    // Message Handlers (avoid spammed reconnect attempts)
+    // --------------------------------------------------------------------------------
+    const handlersRef = useRef({
+        setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers,
+    });
+
+    useEffect(() => {
+        handlersRef.current = {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers};
+    }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
+
+    // --------------------------------------------------------------------------------
+    // Receive data from the backend
     // --------------------------------------------------------------------------------
     const onMessage = useCallback((event: MessageEvent) => {
-        const response = JSON.parse(event.data);
+        // Parse the initial event
+        let response: any
+        try   { response = JSON.parse(event.data); } 
+        catch { console.warn("WS message not JSON:", event.data); return; }
         const type = response.type;
-        const data = response.data;
+        const data = response.data; 
 
-        // We have a general handler method in the page right now
-        if      (type === "message"         ) { console.log(`message received: ${data}`         ); }
-        else if (type === "biomarker_scores") { console.log(`biomarker_scores received: ${data}`); }
+        // Update the last event (for real data only)
+        if (type !== "pong") { setLastEventAt(new Date()); }
 
-        // Handler on the page (for now?)
-        onWSMessage(event);
+        // Handle latency pong
+        if (type === "pong") {
+            const clientTs = response.client_ts;
+            if (typeof clientTs === "number") { setLatencyMs(Date.now() - clientTs); }
+            return;
+        }
 
-    }, [onWSMessage]);
+        // Current handlers
+        const {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers} = handlersRef.current;
+
+        // Call the respective method based on the event type
+        if      (type === "session_info"     ) { setSessionInfo   (data); }
+        else if (type === "message_history"  ) { setHistMessages  (data); }
+        else if (type === "biomarker_history") { setHistBiomarkers(data); }
+        else if (type === "message"          ) { addNewMessage    (data); }
+        else if (type === "biomarker_scores" ) { addNewBiomarkers (data); }
+        else { console.debug("Unhandled WS event type:", type, response); }
+
+    }, []);
+
 
     // ================================================================================
-    // Open and close the websocket connection on change of the "recording" flag
+    // Open and close based on "enabled"
     // ================================================================================
     const wsRef = useRef<WebSocket | null>(null); 
     useEffect(() => {
-        if (!recording) {wsRef.current?.close(); return;}
+        if (!enabled || !wsUrl) {wsRef.current?.close(); wsRef.current = null; setConnected(false); return;}
 
-        wsRef.current = new WebSocket(wsUrl);
-        wsRef.current.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",              wsUrl);};
-        wsRef.current.onclose   = (event) => {setConnected(false); console.log  ("WebSocket closed:",                    event);};
-        wsRef.current.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:",  error);};
-        wsRef.current.onmessage = (event) => {onMessage(event);};
+        const ws = new WebSocket(wsUrl); wsRef.current = ws;
+        ws.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",              wsUrl);};
+        ws.onclose   = (event) => {setConnected(false); console.log  ("WebSocket closed:",                    event);};
+        ws.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:",  error);};
+        ws.onmessage = onMessage;
         
-        return () => wsRef.current?.close(); // (clean up on unmount)
-    }, [recording]);
+        return () => {wsRef.current?.close(); wsRef.current = null;} // clean up on unmount
+    }, [enabled, wsUrl, onMessage]);
+
+
+    // --------------------------------------------------------------------------------
+    // Ping loop for latency (JSON ping/pong)
+    // --------------------------------------------------------------------------------
+    useEffect(() => {
+        // Connection checks
+        if (!connected) return;
+        const ws = wsRef.current; if (!ws) return;
+
+        // Ping the backend at intervals
+        const id = window.setInterval(() => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const t = Date.now(); lastPingAtRef.current = t;
+            ws.send(JSON.stringify({ type: "ping", client_ts: t }));
+        }, pingIntervalMs);
+
+        return () => window.clearInterval(id); // clean up on unmount
+    }, [connected, pingIntervalMs]);
 
     // ================================================================================
-    // Send helper
+    // Send Helper (accepts object or string)
     // ================================================================================
     const send = useCallback((msg: any) => {
         const ws = wsRef.current;
-        if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg));                         }
-        else                                   { console.warn("WebSocket not open; message not sent"); }
+        if (!ws || ws.readyState !== WebSocket.OPEN) {console.warn("WebSocket not open; message not sent");}
+        else { ws.send(typeof msg === "string" ? msg : JSON.stringify(msg));  }
     }, []);
 
     // Expose
-    return { send, connected };
+    return { send, connected, lastEventAt, latencyMs };
 }
