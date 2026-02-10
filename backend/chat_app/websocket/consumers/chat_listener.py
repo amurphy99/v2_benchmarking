@@ -44,7 +44,7 @@ TODO: To completely finish this on the backend
 
 """
 
-import logging
+import logging, time
 logger = logging.getLogger(__name__)
 
 # Django 
@@ -63,10 +63,12 @@ from   .utils  .logging       import ChatListenerLogging as log
 # --------------------------------------------------------------------------------
 def format_message_history(messages):
     return [{
-        "type": "message",
-        "role": m.role,
-        "text": m.content,
-        "ts"  : m.ts.timestamp(),
+        "type" : "message",
+        "data" : {
+            "role"   : m.role,
+            "content": m.content,
+            "ts"     : m.ts.timestamp(),
+        }
     } for m in messages]
 
 # ================================================================================
@@ -140,6 +142,9 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.   room_group, self.channel_name)
         await self.channel_layer.group_add(self.monitor_group, self.channel_name)
 
+
+        # TODO: Put this stuff in a function somewhere
+
         # 8) Send current conversation history to listener immediately
         messages = await database_sync_to_async(
             lambda: list(self.session.messages.all().order_by("start_ts"))
@@ -147,8 +152,21 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
         # Frontend will expect messages/biomarkers to come in this format
         message_history = format_message_history(messages)
-        await self.send_json({"type": "history", "messages": message_history})
 
+        # 9) Send "SessionInfo" to the frontend to populate it's UI
+        start_dt = await ChatService.get_start_ts(self.session)
+        frontend_info = {
+            "sessionId"   : self.session.id,
+            "username"    : getattr(self.session_info["user"],  "username", str(self.user)),
+            "source"      : getattr(self.session,               "source", "unknown"),
+            "isActive"    : getattr(self.session,               "is_active", None),
+            "startTs"     : start_dt.timestamp() if start_dt else None,
+            "messageCount": len(message_history),
+        }
+
+        await self.send_json({"type": "session_info",    "data": frontend_info  })
+        await self.send_json({"type": "message_history", "data": message_history})
+       
         # TODO: Biomarker equivalent of the message history
         #biomarker_history = format_message_history(messages)
         #await self.send_json({"type": "history", "messages": message_history})
@@ -188,13 +206,27 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     async def ws_monitor(self, event):
         await self.send_json(event["payload"])
 
-    # --------------------------------------------------------------------------------
+    # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
-    # --------------------------------------------------------------------------------
+    # ================================================================================
     # Handle messages sent from the 'listener' intended for the primary consumer
     async def receive_json(self, data, **kwargs):
+        msg_type = data.get("type")
+
+        # --------------------------------------------------------------------------------
+        # Allow ping/pong for latency measurement
+        # --------------------------------------------------------------------------------
+        # Echo back client timestamp so client can compute RTT
+        if msg_type == "ping":
+            client_ts = data.get("client_ts")
+            await self.send_json({"type": "pong", "client_ts": client_ts, "server_ts": time.time()})
+            return
+
+        # --------------------------------------------------------------------------------
+        # Commands from the listener client
+        # --------------------------------------------------------------------------------
         # Listener is only allowed to send commands
-        if data.get("type") != "command": return
+        if msg_type != "command": return
 
         # Example command payloads: {"cmd": "pause_auto"} | {"cmd": "resume_auto"}
         payload = data.get("data", {})
