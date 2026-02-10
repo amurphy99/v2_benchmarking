@@ -13,6 +13,9 @@ Later on may need to specifically add start/end timestamps to chats/messages...
 from django.db    import transaction
 from django.utils import timezone
 
+from channels.db      import database_sync_to_async
+from django.db.models import Min
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -170,11 +173,13 @@ class ChatService:
             "user"   : session.profile.account.user,
         }
     
-    # Get a list of all the messages for a ChatSession
+    # --------------------------------------------------------------------------------
+    # Get the starting timestamp of a session
+    # --------------------------------------------------------------------------------
     @staticmethod
-    def get_session_messages(session):
-        msgs = (ChatMessage.objects
-                .filter(session=session)
-                .filter(role="user")
-                .order_by("ts")                      # or "start_ts", "id" ?
-                .values_list("content", flat=True))  # returns a queryset of strings
+    @database_sync_to_async
+    def get_start_ts(session):
+        biomarker_ts = session.biomarker_scores.aggregate(min_ts=Min("ts"))["min_ts"]
+        message_ts   = session.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
+        timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
+        return min(timestamps) if timestamps else None
