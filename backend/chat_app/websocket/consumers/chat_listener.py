@@ -9,7 +9,6 @@ Receives live updates about the current chat's status, including:
 - Structured chat elements (e.g. "conversation_state")
 
 How it works:
-* TODO: Admin users can see a page that retrieves all "active" chat sessions (with a "refresh" button on the page).
 * TODO: The admin user can then click on one of these sessions and it uses the "session_id" field to connect via this consumer.
 * Here they can receive updates about the chat, control pausing, etc. 
 
