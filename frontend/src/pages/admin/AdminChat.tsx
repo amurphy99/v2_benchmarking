@@ -55,12 +55,12 @@ export function AdminChat() {
         const sampleScore = `{
             "type": "biomarker_scores",
             "data": {
-                "prosody": ${Math.random()},
-                "pronunciation": ${Math.random()},
-                "turntaking": ${Math.random()},
-                "grammar": ${Math.random()},
-                "anomia": ${Math.random()},
-                "pragmatic": ${Math.random()}
+                "prosody": ${Math.random().toFixed(3)},
+                "pronunciation": ${Math.random().toFixed(3)},
+                "turntaking": ${Math.random().toFixed(3)},
+                "grammar": ${Math.random().toFixed(3)},
+                "anomia": ${Math.random().toFixed(3)},
+                "pragmatic": ${Math.random().toFixed(3)}
             }
         }`;
         handleWsMessage(sampleScore);

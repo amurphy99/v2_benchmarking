@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from "react";
 import ReactApexChart from "react-apexcharts";
+import ApexCharts from "apexcharts";
 
 interface BiomarkerScoreSet {
     anomia?      : number;
@@ -39,9 +40,23 @@ export default function LiveBiomarkers({scores} : {scores: BiomarkerScoreSet[]})
 
     const options = {
         chart: {
+            id: "biomarker-chart",
             height: 350,
             zoom: {
-                enabled: false
+                enabled: true,
+                autoScaleYaxis: false,  
+                allowMouseWheelZoom: true,  
+                zoomedArea: {
+                    fill: {
+                        color: '#90CAF9',
+                        opacity: 0.4
+                    },
+                    stroke: {
+                        color: '#0D47A1',
+                        opacity: 0.4,
+                        width: 1
+                    }
+                }
             },
             animations: {
                 enabled: false
@@ -54,19 +69,22 @@ export default function LiveBiomarkers({scores} : {scores: BiomarkerScoreSet[]})
 
             },
             yaxis: {
-                min: 0,
-                max: 1.0,
+                min: 0.00,
+                max: 1.00,
                 tickAmount: 1,
                 floating: true,
-                decimalsInFloat: 4,
                 labels: {
                     formatter: function (val: number) {
-                        return val.toFixed(2);
+                        return val.toFixed(3);
                     }
                 }
             }
         }
     }
+
+    useEffect(() => {
+        ApexCharts.exec('biomarker-chart', 'zoomX', Math.max(0, scores.length - 5), scores.length)
+    }, [scores]);
 
     return (
             <ReactApexChart options={options} series={createSeries(scores)} type="line" height={"100%"} width={"100%"}/>
