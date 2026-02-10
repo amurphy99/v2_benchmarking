@@ -1,6 +1,13 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Mark lock files as generated so GitHub hides them in diffs
+# Hide lock files from stats and diffs
 frontend/package-lock.json linguist-generated=true
+frontend/package-lock.json -diff
+
+# Hide package.json from stats, but keep diffs visible
 frontend/package.json linguist-generated=true
+
+# Hide Django DB migrations
+**/migrations/*.py linguist-generated=true
+**/migrations/*.py -diff
