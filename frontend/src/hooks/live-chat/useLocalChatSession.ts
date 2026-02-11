@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toIsoTs } from "../chat-listener/adminChatTransforms";
 
 // --------------------------------------------------------------------------------
 // Models for frontend display use only
@@ -19,7 +20,7 @@ export interface LocalChatMessage {
 
 // What the backend sends in the "data" field
 export type MessageInput = {
-    ts      : string; // ISO string (?)
+    ts      : unknown; // ISO string (?)
     role    : Role;
     content : string;
 };
@@ -45,14 +46,14 @@ export function useLocalChatSession () {
     // --------------------------------------------------------------------------------
     const pushMessageObj = ({ ts, role, content }: MessageInput) => {
         setSession((s) => ({
-            ...s, messages: [...s.messages, { id: crypto.randomUUID(), ts, role, content }],
+            ...s, messages: [...s.messages, { id: crypto.randomUUID(), ts: toIsoTs(ts), role, content }],
         }));
     };
 
     // Replace all messages at once (for loading history)
     const setMessages = (messages: MessageInput[]) => {
         setSession((s) => ({
-            ...s, messages: messages.map(({ ts, role, content }) => ({ id: crypto.randomUUID(), ts, role, content })),
+            ...s, messages: messages.map(({ ts, role, content }) => ({ id: crypto.randomUUID(), ts: toIsoTs(ts), role, content })),
         }));
     };
 

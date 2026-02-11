@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toIsoTs } from "../chat-listener/adminChatTransforms";
 
 // --------------------------------------------------------------------------------
 // Models for frontend display use only
@@ -49,13 +50,13 @@ export function useLocalBiomarkers() {
     // Handling the ChatListener WebSocket data
     // --------------------------------------------------------------------------------
     const pushScoreObj = ({ ts, scores }: BiomarkerInput) => {
-        setSeries((s) => ({ ...s, points: [...s.points, { id: crypto.randomUUID(), ts, scores }] }));
+        setSeries((s) => ({ ...s, points: [...s.points, { id: crypto.randomUUID(), ts: toIsoTs(ts), scores }] }));
     };
 
     // Replace all messages at once (for loading history)
     const setScores = (history: BiomarkerInput[]) => {
         setSeries((s) => ({
-            ...s, points: history.map(({ ts, scores }) => ({ id: crypto.randomUUID(), ts, scores })),
+            ...s, points: history.map(({ ts, scores }) => ({ id: crypto.randomUUID(), ts: toIsoTs(ts), scores })),
         }));
     };
 
