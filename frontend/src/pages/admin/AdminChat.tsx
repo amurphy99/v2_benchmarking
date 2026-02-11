@@ -1,4 +1,4 @@
-import { useState  }   from "react";
+import { useState, useRef  }   from "react";
 import { useParams }   from "react-router-dom";
 
 
@@ -15,8 +15,7 @@ import { useLocalChatSession } from "@/hooks/live-chat";
 import { useLocalBiomarkers  } from "@/hooks/chat-listener/useLocalBiomarkers";
 
 
-
-
+import { useElementHeight } from "@/hooks/style/useElementHeight";
 
 
 import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/adminChatSamples";
@@ -56,6 +55,12 @@ export function AdminChat() {
         addNewMessage     : (data) => { pushMessageObj(data) },
         addNewBiomarkers  : (data) => { pushScoreObj  (data) },
     });
+
+    // --------------------------------------------------------------------------------
+    // Style Helpers
+    // --------------------------------------------------------------------------------
+    const bioPanelRef = useRef<HTMLDivElement | null>(null);
+    const bioHeight = useElementHeight(bioPanelRef);
     
 
     // --------------------------------------------------------------------------------
@@ -74,6 +79,7 @@ export function AdminChat() {
     }
 
     // <LiveBiomarkers scores={biomarkerScores}/>
+    //  <BiomarkerPanel series={series} windowSeconds={300} />
 
     // ================================================================================
     // Page Components
@@ -99,20 +105,23 @@ export function AdminChat() {
             {/* ================================================================================ */}
             {/* Body */}
             {/* ================================================================================ */}
-            <div className="flex flex-row m-[1rem] gap-[1rem]">
+            <div className="flex flex-row m-[1rem] gap-[1rem] items-start">
 
                 {/* -------------------------------------------------------------------------------- */}
-                {/* Chat Messages */}
+                {/* Chat Messages (set height equal to biomarker panel height) */}
                 {/* -------------------------------------------------------------------------------- */}
-                <div className="w-1/2 border border-gray-300">
+                <div 
+                    className="w-1/2 border border-gray-300 flex flex-col min-h-0 rounded-sm"
+                    style={bioHeight ? { height: bioHeight } : undefined}
+                >
                     <ChatMessages messages={session.messages}/>
                 </div>
 
                 {/* -------------------------------------------------------------------------------- */}
                 {/* Biomarkers */}
                 {/* -------------------------------------------------------------------------------- */}
-                <div className="w-1/2 min-h-[400px] border border-gray-300">
-                    <BiomarkerPanel series={series} windowSeconds={300} />
+                <div ref={bioPanelRef} className="w-1/2 border border-gray-300 rounded-sm">
+                   <BiomarkerPanel series={series} windowSeconds={300} />
                 </div>
 
             </div>
