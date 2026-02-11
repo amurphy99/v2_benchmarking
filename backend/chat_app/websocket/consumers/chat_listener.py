@@ -63,13 +63,11 @@ from   .utils  .logging       import ChatListenerLogging as log
 # --------------------------------------------------------------------------------
 def format_message_history(messages):
     return [{
-        "type" : "message",
-        "data" : {
-            "role"   : m.role,
-            "content": m.content,
-            "ts"     : m.ts.timestamp(),
-        }
+        "role"   : m.role,
+        "content": m.content,
+        "ts"     : m.ts.timestamp(),
     } for m in messages]
+    
 
 # ================================================================================
 # ChatListenerConsumer
@@ -200,11 +198,24 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
     # Receives chat message updates (user/assistant) broadcast from the primary consumer.
     async def ws_broadcast(self, event):
-        await self.send_json(event["payload"])
+        await self.send_json({
+            "type": "message", 
+            "data": {
+                "ts"      : event["payload"].get("ts"  ),
+                "role"    : event["payload"].get("role"),
+                "content" : event["payload"].get("text"),
+            }
+        })
 
     # Receives biomarker updates broadcast from the primary consumer.
     async def ws_monitor(self, event):
-        await self.send_json(event["payload"])
+        await self.send_json({
+            "type": "biomarker_scores", 
+            "data": {
+                "ts"     : time.time(),
+                "scores" : event["payload"].get("data") 
+            } 
+        })
 
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
