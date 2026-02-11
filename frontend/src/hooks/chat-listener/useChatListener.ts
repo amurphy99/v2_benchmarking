@@ -1,25 +1,36 @@
-import { getAccess } from "@/context/AuthProvider";
-import { useRef, useEffect, useState, useCallback } from "react";
+
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+
+import { buildChatListenerWsUrl } from "./ws/buildWsUrl";
+import { createWsRouter } from "./ws/createWsRouter";
+import { useWsLatencyPing } from "./ws/useWsLatencyPing";
+import { noopAny } from "./ws/types";
+
 
 // ================================================================================
 // Handle the WebSocket Connection to the Backend
 // ================================================================================
 export default function useChatListener({ 
-    session_id,
-    enabled        = true,
-    pingIntervalMs = 3_000,
+    session_id,                  // ID of the session we want to listen in on
+    enabled        = true,       // Always true (does it matter?)
+    pingIntervalMs = 3_000,      // Intervals at which to send pings to the backend to check for latency
 
-    // Updates from the backend
-    setSessionInfo    = (data : any) => {},
-    setHistMessages   = (data : any) => {},
-    setHistBiomarkers = (data : any) => {},
-    addNewMessage     = (data : any) => {},
-    addNewBiomarkers  = (data : any) => {},
+    // Data sent from backend at the start of the connection 
+    setSessionInfo    = noopAny, // General information about the chat you are listening to
+    setHistMessages   = noopAny, // Current chat history (if you joined the session late)
+    setHistBiomarkers = noopAny, // All biomarkers so far for the chat
+
+    // Mid-chat updates from the backend
+    addNewMessage     = noopAny, // Individual messages
+    addNewBiomarkers  = noopAny, // Individual biomarker set (could be just one or all)
+
+    // Handle commands sent to the backend (and the confirmation responses)
+    onCommandAck      = noopAny, // Relay "acks" confirming commands were received
+    onControlState    = noopAny, // Relay new control states (depending on result of commands)
 }) {
     // --------------------------------------------------------------------------------
-    // Timing
+    // Timing (header UI)
     // --------------------------------------------------------------------------------
-    // For header UI
     const [lastEventAt, setLastEventAt] = useState<Date   | null>(null);
     const [latencyMs,   setLatencyMs  ] = useState<number | null>(null);
 
@@ -29,18 +40,17 @@ export default function useChatListener({
     // --------------------------------------------------------------------------------
     // WebSocket Setup
     // --------------------------------------------------------------------------------
+    // Connection Status & Reference
     const [connected, setConnected] = useState(false);
+    const wsRef = useRef<WebSocket | null>(null); 
 
-    // Backend WebSocket URL 
-    const wsUrlBase =
-        location.hostname === "localhost"
-            ? `ws://localhost:8000/ws/chat/${session_id}/listen/`
-            : `wss://${location.host}/ws/chat/${session_id}/listen/`;
-    const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
+    // Build WebSocket URL
+    const wsUrl = buildChatListenerWsUrl(session_id);
 
     // --------------------------------------------------------------------------------
-    // Message Handlers (avoid spammed reconnect attempts)
+    // Keep handler refs stable (avoid reconnect loops)
     // --------------------------------------------------------------------------------
+    // Chat Updates
     const handlersRef = useRef({
         setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers,
     });
@@ -49,45 +59,30 @@ export default function useChatListener({
         handlersRef.current = {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers};
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
+    // Acks
+    const controlHandlersRef = useRef({ onCommandAck, onControlState });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState };}, [onCommandAck, onControlState]);
+
     // --------------------------------------------------------------------------------
-    // Receive data from the backend
+    // Message Handling
     // --------------------------------------------------------------------------------
-    const onMessage = useCallback((event: MessageEvent) => {
-        // Parse the initial event
-        let response: any
-        try   { response = JSON.parse(event.data); } 
-        catch { console.warn("WS message not JSON:", event.data); return; }
-        const type = response.type;
-        const data = response.data; 
-
-        // Update the last event (for real data only)
-        if (type !== "pong") { setLastEventAt(new Date()); }
-
-        // Handle latency pong
-        if (type === "pong") {
-            const clientTs = response.client_ts;
-            if (typeof clientTs === "number") { setLatencyMs(Date.now() - clientTs); }
-            return;
-        }
-
-        // Current handlers
-        const {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers} = handlersRef.current;
-
-        // Call the respective method based on the event type
-        if      (type === "session_info"     ) { setSessionInfo   (data); }
-        else if (type === "message_history"  ) { setHistMessages  (data); }
-        else if (type === "biomarker_history") { setHistBiomarkers(data); }
-        else if (type === "message"          ) { addNewMessage    (data); }
-        else if (type === "biomarker_scores" ) { addNewBiomarkers (data); }
-        else { console.debug("Unhandled WS event type:", type, response); }
-
+    // Router parses messages received from the backend and handles consequences
+    const onMessage = useMemo(() => {
+        return createWsRouter({
+            setLastEventAt : (d  ) => setLastEventAt(d),
+            setLatencyMs   : (n  ) => setLatencyMs(n),
+            getHandlers    : (   ) => handlersRef.current,
+            onCommandAck   : (ack) => controlHandlersRef.current.onCommandAck  (ack),
+            onControlState : (st ) => controlHandlersRef.current.onControlState(st ),
+        });
     }, []);
 
+    // Ping loop for latency (JSON ping/pong)
+    useWsLatencyPing({connected, wsRef, pingIntervalMs});
 
     // ================================================================================
-    // Open and close based on "enabled"
+    // Open or close connection
     // ================================================================================
-    const wsRef = useRef<WebSocket | null>(null); 
     useEffect(() => {
         if (!enabled || !wsUrl) {wsRef.current?.close(); wsRef.current = null; setConnected(false); return;}
 
@@ -100,32 +95,13 @@ export default function useChatListener({
         return () => {wsRef.current?.close(); wsRef.current = null;} // clean up on unmount
     }, [enabled, wsUrl, onMessage]);
 
-
-    // --------------------------------------------------------------------------------
-    // Ping loop for latency (JSON ping/pong)
-    // --------------------------------------------------------------------------------
-    useEffect(() => {
-        // Connection checks
-        if (!connected) return;
-        const ws = wsRef.current; if (!ws) return;
-
-        // Ping the backend at intervals
-        const id = window.setInterval(() => {
-            if (ws.readyState !== WebSocket.OPEN) return;
-            const t = Date.now(); lastPingAtRef.current = t;
-            ws.send(JSON.stringify({ type: "ping", client_ts: t }));
-        }, pingIntervalMs);
-
-        return () => window.clearInterval(id); // clean up on unmount
-    }, [connected, pingIntervalMs]);
-
     // ================================================================================
     // Send Helper (accepts object or string)
     // ================================================================================
     const send = useCallback((msg: any) => {
         const ws = wsRef.current;
         if (!ws || ws.readyState !== WebSocket.OPEN) {console.warn("WebSocket not open; message not sent");}
-        else { ws.send(typeof msg === "string" ? msg : JSON.stringify(msg));  }
+        else { ws.send(typeof msg === "string" ? msg : JSON.stringify(msg)); }
     }, []);
 
     // Expose
