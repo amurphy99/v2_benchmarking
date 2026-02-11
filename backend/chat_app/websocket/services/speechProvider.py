@@ -19,17 +19,17 @@ CHUNK_SIZE = 2_048  # 64ms of 16-bit PCM audio = 2048 bytes
 class SpeechToTextProvider:
     '''Speech-to-Text provider that uses Google Cloud's Speech-to-Text API'''
     def __init__(self, transcript_callback=None, msg_callback=None, send_callback=None, bio_callback=None, on_timestamps_callback=None, loop=None):
-        self._client = speech.SpeechClient()
-        self._streaming_config = None
-        self._audio_buffer = Queue()
-        self._streaming = False
+        self._client              = speech.SpeechClient()
+        self._streaming_config    = None
+        self._audio_buffer        = Queue()
+        self._streaming           = False
         self._transcript_callback = transcript_callback # The function to call when a complete transcription is received
-        self._msg_callback = msg_callback
-        self._send_callback = send_callback
-        self._bio_callback = bio_callback
-        self.ts_callback = on_timestamps_callback # The function to call when word-level timestamps are received
-        self._loop = loop or asyncio.get_event_loop()
-        self._recent_transcript = None
+        self._msg_callback        = msg_callback
+        self._send_callback       = send_callback
+        self._bio_callback        = bio_callback
+        self.ts_callback          = on_timestamps_callback # The function to call when word-level timestamps are received
+        self._loop                = loop or asyncio.get_event_loop()
+        self._recent_transcript   = None
 
     def _audio_generator(self):
         '''Generates audio requests from the audio buffer.'''
