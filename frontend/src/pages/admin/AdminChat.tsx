@@ -1,34 +1,35 @@
-import { useState, useRef  }   from "react";
-import { useParams }   from "react-router-dom";
-
-
-// Components
-import { SessionHeader } from  "./components/adminHeader";
-import   LiveBiomarkers  from "./components/LiveBiomarkers";
-import   ChatMessages    from "../chat/components/ChatMessages";
-import { BiomarkerPanel } from "./components/BiomarkerPanel";
+import { useState, useRef } from "react";
+import { useParams        } from "react-router-dom";
 
 // Hook for handling the WebSocket connection
-import   useChatListener       from "@/hooks/chat-listener/useChatListener";
+import useChatListener from "@/hooks/chat-listener/useChatListener";
+
+// Command types
+import type { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
+
+// Data received from the backend
 import { SessionInfo         } from "@/hooks/chat-listener/sessionData";
 import { useLocalChatSession } from "@/hooks/live-chat";
 import { useLocalBiomarkers  } from "@/hooks/chat-listener/useLocalBiomarkers";
 
+// Components
+import   ChatMessages          from "../chat/components/ChatMessages";
+import { SessionHeader      }  from  "./components/adminHeader";  // TODO: rename this file
+import {     BiomarkerPanel }  from  "./components/BiomarkerPanel";
+import { AdminControlsPanel }  from "./components/AdminControlsPanel";
 
-import { useElementHeight } from "@/hooks/style/useElementHeight";
-
-
+// Misc. Helpers
+import { useElementHeight                            } from "@/hooks/style/useElementHeight";
 import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/adminChatSamples";
 
-
-
-
-
 // ================================================================================
-// AdminChat
+// AdminChat -- Monitor a participant's ChatSession in real time
 // ================================================================================
-// Monitor a participant's ChatSession in real time
 export function AdminChat() {
+    // Style Helpers
+    const bioPanelRef = useRef<HTMLDivElement | null>(null);
+    const bioHeight = useElementHeight(bioPanelRef);
+
     // --------------------------------------------------------------------------------
     // Storage Setup
     // --------------------------------------------------------------------------------
@@ -54,35 +55,41 @@ export function AdminChat() {
         setHistBiomarkers : (data) => { setScores     (data) },
         addNewMessage     : (data) => { pushMessageObj(data) },
         addNewBiomarkers  : (data) => { pushScoreObj  (data) },
+
+        // For admin commands
+        onCommandAck      : (ack)  => { ackHandlerRef.current(ack); },
+        onControlState    : (st)   => {
+            setControlState((s) => ({
+            listeningPaused: st?.listeningPaused ?? s.listeningPaused,
+            responsesPaused: st?.responsesPaused ?? s.responsesPaused,
+            }));
+        },
     });
 
-    // --------------------------------------------------------------------------------
-    // Style Helpers
-    // --------------------------------------------------------------------------------
-    const bioPanelRef = useRef<HTMLDivElement | null>(null);
-    const bioHeight = useElementHeight(bioPanelRef);
-    
 
     // --------------------------------------------------------------------------------
     // [DEBUGGING] Sample Data Methods 
     // --------------------------------------------------------------------------------
     const [isUserRole, setIsUserRole] = useState<boolean>(true);
+    function addSampleMessage       () {pushMessageObj(makeSampleMessage(isUserRole)); setIsUserRole((prev) => !prev);}
+    function addSampleBiomarkerScore() {  pushScoreObj(makeSampleBiomarkerEvent()); }
 
-    function addSampleMessage() {
-        pushMessageObj(makeSampleMessage(isUserRole));
-        setIsUserRole((prev) => !prev);
-    }
 
-    function addSampleBiomarkerScore() {
-        pushScoreObj(makeSampleBiomarkerEvent());
-        
-    }
+    // --------------------------------------------------------------------------------
+    // Control state (commands confirmed by backend)
+    // --------------------------------------------------------------------------------
+    const [controlState, setControlState] = useState<ControlState>({
+        listeningPaused: false,
+        responsesPaused: false,
+    });
 
-    // <LiveBiomarkers scores={biomarkerScores}/>
-    //  <BiomarkerPanel series={series} windowSeconds={300} />
+    // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)
+    const ackHandlerRef = useRef<(ack: CommandAck) => void>(() => {});
+    const registerAckHandler = (fn: (ack: CommandAck) => void) => { ackHandlerRef.current = fn; };
+
 
     // ================================================================================
-    // Page Components
+    // UI Components
     // ================================================================================
     return (
         <div>
@@ -129,11 +136,15 @@ export function AdminChat() {
             {/* -------------------------------------------------------------------------------- */}
             {/* Control Buttons */}
             {/* -------------------------------------------------------------------------------- */}
-            <div className="flex flex-row gap-[2rem] m-[2rem]">
-                <button className="btn btn-primary" onClick={addSampleMessage}>Add sample message</button>
-                <button className="btn btn-primary" onClick={addSampleBiomarkerScore}>Add sample biomarker score</button>
-            </div>
-
+            <AdminControlsPanel
+                connected            = {connected}
+                send                 = {send}
+                controlState         = {controlState}
+                setControlState      = {setControlState}
+                registerAckHandler   = {registerAckHandler}
+                onAddSampleMessage   = {addSampleMessage}
+                onAddSampleBiomarker = {addSampleBiomarkerScore}
+            />
         </div>
     );
 }

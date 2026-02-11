@@ -60,8 +60,7 @@ function computeDelta(latest?: number, prev?: number): number | null {
 // Output format is [{t, v}] where:
 //   t = epoch ms (sorted ascending)
 //   v = biomarker value (float)
-function buildSeriesForKey(points: LocalBiomarkerSeries["points"], key: BiomarkerKey) {
-    
+function buildSeriesForKey(points: LocalBiomarkerSeries["points"], key: BiomarkerKey) {    
     const out: Array<{ t: number; v: number }> = [];
 
     for (const p of points) {
