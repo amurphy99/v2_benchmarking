@@ -237,16 +237,22 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # Commands from the listener client
         # --------------------------------------------------------------------------------
         # Listener is only allowed to send commands
-        if msg_type != "command": return
+        if msg_type == "command": 
+            # Example command payloads: {"cmd": "pause_auto"} | {"cmd": "resume_auto"}
+            payload = data.get("data", {})
 
-        # Example command payloads: {"cmd": "pause_auto"} | {"cmd": "resume_auto"}
-        payload = data.get("data", {})
+            # Route to the primary consumer through the control group
+            await self.channel_layer.group_send(
+                self.control_group,
+                {"type": "ws.command", "payload": payload}
+            )
 
-        # Route to the primary consumer through the control group
-        await self.channel_layer.group_send(
-            self.control_group,
-            {"type": "ws.command", "payload": payload}
-        )
+            # Log update
+            logger.info(f"{lu.CL_MAIN} Client command relayed: {lu.GREEN} {payload} {lu.RESET}")
 
-        # Log update
-        logger.info(f"{lu.CL_MAIN} Client command relayed: {lu.GREEN} {payload} {lu.RESET}")
+        # --------------------------------------------------------------------------------
+        # Unknown message type received from the client
+        # --------------------------------------------------------------------------------
+        else:
+            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN} {payload} {lu.RESET}")
+            return
