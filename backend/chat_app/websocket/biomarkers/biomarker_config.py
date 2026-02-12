@@ -29,6 +29,9 @@ LAST_X_CHAT_ENTRIES = 5
 # Time how long each biomarker takes to calculate and log it
 TIME_BIOMARKERS = True
 
+# Toggles
+LOG_GRAMMAR = False
+
 # --------------------------------------------------------------------------------
 # Biomarker Logging Helpers
 # --------------------------------------------------------------------------------
