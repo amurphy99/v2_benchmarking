@@ -17,32 +17,43 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD
 # --------------------------------------------------------------------------------
 # ChatConsumer Utilities
 # --------------------------------------------------------------------------------
-from ....services.logging_utils import CC_MAIN, BRIGHT_GREEN, G_LINE_1, G_LINE_2
+from ....services.logging_utils import CC_MAIN, CC_H, CC_R, GREEN, G_LINE_1, G_LINE_2
 
 class ChatConsumerLogging:
     @staticmethod
     def log_connect(user, source):
-        logger.info(f"{G_LINE_1}{CC_MAIN} {BOLD}{user}{UNBOLD} opened ChatSession from {BOLD}{source}{RESET}{G_LINE_2}")
+        logger.info(f"{G_LINE_1}{CC_MAIN} {CC_H}{user}{CC_R} opened ChatSession from {CC_H}{source}{RESET}{G_LINE_2}")
 
     @staticmethod
     def log_connect_done(user, session_id):
-        logger.info(f"{CC_MAIN} All setup steps for {BOLD}{user}{UNBOLD} succeeded. ChatSession ID: {BOLD}{session_id}{RESET}")
+        logger.info(f"{CC_MAIN} All setup steps for {CC_H}{user}{CC_R} succeeded. ChatSession ID: {CC_H}{session_id}{RESET}")
 
     @staticmethod
     def log_disconnect(user, code):
-        logger.info(f"{G_LINE_1}{CC_MAIN} {BOLD}{user}{UNBOLD} {lu.RED}disconnected{BRIGHT_GREEN} (code: {BOLD}{code}{UNBOLD}) {RESET}{G_LINE_2}")
+        logger.info(f"{G_LINE_1}{CC_MAIN} {CC_H}{user}{CC_R} {lu.RED}disconnected{GREEN} (code: {CC_H}{code}{CC_R}) {RESET}{G_LINE_2}")
+
+    @staticmethod
+    def log_group_left(user, channel_name):
+        logger.info(f"{CC_MAIN} {CC_H}{user}{CC_R} left channel group: {CC_H}{channel_name}{CC_R} {RESET}")
 
 # --------------------------------------------------------------------------------
 # ChatListener Utilities
 # --------------------------------------------------------------------------------
-from ....services.logging_utils import CL_MAIN, Y_LINE_1, Y_LINE_2
+from ....services.logging_utils import CL_MAIN, CL_H, CL_R, Y_LINE_1, Y_LINE_2
 
 class ChatListenerLogging:
     @staticmethod
     def log_connect(username, session_owner, session_id):
-        logger.info(f"{Y_LINE_1}{CL_MAIN} {BOLD}{username}{UNBOLD} listening to: {BOLD}{session_owner}{UNBOLD}. ChatSession ID: {BOLD}{session_id} {RESET}{Y_LINE_2}")
+        logger.info(f"{Y_LINE_1}{CL_MAIN} {CL_H}{username}{CL_R} listening to: {CL_H}{session_owner}{CL_R}. ChatSession ID: {CL_H}{session_id} {RESET}{Y_LINE_2}")
         
     @staticmethod
-    def log_disconnect(username, code):
-        logger.info(f"{Y_LINE_1}{CL_MAIN} {BOLD}{username}{UNBOLD} disconnected (code: {BOLD}{code}{UNBOLD}) {RESET}{Y_LINE_2}")
+    def log_connect_done(num_messages, num_biomarkers):
+        logger.info(f"{CL_MAIN} Loaded {CL_H}{num_messages}{CL_R} messages & {CL_H}{num_biomarkers}{CL_R} {RESET}")
 
+    @staticmethod
+    def log_disconnect(username, code):
+        logger.info(f"{Y_LINE_1}{CL_MAIN} {CL_H}{username}{CL_R} disconnected (code: {CL_H}{code}{CL_R}) {RESET}{Y_LINE_2}")
+
+    @staticmethod
+    def log_group_left(user, channel_name):
+        logger.info(f"{CL_MAIN} {CL_H}{user}{CL_R} left channel group: {CL_H}{channel_name}{CL_R} {RESET}")

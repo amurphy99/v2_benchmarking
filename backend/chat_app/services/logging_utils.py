@@ -100,9 +100,13 @@ ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}"
 
 # ChatConsumer
 CC_MAIN = f"{GREEN}[{BRIGHT_GREEN}ChatConsumer{GREEN}]"
+CC_H = f"{  BOLD}{BRIGHT_GREEN}" # Highlight by making bold and a brighter shade
+CC_R = f"{UNBOLD}{       GREEN}" # Reset the highlight
 
 # ChatListener
 CL_MAIN = f"{YELLOW}[{BRIGHT_YELLOW}ChatListener{YELLOW}]"
+CL_H = f"{  BOLD}{BRIGHT_YELLOW}" # Highlight by making bold and a brighter shade
+CL_R = f"{UNBOLD}{       YELLOW}" # Reset the highlight
 
 # LLM Updates
 LLM_MAIN = f"{CYAN}"
