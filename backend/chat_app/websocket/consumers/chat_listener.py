@@ -1,7 +1,7 @@
 """
 Monitor & control a live chat session. 
 --------------------------------------------------------------------------------
-backend.chat_app.websocket.consumers.chat_listner
+backend.chat_app.websocket.consumers.chat_listener
 
 Receives live updates about the current chat's status, including:
 - Messages (from user & backend)
@@ -30,8 +30,6 @@ TODO: Future possibilities:
 --------------------------------------------------------------------------------
 TODO: To completely finish this on the backend
 --------------------------------------------------------------------------------
-* Add biomarkers to the initial history that gets sent to the user as well
-
 * Add functionality for the commands
     - pause/resume automatic responses (STT based responding)
         > this may require a bunch of logic for concatenating consecutive, uninterrupted user utterances
@@ -50,24 +48,15 @@ logger = logging.getLogger(__name__)
 # Django 
 from django.core.exceptions     import ObjectDoesNotExist
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from channels.db                import database_sync_to_async
+from channels.db                import database_sync_to_async as db_s2a
 from django.apps                import apps
 
 # Imports from this project
-from ...services              import logging_utils as lu
-from ...services.db_services  import ChatService
-from   .utils  .logging       import ChatListenerLogging as log
-
-# --------------------------------------------------------------------------------
-# History Helper
-# --------------------------------------------------------------------------------
-def format_message_history(messages):
-    return [{
-        "role"   : m.role,
-        "content": m.content,
-        "ts"     : m.ts.timestamp(),
-    } for m in messages]
-    
+from ...services.db_services import ChatService
+from ...services             import logging_utils       as lu
+from   .utils.logging        import ChatListenerLogging as log
+from   .utils.db_data        import send_initial_data
+from   .utils.groups         import leave_all_groups, format_message_broadcast, format_biomarker_broadcast
 
 # ================================================================================
 # ChatListenerConsumer
@@ -89,6 +78,9 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     In Channels, a "group" is basically a broadcast list.
     Anyone in the group receives any events sent to the group.
 
+    Listener joins: messages & biomarker groups to get updates about those.
+    Only the primary consumer will join the control group so it can receive commands.
+
     """
     # --------------------------------------------------------------------------------
     # Connect
@@ -107,19 +99,17 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
         # 3) Load the session from the DB (wrapped in try-except for if the given ID is not valid)
         ChatSession = apps.get_model("chat_app", "ChatSession")
-        try: self.session = await database_sync_to_async(ChatSession.objects.get)(id=self.session_id)
+        try: self.session = await db_s2a(ChatSession.objects.get)(id=self.session_id)
         except ChatSession.DoesNotExist:
             logger.info("[WS] listener connect: invalid session_id=%s user=%s", self.session_id, self.scope["user"])
             await self.close(code=4404); return # custom "not found" code
 
         # 4) Authorize (session owner can listen, admin users can listen)
-        # TODO: Make this so you have to be like the associated user?
-        if (not self.user.is_staff):
+        if (not self.user.is_staff):  # TODO: Make this so you have to be like the associated user?
             logger.info(f"{lu.CL_MAIN} {self.user} not authorized (stage 2) {lu.RESET}")
             await self.close(code=4003); return
         
-        # 5) Define group ("room") names
-        # Separate rooms for commands, ChatMessages, & ChatBiomarkers
+        # 5) Define group ("room") names -- separate rooms for commands, ChatMessages, & ChatBiomarkers
         sid = self.session_id
         self.room_group    = f"chat_{sid}"       # all listeners + primary (message events)
         self.monitor_group = f"chat_{sid}_mon"   # listeners (biomarker events)
@@ -129,57 +119,25 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
 
         # Session info dict with: {"session", "profile", "account", "user"}
-        self.session_info = await database_sync_to_async(ChatService.get_session_info)(self.session_id)
+        self.session_info = await db_s2a(ChatService.get_session_info)(self.session_id)
 
         # Log an update about connecting
         log.log_connect(self.user.username, self.session_info["user"].username, self.session_id)
 
         # 7) Join groups
-        # Listener joins: messages & biomarker groups to get updates about those
-        # Only the primary consumer will join the control group so it can receive commands
         await self.channel_layer.group_add(self.   room_group, self.channel_name)
         await self.channel_layer.group_add(self.monitor_group, self.channel_name)
 
-
-        # TODO: Put this stuff in a function somewhere
-
-        # 8) Send current conversation history to listener immediately
-        messages = await database_sync_to_async(
-            lambda: list(self.session.messages.all().order_by("start_ts"))
-        )()
-
-        # Frontend will expect messages/biomarkers to come in this format
-        message_history = format_message_history(messages)
-
-        # 9) Send "SessionInfo" to the frontend to populate it's UI
-        start_dt = await ChatService.get_start_ts(self.session)
-        frontend_info = {
-            "sessionId"   : self.session.id,
-            "username"    : getattr(self.session_info["user"],  "username", str(self.user)),
-            "source"      : getattr(self.session,               "source", "unknown"),
-            "isActive"    : getattr(self.session,               "is_active", None),
-            "startTs"     : start_dt.timestamp() if start_dt else None,
-            "messageCount": len(message_history),
-        }
-
-        await self.send_json({"type": "session_info",    "data": frontend_info  })
-        await self.send_json({"type": "message_history", "data": message_history})
-       
-        # TODO: Biomarker equivalent of the message history
-        #biomarker_history = format_message_history(messages)
-        #await self.send_json({"type": "history", "messages": message_history})
-
-        logger.info(f"{lu.CL_MAIN} Loaded {lu.BOLD}{len(message_history)}{lu.RESET}{lu.YELLOW} existing messages{lu.RESET}")
+        # 8) Collect and send all data required on-connection by the frontend
+        num_messages, num_biomarkers = await send_initial_data(self.session_info, self)
+        log.log_connect_done(num_messages, num_biomarkers)
 
     # --------------------------------------------------------------------------------
     # Disconnect (listener does NOT close the session in DB)
     # --------------------------------------------------------------------------------
-    async def disconnect(self, code):
+    async def disconnect(self, code):      
+        leave_all_groups(self, log)
         log.log_disconnect(self.user.username, code)
-
-        # Leave all groups
-        for group in [getattr(self, "room_group", None), getattr(self, "monitor_group", None)]:
-            if group: await self.channel_layer.group_discard(group, self.channel_name)
 
     # ================================================================================
     # Group Event Handlers | Handle all messages send from consumer-to-consumer
@@ -198,24 +156,11 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
     # Receives chat message updates (user/assistant) broadcast from the primary consumer.
     async def ws_broadcast(self, event):
-        await self.send_json({
-            "type": "message", 
-            "data": {
-                "ts"      : event["payload"].get("ts"  ),
-                "role"    : event["payload"].get("role"),
-                "content" : event["payload"].get("text"),
-            }
-        })
+        await self.send_json(format_message_broadcast(event))
 
     # Receives biomarker updates broadcast from the primary consumer.
     async def ws_monitor(self, event):
-        await self.send_json({
-            "type": "biomarker_scores", 
-            "data": {
-                "ts"     : time.time(),
-                "scores" : event["payload"].get("data") 
-            } 
-        })
+        await self.send_json(format_biomarker_broadcast(event))
 
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
