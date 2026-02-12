@@ -3,7 +3,7 @@ from pgvector.django import VectorField
 from .config import EMBED_DIM
 
 
-class RAGInstructionChunkEmbedding(models.Model):
+class RagInstruction(models.Model):
     """
     One row per *chunk* of a RAGInstructions record.
     """
