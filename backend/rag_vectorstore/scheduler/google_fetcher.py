@@ -14,7 +14,9 @@ load_dotenv()
 
 # Import your models and config
 from rag_vectorstore.models import RagInstruction
-from your_app import config as cf 
+
+
+from rag_vectorstore import config as cf
 
 logger = logging.getLogger(__name__)
 
