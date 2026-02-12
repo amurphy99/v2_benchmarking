@@ -9,6 +9,8 @@ from channels.db import database_sync_to_async
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 
+from backend.rag_vectorstore.services import Live_data_Fetch
+
 from ... import config as cf
 from chat_app.services import logging_utils as lu
 from chat_app.models import RAGInstructions
@@ -213,6 +215,63 @@ Rules:
 - **Do not include any special formatting such as headings, bullet points, lists or newlines.**
 """
 
+# Live Data Fetch fro Google 
+
+def build_comparison_state_prompt(
+    *,
+    current_scenario: str,
+    instructions_text: str,
+    state_history: List[BaseMessage],
+    live_context: str = "", 
+) -> str:
+    chat_history = organize_message_history(state_history)
+
+    # Instead of a previous state block, we use a "Past Facts" block
+    prev_block = ""
+    if previous_state_context.strip():
+        prev_block = f"\nConversation history from the previous state (for continuity only):\n{previous_state_context}\n"
+    return   f """
+    
+    Your name is QT robot. You are a memory-focused conversational assistant.
+    
+    You will be given current data and must compare it with the historical data you have about the user’s topics of interest.
+    The instructions for this state will include:
+    - The specific goals for bridging memory gaps.
+    - Signals to look for in the user's response.
+    - Examples of how to gently reference the past.
+    
+    Current  Information :
+    
+    -----------------------
+    
+    {live_context}
+    
+    -----------------------
+    You are currently in the conversation state named: "{current_scenario}".
+    
+    {rag_block}
+    
+    INSTRUCTIONS FOR CURRENT_STATE:
+    ----------------
+    {instructions_text}
+    ----------------
+    
+    Recent conversation history in the CURRENT_STATE:
+    {chat_history}
+    
+    Your Task:
+    - Analyze the RETRIEVED FACTS and the recent conversation history.
+    - Use the facts to anchor your questions about the user's current life.
+    - Follow the CURRENT_STATE instructions strictly and respond to the user.
+    - **Remember, your response should guide** the user to reflect on their past in a natural, friendly way.
+    - Keep the reply very short (1-2 sentences) and empathetic.
+    - Do not mention "database," "retrieval," or "facts." Speak naturally.
+    - DO NOT mention state names or instructions in your responses.
+    """
+
+
+
+
 # =============================================================================
 # MAIN ENTRYPOINT
 # =============================================================================
@@ -368,12 +427,33 @@ async def rag_response_fn(
 
     # --- CALL #1: assistant response ---
     try:
-        system_prompt = build_response_system_prompt(
-            current_scenario=current,
-            instructions_text=instructions_text,
-            state_history=current_state_history,
-            previous_state_context=previous_state_context,
-        )
+        # KARTHICK'S LOGIC START: Check for the comparison state
+        if current == "compare_present_and_past":
+            logger.info(f"{lu.CYAN}[ACT-RULE][{trace_id}] Triggering Live_data_Fetch for state: {current}{lu.RESET}")
+            
+            # Ping the vector store
+            live_context = await Live_data_Fetch(
+                user_id=user.id, 
+                user_text=user_text, 
+                embedding_model=cf.embedding_model
+            )
+
+            # Build the specialized prompt
+            system_prompt = build_comparison_state_prompt(
+                current_scenario=current,
+                instructions_text=instructions_text,
+                state_history=current_state_history,
+                live_context=live_context,
+            )
+        else:
+            # ORIGINAL LOGIC: Use the standard prompt for everything else
+            system_prompt = build_response_system_prompt(
+                current_scenario=current,
+                instructions_text=instructions_text,
+                state_history=current_state_history,
+                previous_state_context=previous_state_context,
+            )
+        # KARTHICK'S LOGIC END
 
         messages = [
             SystemMessage(content=system_prompt),
