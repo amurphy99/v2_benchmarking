@@ -1,5 +1,5 @@
 
-import {   MessageInput } from "../live-chat";
+import {   MessageInput } from "../../live-chat";
 import { BiomarkerInput } from "./useLocalBiomarkers";
 
 // --------------------------------------------------------------------------------

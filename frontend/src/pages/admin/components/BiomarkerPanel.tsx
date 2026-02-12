@@ -6,7 +6,7 @@
 // ================================================================================
 
 import { useMemo, useState } from "react";
-import { BiomarkerScoreSet, LocalBiomarkerSeries } from "@/hooks/chat-listener/useLocalBiomarkers";
+import { BiomarkerScoreSet, LocalBiomarkerSeries } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
 type BiomarkerKey = keyof BiomarkerScoreSet;
 type XAxisMode    = "time" | "index";

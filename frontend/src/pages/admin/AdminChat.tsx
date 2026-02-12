@@ -8,9 +8,9 @@ import useChatListener from "@/hooks/chat-listener/useChatListener";
 import type { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
 
 // Data received from the backend
-import { SessionInfo         } from "@/hooks/chat-listener/sessionData";
+import { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
 import { useLocalChatSession } from "@/hooks/live-chat";
-import { useLocalBiomarkers  } from "@/hooks/chat-listener/useLocalBiomarkers";
+import { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
 // Components
 import   ChatMessages          from "../chat/components/ChatMessages";
@@ -20,7 +20,7 @@ import { AdminControlsPanel }  from "./components/AdminControlsPanel";
 
 // Misc. Helpers
 import { useElementHeight                            } from "@/hooks/style/useElementHeight";
-import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/adminChatSamples";
+import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/data_utils/adminChatSamples";
 
 // ================================================================================
 // AdminChat -- Monitor a participant's ChatSession in real time
