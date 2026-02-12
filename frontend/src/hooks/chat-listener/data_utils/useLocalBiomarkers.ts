@@ -5,12 +5,12 @@ import { toIsoTs  } from "./transforms";
 // Models for frontend display use only
 // --------------------------------------------------------------------------------
 export type BiomarkerScoreSet = {
-    anomia        ? : number;
-    grammar       ? : number;
-    pragmatic     ? : number;
-    pronunciation ? : number;
-    prosody       ? : number;
-    turntaking    ? : number;
+    anomia         ? : number;
+    alteredgrammar ? : number;
+    pragmatic      ? : number;
+    pronunciation  ? : number;
+    prosody        ? : number;
+    turntaking     ? : number;
 };
 
 // TODO: I'm not going to worry too much about this until we start doing the visualizations

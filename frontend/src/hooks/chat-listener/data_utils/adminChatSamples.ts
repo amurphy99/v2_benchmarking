@@ -19,12 +19,12 @@ export function makeSampleBiomarkerEvent(): BiomarkerInput {
     return {
         ts     : new Date().toISOString(),
         scores : {
-            prosody       : rnd(),
-            pronunciation : rnd(),
-            turntaking    : rnd(),
-            grammar       : rnd(),
-            anomia        : rnd(),
-            pragmatic     : rnd(),
+            prosody        : rnd(),
+            pronunciation  : rnd(),
+            turntaking     : rnd(),
+            alteredgrammar : rnd(),
+            anomia         : rnd(),
+            pragmatic      : rnd(),
         },
     };
 }

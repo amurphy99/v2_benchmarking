@@ -20,7 +20,7 @@ const BIOMARKERS: Array<{ key: BiomarkerKey; label: string }> = [
     { key: "prosody",        label: "Prosody"             },
     { key: "pronunciation",  label: "Pronunciation"       },
     { key: "turntaking",     label: "Turn-taking"         },
-    { key: "grammar",        label: "Altered Grammar"     },
+    { key: "alteredgrammar", label: "Altered Grammar"     },
     { key: "anomia",         label: "Anomia"              },
     { key: "pragmatic",      label: "Pragmatic Impairment"},
 ];
