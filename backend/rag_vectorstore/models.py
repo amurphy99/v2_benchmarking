@@ -40,4 +40,4 @@ class RagInstruction(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"RAGInstructionChunkEmbedding(instr={self.instruction_id}, chunk={self.chunk_index})"
+        return f"RagInstruction(instr={self.instruction_id}, chunk={self.chunk_index})"
