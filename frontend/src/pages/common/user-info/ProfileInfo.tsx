@@ -38,6 +38,11 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
                     <NavLink to="/profile">
                         <button className="text-lg hover:text-blue-600">Profile Settings</button>
                     </NavLink>
+                    { user.is_staff ? 
+                        <NavLink to="/admin">
+                            <button className="text-lg hover:text-blue-600">Admin Page</button>
+                        </NavLink> 
+                    : null}
                     <button className="text-left text-blue-500 hover:text-blue-600 text-lg" onClick={() => logout()}>Log Out</button>
                 </div>
                 {isCare && profile ? <DownloadButton /> : null}

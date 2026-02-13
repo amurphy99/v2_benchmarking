@@ -11,7 +11,8 @@ from .views import (
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
-    ActiveChatSessionViewSet,
+    ActiveChatSessionViewSet, ChatSessionViewSetAll,
+    ChatSessionView,
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
     RAGInstructionsViewSet                   # RAG Instructions list endpoint
@@ -22,6 +23,7 @@ from .views import (
 # ------------------------------------------------------------------
 router = DefaultRouter()
 router.register(r"chatsessions", ChatSessionViewSet, basename="chatsession")
+router.register(r"allchatsessions", ChatSessionViewSetAll, basename="all_chatsession")
 router.register(r"activechatsessions", ActiveChatSessionViewSet, basename="active_chatsession")
 router.register(r"reminders",    ReminderViewSet,    basename="reminder"   )
 router.register(r"accesses",       AccessViewSet,      basename="accesses" )
@@ -53,6 +55,7 @@ urlpatterns = [
     
     # Single-row resources (not connected to a user)
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
+    path("chatsession/<int:sessionid>/", ChatSessionView.as_view(), name="rag_instructions"),
 
     # JWT login
     path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),

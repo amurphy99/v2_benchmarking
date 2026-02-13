@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toIsoTs  } from "./transforms";
+import { ChatBiomarkerScore } from "@/api";
 
 // --------------------------------------------------------------------------------
 // Models for frontend display use only
@@ -64,4 +65,13 @@ export function useLocalBiomarkers() {
     const reset = () => setSeries(makeEmpty());
 
     return { series, pushScores, pushScoreObj, setScores, reset };
+}
+
+export function ChatBiomarkerToLocalSeries(data: ChatBiomarkerScore[]): LocalBiomarkerSeries {
+    const points = data.map(({ id, ts, score_type, score }) => ({
+        id: String(id),
+        ts: toIsoTs(ts),
+        scores: { [score_type.toLowerCase()]: score },
+    }));
+    return { id: crypto.randomUUID(), points, started: points[0]?.ts ?? new Date().toISOString() };
 }

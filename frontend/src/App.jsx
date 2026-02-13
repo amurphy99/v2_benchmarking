@@ -5,7 +5,7 @@ import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/rou
 
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
     WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile, 
-    Admin, AdminChat } from "@/pages";
+    Admin, AdminChat, AdminChatInactive } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
@@ -81,6 +81,7 @@ export default function App() {
                 {/* Admin */}
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/admin/chat/:id" element={<AdminChat />} />
+                <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
                 
             </Route>
 
