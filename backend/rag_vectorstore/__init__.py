@@ -1,7 +1,7 @@
 import logging
 from pgvector.django import CosineDistance
 from channels.db import database_sync_to_async
-from .models import RagInstruction # Or whatever your model name is
+from ..models import RagInstruction # Or whatever your model name is
 
 logger = logging.getLogger(__name__)
 
@@ -30,3 +30,4 @@ async def Live_data_Fetch(user_id: int, user_text: str, embedding_model) -> str:
     except Exception as e:
         logger.error(f"[LIVE-FETCH-ERROR] {e}")
         return ""
+
