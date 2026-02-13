@@ -18,17 +18,21 @@ Everything is wrapped in docker-compose.yaml and the frontend and backend APIs a
 
 <details closed> <summary>Locally</summary>
 
+You will need Docker Desktop and a code editor.
+
+1. Clone the repository
 ### Frontend
 1. `cd` into the `frontend` directory
-2. `npm install` (only need to do once if you haven't already)
-3. `npm run dev`
+2. Run `npm install` (only need to do once if you haven't already)
+3. Run `npm run dev`
 
 ### Backend
-1. Need to have copies of `new_LSA.csv` and the stanford-parser models file placed in their correct directories.
-2. Open Docker Desktop
-3. `cd` into the `backend` directory
-4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines
-5. `docker compose -f docker-compose.backend.yaml up --build`
+1. Acquire and place copies of `new_LSA.csv` and the stanford-parser models file in their correct directories (highlighted green in the Project Architecture section).
+2. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out all `external: true` lines and uncomment all lines under db_vector and db under `services`
+3. Open Docker Desktop
+4. `cd` into the `backend` directory
+5. Run `docker compose -f docker-compose.backend.yaml up --build`
+6. Wait until you see the "Listening on TCP ..." message.
 
 The web app can be accessed through localhost:5173 in your browser.
 
