@@ -87,14 +87,14 @@ async def format_actions_command(payload, consumer):
     elif expression == "spin"   : data = {"expression": "ANGRY",   "duration_ms": 2000}
     else:                         data = {"expression": "HAPPY",   "duration_ms": 2000}
 
-    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{data}{CC_R}, relaying now...")
-
     # Build & send the payload to the frontend client
-    payload = {
+    relay_payload = {
         "type": "expression",
         "data": {
             "expression"  : data.get("expression", "HAPPY").upper(),
             "duration_ms" : data.get("duration_ms", 3000),
         }
     }
-    await consumer.send_json(payload)
+
+    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now...")
+    await consumer.send_json(relay_payload)

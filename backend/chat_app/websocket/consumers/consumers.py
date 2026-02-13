@@ -179,7 +179,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         elif command == "robot_action":
             logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-            format_actions_command(payload, self)
+            await format_actions_command(payload, self)
 
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
     # TODO: No need to separately send things to the client, just forward it from here after broadcasting
