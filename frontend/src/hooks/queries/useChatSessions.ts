@@ -1,4 +1,4 @@
-import { ChatSession, listActiveChatSessions, listChatSessions } from "@/api";
+import { ChatSession, listActiveChatSessions, listAllChatSessions, listChatSessions } from "@/api";
 import { useModelQuery } from "@/hooks/queries/common";
 
 // Hook to wrap useQuery for retrieving ChatSession objects
@@ -8,6 +8,14 @@ export const useChatSessions = () =>
         queryFn : listChatSessions,
         empty   : [],
     });
+
+export const useAllChatSessions = () => {
+    return useModelQuery<ChatSession[]>({
+        queryKey: "allChatSessions",
+        queryFn : listAllChatSessions,
+        empty   : [],
+    });
+}
 
 export const useActiveChatSessions = () => {
     return useModelQuery<ChatSession[]>({
