@@ -66,6 +66,16 @@ class ChatService:
         session.is_active = False
         session.end_ts    = timezone.now()
 
+        # -------------------------------------------------------------------------
+        # If the session has no meaningful content, delete it and return None
+        # -------------------------------------------------------------------------
+        has_user_msgs = ChatMessage.objects.filter(session=session, role="user").exists()
+        if not has_user_msgs:
+            session_id = session.id
+            session.delete()  # cascades to ChatMessage because of foreign key on_delete=CASCADE
+            logger.info(f"{lu.RED}[DB] Deleted empty ChatSession id={session_id} for {user.username}{lu.RESET}")
+            return None
+
         # --------------------------------------------------------------------------------
         # Get all messages for this session
         # -------------------------------------------------------------------------------- 
