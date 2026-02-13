@@ -163,7 +163,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def ws_command(self, event):
         # Parse command from payload
         payload = event  .get("payload", {})
-        command = payload.get("cmd")
+        command = payload.get("name")
         logger.info(f"{lu.CC_MAIN} Listener command received: {lu.YELLOW} {payload} {lu.RESET}")
 
         # Act accordingly
@@ -179,7 +179,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         elif command == "robot_action":
             logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-            format_actions_command(event, self)
+            format_actions_command(payload, self)
 
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
     # TODO: No need to separately send things to the client, just forward it from here after broadcasting

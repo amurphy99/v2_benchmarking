@@ -39,7 +39,7 @@ export default function AvatarActionsGroup({
                     disabled  = {pending.robot_spin || !connected}
                     onClick   = {onSpin}
                 > 
-                {pending.robot_spin ? "Sending..." : "Do a spin"}
+                {pending.robot_spin ? "Sending..." : "Show angry"}
                 </button>
 
                 {/* -------------------------------------------------------------------------------- */}

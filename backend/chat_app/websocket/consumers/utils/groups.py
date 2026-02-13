@@ -7,7 +7,11 @@ TODO: Need to move more of this shared stuff into here
 
 """
 
-import time
+import logging, time
+logger = logging.getLogger(__name__)
+
+
+from ....services.logging_utils import CC_MAIN, CC_H, CC_R
 
 
 # --------------------------------------------------------------------------------
@@ -61,17 +65,31 @@ def format_biomarker_broadcast(event):
 # ================================================================================
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
-# TODO: This isn't just formatting, I'm also just sending it
-async def format_actions_command(event, consumer):
+# TODO: This isn't just formatting, I'm also just sending it from this function, need to clean up documentation
+async def format_actions_command(payload, consumer):
     """
     Commands can look like:
         {'id': '..', 'name': 'robot_action', 'value': {'action': 'excited'}}
+    or
+        {'id': '..', 'name': 'robot_action', 'value': {'action': 'spin'}}
 
-    TODO: Should be data instead of value ?
+    TODO: Fields should be "data" instead of "value" ??
+    TODO: This whole thing needs to be clenaed up...
+    TODO: After sending to the frontend client, send an "ack" to the listener that issued the command, using the ID from the payload
 
     """
-    data = event["payload"].get("value", {"expression": "HAPPY", "duration_ms": 3000})
+    #data = event["payload"].get("value", {"expression": "HAPPY", "duration_ms": 3000})
+    value = payload.get("value", {"action": "HAPPY"})
 
+    # Temporary mapping values for spin to be "angry"
+    expression = value.get("action", "HAPPY").lower()
+    if   expression == "excited": data = {"expression": "EXCITED", "duration_ms": 3000}
+    elif expression == "spin"   : data = {"expression": "ANGRY",   "duration_ms": 2000}
+    else:                         data = {"expression": "HAPPY",   "duration_ms": 2000}
+
+    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{data}{CC_R}, relaying now...")
+
+    # Build & send the payload to the frontend client
     payload = {
         "type": "expression",
         "data": {
@@ -79,6 +97,4 @@ async def format_actions_command(event, consumer):
             "duration_ms" : data.get("duration_ms", 3000),
         }
     }
-
-    consumer.send_json(payload)
-
+    await consumer.send_json(payload)
