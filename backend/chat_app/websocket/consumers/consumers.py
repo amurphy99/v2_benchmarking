@@ -27,7 +27,7 @@ from  ..services.chatHelpers       import ChatHandler
 from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
 from  ..services.speechProvider    import SpeechToTextProvider
 from   .utils   .logging           import ChatConsumerLogging as log
-
+from   .utils   .groups            import leave_all_groups, format_actions_command
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
 
@@ -153,6 +153,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
 
+        leave_all_groups(self, log)
         log.log_disconnect(self.user, code)
 
     # ================================================================================
@@ -175,6 +176,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         elif command == "respond_now":
             logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'respond_now'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+
+        elif command == "robot_action":
+            logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+            format_actions_command(event, self)
 
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
     # TODO: No need to separately send things to the client, just forward it from here after broadcasting
