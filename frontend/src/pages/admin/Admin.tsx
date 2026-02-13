@@ -43,7 +43,7 @@ export function Admin() {
             <div className="grid grid-cols-3 gap-2">
                 {chatSessions.map((chat, idx) => {
                     return (
-                        <NavLink to={`/admin/chat/${chat.id}`} key={idx} 
+                        <NavLink to={`/admin/chat/inactive/${chat.id}`} key={idx} 
                         className="flex flex-col p-4 rounded-lg border-1 border-black no-underline text-black hover:bg-gray-100">
                             <p>Chat Session ID: {chat.id}</p>
                             <p>User: {chat.profile.account.user.first_name} {chat.profile.account.user.last_name} </p>

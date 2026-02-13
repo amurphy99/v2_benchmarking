@@ -3,6 +3,7 @@
 // ================================================================================
 import { useRef, useEffect, useMemo } from "react";
 import { LocalChatMessage  } from "@/hooks/live-chat";
+import { ChatMessage } from "@/api";
 
 // --------------------------------------------------------------------------------
 // Format Timestamps
@@ -29,7 +30,7 @@ function formatElapsed(chatStartMs: number | null, msgTsIso: string): string {
 // --------------------------------------------------------------------------------
 // Format the Message Bubbles
 // --------------------------------------------------------------------------------
-function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage, elapsed: string }) {
+function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage | ChatMessage, elapsed: string }) {
     // Style differentiation between the user and the system
     const messageStyle = {
         user:    { sender: "User",     marginFar: "ml-auto", marginClose: "mr-[1em]", bubbleColor: "bg-purple-200" },
@@ -56,7 +57,7 @@ function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage, elapsed: strin
 // ChatMessages (scroll view)
 // ================================================================================
 export default function ChatMessages({ messages, chatStartTsIso }: { 
-    messages        : LocalChatMessage[]; 
+    messages        : LocalChatMessage[] | ChatMessage[]; 
     chatStartTsIso? : string | null; 
 }) {
     // Automatically scroll to bottom when messages change

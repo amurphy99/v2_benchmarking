@@ -12,6 +12,7 @@ from .views import (
     MyTokenRefreshView,                      # JWT token refresh
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
     ActiveChatSessionViewSet, ChatSessionViewSetAll,
+    ChatSessionView,
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
     RAGInstructionsViewSet                   # RAG Instructions list endpoint
@@ -54,6 +55,7 @@ urlpatterns = [
     
     # Single-row resources (not connected to a user)
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
+    path("chatsession/<int:sessionid>/", ChatSessionView.as_view(), name="rag_instructions"),
 
     # JWT login
     path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),

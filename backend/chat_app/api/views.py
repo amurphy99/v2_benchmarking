@@ -67,6 +67,20 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
             user=self.request.user, # only allow access to own instructions
         )
         return instructions
+    
+class ChatSessionView(generics.RetrieveAPIView):
+    """
+    GET  /api/rag/<int:sessionid>/  => fetch a single ChatSession
+    """
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        sessionid = self.kwargs["sessionid"]
+        session = ChatSession.objects.get(
+            id=sessionid, 
+        )
+        return session
 
 # ======================================================================= ===================================
 # List + Create
