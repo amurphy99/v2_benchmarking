@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.state import token_backend
+from rest_framework.exceptions import PermissionDenied
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
@@ -93,11 +94,24 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
     serializer_class   = RAGInstructionsSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _require_caregiver(self):
+        """
+        Ensure only caregivers can create/update/delete RAG instructions.
+        """
+        try:
+            if self.request.user.account_user.role.lower() != "caregiver":
+                raise PermissionDenied("Only caregivers can manage RAG instructions.")
+        except Exception:
+            raise PermissionDenied("Only caregivers can manage RAG instructions.")
+
     def get_queryset(self):
+        self._require_caregiver()
         # Only return instructions belonging to the logged-in user
         return RAGInstructions.objects.filter(user=self.request.user).order_by("instruction_order", "name")
 
     def perform_create(self, serializer):
+        # Only caregivers should be able to create RAG instructions, since they are the ones configuring the activities for the PLWD. Enforce this at the API level.
+        self._require_caregiver()
         # For now, always use the 'memory_activity'
         activity = Activity.objects.get(name="memory_activity")
         instance = serializer.save(user=self.request.user, activity=activity)
@@ -109,6 +123,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to index new instruction {instance.id}: {e}")
 
     def perform_update(self, serializer):
+        self._require_caregiver()
         # Save the updated instruction to the default DB
         instance = serializer.save()
 
@@ -119,6 +134,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to update embedding for instruction {instance.id}: {e}")
 
     def perform_destroy(self, instance):
+        self._require_caregiver()
         inst_id = instance.id
 
         # Delete chunks from vector DB first

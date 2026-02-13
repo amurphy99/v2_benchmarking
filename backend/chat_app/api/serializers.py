@@ -76,7 +76,21 @@ class CreateAccessSerializer(serializers.Serializer):
     def create(self, validated):
         profile = Profile.objects.get(id=validated['profileId'])
         account = Account.objects.get(id=validated['accountId'])
-        access  = Access.objects.create(profile=profile, account=account, permissions=validated['permissions'])
+        
+        # Use get_or_create to handle duplicate access gracefully
+        access, created = Access.objects.get_or_create(
+            account=account,
+            defaults={
+                'profile': profile,
+                'permissions': validated['permissions']
+            }
+        )
+        
+        # Update permissions if access already existed and permissions differ
+        if not created and access.permissions != validated['permissions']:
+            access.permissions = validated['permissions']
+            access.save()
+        
         return access
     
     def to_representation(self, access: Access):

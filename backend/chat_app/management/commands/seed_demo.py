@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from datetime        import timedelta, date, time
 from random          import random
 from chat_app.models import Profile, Account, Access, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
+from rag_vectorstore.services.vdb_services import index_single_instruction
 
 # Demo data
 USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
@@ -111,16 +112,16 @@ class Command(BaseCommand):
         # This could lead to dangling vector embeddings since they are linked to a separate DB using the user_id, and cascading delete won't work across DBs.
         plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
         care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
-        plwd_account = Account.objects.create(user=plwd, role="patient")
-        care_account = Account.objects.create(user=care, role="caregiver")
-        profile = Profile.objects.create(account=plwd_account, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
+        plwd_account, _ = Account.objects.get_or_create(user=plwd, defaults={"role": "patient"})
+        care_account, _ = Account.objects.get_or_create(user=care, defaults={"role": "caregiver"})
+        profile, _ = Profile.objects.get_or_create(account=plwd_account,defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",},)
         
         # Create an Access object so caregiver account can access the plwd account
-        Access.objects.create(account=care_account, profile=profile)
+        Access.objects.get_or_create(account=care_account, profile=profile)
 
         # Also create settings and goal objects for the new Profile
-        UserSettings.objects.create(profile=profile)
-        Goal        .objects.create(profile=profile, target=5, start_date=two_days_ago)
+        UserSettings.objects.get_or_create(profile=profile)
+        Goal        .objects.get_or_create(profile=profile, target=5, start_date=two_days_ago)
         # Add sample ChatSessions
         self.seed_chats(profile, days_back=10)
         
@@ -132,15 +133,15 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------
         plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
         care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver", is_staff=True)
-        plwd_account_2 = Account.objects.create(user=plwd_2, role="patient")
-        care_account_2 = Account.objects.create(user=care_2, role="caregiver")
-        profile_2 = Profile.objects.create(account=plwd_account_2, zipcode="9999", birthDate=timezone.now(), locationStatus="alone")
+        plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"})
+        care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
+        profile_2, _ = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",})
         
         # Create an Access object so caregiver account can access the plwd account
-        Access.objects.create(account=care_account_2, profile=profile_2)
+        Access.objects.get_or_create(account=care_account_2, profile=profile_2)
 
-        UserSettings.objects.create(profile=profile_2)
-        Goal        .objects.create(profile=profile_2, target=5, start_date=two_days_ago)
+        UserSettings.objects.get_or_create(profile=profile_2)
+        Goal        .objects.get_or_create(profile=profile_2, target=5, start_date=two_days_ago)
         self.seed_chats(profile_2, days_back=10)
         self.seed_reminders(profile_2, num_reminders=5)
         self.seed_activities()
@@ -150,7 +151,11 @@ class Command(BaseCommand):
     # Helper: Deletes all data associated with a user, such as Account, Profile, Settings, etc
     # ====================================================================
     def delete_user_data(self, user):
-        account = Account.objects.get(user=user)
+        account = Account.objects.filter(user=user).first()
+        # if there is no account linked to this user, then there is no data to delete, so we can just return.
+        if not account:
+            return
+
         RAGInstructions.objects.filter(user=user).delete()
         try: # The case where this user's account is the main account of a Profile object
             profile = Profile.objects.get(account=account)
@@ -175,22 +180,28 @@ class Command(BaseCommand):
     # ====================================================================
     def get_or_create_demo_user(self, username, **kwargs):
         User = get_user_model()
-        # Try to fetch the existing user to preserve their ID
+        password = kwargs.pop("password", "1")
+
         user, created = User.objects.get_or_create(username=username, defaults=kwargs)
-        
-        if not created:
-            # If user exists, update their details just in case they changed
-            for k, v in kwargs.items():
-                if k != 'password':
-                    setattr(user, k, v)
-            user.set_password(kwargs.get('password', '1'))
+
+        # Always ensure password is hashed and details are correct
+        changed = False
+        for k, v in kwargs.items():
+            if getattr(user, k, None) != v:
+                setattr(user, k, v)
+                changed = True
+
+        user.set_password(password)  # hashes properly
+        changed = True
+
+        if changed:
             user.save()
-            
-            # Delete data linked to this user
+
+        # If user already existed, delete linked demo data (resetting the user but keeping the same user_id to avoid dangling vector DB entries)
+        if not created:
             self.delete_user_data(user)
-            
+
         return user
-        
 
     # Seed AlbumImages into the DB
     # ====================================================================
@@ -310,10 +321,18 @@ class Command(BaseCommand):
         for idx, name in enumerate(DEMO_RAG_NAMES):
             description = DEMO_RAG_DESCRIPTIONS[idx]
             instructions = DEMO_RAG_INSTRUCTIONS[idx]
-            RAGInstructions.objects.create(
-                name=name,
-                description=description,
-                instructions=instructions,
-                user=demo_user,
-                activity=memory_activity,
-            )
+            obj, _ = RAGInstructions.objects.update_or_create(
+                        name=name,
+                        user=demo_user,
+                        activity=memory_activity,
+                        defaults={
+                            "description": description,
+                            "instructions": instructions,
+                            "instruction_order": 1,
+                        },
+                    )
+
+            try:
+                index_single_instruction(obj)
+            except Exception as e:
+                print(f"[VectorDB] Failed to index seeded instruction {obj.id}: {e}")
