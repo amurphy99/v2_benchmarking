@@ -121,7 +121,7 @@ try:
     # Setup the LLM
     llm = LLMClass()
 
-    RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
+    RAG_METHOD = "legacy" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
 
     if RAG_METHOD == "legacy":
         # Initialize LangChain wrapper for the our fine-tuned phi3 model

@@ -20,7 +20,7 @@ from .services.bg_helpers    import fire_and_log
 from .services.chatHelpers   import handle_transcription, handle_stt_output
 from .services.audioHelpers  import extract_audio_biomarkers, extract_text_biomarkers
 from .services.speechProvider import SpeechToTextProvider
-from .services.ragChatHelpers import rag_response_fn, START_SCENARIO
+from .services.activityChatHelper import rag_response_fn, START_SCENARIO
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
 
