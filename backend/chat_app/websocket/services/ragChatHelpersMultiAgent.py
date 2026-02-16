@@ -1,35 +1,41 @@
-# chat_app/services/ragChatHelpers_phi3.py
 import time
+import json
 import uuid
 import logging
-import re
 import asyncio
 from contextlib import suppress
-import difflib
-from typing import Iterable
-from django.core.exceptions import ObjectDoesNotExist
-from channels.db import database_sync_to_async
+from pydantic import BaseModel, Field
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 
 from ... import config as cf
 from chat_app.services import logging_utils as lu 
-from chat_app.models import RAGInstructions, Activity
 from .ragChatHelpers import (
     resolve_instruction_owner, 
-    _message_content_to_text, 
+    _lc_messages_to_openai,
     get_activity,
     get_available_scenarios,
     format_available_scenarios,
     get_full_instruction_text,
-    retrieve_instruction_chunks,
-    chunks_to_text,
     )
+
+from .utils.chatUtils import (
+    ChatState,
+)
 
 logger = logging.getLogger(__name__)
 
 START_SCENARIO = "start_conversation"
 _available_scenarios_logged = False
+
+class Agent2Output(BaseModel):
+    thought: str = Field(..., description="Brief internal reasoning about your decision.")
+    agent1_instructions: str = Field(
+        description="Natural language instructions that guide your assistant on how to respond next turn."
+    )
+    next_state: str = Field(
+        description="The next state name. Must be either the current state or one of the available states."
+    )
 
 def _get_rag_lock(rag_state: dict) -> asyncio.Lock:
     """Ensures that only one piece of code mutates rag_state["current_scenario"] at a time."""
@@ -58,193 +64,108 @@ async def _await_pending_scenario_update(rag_state: dict, trace_id: str) -> None
     finally:
         rag_state["_pending_scenario_task"] = None
 
-def _truncate(s: str, n: int = 3000) -> str:
-    s = "" if s is None else str(s)
-    return s if len(s) <= n else (s[:n] + f"\n... [truncated {len(s)-n} chars]")
-
-
-def _normalize_token_text(s: str) -> str:
-    """Lowercase + strip punctuation-ish characters for robust matching."""
-    s = (s or "").strip().lower()
-    s = re.sub(r"[\r\n\t]+", " ", s)
-    s = re.sub(r"[^a-z0-9_ -]+", " ", s)  # keep underscores for scenario names
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def _scenario_candidates(available: Iterable[str], current: str) -> list[str]:
-    """
-    Valid scenario names are:
-    - all available scenarios
-    - plus current scenario
-    - plus START_SCENARIO
-    """
-    s = set(x for x in available if x)
-    s.add(current)
-    s.add(START_SCENARIO)
-    return sorted(s)
-
-
-def _extract_best_scenario(raw: str, *, candidates: list[str], current: str, trace_id: str) -> str:
-    """
-    map model output to valid scenario.
-
-    Matching strategy:
-    1) exact substring match of any candidate (normalized)
-    2) token similarity (difflib) against candidates
-    3) fallback to current scenario (no state change)
-    """
-    norm_raw = _normalize_token_text(raw)
-    norm_map = {c: _normalize_token_text(c) for c in candidates}
-
-    # Exact candidate substring match
-    for c in candidates:
-        if norm_map[c] and norm_map[c] in norm_raw:
-            logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] scenario_match=substring selected={c} raw={_truncate(raw, 240)}{lu.RESET}")
-            return c
-
-    # difflib closest match
-    # documentation: https://docs.python.org/3/library/difflib.html#difflib.get_close_matches
-    norm_candidates = [norm_map[c] for c in candidates]
-    if norm_raw:
-        best = difflib.get_close_matches(norm_raw, norm_candidates, n=1, cutoff=0.45)
-        if best:
-            # map normalized back to original candidate
-            best_norm = best[0]
-            for c in candidates:
-                if norm_map[c] == best_norm:
-                    logger.info(f"[RAG-PHI3][{trace_id}] scenario_match=difflib selected={c} raw={_truncate(raw, 240)}")
-                    return c
-
-    # stay in current scenario
-    logger.warning(f"{lu.BG_RED}[RAG-PHI3][{trace_id}] scenario_match=fallback selected={current} raw={_truncate(raw, 240)}{lu.RESET}")
-    return current
-
 
 # =============================================================================
-# Prompt builders (Phi-3 friendly: no strict JSON)
+# Prompt builders 
 # =============================================================================
 
-def build_response_system_prompt(
-    *,
-    current_scenario: str,
-    instructions_text: str,
-) -> str:
+def build_agent1_system_prompt(*, agent2_instructions: str) -> str:
     return f"""
-    Your name is QT robot. You are a state-based conversational assistant.
+    You are an assistant whose job is to respond to user queries. You will be given instructions 
+    by your superiors on how to respond to the user. You will need to follow those instructions
+    and respond accordingly.
 
-    You will be given instructions for the CURRENT_STATE to help you decide how to respond to the user.
-    The instructions for each state will include:
-    - The conversational goals of the state.
-    - Signals for understanding when the goals of the state are complete.
-    - Guidelines for how to move toward the next state.
-    - Also, examples of user and system responses that fit within the state.
-
-    You are currently in the conversation state named: "{current_scenario}".
-
-    INSTRUCTIONS FOR CURRENT_STATE:
+    SUPERVISOR INSTRUCTIONS:
     ----------------
-    {instructions_text}
+    {agent2_instructions}
     ----------------
 
-    Your Task:
-    - Read the user's message, along with the provided the recent conversation history.
-    - Decide how the assistant would respond to the user in the current turn.
-    - Keep the reply short and natural.
-    - Ensure that the response helps move toward achieving the goals of the current state.
-    - DO NOT mention state names within your responses.
-    - DO NOT mention any of the instructions or guidelines in your response.
-    """
+    Rules:
+    - Respond in plain natural language only.
+    - Do NOT mention the supervisor instructions.
+    - Do NOT include explanations, reasoning, or analysis.
+    - Keep it short and friendly.
+    - Do not use emojis or emoticons.
+    """.strip()
 
-
-def build_next_scenario_system_prompt(
+def build_agent2_system_prompt(
     *,
     available_scenarios_text: str,
     current_scenario: str,
     instructions_text: str,
 ) -> str:
     return f"""
-    You are a conversation specialist. Your job is to select the next state for a conversation state machine.
-    The conversations are structured into STATES. States are stages that help guide the flow of the conversation. 
-    States define the goals for what should be achieved in that part of the conversation.
-    You will be given instructions for the CURRENT_STATE. The instructions for each state will include:
-    - The conversational goals of the state
-    - Signals for understanding when the goals of the state are complete
-    - When it is time to move to the next state topic
-    - Expected user responses that fit within the current state
-    - Expected assistant responses that fit within the current state
-    
+    You are a conversation specialist supervising another assistant.
 
+    The conversation is structured into states.
+    Each state has goals and transition conditions.
 
-    Here is a list of AVAILABLE_STATES and a short description for each state.
-    The short description and instructions of the CURRENT_STATE mention which states are appropriate to choose next.
-    AVAILABLE_STATES (valid answers must be one of these, or CURRENT_STATE):
+    Here is a ordered list of AVAILABLE_STATES:
     {available_scenarios_text}
 
-    You are currently in the conversation state named: "{current_scenario}".
+    CURRENT_STATE:
+    "{current_scenario}"
 
     INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
     ----------------
 
-    Your task:
-    - Analyze the recent conversation history that is provided.
-    - Follow the instructions to decide whether the goals of the current state have been met.
-    - If the objectives have been met, choose a new state from the AVAILABLE_STATES that is best suited to follow the current.
-    - If the goals have NOT been met, select the CURRENT_STATE again to continue working toward its goals.
-    - Return ONLY the state name (exactly).
-    - Do not explain or include comments with the output.
-    - Do not add punctuation.
-    - Do not add extra words.
-    - Do not output markdown, code fences, explanations, labels, or commentary.
-    - The state name must come from one of AVAILABLE_STATES.
-    """
+    Your tasks:
 
-    # few shot examples that I might use later
-    # Example Outputs:
-    # Example 1:
-    # start_conversation
-    # Example 2:
-    # initiate_smalltalk
-    # Example 3:
-    # discuss_hobbies
-    # Example 4:
-    # explore_user_interests
-    # Example 5:
-    # end_conversation
+    1) Analyze the conversation history.
+        - You don't know yet what user will say next, but you can anticipate based on the last assistant response.
+        - You need to guide the assistant accordingly.
+    2) Decide whether the goals of the CURRENT_STATE have been met.
+    3) If goals are met, choose a new state from AVAILABLE_STATES.
+    If not, keep the CURRENT_STATE.
+    4) Write clear, short instructions for the assistant on how to respond next turn.
+    5) **Remember, your goal is to guide the response of your assistant in a manner so that the 
+    conversation moves toward achieving the goals described in the current instructions.**
+
+
+    STRICT OUTPUT CONTRACT:
+    Return exactly one JSON object with:
+
+    - "agent1_instructions": short natural language instructions guiding the assistant.
+    - "next_state": must be CURRENT_STATE or one of AVAILABLE_STATES.
+
+    Do not include markdown.
+    Do not include explanations.
+    Output valid JSON only.
+    """.strip()
 
 
 # =============================================================================
 # LLM invocation helpers (LangChain wrapper)
 # =============================================================================
 
-async def invoke_agent(messages: list[BaseMessage], *, trace_id: str, temperature: float, top_p: float, top_k: int, max_tokens: int) -> str:
-    """
-    Invoke the LangChain wrapper with specified sampling params.
-    Returns raw model output text.
-    """
-    if cf.llm_lc_wrapper is None:
-        raise RuntimeError("cf.llm_lc_wrapper is None (USE_LLM is disabled). Cannot run Phi-3 RAG pipeline.")
+async def invoke_agent1_chat(
+    messages: list[BaseMessage],
+    *,
+    trace_id: str,
+    temperature: float = 0.6,
+    max_tokens: int = 128,
+) -> str:
+    if cf.instructor_client is None:
+        raise RuntimeError("cf.instructor_client is None (USE_LLM is disabled or init failed).")
 
-    llm = cf.llm_lc_wrapper.bind( 
+    openai_messages = _lc_messages_to_openai(messages)
+
+    resp = await cf.instructor_client.chat.completions.create(
+        model=cf.INSTRUCTOR_MODEL_NAME,
+        messages=openai_messages,
         temperature=temperature,
-        top_p=top_p,
-        top_k=top_k,
         max_tokens=max_tokens,
     )
 
-    out = await llm.ainvoke(messages)
-
-    if isinstance(out, AIMessage):
-        txt = _message_content_to_text(out.content)
-    elif isinstance(out, str):
-        txt = out
-    else:
-        txt = str(out)
-
-    logger.debug(f"{lu.BG_GREEN}[RAG-PHI3][{trace_id}] invoke_agent params temp={temperature} top_p={top_p} top_k={top_k} max_tokens={max_tokens} raw_len={len(txt or '')}{lu.RESET}")
-    return txt
+    # OpenAI-style response object
+    try:
+        logger.debug(f"{lu.BG_BLUE}[RAG-PHI3][{trace_id}] Agent-1 raw response: {resp.choices[0].message.content}{lu.RESET}")
+        return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        # Fallback (should be rare)
+        return str(resp).strip()
 
 # =============================================================================
 # Background task for predicting next scenario
@@ -254,10 +175,7 @@ async def _predict_and_update_next_scenario(
     *,
     trace_id: str,
     msg_history: list[BaseMessage],
-    user_text: str,
-    assistant_text: str,
     available_scenarios_text: str,
-    available_names: list[str],
     current: str,
     instructions_text: str,
     rag_state: dict,
@@ -265,43 +183,45 @@ async def _predict_and_update_next_scenario(
     lock = _get_rag_lock(rag_state)
     async with lock:
         try:
-            scenario_system_prompt = build_next_scenario_system_prompt(
+            scenario_system_prompt = build_agent2_system_prompt(
                 available_scenarios_text=available_scenarios_text,
                 current_scenario=current,
                 instructions_text=instructions_text,
             )
 
-            # Include both the user message and the assistant reply to help the classifier decide.
-            messages_2 = [SystemMessage(content=scenario_system_prompt )] + msg_history + [
-                HumanMessage(content=f'Most Recent User message:\n{user_text}\n\nMost RecentAssistant reply:\n{assistant_text}')
-            ]
+            logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] Agent-2 predicting next_state...{lu.RESET}")
 
-            logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] CALL#2 predicting next_scenario...{lu.RESET}")
-            raw_next = await invoke_agent(
-                messages_2,
-                trace_id=trace_id,
-                temperature=0.1,  # low randomness
-                top_p=0.1,
-                top_k=1,
-                max_tokens=10,    # small output budget
+            messages_2 = [SystemMessage(content=scenario_system_prompt)] + msg_history
+
+            openai_messages = _lc_messages_to_openai(messages_2)
+            resp = await cf.instructor_client.chat.completions.create(
+                model=cf.INSTRUCTOR_MODEL_NAME,
+                messages=openai_messages,
+                response_model=Agent2Output,
+                temperature=0.2,
+                max_tokens=400,
             )
-            raw_next = (raw_next or "").strip()
 
-            logger.info(f"{lu.MAGENTA}[RAG-PHI3][{trace_id}] CALL#2 raw_next_scenario={_truncate(raw_next, 240)}{lu.RESET}")
+            logger.info(
+                f"{lu.MAGENTA}[RAG-PHI3][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}"
+            )
 
-            candidates = _scenario_candidates(available_names, current)
-            next_scenario = _extract_best_scenario(raw_next, candidates=candidates, current=current, trace_id=trace_id)
+            # Update rag_state with new scenario and instructions for agent1
+            rag_state["agent2_instructions"] = resp.agent1_instructions
+            rag_state["current_scenario"] = resp.next_state
+            rag_state["_last_predicted_next_scenario"] = resp.next_state
+
 
         except Exception as e:
             # If classification fails, we *do not* crash the chat; we simply keep the same scenario.
             logger.exception(f"{lu.BG_RED}[RAG-PHI3][{trace_id}] CALL#2 failed:{e} (fallback to current_scenario){lu.RESET}")
-            next_scenario = current
+            rag_state["current_scenario"] = current        
 
-        rag_state["current_scenario"] = next_scenario
-        rag_state["_last_predicted_next_scenario"] = next_scenario  # optional for debugging/logging
-        logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] (bg) Updated rag_state current_scenario={next_scenario}{lu.RESET}")
-
-
+            # If no previous instructions exist, set safe default
+            if "agent2_instructions" not in rag_state:
+                rag_state["agent2_instructions"] = (
+                    "Respond warmly and briefly. Ask one gentle follow-up question."
+                )
 
 # =============================================================================
 # Main entrypoint, two agent call pipeline
@@ -338,18 +258,36 @@ async def rag_response_fn(
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] user={getattr(user, 'id', None)} instruction_owner={getattr(instruction_owner, 'id', None)} activity={activity_name}{lu.RESET}")
 
     # --- Load available scenarios (for validation/matching) ---
-    scenarios = await get_available_scenarios(instruction_owner.id, activity)
+    scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
     available_scenarios_text = format_available_scenarios(scenarios)
-    available_names = [s["name"] for s in scenarios if s.get("name")]
 
     if not _available_scenarios_logged:
         logger.info(f"[RAG-PHI3][{trace_id}] Available scenarios:\n{available_scenarios_text}")
-        logger.info(f"[RAG-PHI3][{trace_id}] Available scenario NAMES: {available_names}")
         _available_scenarios_logged = True
 
     # --- Determine current scenario ---
     current = rag_state.get("current_scenario") or START_SCENARIO
     logger.info(f"{lu.CYAN}[RAG-PHI3][{trace_id}] current_scenario={current}{lu.RESET}")
+
+    chat_state: ChatState | None = rag_state.get("_chat_state")
+    if chat_state is None:
+        chat_state = ChatState(current_scenario=current)
+        rag_state["_chat_state"] = chat_state
+    else:
+        # keep ChatState in sync with rag_state current scenario
+        chat_state.current_scenario = current
+        chat_state._ensure_state(current)
+
+    # --- initialize rolling tail history (last 10 messages) ---
+    tail_history = rag_state.get("_tail_history")
+    if tail_history is None:
+        tail_history = []
+        rag_state["_tail_history"] = tail_history
+
+    if "agent2_instructions" not in rag_state:
+        rag_state["agent2_instructions"] = (
+            "Greet the user warmly and ask to know their name."
+        )
 
     instructions_text_call_1 = await get_full_instruction_text(
         instruction_name=current,
@@ -362,66 +300,54 @@ async def rag_response_fn(
     if not instructions_text_call_1.strip():
         logger.warning(f"{lu.RED}[RAG-PHI3][{trace_id}] No instructions_text found for scenario={current} (empty chunks).{lu.RESET}")
     # --- Build message history for context ---
-    msg_history: list[BaseMessage] = []
-    for role, content, _ts in context_buffer:
-        if role == "user":
-            msg_history.append(HumanMessage(content=content))
-        elif role == "assistant":
-            msg_history.append(AIMessage(content=content))
+    msg_history = list(tail_history)
 
     logger.debug(f"{lu.MAGENTA}[RAG-PHI3][{trace_id}] msg_history_len={len(msg_history)} user_text_len={len(user_text or '')}{lu.RESET}")
 
     try:
-        response_system_prompt = build_response_system_prompt(
-            current_scenario=current,
-            instructions_text=instructions_text_call_1,
-        )
+        agent2_instructions = rag_state.get("agent2_instructions") or "Respond warmly and briefly. Ask one gentle follow-up question."
+
+        response_system_prompt = build_agent1_system_prompt(agent2_instructions=agent2_instructions)
 
         messages_1 = [SystemMessage(content=response_system_prompt)] + msg_history + [
             HumanMessage(content=user_text)
         ]
 
-        logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] CALL#1 generating assistant response...{lu.RESET}")
-        raw_resp = await invoke_agent(
+        logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] CALL#1 generating Agent-1 response...{lu.RESET}")
+        
+        assistant_text = await invoke_agent1_chat(
             messages_1,
             trace_id=trace_id,
-            temperature=0.7, 
-            top_p=0.7,
-            top_k=30,
-            max_tokens=64,
+            temperature=0.6,
+            max_tokens=256,
         )
-        assistant_text = (raw_resp or "").strip()
+        assistant_text = (assistant_text or "").strip()
 
-        logger.info(f"[RAG-PHI3][{trace_id}] CALL#1 raw_response:\n{_truncate(assistant_text, 1200)}")
+        chat_state.add_message(HumanMessage(content=user_text), scenario=current)
+        chat_state.add_message(AIMessage(content=assistant_text), scenario=current)
+
+        tail_history.append(HumanMessage(content=user_text))
+        tail_history.append(AIMessage(content=assistant_text))
+
+        # keep only last 10 messages (5 turns)
+        if len(tail_history) > 10:
+            rag_state["_tail_history"] = tail_history[-10:]
+            tail_history = rag_state["_tail_history"]
+        else:
+            rag_state["_tail_history"] = tail_history # ensure it's saved back to rag_state
 
     except Exception as e:
         logger.exception(f"{lu.BG_RED}[RAG-PHI3][{trace_id}] CALL#1 failed: {e}{lu.RESET}")
         raise
 
-    # =============================================================================
-    # CALL #2: Predict next_scenario (constrained output)
-    # Schedule CALL #2 in background (do NOT block this turn’s response)
-    # =============================================================================
-    # routing_text_call_2 = f"signals for changing the conversation topic and Next Conversation Topic rules."
-        
-    # chunks_call_2 = await retrieve_instruction_chunks(
-    #     instruction_name=current,
-    #     user_id=instruction_owner.id,
-    #     activity_id=activity.id,
-    #     query_text=routing_text_call_2,
-    #     k=2,
-    # )
+    msg_history_call2 = list(tail_history)
 
-    # instructions_text_call_2 = chunks_to_text(chunks_call_2)
     async def _runner():
         # ensure only one CALL#2 mutates rag_state at a time
         await _predict_and_update_next_scenario(
             trace_id=trace_id,
-            msg_history=msg_history,
-            user_text=user_text,
-            assistant_text=assistant_text,
+            msg_history=msg_history_call2,  
             available_scenarios_text=available_scenarios_text,
-            available_names=available_names,
             current=current,
             instructions_text=instructions_text_call_1,
             rag_state=rag_state,

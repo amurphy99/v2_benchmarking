@@ -15,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
 USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
-INSTRUCTOR_MODEL_NAME = "phi3.5-mini"  # model name for the Instructor client
+INSTRUCTOR_MODEL_NAME = "qwen2.5-3b"  # model name for the Instructor client
 
 # LLM Parameters
 MAX_LENGTH = 128 # 256
@@ -121,7 +121,7 @@ try:
     # Setup the LLM
     llm = LLMClass()
 
-    RAG_METHOD = "legacy" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
+    RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
 
     if RAG_METHOD == "legacy":
         # Initialize LangChain wrapper for the our fine-tuned phi3 model
