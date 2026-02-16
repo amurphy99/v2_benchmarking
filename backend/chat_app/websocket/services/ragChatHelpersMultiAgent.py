@@ -202,9 +202,9 @@ async def _predict_and_update_next_scenario(
                 max_tokens=400,
             )
 
-            logger.info(
-                f"{lu.MAGENTA}[RAG-PHI3][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}"
-            )
+            logger.debug(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 thought: {resp.thought}{lu.RESET}")
+            logger.debug(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 instructions for Agent-1: {resp.agent1_instructions}{lu.RESET}")
+            logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
 
             # Update rag_state with new scenario and instructions for agent1
             rag_state["agent2_instructions"] = resp.agent1_instructions

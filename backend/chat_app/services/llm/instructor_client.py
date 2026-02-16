@@ -43,10 +43,10 @@ def build_instructor_client():
         timeout=timeout,
     )
 
-    # 1. Initialize Instructor
+    # Initialize Instructor
     instructor_client = instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
 
-    # 2. Define the INPUT Hook (Fires BEFORE API call)
+    # Define the INPUT Hook (Fires BEFORE API call)
     def log_input_hook(*args, **kwargs):
         logger.info(f"{lu.BRIGHT_YELLOW}---------- INSTRUCTOR INPUT (SENT) ----------{lu.RESET}")
         
@@ -59,7 +59,7 @@ def build_instructor_client():
         
         logger.info(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}")
 
-    # 3. Define the OUTPUT Hook (Fires AFTER API call, receives Raw Response)
+    # Define the OUTPUT Hook (Fires AFTER API call, receives Raw Response)
     def log_response_hook(response, *args, **kwargs):
         logger.info(f"{lu.BRIGHT_YELLOW}---------- INSTRUCTOR RAW OUTPUT (RECEIVED) ----------{lu.RESET}")
         
@@ -87,8 +87,8 @@ def build_instructor_client():
             
         logger.info(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}")
 
-    # 4. Attach Hooks
-    instructor_client.on("completion:kwargs", log_input_hook)
-    instructor_client.on("completion:response", log_response_hook)
+    #  Attach Hooks
+    #instructor_client.on("completion:kwargs", log_input_hook)
+    #instructor_client.on("completion:response", log_response_hook)
 
     return instructor_client
