@@ -4,7 +4,7 @@
 # Load Packages
 import os, warnings, logging
 from .services.llm.langchain_wrapper import CustomChatModel
-from .services.llm.instructor_client import build_instructor_client
+from .services.llm.instructor_client import build_instructor_client, build_openai_client
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -128,9 +128,11 @@ try:
         llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
         logger.info("LangChain LLM wrapper initialized successfully")
     else:
-        # Initialize Instructor client
+        # Initialize Instructor client (for structured responses)
         instructor_client = build_instructor_client() if USE_LLM else None
-        logger.info("Instructor client initialized successfully")
+        # Initialize plain OpenAI client (for plain text responses)
+        openai_client = build_openai_client() if USE_LLM else None
+        logger.info("Instructor and OpenAI clients initialized successfully")
 
     logger.info("LLM initialized successfully")
 

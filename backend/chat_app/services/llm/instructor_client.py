@@ -7,6 +7,23 @@ from ...services import logging_utils as lu
 
 logger = logging.getLogger(__name__)
 
+def build_openai_client():
+    """
+    Builds a plain AsyncOpenAI client for unstructured/plain text responses.
+    """
+    base = os.getenv("LLM_BASE_URL", "127.0.0.1")
+    port = "8080"
+    llm_url = f"http://{base}:{port}/v1"
+
+    llm_key = os.getenv("LLM_GATEWAY_TOKEN") or "SAMPLE_TOKEN"
+    timeout = float(os.getenv("LLM_TIMEOUT", "20"))
+
+    return AsyncOpenAI(
+        base_url=llm_url,
+        api_key=llm_key,
+        timeout=timeout,
+    )
+
 def build_instructor_client():
     """
     Builds an Instructor-wrapped AsyncOpenAI client for OpenAI-compatible servers.

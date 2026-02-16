@@ -147,12 +147,12 @@ async def invoke_agent1_chat(
     temperature: float = 0.6,
     max_tokens: int = 128,
 ) -> str:
-    if cf.instructor_client is None:
-        raise RuntimeError("cf.instructor_client is None (USE_LLM is disabled or init failed).")
+    if cf.openai_client is None:
+        raise RuntimeError("cf.openai_client is None.")
 
     openai_messages = _lc_messages_to_openai(messages)
 
-    resp = await cf.instructor_client.chat.completions.create(
+    resp = await cf.openai_client.chat.completions.create(
         model=cf.INSTRUCTOR_MODEL_NAME,
         messages=openai_messages,
         temperature=temperature,
