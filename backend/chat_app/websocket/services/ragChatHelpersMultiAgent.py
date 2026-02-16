@@ -72,8 +72,9 @@ async def _await_pending_scenario_update(rag_state: dict, trace_id: str) -> None
 def build_agent1_system_prompt(*, agent2_instructions: str) -> str:
     return f"""
     You are an assistant whose job is to respond to user queries. You will be given instructions 
-    by your superiors on how to respond to the user. You will need to follow those instructions
-    and respond accordingly.
+    by your superiors on how to respond to the user. You will need to follow those instructions.
+    But **Remember, your intructions will only provide general guidelines on how to respond, 
+    and you need to match them to the specific context of the conversation based on conversation history.**
 
     SUPERVISOR INSTRUCTIONS:
     ----------------
@@ -82,10 +83,13 @@ def build_agent1_system_prompt(*, agent2_instructions: str) -> str:
 
     Rules:
     - Respond in plain natural language only.
+    - Follow the supervisor's guidance while maintaining a natural flow
     - Do NOT mention the supervisor instructions.
     - Do NOT include explanations, reasoning, or analysis.
     - Keep it short and friendly.
     - Do not use emojis or emoticons.
+
+    Current Conversation: History:
     """.strip()
 
 def build_agent2_system_prompt(
@@ -97,8 +101,7 @@ def build_agent2_system_prompt(
     return f"""
     You are a conversation specialist supervising another assistant.
 
-    The conversation is structured into states.
-    Each state has goals and transition conditions.
+    The conversation is structured into states. Each state has goals and transition conditions.
 
     Here is a ordered list of AVAILABLE_STATES:
     {available_scenarios_text}
@@ -109,30 +112,32 @@ def build_agent2_system_prompt(
     INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
-    ----------------
 
-    Your tasks:
+    Based on the conversation history, your tasks:
 
-    1) Analyze the conversation history.
-        - You don't know yet what user will say next, but you can anticipate based on the last assistant response.
-        - You need to guide the assistant accordingly.
-    2) Decide whether the goals of the CURRENT_STATE have been met.
-    3) If goals are met, choose a new state from AVAILABLE_STATES.
-    If not, keep the CURRENT_STATE.
-    4) Write clear, short instructions for the assistant on how to respond next turn.
-    5) **Remember, your goal is to guide the response of your assistant in a manner so that the 
-    conversation moves toward achieving the goals described in the current instructions.**
+    1. **Assess Progress**: How well have the current state's objectives been met?
+    2. **Plan Next Response**: What should the assistant focus on in their immediate response?
+    3. **State Transition**: Should we stay in current state or move to the next?
 
+    Guidelines for agent1_instructions:
+    - Be specific about what to address or ask
+    - Include any key information to convey
+    - Specify the tone or approach needed
+    - Don't write the response - give clear guidance
 
-    STRICT OUTPUT CONTRACT:
-    Return exactly one JSON object with:
+    State Transition Rules:
+    - Only advance states when current objectives are complete
+    - If user seems confused or off-track, stay in current state
+    - Choose the most logical next state from available options
 
-    - "agent1_instructions": short natural language instructions guiding the assistant.
-    - "next_state": must be CURRENT_STATE or one of AVAILABLE_STATES.
+    Output format: Valid JSON only, no markdown.
+    
+    Required fields:
+    - "thought": Your analysis of conversation progress and next steps
+    - "agent1_instructions": Specific guidance for the assistant's response
+    - "next_state": Current state name or next appropriate state
 
-    Do not include markdown.
-    Do not include explanations.
-    Output valid JSON only.
+    Conversation History:
     """.strip()
 
 
@@ -202,8 +207,8 @@ async def _predict_and_update_next_scenario(
                 max_tokens=400,
             )
 
-            logger.debug(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 thought: {resp.thought}{lu.RESET}")
-            logger.debug(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 instructions for Agent-1: {resp.agent1_instructions}{lu.RESET}")
+            logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 thought: {resp.thought}{lu.RESET}")
+            logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 instructions for Agent-1: {resp.agent1_instructions}{lu.RESET}")
             logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
 
             # Update rag_state with new scenario and instructions for agent1
@@ -340,6 +345,8 @@ async def rag_response_fn(
         logger.exception(f"{lu.BG_RED}[RAG-PHI3][{trace_id}] CALL#1 failed: {e}{lu.RESET}")
         raise
 
+    # --- AGENT-2: Analyze conversation and prepare for next turn ---
+    # This runs in background to prepare for the next user message
     msg_history_call2 = list(tail_history)
 
     async def _runner():
