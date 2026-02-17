@@ -24,7 +24,7 @@ TEMPERATURE   = 0.5
 # ================================================================================
 # Make all LLM queries for the post-chat analysis
 # ================================================================================
-async def post_chat_analysis_async(chat_messages, model=DEFAULT_MODEL):
+async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
     # Prepare the transcript & handle empty chats
     transcript = to_transcript(chat_messages)
     
