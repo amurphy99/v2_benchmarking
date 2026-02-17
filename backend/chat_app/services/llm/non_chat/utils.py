@@ -4,7 +4,7 @@ Utilities for the non-chat LLM calls & analysis.
 `backend.chat_app.services.llm.non_chat.utils`
 
 """
-import re
+from ..chat_utilities import normalize_text
 
 # --------------------------------------------------------------------------------
 # Convert messages from the database to a basic string format we can use 
@@ -12,9 +12,7 @@ import re
 def to_transcript(messages, max_chars=30_000) -> str:
     """ Format ChatMessage objects into a transcript for the LLM post-chat analysis. """
     # 1) Sort ChatMessages by timestamp
-    try:              messages = messages.order_by("ts", "id") 
-    except Exception: messages = sorted(messages, key=lambda m: (m.ts, getattr(m, "id", 0)))
-    messages = list(messages)
+    messages = _sort_messages(messages)
 
     # 2) Loop through and prepare a line for each message 
     lines = []
@@ -35,17 +33,19 @@ def to_transcript(messages, max_chars=30_000) -> str:
     if not transcript: return ""
 
     # 4) Keep recent characters if we have to truncate
-    if len(transcript) > max_chars:
-        transcript = transcript[-max_chars:]
-        transcript = "(TRUNCATED TO MOST RECENT PORTION)\n" + transcript
-
+    if len(transcript) > max_chars: transcript = "(TRUNCATED TO MOST RECENT PORTION)\n" + transcript[-max_chars:]
     return transcript
 
 # --------------------------------------------------------------------------------
-# Helper for cleaning text with re
+# Flexible Sorting
 # --------------------------------------------------------------------------------
-def normalize_text(text):
-    text = (text or "").strip()
-    text = re.sub(r"\s*\n+\s*", " ", text)  # Replace internal newlines 
-    text = re.sub(r"[ \t]{2,}", " ", text)  # Collapse repeated whitespace
-    return text
+# Allow database model objects or dictionary-style rows
+def _get(m, key, default=None):
+    if isinstance(m, dict): return m.get(key, default)
+    return getattr(m, key, default)
+
+# If it is a "QuerySet" (result from DB access) => standard ordering works
+# If it is a list of dicts/objects              => sort normally
+def _sort_messages(messages):
+    try:              messages = messages.order_by("ts", "id")
+    except Exception: messages = sorted(messages, key=lambda m: (_get(m, "ts"), _get(m, "id", 0)))

@@ -5,7 +5,7 @@ LLM interaction utilities for chats.
 
 """
 
-import logging, asyncio, time
+import logging, asyncio, time, re
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -72,9 +72,21 @@ def prepare_LLM_input(context_buffer):
     return LLM_input
 
 
+# --------------------------------------------------------------------------------
+# Helper for cleaning text with re
+# --------------------------------------------------------------------------------
+def normalize_text(text):
+    text = (text or "").strip()
+    text = re.sub(r"\s*\n+\s*", " ", text)  # Replace internal newlines 
+    text = re.sub(r"[ \t]{2,}", " ", text)  # Collapse repeated whitespace
+    return text
 
 
-# NOT INTEGRATED 
+
+
+
+
+# TODO: NOT INTEGRATED 
 # --------------------------------------------------------------------------------
 # Classify the LLM text using vader or zero-shot (not integrated right now)
 # --------------------------------------------------------------------------------
