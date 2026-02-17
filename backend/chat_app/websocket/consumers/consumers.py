@@ -47,8 +47,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     * self.return_biomarkers => should we return the biomarkers to the client? (right now, no)
 
     """
-    MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
-    SECONDS     = 10  # How often we want to send audio to calculate biomarkers
+    MAX_CONTEXT = 8  # How many recent messages to keep for the LLM
+    SECONDS     = 5  # How often we want to send audio to calculate biomarkers
 
     # ================================================================================
     # Connect
