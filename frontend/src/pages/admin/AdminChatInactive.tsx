@@ -41,6 +41,7 @@ export function AdminChatInactive() {
     // ================================================================================
     return (
         <div className="pb-[15vh]">
+            <h1 className="m-[1rem]">Admin Page</h1>
             {/* ================================================================================ */}
             {/* Body */}
             {/* ================================================================================ */}
@@ -79,6 +80,25 @@ export function AdminChatInactive() {
                 >
                     <p className="flex justify-center p-1 border-b border-black/10 text-base font-semibold">Sentiment</p>
                     <p className="p-3">{session.sentiment}</p>
+                </div>
+
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Notes and Summary */}
+                {/* -------------------------------------------------------------------------------- */}
+
+                <div 
+                    className="w-full border border-gray-300 flex flex-col min-h-0 rounded-sm"
+                    style={bioHeight ? { height: bioHeight } : undefined}
+                >
+                    <p className="flex justify-center p-1 border-b border-black/10 text-base font-semibold">Notes</p>
+                    <p className="p-3">{session.notes}</p>
+                </div>
+                <div 
+                    className="w-full border border-gray-300 flex flex-col min-h-0 rounded-sm"
+                    style={bioHeight ? { height: bioHeight } : undefined}
+                >
+                    <p className="flex justify-center p-1 border-b border-black/10 text-base font-semibold">Summary</p>
+                    <p className="p-3">{session.taskSubtype}</p>
                 </div>
             </div>
             
