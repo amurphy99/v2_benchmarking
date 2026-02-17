@@ -4,6 +4,8 @@ Various LLM wrapper classes as well as utilities. Utilities should support (1) h
 
 * `dummy_LLM.py` serves as a wrapper for local development that returns simple string responses. 
 
+TODO: Should probably add a `chat` directory, similar to the `non_chat` one, and move some stuff there, like `dummy_LLM` for example. It's just annoying that git tracking doesn't work on VSCode sometimes so you have to use the `git mv` command and do all of the import refactors yourself...
+
 ```diff
 
 llm/
