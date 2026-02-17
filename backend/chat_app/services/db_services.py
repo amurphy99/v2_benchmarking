@@ -6,18 +6,20 @@ Service for working with chat data
 TODO: Need to add topic/sentiment fields, probably on close ?
 TODO: If chat hasn't been modified in X time, save it and remake one automatically
 
+TODO: When fully adding the LLM-based post-chat analysis, should find a way to make
+      the existing stuff work as a backup...
+
 Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-
-from django.db    import transaction
-from django.utils import timezone
-
-from channels.db      import database_sync_to_async
-from django.db.models import Min
-
 import logging
 logger = logging.getLogger(__name__)
+
+# Django imports
+from channels.db        import database_sync_to_async
+from django  .db        import transaction
+from django  .db.models import Min
+from django  .utils     import timezone
 
 # From this project
 from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
@@ -27,16 +29,15 @@ from  .emotionHelpers import classify_emotion_with_vader
 from  .imageHelpers   import get_images
 from  .               import logging_utils as lu
 
+# Utilities for conducting the post-chat analysis via LLMs
+from .llm.chat_utilities              import normalize_text
+from .llm.non_chat.post_chat_analysis import post_chat_analysis
+
+
 # ================================================================================
 # ChatService
 # ================================================================================
 class ChatService:
-    """
-    ChatListenerConsumer
-    --------------------
-    Service for working with chat data.
-
-    """
     # --------------------------------------------------------------------------------
     # Session Helpers
     # --------------------------------------------------------------------------------
@@ -58,39 +59,43 @@ class ChatService:
     @transaction.atomic
     def close_session(user, session, *, source="webapp", notes=None, sentiment=None, topics=None):
         """
+        TODO: Update this...
         * Marks the current session inactive
         * Fills in "ended_at"
         * Stores optional metadata
         * Immediately opens a fresh/blank session
         """
+        # Set to inactive & add the end timestamp
         session.is_active = False
         session.end_ts    = timezone.now()
 
-        # -------------------------------------------------------------------------
-        # If the session has no meaningful content, delete it and return None
-        # -------------------------------------------------------------------------
-        has_user_msgs = ChatMessage.objects.filter(session=session, role="user").exists()
+        # Retrieve messages for the session (includes user & assistant; reuse this so we only need one DB query)
+        qs       = ChatMessage.objects.filter(session=session).order_by("ts", "id")
+        messages = list(qs)  # converted to a list for object stability
+
+        # --------------------------------------------------------------------------------
+        # 1) If the session has no meaningful content, delete it and return None
+        # --------------------------------------------------------------------------------
+        has_user_msgs = any((m.role == "user") and normalize_text(m.content) for m in messages)
         if not has_user_msgs:
             session_id = session.id
-            session.delete()  # cascades to ChatMessage because of foreign key on_delete=CASCADE
+            session.delete()  # Cascades to ChatMessage because of foreign key on_delete=CASCADE
             logger.info(f"{lu.RED}[DB] Deleted empty ChatSession id={session_id} for {user.username}{lu.RESET}")
             return None
 
         # --------------------------------------------------------------------------------
-        # Get all messages for this session
-        # -------------------------------------------------------------------------------- 
-        msgs = (ChatMessage.objects
-           .filter(session=session)             # could also stack .filter(role="user")
-           .filter(role="user")
-           .order_by("ts")                      # or "start_ts", "id" ?
-           .values_list("content", flat=True))  # returns a queryset of strings
-        
-        messages     = [msg for msg in msgs]
-        message_text = " ".join(messages)
-        
+        # TODO: Testing the new LLM-based post-chat analysis methods
+        # --------------------------------------------------------------------------------
+        # Get messages for this chat from the user & the assistant
+        analysis = post_chat_analysis(messages)
+  
         # --------------------------------------------------------------------------------
         # Topics & Sentiment (and Notes, but it is currently unused anyways...)
         # --------------------------------------------------------------------------------
+        # Get ONLY message content ONLY for the user
+        user_texts = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
+        message_text = " ".join(user_texts)
+
         topics    = get_topics                 (message_text)
         sentiment = classify_emotion_with_vader(message_text)
 
@@ -124,7 +129,9 @@ class ChatService:
                 album_image.save()
                 session.image = album_image
 
-        # Changes to user ?        
+        # --------------------------------------------------------------------------------
+        # Changes to user ? TODO: Don't remember what this was for
+        # --------------------------------------------------------------------------------
         profile = get_profile(user)
         if profile is not None:
             settings = UserSettings.objects.get(profile=profile)
@@ -164,6 +171,7 @@ class ChatService:
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
 
 
+
     # ================================================================================
     # ChatListener Helpers
     # ================================================================================
@@ -172,8 +180,8 @@ class ChatService:
         # Pull session + profile + account + user in one DB query
         session = (
             ChatSession.objects
-            .select_related("profile", "profile__account", "profile__account__user")
-            .get(id=session_id)
+                .select_related("profile", "profile__account", "profile__account__user")
+                .get(id=session_id)
         )
 
         return {
