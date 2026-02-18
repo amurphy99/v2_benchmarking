@@ -46,14 +46,14 @@ class InstructWrapper:
     # Catch errors and retry if a call fails
     # --------------------------------------------------------------------------------
     @staticmethod
-    async def call_with_retries_async(client, *, model, response_model, messages, temperature=0.2, max_retries=3, backoff_sec=1.0, default=None):
+    async def call_with_retries_async(client, *, model, response_model, messages, temperature=0.2, max_retries=3, backoff_sec=1.0, default=None, name="unknown"):
         # Try to get a response the given number of times
         for attempt in range(max_retries + 1):
             try: return await client.chat.completions.create(model=model, response_model=response_model, messages=messages, temperature=temperature)
             
             # Capture Pydantic response schema validation errors (i.e. the model didn't return proper JSON)
             except (ValidationError, Exception) as e:
-                logger.info(f"{LLM_MAIN}[LLM] Post-chat LLM call {lu.RED}{BOLD}FAILED{UNBOLD}{LLM_MAIN} (attempt {attempt+1}/{max_retries+1}): {repr(e)} {RESET}")
+                logger.info(f"{LLM_MAIN}[LLM] Post-chat LLM call for {BOLD}{name}{UNBOLD} {lu.RED}{BOLD}FAILED{UNBOLD}{LLM_MAIN} (attempt {attempt+1}/{max_retries+1}): {repr(e)} {RESET}")
                 if attempt < max_retries: await asyncio.sleep(backoff_sec * (2 ** attempt))
         
         # The maximum retries has been exceeded

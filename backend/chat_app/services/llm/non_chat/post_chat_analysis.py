@@ -59,7 +59,7 @@ async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
     # Call 1: Summary & Topics
     t0 = time.time()
     summary_response = await InstructWrapper.call_with_retries_async(
-        client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, temperature=TEMPERATURE, default=DEFAULT_TOPICS,
+        client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, temperature=TEMPERATURE, default=DEFAULT_TOPICS, name="summary",
     )
     t1 = time.time()
     log_summary_response(summary_response, t0, t1)
@@ -67,7 +67,7 @@ async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
     # Call 2:  Sentiment & Emotions
     t0 = time.time()
     sentiment_response = await InstructWrapper.call_with_retries_async(
-        client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, temperature=TEMPERATURE, default=DEFAULT_SENTIMENT,
+        client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, temperature=TEMPERATURE, default=DEFAULT_SENTIMENT, name="sentiment",
     )
     t1 = time.time()
     log_sentiment_response(sentiment_response, t0, t1)
