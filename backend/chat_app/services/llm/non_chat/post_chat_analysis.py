@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from ....config                 import USE_LLM
 
 # Import helper methods 
 from .utils            import to_transcript
@@ -34,7 +35,7 @@ DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutr
 # ================================================================================
 async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
     # Check if we are in local or deployed mode
-    if os.getenv("APP_ENVIRONMENT", "local"): 
+    if not USE_LLM: 
         logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted in local mode. {RESET}")
         return DEF_ANALYSIS
 
