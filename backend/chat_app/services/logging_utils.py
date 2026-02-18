@@ -95,8 +95,8 @@ G_LINE_2 = f"\n{GREEN}{HLINE}{RESET}"
 # --------------------------------------------------------------------------------
 # Specific Presets
 # --------------------------------------------------------------------------------
-USER_MSG = f"{RESET}{ITALIC}{GREEN  }"
-ROBO_MSG = f"{RESET}{ITALIC}{MAGENTA}"
+USER_MSG = f"{RESET}{ITALIC}{BRIGHT_GREEN  }"
+ROBO_MSG = f"{RESET}{ITALIC}{BRIGHT_MAGENTA}"
 
 # ChatConsumer
 CC_MAIN = f"{GREEN}[{BRIGHT_GREEN}ChatConsumer{GREEN}]"
