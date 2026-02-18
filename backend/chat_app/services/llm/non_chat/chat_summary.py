@@ -25,6 +25,8 @@ class ChatSummaryTopics(BaseModel):
     # Get a short list of comma separated main topics for this chat
     topics: list[str] = Field(..., min_items=2, max_items=8, description="2-8 short topic labels, 1-4 words each (no sentences).")
 
+# Default response
+DEFAULT_TOPICS = ChatSummaryTopics(thought="FAILED", summary="Chat summary failed", topics=["--", "--"])
 
 # --------------------------------------------------------------------------------
 # Build System Prompt

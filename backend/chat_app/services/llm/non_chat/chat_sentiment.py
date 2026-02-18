@@ -28,6 +28,9 @@ class ChatSentimentRisk(BaseModel):
     sentiment_label: ChatSentiment = Field(..., description="Overall label for whatever sentiment was most prominent during this chat.")
     emotion_label  : ChatEmotion   = Field(..., description="Overall label for whatever emotion was most prominent from the user during this chat.")
 
+# Default response
+DEFAULT_SENTIMENT = ChatSentimentRisk(thought="FAILED", sentiment_label="neutral", emotion_label="neutral")
+
 # --------------------------------------------------------------------------------
 # Build System Prompt
 # --------------------------------------------------------------------------------

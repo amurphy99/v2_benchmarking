@@ -3,6 +3,10 @@ Use LLM calls to generate post-chat data.
 --------------------------------------------------------------------------------
 `backend.chat_app.services.llm.non_chat.post_chat_analysis`
 
+TODO: Maybe do some kind of thing here where if the thought fields are "FAILED",
+      we know that was the default response, so switch to doing the original,
+      algorithm-based methods for topics and emotions...
+
 """
 import logging, os, time
 logger = logging.getLogger(__name__)
@@ -14,8 +18,8 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 # Import helper methods 
 from .utils            import to_transcript
 from .instruct_wrapper import InstructWrapper
-from .chat_summary     import ChatSummaryTopics, build_summary_topics_messages, log_summary_response
-from .chat_sentiment   import ChatSentimentRisk, build_sentiment_messages, log_sentiment_response
+from .chat_summary     import ChatSummaryTopics, DEFAULT_TOPICS,    build_summary_topics_messages, log_summary_response
+from .chat_sentiment   import ChatSentimentRisk, DEFAULT_SENTIMENT, build_sentiment_messages,      log_sentiment_response
 
 # Config
 DEFAULT_MODEL = "qwen2.5-3b"
@@ -50,17 +54,20 @@ async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
     # --------------------------------------------------------------------------------
     # Initialize the client to use
     client = InstructWrapper.init_async_client()
-    call   = InstructWrapper.call_with_retries_async # Shorter name for readability
 
     # Call 1: Summary & Topics
     t0 = time.time()
-    summary_response = await call(client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, temperature=TEMPERATURE)
+    summary_response = await InstructWrapper.call_with_retries_async(
+        client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, temperature=TEMPERATURE, default=DEFAULT_TOPICS,
+    )
     t1 = time.time()
     log_summary_response(summary_response, t0, t1)
 
     # Call 2:  Sentiment & Emotions
     t0 = time.time()
-    sentiment_response = await call(client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, temperature=TEMPERATURE)
+    sentiment_response = await InstructWrapper.call_with_retries_async(
+        client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, temperature=TEMPERATURE, default=DEFAULT_SENTIMENT,
+    )
     t1 = time.time()
     log_sentiment_response(sentiment_response, t0, t1)
 
