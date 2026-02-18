@@ -140,19 +140,28 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # --------------------------------------------------------------------------------
     async def disconnect(self, code):
         """
-        # DO NOT close the session -- just clean local state.
-        --- Originally had pausing in here, but im just changing it so disconnects end the chat. ---
+        TODO: Originally had pausing/resuming in here, but for now disconnects always end the chat.
         """
-        # 1) Close the ChatSession in the DB
-        if self.session and self.session.is_active:
-            task = asyncio.create_task(ChatService.close_session(self.user, self.session, source=self.source))
-            task.add_done_callback(ChatService._log_task_exception)
+        # Guard for double calls when we are already closing
+        if getattr(self, "_close_scheduled", False): return
+        self._close_scheduled = True
 
-        # Cancel background tasks (if any)
+        # Snapshot IDs (don't pass model instances into background tasks)
+        user_id    = getattr(self.user,    "id",    None)
+        session_id = getattr(self.session, "id",    None)
+        username   = getattr(self.user, "username", None)
+
+        # Close the ChatSession in the DB
+        if user_id and session_id:
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source), 
+                         name=f"disconnect::close-session-{session_id}")
+
+        # Cancel background tasks (only connection-based ones; not the close_session task)
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
 
         # Reset some properties for the next connection
+        self.session                  = None
         self.context_buffer           = []
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
