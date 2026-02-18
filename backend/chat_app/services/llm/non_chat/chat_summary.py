@@ -59,7 +59,7 @@ def build_summary_topics_messages(transcript):
 # --------------------------------------------------------------------------------
 def log_summary_response(response: ChatSummaryTopics, t0, t1):
     log_string = (
-        f"{LLM_MAIN}[LLM] Post-chat {BOLD}summary & topics{UNBOLD} extracted in ({BOLD}{(t1-t0):.2f}{UNBOLD}s): {RESET}\n"
+        f"{LLM_MAIN}[LLM] Post-chat {BOLD}summary & topics{UNBOLD} extracted in ({BOLD}{(t1-t0):.2f}s{UNBOLD}): {RESET}\n"
         f"    {LLM_MAIN}{BOLD}Thought: {UNBOLD}{response.thought}{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Summary: {UNBOLD}{response.summary}{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Topics:  {UNBOLD}{response.topics }{RESET}"

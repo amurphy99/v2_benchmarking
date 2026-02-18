@@ -59,7 +59,7 @@ def build_sentiment_messages(transcript):
 # --------------------------------------------------------------------------------
 def log_sentiment_response(response: ChatSentimentRisk, t0, t1):
     log_string = (
-        f"{LLM_MAIN}[LLM] Post-chat {BOLD}sentiment & emotion{UNBOLD} extracted in ({BOLD}{(t1-t0):.2f}{UNBOLD}s): {RESET}\n"
+        f"{LLM_MAIN}[LLM] Post-chat {BOLD}sentiment & emotion{UNBOLD} extracted in ({BOLD}{(t1-t0):.2f}s{UNBOLD}): {RESET}\n"
         f"    {LLM_MAIN}{BOLD}Thought:   {UNBOLD}{response.thought        }{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Sentiment: {UNBOLD}{response.sentiment_label}{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Emotion:   {UNBOLD}{response.  emotion_label}{RESET}"
