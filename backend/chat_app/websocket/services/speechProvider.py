@@ -36,30 +36,29 @@ class SpeechToTextProvider:
         while self._streaming or self._audio_buffer:
             if self._audio_buffer:
                 data = self._audio_buffer.get()
-                if data is None:
-                    break
+                if data is None: break
                 yield speech.StreamingRecognizeRequest(audio_content=data)
 
     def start(self):
         '''Starts the streaming process. Initializes the configs and starts a new thread to handle the streaming without blocking.'''
         self._streaming = True
         config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=SAMPLE_RATE,
-            language_code="en-US",
-            enable_automatic_punctuation=True,
-            enable_spoken_punctuation=True,
-            model="latest_long",
-            use_enhanced=True,
-            enable_word_time_offsets=True,
+            encoding                     = speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz            = SAMPLE_RATE,
+            language_code                = "en-US",
+            enable_automatic_punctuation = True,
+            enable_spoken_punctuation    = True,
+            model                        = "latest_long",
+            use_enhanced                 = True,
+            enable_word_time_offsets     = True,
         )
         self._streaming_config = speech.StreamingRecognitionConfig(
-            config=config,
-            interim_results=False,
+            config          = config, 
+            interim_results = False,
         )
-
         threading.Thread(target=self._start_streaming_thread, daemon=True).start()
         
+
     def stop(self):
         '''Stops the streaming process.'''
         self._streaming = False
@@ -69,18 +68,16 @@ class SpeechToTextProvider:
         '''Sends audio data to the audio buffer. If streaming is not active, starts the streaming process.'''
         audio_bytes = base64.b64decode(data["data"])
         self._audio_buffer.put(audio_bytes)
-        if not self._streaming:
-            self.start()
+        if not self._streaming: self.start()
             
     def _start_streaming_thread(self):
         '''Main streaming thread. Upon the generator yielding streaming recognition requests, will send them to the Google Cloud STT API. '''
         requests = self._audio_generator()
-
         try:
             responses = self._client.streaming_recognize(config=self._streaming_config, requests=requests)
             self._listen_responses(responses)
-        except Exception as e:
-            print(f"[ERROR] Streaming connection failed: {e}")
+        
+        except Exception as e: print(f"[ERROR] Streaming connection failed: {e}")
 
 
     def _listen_responses(self, responses):
@@ -90,39 +87,37 @@ class SpeechToTextProvider:
             for result in response.results:
                 if result.is_final:
                     transcript = result.alternatives[0].transcript
-                    if transcript == self._recent_transcript or len(transcript) < 1: # in case of duplicate final transcripts
-                        continue
+
+                    # in case of duplicate final transcripts 
+                    if transcript == self._recent_transcript or len(transcript) < 1: continue
+
                     self._recent_transcript = transcript
-                    logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript}")
+                    logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript} {lu.RESET}")
                     word_timestamps = self._get_word_timestamps(datetime.now(), result.alternatives[0].words)
+
                     if self._transcript_callback:
                         data = {"type": "user_utt", "data": transcript}
                         if asyncio.iscoroutinefunction(self._transcript_callback):
-                            asyncio.run_coroutine_threadsafe(
-                                self._transcript_callback(data, self._msg_callback, self._send_callback, self._bio_callback),
-                                self._loop
-                            )
-                        else:
-                            self._transcript_callback(data)
+                            asyncio.run_coroutine_threadsafe(self._transcript_callback(data, self._msg_callback, self._send_callback, self._bio_callback), self._loop)
+                        else: self._transcript_callback(data)
+                    
                     if self.ts_callback:
-                        if asyncio.iscoroutinefunction(self.ts_callback):
-                            asyncio.run_coroutine_threadsafe(
-                                self.ts_callback,
-                                self._loop
-                            )
-                        else:
-                            self.ts_callback(word_timestamps)
+                        if asyncio.iscoroutinefunction(self.ts_callback): asyncio.run_coroutine_threadsafe( self.ts_callback, self._loop)
+                        else: self.ts_callback(word_timestamps)
                             
     def _get_word_timestamps(self, now, words):
         ''' Gets word-level timestamps of an array of WordInfo objects. Will return an array of dictionaries
         with the word, word start timestamp, and word end timestamp (as a datetime.datetime object).'''
         timestamps = [{
-            "word": word.word, 
-            "start": now + word.start_time, 
-            "end": now + word.end_time
+            "word"  : word.word, 
+            "start" : now + word.start_time, 
+            "end"   : now + word.end_time
         } for word in words]
         return timestamps
-            
+
+
+
+
 
 class TextToSpeechProvider:
     '''TTS provider class. Uses Google's TTS API.'''
@@ -149,7 +144,7 @@ class TextToSpeechProvider:
                 )
             )
             data = response.candidates[0].content.parts[0].inline_data.data
-            logger.info(f"{lu.YELLOW}[TTS] Speech synthesized")
+            logger.info(f"{lu.YELLOW}[TTS] Speech synthesized {lu.RESET}")
             return data
         except Exception as e:
-            logger.error(f"{lu.RED}[TTS] Error synthesizing speech: {e}")
+            logger.error(f"{lu.RED}[TTS] Error synthesizing speech: {e} {lu.RESET}")
