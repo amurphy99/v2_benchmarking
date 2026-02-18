@@ -24,10 +24,12 @@ from django  .utils     import timezone
 # From this project
 from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
 from ..api.mixins     import get_profile
-from  .topicHelpers   import get_topics
-from  .emotionHelpers import classify_emotion_with_vader
-from  .imageHelpers   import get_images
 from  .               import logging_utils as lu
+
+# Helpers
+from  .chat_info.topicHelpers   import get_topics
+from  .chat_info.emotionHelpers import classify_emotion_with_vader
+from  .chat_info.imageHelpers   import get_images
 
 # Utilities for conducting the post-chat analysis via LLMs
 from .llm.chat_utilities              import normalize_text
@@ -201,3 +203,22 @@ class ChatService:
         message_ts   = session.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
         timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
         return min(timestamps) if timestamps else None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
