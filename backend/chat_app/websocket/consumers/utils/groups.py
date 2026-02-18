@@ -66,7 +66,7 @@ def format_biomarker_broadcast(event):
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
 # TODO: This isn't just formatting, I'm also just sending it from this function, need to clean up documentation
-async def format_actions_command(payload, consumer):
+async def format_actions_command(consumer, payload):
     """
     Commands can look like:
         {'id': '..', 'name': 'robot_action', 'value': {'action': 'excited'}}

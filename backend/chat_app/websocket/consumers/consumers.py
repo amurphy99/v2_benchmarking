@@ -9,13 +9,11 @@ TODO: Might need to add arguments in the URL (like source) for if the backend sh
       handle STT and/or TTS.
 
 """
-
-from django.apps import apps
-from time        import time
-
-import asyncio, logging, base64
+import asyncio, logging, base64, time
 logger = logging.getLogger(__name__)
 
+# Django
+from django.apps                import apps
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
@@ -26,11 +24,15 @@ from  ..services.bg_helpers        import fire_and_log
 from  ..services.chatHelpers       import ChatHandler
 from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
 from  ..services.speechProvider    import SpeechToTextProvider
-from   .utils   .logging           import ChatConsumerLogging as log
-from   .utils   .groups            import leave_all_groups, format_actions_command
+
+# Consumer-specific utilities
+from .utils   .logging   import ChatConsumerLogging as log
+from .utils   .groups    import leave_all_groups, format_actions_command
+from .handlers.ch_events import handle_ws_command, forward_payload_to_client
+
+
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
-
 
 # ================================================================================
 # ChatConsumer 
@@ -93,7 +95,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.context_buffer = [(m.role, m.content, m.ts.timestamp()) for m in recent]
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
-        self.context_buffer = [("assistant", "How can I help you today?", time())] + self.context_buffer
+        self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
 
         # --------------------------------------------------------------------------------
         # 3) Define group ("room") names & Join them
@@ -157,34 +159,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         log.log_disconnect(self.user, code)
 
     # ================================================================================
-    # Group Event Handlers | Handle all messages send from consumer-to-consumer
+    # Group Event Handlers | 
     # ================================================================================
-    # Receives commands from listener consumers TODO: Actually make this do something
-    async def ws_command(self, event):
-        # Parse command from payload
-        payload = event  .get("payload", {})
-        command = payload.get("name")
-        logger.info(f"{lu.CC_MAIN} Listener command received: {lu.YELLOW} {payload} {lu.RESET}")
-
-        # Act accordingly
-        if command == "pause_auto":
-            logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'pause_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-        
-        elif command == "resume_auto":
-            self.responses_paused = False
-            logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'resume_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-        
-        elif command == "respond_now":
-            logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'respond_now'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-
-        elif command == "robot_action":
-            logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-            await format_actions_command(payload, self)
-
+    # Receives commands from listener consumers
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
-    # TODO: No need to separately send things to the client, just forward it from here after broadcasting
-    async def ws_broadcast(self, event): await self.send_json(event["payload"])
-    async def ws_monitor  (self, event): await self.send_json(event["payload"])
+    async def ws_command  (self, event): await handle_ws_command        (self, event)
+    async def ws_broadcast(self, event): await forward_payload_to_client(self, event)
+    async def ws_monitor  (self, event): await forward_payload_to_client(self, event)
 
     # --------------------------------------------------------------------------------
     # Broadcast Helpers
@@ -210,7 +191,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Overlapped Speech
     async def _handle_overlap(self, data=None):
         self.overlapped_speech_count += 1
-        self.overlapped_speech_events.append(time())
+        self.overlapped_speech_events.append(time.time())
         logger.info(f"{lu.YELLOW}Overlapped speech detected. Count: {self.overlapped_speech_count} {lu.RESET}")
  
     # --------------------------------------------------------------------------------
