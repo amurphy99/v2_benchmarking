@@ -7,6 +7,9 @@ Doesn't need to import anything from the other files because this will always be
 called by something else. Just serves as a default pathway for those methods to
 access the LLMs.
 
+TODO: Might need to add guards for local mode for any other services that make
+      use of this file... `post_chat_analysis` has one already though.
+
 """
 import logging, os
 logger = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ Use LLM calls to generate post-chat data.
 `backend.chat_app.services.llm.non_chat.post_chat_analysis`
 
 """
-import logging, time
+import logging, os, time
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -21,17 +21,25 @@ from .chat_sentiment   import ChatSentimentRisk, build_sentiment_messages, log_s
 DEFAULT_MODEL = "qwen2.5-3b"
 TEMPERATURE   = 0.5
 
+# Default Response (empty transcript or local mode)
+DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutral", "emotion_label": "neutral"}
+
+
 # ================================================================================
 # Make all LLM queries for the post-chat analysis
 # ================================================================================
 async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
+    # Check if we are in local or deployed mode
+    if os.getenv("APP_ENVIRONMENT", "local"): 
+        logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted in local mode. {RESET}")
+        return DEF_ANALYSIS
+
     # Prepare the transcript & handle empty chats
     transcript = to_transcript(chat_messages)
     
     if not transcript.strip():
-        analysis = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutral", "emotion_label": "neutral"}
         logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted with empty chat. {RESET}")
-        return analysis
+        return DEF_ANALYSIS
 
     # Build formatted messages for each (system prompts are already included)
     msgs_summary   = build_summary_topics_messages(transcript)
