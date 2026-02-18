@@ -47,5 +47,5 @@ def _get(m, key, default=None):
 # If it is a "QuerySet" (result from DB access) => standard ordering works
 # If it is a list of dicts/objects              => sort normally
 def _sort_messages(messages):
-    try:              messages = messages.order_by("ts", "id")
-    except Exception: messages = sorted(messages, key=lambda m: (_get(m, "ts"), _get(m, "id", 0)))
+    try:              return messages.order_by("ts", "id")
+    except Exception: return sorted(messages, key=lambda m: (_get(m, "ts"), _get(m, "id", 0)))
