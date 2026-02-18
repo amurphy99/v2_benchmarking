@@ -22,14 +22,14 @@ from django  .db.models import Min
 from django  .utils     import timezone
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings, AlbumImage
+from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 
 # Helpers
 from  .chat_info.topicHelpers   import get_topics
 from  .chat_info.emotionHelpers import classify_emotion_with_vader
-from  .chat_info.imageHelpers   import get_images
+from  .chat_info.imageHelpers   import get_image_for_topics
 
 # Utilities for conducting the post-chat analysis via LLMs
 from .llm.chat_utilities              import normalize_text
@@ -37,113 +37,127 @@ from .llm.non_chat.post_chat_analysis import post_chat_analysis
 
 
 # ================================================================================
-# ChatService
+# Utility methods for other files to interact with the database
 # ================================================================================
 class ChatService:
-    # --------------------------------------------------------------------------------
-    # Session Helpers
-    # --------------------------------------------------------------------------------
+    """
+    Most methods here are wrapped as atomic transactions to avoid problems from things like two cuncurrent requests.
+    """
     @staticmethod
     @transaction.atomic
     def get_or_create_active_session(user, *, source="webapp"):
-        """
-        Returns the single active ChatSession for the user or creates one if needed.
-        Wrapped in a transaction to avoid problems from things like two cuncurrent requests.
-        """
+        """ Returns the single active ChatSession for the user or creates one if needed. """
         profile = get_profile(user)
         session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
-    
-    # ================================================================================
+
+    # ===============================================================================
     # Close Session
     # ================================================================================
+    @staticmethod 
+    async def close_session(user, session, *, source="webapp", notes=None, sentiment=None, topics=None):
+        """
+        NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
+        post-chat analysis and searching for images, so we do those outside of the DB calls.
+
+        TODO: Might still need to do something with the source field...
+
+        """
+        # Get messages for the session & make sure it is valid
+        valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user, session)
+        if not valid: return None
+
+        # Run a post-chat analysis to fill out the rest of the fields
+        # TODO: Testing the new LLM-based post-chat analysis methods
+        analysis = await post_chat_analysis(messages) # summary, topics, sentiment, emotion
+
+        # Use the results to save the rest of the fields
+        session = await database_sync_to_async(ChatService.save_session_fields)(
+            user, session, messages, notes, sentiment, topics
+        )
+
+        # Done
+        logger.info(f"{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}")
+        return session
+
+    # --------------------------------------------------------------------------------
+    # Methods to wrap with `database_sync_to_async` for DB saving
+    # --------------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
-    def close_session(user, session, *, source="webapp", notes=None, sentiment=None, topics=None):
-        """
-        TODO: Update this...
-        * Marks the current session inactive
-        * Fills in "ended_at"
-        * Stores optional metadata
-        * Immediately opens a fresh/blank session
-        """
-        # Set to inactive & add the end timestamp
+    def prepare_session_for_analysis(user, session):
+        # Set session to inactive & add the end timestamp
         session.is_active = False
-        session.end_ts    = timezone.now()
+        session.end_ts = timezone.now()
 
         # Retrieve messages for the session (includes user & assistant; reuse this so we only need one DB query)
         qs       = ChatMessage.objects.filter(session=session).order_by("ts", "id")
         messages = list(qs)  # converted to a list for object stability
 
-        # --------------------------------------------------------------------------------
-        # 1) If the session has no meaningful content, delete it and return None
-        # --------------------------------------------------------------------------------
+        # If the session has no meaningful content, delete it and return None
         has_user_msgs = any((m.role == "user") and normalize_text(m.content) for m in messages)
         if not has_user_msgs:
             session_id = session.id
             session.delete()  # Cascades to ChatMessage because of foreign key on_delete=CASCADE
             logger.info(f"{lu.RED}[DB] Deleted empty ChatSession id={session_id} for {user.username}{lu.RESET}")
-            return None
+            return False, []
 
-        # --------------------------------------------------------------------------------
-        # TODO: Testing the new LLM-based post-chat analysis methods
-        # --------------------------------------------------------------------------------
-        # Get messages for this chat from the user & the assistant
-        analysis = post_chat_analysis(messages)
-  
-        # --------------------------------------------------------------------------------
-        # Topics & Sentiment (and Notes, but it is currently unused anyways...)
-        # --------------------------------------------------------------------------------
-        # Get ONLY message content ONLY for the user
-        user_texts = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
-        message_text = " ".join(user_texts)
-
-        topics    = get_topics                 (message_text)
-        sentiment = classify_emotion_with_vader(message_text)
-
-        # Set sentiment and notes
-        if sentiment is not None: session.sentiment = sentiment
-        if notes     is not None: session.notes     = notes
-
-        # Album Image
-        if (topics is not None) and (len(topics) > 0): 
-            session.topics = str(topics).strip()
-
-            # See if there is already an image for the topic
-            try:
-                album_image = AlbumImage.objects.get(topic=topics[0])
-                session.image = album_image
-            
-            # If there is not already an image for the topic, get a new one from Pexels
-            except AlbumImage.DoesNotExist: 
-                image = get_images(topics[0], "pexels", 1)
-                if image is None:
-                    image = get_images(topics[1], "pexels", 1)
-                    if image is None:
-                        image = {
-                            "id"               : -1,
-                            "topic"            :  "N/A",
-                            "url"              : "https://images.pexels.com/photos/356079/pexels-photo-356079.jpeg",
-                            "photographer"     : "Pixabay",
-                            "photographer_url" : "https://www.pexels.com/@pixabay/"
-                        }
-                album_image = AlbumImage.objects.create(topic=image["topic"], url=image["url"], photographer=image["photographer"], photographer_url=image["photographer_url"])
-                album_image.save()
-                session.image = album_image
-
-        # --------------------------------------------------------------------------------
-        # Changes to user ? TODO: Don't remember what this was for
-        # --------------------------------------------------------------------------------
+        # If valid, save the fields we changed & return the messages
+        session.save(update_fields=["is_active", "end_ts"])
+        return True, messages
+    
+    # Wrapper to do everything from `close_session` AFTER the async await
+    # One method to wrap with `async_to_sync`
+    @staticmethod
+    @transaction.atomic
+    def save_session_fields(user, session, messages, notes, sentiment, topics):
+        # Set the topics TODO: if it works, these will come from analysis
+        topics, sentiment = ChatService.set_analysis_fields(session, messages, notes=notes, sentiment=sentiment, topics=topics)
+        
+        # Get an AlbumImage for the session
+        album_image = get_image_for_topics(topics)
+        session.image = album_image
+        
+        # Get the chat type and subtype from the user's profile
         profile = get_profile(user)
         if profile is not None:
             settings = UserSettings.objects.get(profile=profile)
             session.taskType    = settings.taskType
             session.taskSubtype = settings.taskSubtype
-        session.save()
-       
-        logger.info(f"{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}")
+
+        # Save & return the session
+        session.save(update_fields=["image", "taskType", "taskSubtype"])
         return session
-    
+
+
+    # --------------------------------------------------------------------------------
+    # Set post-chat analysis fields for the session (summary, topics, sentiment)
+    # --------------------------------------------------------------------------------
+    # TODO: this might just get added to `save_session_fields` later...
+    @staticmethod 
+    @transaction.atomic
+    def set_analysis_fields(session, messages, notes=None, sentiment=None, topics=None):
+        # Get ONLY message content ONLY for the user
+        user_texts = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
+        message_text = " ".join(user_texts)
+
+        if topics    is None: topics    = get_topics                 (message_text)
+        if sentiment is None: sentiment = classify_emotion_with_vader(message_text)
+
+        # Set sentiment and notes
+        if sentiment is not None: session.sentiment = sentiment
+        if notes     is not None: session.notes     = notes
+        if topics    is not None: session.topics    = topics
+
+        # Done; save and return topics
+        session.save(update_fields=["topics", "sentiment", "notes"])
+        return topics, sentiment
+
+
+
+
+
+
     # --------------------------------------------------------------------------------
     # Manually close an active chat session
     # --------------------------------------------------------------------------------
@@ -193,9 +207,7 @@ class ChatService:
             "user"   : session.profile.account.user,
         }
     
-    # --------------------------------------------------------------------------------
     # Get the starting timestamp of a session
-    # --------------------------------------------------------------------------------
     @staticmethod
     @database_sync_to_async
     def get_start_ts(session):
@@ -203,22 +215,5 @@ class ChatService:
         message_ts   = session.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
         timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
         return min(timestamps) if timestamps else None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
