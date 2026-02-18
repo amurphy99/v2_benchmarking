@@ -25,6 +25,8 @@ from django  .utils     import timezone
 from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
+from  .logging_utils  import RESET, BOLD, UNBOLD, RED
+
 
 # Helpers
 from  .chat_info.topicHelpers   import get_topics
@@ -63,9 +65,12 @@ class ChatService:
         TODO: Might still need to do something with the source field...
 
         """
+        logger.info(f"{RED}[DB] Closing ChatSession (ID: {BOLD}{session.id}{UNBOLD}) for {BOLD}{user.username}{UNBOLD}. {RESET}")
+
         # Get messages for the session & make sure it is valid
         valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user, session)
         if not valid: return None
+        logger.info(f"{RED}[DB] ChatSession {BOLD}{session.id}{UNBOLD}: valid={BOLD}{valid}{UNBOLD}, num messages={BOLD}{len(messages)}{UNBOLD}. {RESET}")
 
         # Run a post-chat analysis to fill out the rest of the fields
         # TODO: Testing the new LLM-based post-chat analysis methods
@@ -77,7 +82,7 @@ class ChatService:
         )
 
         # Done
-        logger.info(f"{lu.RED}[DB] ChatSession closed for {user.username} {lu.RESET}")
+        logger.info(f"{RED}[DB] ChatSession closed for {BOLD}{user.username}{UNBOLD}. {RESET}")
         return session
 
     # --------------------------------------------------------------------------------
