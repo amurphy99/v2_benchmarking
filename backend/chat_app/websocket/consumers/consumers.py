@@ -143,7 +143,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         --- Originally had pausing in here, but im just changing it so disconnects end the chat. ---
         """
         # 1) Close the ChatSession in the DB
-        if self.session.is_active: await db_s2a(ChatService.close_session)(self.user, self.session, source=self.source)
+        #if self.session.is_active: await db_s2a(ChatService.close_session)(self.user, self.session, source=self.source)
+        if self.session.is_active: await ChatService.close_session(self.user, self.session, source=self.source)
 
         # Cancel background tasks (if any -- none right now)
         for task in getattr(self, "_bg_tasks", []): task.cancel()
