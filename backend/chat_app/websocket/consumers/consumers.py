@@ -29,6 +29,7 @@ from  ..services.speechProvider    import SpeechToTextProvider
 from .utils   .logging   import ChatConsumerLogging as log
 from .utils   .groups    import leave_all_groups, format_actions_command
 from .handlers.ch_events import handle_ws_command, forward_payload_to_client
+from .handlers.ws_events import handle_receive_json
 
 
 
@@ -183,17 +184,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Handle Incoming Data
     # ================================================================================
     async def receive_json(self, data, **kwargs):
-        if   data["type"] == "overlapped_speech" : await self._handle_overlap(data=data)
-        elif data["type"] == "audio_data"        : await self._handle_audio_data(data)
-        elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, msg_callback=self._add_message_CB, send_callback=self.send, bio_callback=self._utt_bio)
-        elif data["type"] == "end_chat"          : self.stt_provider.stop(); await db_s2a(ChatService.close_session)(self.user, self.session, source=self.source)        
-        elif data["type"] == "toggle_stream": self._toggle_stream(data)
-
-    # Overlapped Speech
-    async def _handle_overlap(self, data=None):
-        self.overlapped_speech_count += 1
-        self.overlapped_speech_events.append(time.time())
-        logger.info(f"{lu.YELLOW}Overlapped speech detected. Count: {self.overlapped_speech_count} {lu.RESET}")
+        await handle_receive_json(self, data)
  
     # --------------------------------------------------------------------------------
     # Text Transcriptions
