@@ -48,7 +48,7 @@ class ChatListenerLogging:
         
     @staticmethod
     def log_connect_done(num_messages, num_biomarkers):
-        logger.info(f"{CL_MAIN} Loaded {CL_H}{num_messages}{CL_R} messages & {CL_H}{num_biomarkers}{CL_R} {RESET}")
+        logger.info(f"{CL_MAIN} Loaded {CL_H}{num_messages}{CL_R} messages & {CL_H}{num_biomarkers}{CL_R} biomarkers. {RESET}")
 
     @staticmethod
     def log_disconnect(username, code):
