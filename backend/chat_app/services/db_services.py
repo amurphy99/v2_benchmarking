@@ -3,23 +3,20 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-TODO: Need to add topic/sentiment fields, probably on close ?
-TODO: If chat hasn't been modified in X time, save it and remake one automatically
-
-TODO: When fully adding the LLM-based post-chat analysis, should find a way to make
-      the existing stuff work as a backup...
-
 Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-import logging, asyncio
+import logging
 logger = logging.getLogger(__name__)
 
 # Django imports
-from channels.db        import database_sync_to_async
-from django  .db        import transaction
-from django  .db.models import Min
-from django  .utils     import timezone
+from channels.db         import database_sync_to_async
+from django  .db         import transaction
+from django  .db.models  import Min
+from django  .utils      import timezone
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 # From this project
 from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
@@ -53,16 +50,11 @@ class ChatService:
         session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
 
-    @staticmethod
-    def _log_task_exception(t: asyncio.Task):
-        try:              t.result()
-        except Exception: logger.info(f"{RED}[DB] close_session background task {BOLD}failed{UNBOLD}. {RESET}")
-
     # ===============================================================================
     # Close Session
     # ================================================================================
     @staticmethod 
-    async def close_session(user, session, *, source="webapp", notes=None, sentiment=None, topics=None):
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp", notes=None, sentiment=None, topics=None):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -70,20 +62,22 @@ class ChatService:
         TODO: Might still need to do something with the source field...
 
         """
-        logger.info(f"{RED}[DB] Closing ChatSession (ID: {BOLD}{session.id}{UNBOLD}) for {BOLD}{user.username}{UNBOLD}. {RESET}")
+        logger.info(f"{RED}[DB] Closing ChatSession (ID: {BOLD}{session_id}{UNBOLD}) for {BOLD}{username}{UNBOLD}, source: {BOLD}{source}{UNBOLD}. {RESET}")
 
         # Get messages for the session & make sure it is valid
-        valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user, session)
+        user, session, valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user_id, session_id)
         if not valid: return None
         logger.info(f"{RED}[DB] ChatSession {BOLD}{session.id}{UNBOLD}: valid={BOLD}{valid}{UNBOLD}, num messages={BOLD}{len(messages)}{UNBOLD}. {RESET}")
 
         # Run a post-chat analysis to fill out the rest of the fields
-        # TODO: Testing the new LLM-based post-chat analysis methods
         analysis = await post_chat_analysis(messages) # summary, topics, sentiment, emotion
 
-        # Use the results to save the rest of the fields
+        # Use the results to save the rest of the fields  TODO: combining summary with emotion for display
         session = await database_sync_to_async(ChatService.save_session_fields)(
-            user, session, messages, notes, sentiment, topics
+            user, session, messages, 
+            notes     =           analysis.get("summary", "So summary.") + " \n\n Sentiment:" + analysis.get("sentiment", "no sentiment"),
+            sentiment =           analysis.get("emotion", "Neutral"    ).capitalize(), 
+            topics    = ", ".join(analysis.get("topics", ["N/A"]       ))
         )
 
         # Done
@@ -91,11 +85,15 @@ class ChatService:
         return session
 
     # --------------------------------------------------------------------------------
-    # Methods to wrap with `database_sync_to_async` for DB saving
+    # 1) Initial DB actions to do before the async analysis call
     # --------------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
-    def prepare_session_for_analysis(user, session):
+    def prepare_session_for_analysis(user_id, session_id):
+        # Get user and session objects with their IDs
+        user    = User       .objects.get(id=   user_id)
+        session = ChatSession.objects.get(id=session_id)
+
         # Set session to inactive & add the end timestamp
         session.is_active = False
         session.end_ts = timezone.now()
@@ -110,17 +108,19 @@ class ChatService:
             session_id = session.id
             session.delete()  # Cascades to ChatMessage because of foreign key on_delete=CASCADE
             logger.info(f"{lu.RED}[DB] Deleted empty ChatSession id={session_id} for {user.username}{lu.RESET}")
-            return False, []
+            return None, None, False, []
 
         # If valid, save the fields we changed & return the messages
         session.save(update_fields=["is_active", "end_ts"])
-        return True, messages
+        return user, session, True, messages
     
-    # Wrapper to do everything from `close_session` AFTER the async await
+    # --------------------------------------------------------------------------------
+    # 2) Wrapper to do everything from `close_session` AFTER the async await
+    # --------------------------------------------------------------------------------
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, notes, sentiment, topics):
+    def save_session_fields(user, session, messages, notes=None, sentiment=None, topics=None):
         # Set the topics TODO: if it works, these will come from analysis
         topics, sentiment = ChatService.set_analysis_fields(session, messages, notes=notes, sentiment=sentiment, topics=topics)
         
@@ -139,11 +139,11 @@ class ChatService:
         session.save(update_fields=["image", "taskType", "taskSubtype"])
         return session
 
-
     # --------------------------------------------------------------------------------
     # Set post-chat analysis fields for the session (summary, topics, sentiment)
     # --------------------------------------------------------------------------------
-    # TODO: this might just get added to `save_session_fields` later...
+    # TODO: Check whatever the default values are (that get returned on LLM error) and
+    #       call the original methods when given those.
     @staticmethod 
     @transaction.atomic
     def set_analysis_fields(session, messages, notes=None, sentiment=None, topics=None):
