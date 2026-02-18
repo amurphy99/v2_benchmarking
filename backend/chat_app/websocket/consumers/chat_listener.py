@@ -193,7 +193,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
             )
 
             # Log update
-            logger.info(f"{lu.CL_MAIN} Client command relayed: {lu.GREEN} {payload} {lu.RESET}")
+            logger.info(f"{lu.CL_MAIN} Client command relayed:    {lu.GREEN} {payload} {lu.RESET}")
 
         # --------------------------------------------------------------------------------
         # Unknown message type received from the client

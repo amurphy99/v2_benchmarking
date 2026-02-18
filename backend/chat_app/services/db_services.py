@@ -12,7 +12,7 @@ TODO: When fully adding the LLM-based post-chat analysis, should find a way to m
 Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-import logging
+import logging, asyncio
 logger = logging.getLogger(__name__)
 
 # Django imports
@@ -52,6 +52,11 @@ class ChatService:
         profile = get_profile(user)
         session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
+
+    @staticmethod
+    def _log_task_exception(t: asyncio.Task):
+        try:              t.result()
+        except Exception: logger.info(f"{RED}[DB] close_session background task {BOLD}failed{UNBOLD}. {RESET}")
 
     # ===============================================================================
     # Close Session

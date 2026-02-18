@@ -144,11 +144,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         --- Originally had pausing in here, but im just changing it so disconnects end the chat. ---
         """
         # 1) Close the ChatSession in the DB
-        #if self.session.is_active: await db_s2a(ChatService.close_session)(self.user, self.session, source=self.source)
-        if self.session.is_active: await ChatService.close_session(self.user, self.session, source=self.source)
+        if self.session and self.session.is_active:
+            task = asyncio.create_task(ChatService.close_session(self.user, self.session, source=self.source))
+            task.add_done_callback(ChatService._log_task_exception)
 
-        # Cancel background tasks (if any -- none right now)
-        for task in getattr(self, "_bg_tasks", []): task.cancel()
+        # Cancel background tasks (if any)
+        for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
 
         # Reset some properties for the next connection
@@ -186,6 +187,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, data, **kwargs):
         await handle_receive_json(self, data)
  
+
+
     # --------------------------------------------------------------------------------
     # Text Transcriptions
     # --------------------------------------------------------------------------------
