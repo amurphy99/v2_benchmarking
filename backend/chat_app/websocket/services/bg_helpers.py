@@ -17,8 +17,8 @@ from ...services.logging_utils import BOLD, UNBOLD
 def fire_and_log(awaitable, *, name: str = "bg-task"):
     async def _runner():
         try:                           return await awaitable
-        except asyncio.CancelledError: logger.debug  (f"Background task cancelled: {BOLD}{name}{UNBOLD}"); raise
-        except Exception:              logger.exception(f"Background task crashed: {BOLD}{name}{UNBOLD}")
+        except asyncio.CancelledError: logger.debug    (f"Background task cancelled: {BOLD}{name}{UNBOLD}"); raise
+        except Exception:              logger.exception(f"Background task crashed:   {BOLD}{name}{UNBOLD}")
     return asyncio.create_task(_runner(), name=name)
 
 
