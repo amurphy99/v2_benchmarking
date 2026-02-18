@@ -69,18 +69,19 @@ class LlamaAPI:
         }
 
         # ---- DEBUG: what we're sending ----
-        try:
-            prompt_str = llm_json.get("prompt", "")
-            logger.info(
-                "[LLM][REQ] model=%s max_tokens=%s stop=%s echo=%s prompt_chars=%d",
-                llm_json.get("model"),
-                llm_json.get("max_tokens"),
-                llm_json.get("stop"),
-                llm_json.get("echo"),
-                len(prompt_str),
-            )
-        except Exception as _e:
-            logger.warning("[LLM][REQ] Failed to log request: %r", _e)
+        if False:
+            try:
+                prompt_str = llm_json.get("prompt", "")
+                logger.info(
+                    "[LLM][REQ] model=%s max_tokens=%s stop=%s echo=%s prompt_chars=%d",
+                    llm_json.get("model"),
+                    llm_json.get("max_tokens"),
+                    llm_json.get("stop"),
+                    llm_json.get("echo"),
+                    len(prompt_str),
+                )
+            except Exception as _e:
+                logger.warning("[LLM][REQ] Failed to log request: %r", _e)
 
         # Get a response from the API
         try:
@@ -88,13 +89,13 @@ class LlamaAPI:
                 response = await client.post(f"{self.full_url}", json=llm_json, headers=self.headers)
                 response.raise_for_status()
   
-  
-                # Pretty-print the entire response
-                data = response.json()
-                pretty = json.dumps(data, indent=2, ensure_ascii=False)
-                print(f"\n{lu.BRIGHT_YELLOW}---------- LLM RAW RESPONSE ----------{lu.RESET}")
-                print(pretty)
-                print(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}\n")
+                if False:
+                    # Pretty-print the entire response
+                    data = response.json()
+                    pretty = json.dumps(data, indent=2, ensure_ascii=False)
+                    print(f"\n{lu.BRIGHT_YELLOW}---------- LLM RAW RESPONSE ----------{lu.RESET}")
+                    print(pretty)
+                    print(f"{lu.BRIGHT_YELLOW}{lu.HLINE}{lu.RESET}\n")
 
                 
                 return response.json()
