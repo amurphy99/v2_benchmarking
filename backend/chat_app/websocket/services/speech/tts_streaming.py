@@ -49,6 +49,6 @@ async def stream_audio_chunks(audio_bytes, send_callback):
 
         await send_callback(json.dumps({
             "type": "audio_chunk",
-            "data": {"data": base64.b64encode(chunk).decode("utf-8")}
+            "data": json.dumps({"data": base64.b64encode(chunk).decode("utf-8")})
         }))
 

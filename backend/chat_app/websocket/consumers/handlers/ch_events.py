@@ -58,27 +58,27 @@ async def handle_ws_command(consumer, event):
     # Parse command from payload
     payload = event  .get("payload", {}) or {}
     command = payload.get("name")
-    logger.info(f"{lu.CC_MAIN} Listener command received: {lu.YELLOW} {payload} {lu.RESET}")
+    logger.info(f"{lu.CC_MAIN} Listener command received: {lu.YELLOW} {payload} {RESET}")
 
     # Act accordingly
-    if command == "pause_auto":
-        logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'pause_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-        consumer.reply_on_STT = True
-    
-    elif command == "resume_auto":
-        logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'resume_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+    if command == "pause_responses":
+        logger.info(f"{CC_MAIN} Command: {BOLD}'pause_auto'{RESET}{lu.GREEN} received. {RESET}")
         consumer.reply_on_STT = False
     
+    elif command == "resume_responses":
+        logger.info(f"{CC_MAIN} Command: {BOLD}'resume_auto'{RESET}{lu.GREEN} received. {RESET}")
+        consumer.reply_on_STT = True
+    
     elif command == "respond_now":
-        logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'respond_now'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+        logger.info(f"{CC_MAIN} Command: {BOLD}'respond_now'{RESET}{lu.GREEN} received. {RESET}")
         system_resp = await consumer.reply_now()
 
     elif command == "robot_action":
-        logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+        logger.info(f"{CC_MAIN} Command: {BOLD}'robot_action'{RESET}{lu.GREEN} received. {RESET}")
         await format_actions_command(consumer, payload)
 
     # Unknown/unhandled command
-    else: logger.info(f"{CC_MAIN} {lu.RED}WARNING{lu.GREEN} Unknown command: {command}, payload={payload}")
+    else: logger.info(f"{CC_MAIN} {lu.RED}WARNING{lu.GREEN} Unknown command: {command}, payload={payload}. {RESET}")
 
 
 # Forwards payloads to websocket client (catches our own broadcasts and forwards them)

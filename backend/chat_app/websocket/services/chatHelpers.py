@@ -64,7 +64,7 @@ class ChatHandler:
 
         # 2) Get the LLMs response
         if reply_on_STT:
-            system_resp = await ChatHandler.reply_with_llm(
+            system_resp = await ChatHandler.respond_to_user(
                 context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio
             )
             return system_resp
@@ -72,10 +72,11 @@ class ChatHandler:
         return "" # I don't know how this works totally yet
     
     @staticmethod
-    async def reply_with_llm(context_buffer, send_callback, msg_callback, bio_callback, reply_audio=False):
+    async def respond_to_user(context_buffer, send_callback, msg_callback, bio_callback, *, reply_audio=False, use_response=None):
         # Get the LLMs response
-        system_resp = await get_LLM_response(context_buffer)
-        system_ts   = now_ts() 
+        if use_response is None: system_resp = await get_LLM_response(context_buffer)
+        else:                    system_resp = use_response
+        system_ts = now_ts() 
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))

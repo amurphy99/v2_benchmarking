@@ -279,11 +279,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     def _reply_on_STT(self):
         return self.reply_on_STT
     
-    async def reply_now(self):
-        return await ChatHandler.reply_with_llm(
+    async def reply_now(self, use_response=None):
+        return await ChatHandler.respond_to_user(
             self.context_buffer, 
             send_callback = self.send, 
             msg_callback  = self._add_message_CB,
             bio_callback  = self._utt_bio, 
             reply_audio   = self.reply_with_audio,
+            use_response  = use_response,
         )
+
