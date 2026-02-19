@@ -65,21 +65,22 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4001); return
         
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
-        self.user        = self.scope["user"]
-        self.source      = self.scope.get("source", "unknown")
+        self.user   = self.scope["user"]
+        self.source = self.scope.get("source", "unknown")
         
         # Configuration based on the source platform for the chat
         # TODO: Change later as the other platforms (robots) get updated
         self.reply_with_audio  = self.source == "webapp"
-        self.use_backend_STT   = self.source == "webapp" 
+        self.use_backend_TTS   = (self.source == "webapp")
+        self.use_backend_STT   = (self.source == "webapp")
         self.reply_on_STT      = True # self.source != "webapp"
         self.reply_on_user_utt = True # TODO: Rename `reply_on_STT` to this
-        
+     
+
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
         
-
         # --------------------------------------------------------------------------------
         # 2) Load or create an active session & Prepare the 'context_buffer'
         # --------------------------------------------------------------------------------
@@ -116,7 +117,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
         # Log the successful connection
-        log.log_connect_done(self.user, self.session.id, config={""})
+        log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
         
     
     # ================================================================================
