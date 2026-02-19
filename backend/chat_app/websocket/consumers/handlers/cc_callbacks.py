@@ -12,15 +12,18 @@ TODO: Room here to alter the audio biomarker calculations if I decide to change
       it so that they are only calculated when we know the user was speaking.
 
 """
-import logging, time, base64
+import logging, base64
 logger = logging.getLogger(__name__)
 
 # Django / Channels 
-from channels.db                import database_sync_to_async as db_s2a
+from channels.db import database_sync_to_async as db_s2a
 
 # From this project
 from ....services import logging_utils as lu 
 from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
+
+# Import the class for type checking
+from ..consumers import ChatConsumer
 
 # Handling messages
 from ....services.db_services       import ChatService
@@ -36,7 +39,7 @@ AUDIO_WINDOW_S = 10      # Seconds of audio needed for audio-based biomarkers
 # --------------------------------------------------------------------------------
 # Handle "User" & "Robot" messages (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
-async def handle_chat_messages(consumer, role, text, ts):
+async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
     """ 
     Add messages to the database & update the local context (role must be "user" or "assistant").
 
@@ -67,7 +70,7 @@ async def handle_chat_messages(consumer, role, text, ts):
 # --------------------------------------------------------------------------------
 # Handle "streamed" audio data from the frontend client
 # --------------------------------------------------------------------------------
-async def handle_audio_data(consumer, data):
+async def handle_audio_data(consumer: ChatConsumer, data):
     """ 
     Forward streamed audio data from the client to backend STT & get audio-based
     biomarker scores. 
@@ -89,7 +92,7 @@ async def handle_audio_data(consumer, data):
 # --------------------------------------------------------------------------------
 # [TEXT-BASED] Handle on-utterance biomarkers (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
-async def on_utterance_biomarkers(consumer):
+async def on_utterance_biomarkers(consumer: ChatConsumer):
     """
     Because this uses the entire `context_buffer`, it MUST only be called AFTER
     `add_message_CB` has already updated the buffer.
@@ -107,7 +110,7 @@ async def on_utterance_biomarkers(consumer):
 # --------------------------------------------------------------------------------
 # [AUDIO-BASED] Handle on-audio biomarkers (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
-async def on_audio_biomarkers(consumer, *, sample_rate=16_000):
+async def on_audio_biomarkers(consumer: ChatConsumer, *, sample_rate=16_000):
     """
     TODO: Should use a given sample rate to calculate the size of the window...
           Which I think would be 2 * sample_rate. Not 100% sure though.

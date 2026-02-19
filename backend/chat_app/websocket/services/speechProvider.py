@@ -3,8 +3,10 @@ Live user chat controller.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.speechProvider`
 
+TODO: Really need to test it out without KEEP_ALIVE_SEC
+
 """
-import logging, threading, asyncio, base64, os, weakref
+import logging, threading, asyncio, base64, weakref
 logger = logging.getLogger(__name__)
 
 from datetime import datetime, timedelta
@@ -12,16 +14,14 @@ from queue    import Queue, Empty
 from time     import monotonic as now_ts
 
 # Google imports
-from google.cloud import speech, texttospeech
-from google import genai
-from google.genai import types
+from google.cloud import speech
 
 # From this project
 from ...services import logging_utils as lu
 from ...services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
 from .chatHelpers import ChatHandler
-from .bg_helpers  import threadsafe_fire_and_log
+from .bg_helpers  import threadsafe_fire_and_log as thread_fl
 
 # Constants
 SAMPLE_RATE   = 16_000
@@ -29,8 +29,8 @@ CHUNK_SIZE    =  2_048  # 64ms of 16-bit PCM audio = 2048 bytes
 LANGUAGE_CODE = "en-US"
 
 # Config
-KEEPALIVE_SEC = 0.1     # Keep streaming alive during short pauses
-SILENCE       = b"\x00" * CHUNK_SIZE
+KEEP_ALIVE_SEC = 0.1     # Keep streaming alive during short pauses
+SILENCE        = b"\x00" * CHUNK_SIZE
 
 # ================================================================================
 # Streaming STT via audio bytes received from the ChatConsumer client
@@ -58,24 +58,12 @@ class SpeechToTextProvider:
     # --------------------------------------------------------------------------------
     def _consumer(self):
         return self._consumer_ref()
-    
-    # Re-used for every transcript result
-    def _get_transcript_args(self):
-        c = self._consumer()
-        if c is None: return None
-        return dict(
-            msg_callback  = c._add_message_CB,     # Callback to add new messages to the database & update local chat context
-            send_callback = c.send,                # Callback to send data to the chat WebSocket client
-            bio_callback  = c._utt_bio,            # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
-            reply_on_STT  = c._reply_on_STT(),     # Should the ChatHandler reply instantly when receiving this
-            reply_audio   = c._reply_with_audio(), # Should the ChatHandler reply with audio bytes as well as text 
-        )
 
     # Generates StreamingRecognizeRequest objects from the audio Queue
     def _audio_generator(self):
         while self._streaming:
             # Keep streaming alive during short pauses
-            try:          ts_in, data = self._audio_buffer.get(timeout=KEEPALIVE_SEC)
+            try:          ts_in, data = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
             except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
 
             delay = now_ts() - ts_in
@@ -187,26 +175,26 @@ class SpeechToTextProvider:
                 logger.info(f"{STT_MAIN} Received final transcription: \"{transcript}\" {RESET}")
                 
                 # Prepare references to the ChatConsumer's methods
-                args = self._get_transcript_args()
-                if args is None: return  # consumer gone
+                consumer = self._consumer()
+                if consumer is None: return  # consumer gone
 
                 # Send the transcript results to the ChatConsumer
                 data = {"type": "user_utt", "data": transcript}
 
                 t_sched = now_ts()
-                fut = threadsafe_fire_and_log(
-                    self._loop, ChatHandler.handle_stt_output(data, **args),
-                    name="stt::handle_stt_output",
+                fut = thread_fl(
+                    self._loop, ChatHandler.handle_transcription(data, consumer, relay_user_utt=True), 
+                    name="stt::handle_stt_output"
                 )
-                def _done(f):
-                    logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-t_sched:.3f}s{UNBOLD}.{RESET}")
+                def _done(f): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-t_sched:.3f}s{UNBOLD}.{RESET}")
                 fut.add_done_callback(_done)
                 
                 # TODO: We don't currently handle STT results with word-level timestamps
                 if self._ts_callback: 
                     word_timestamps = SpeechToTextProvider._get_word_timestamps(datetime.now(), result.alternatives[0].words)
-                    threadsafe_fire_and_log(self._loop, self._ts_callback(word_timestamps), name="stt:timestamps")
+                    thread_fl(self._loop, self._ts_callback(word_timestamps), name="stt:timestamps")
           
+    
     # TODO: Doesn't work for transcript highlighting
     # TODO: These timestamps need to be related to either the start of the ChatMessage, or real time
     @staticmethod

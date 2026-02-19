@@ -13,6 +13,9 @@ TODO: Add `reply_audio` to the `on_connect()` logging function
 TODO: Probably just need to pass a reference to this around in all of the helpers,
       rather than the methods themselves.
 
+TODO: Change the config stuff later as the other platforms (robots) get updated (e.g.
+      the stuff like `use_backend_STT`, etc.).
+
 """
 import asyncio, logging, base64, time
 logger = logging.getLogger(__name__)
@@ -35,7 +38,11 @@ from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
-from .handlers.cc_callbakcs import handle_chat_messages, on_utterance_biomarkers, handle_audio_data
+
+# Delegation / passthroughs
+from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
+from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
+from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
@@ -69,13 +76,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.source = self.scope.get("source", "unknown")
         
         # Configuration based on the source platform for the chat
-        # TODO: Change later as the other platforms (robots) get updated
-        self.reply_with_audio  = self.source == "webapp"
-        self.use_backend_TTS   = (self.source == "webapp")
+        
         self.use_backend_STT   = (self.source == "webapp")
-        self.reply_on_STT      = True # self.source != "webapp"
-        self.reply_on_user_utt = True # TODO: Rename `reply_on_STT` to this
-     
+        self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
+        self.reply_on_user_utt = True  # Should the ChatHandler reply instantly when receiving a user utterance
+
+    
 
         # Accept the connection
         await self.accept()
@@ -186,31 +192,24 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await handle_receive_json(self, data)
  
     # Add messages to the database & update the local context (role must be "user" or "assistant")
-    async def _add_message_CB(self, role, text, ts): return await handle_chat_messages(self, role, text, ts)
+    # TODO: Working on replacing _add_message_CB
+    async def _add_message_CB(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
+    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
 
     # Handle on-utterance biomarkers
-    async def _utt_bio(self): await on_utterance_biomarkers(self)
+    async def _utt_bio(self): await _on_utterance_biomarkers(self)
+    async def on_utterance_biomarkers(self): await _on_utterance_biomarkers(self)
 
     # Handle "streamed" audio data from the frontend client
-    async def _handle_audio_data(self, data): await handle_audio_data(self, data)
+    async def _handle_audio_data(self, data): await _handle_audio_data(self, data)
+    async def  handle_audio_data(self, data): await _handle_audio_data(self, data)
 
 
     # ================================================================================
     # Additional Helpers
     # ================================================================================
+
+    # Reply to the user immediately. Can pass a message, otherwise will query the LLM.
     async def reply_now(self, use_response=None):
-        return await ChatHandler.respond_to_user(
-            self.context_buffer, 
-            send_callback = self.send, 
-            msg_callback  = self._add_message_CB,
-            bio_callback  = self._utt_bio, 
-            reply_audio   = self.reply_with_audio,
-            use_response  = use_response,
-        )
-
-
-    # Access to fields 
-    # TODO: Need to be removed
-    def _reply_with_audio(self): return self.reply_with_audio
-    def _reply_on_STT    (self): return self.reply_on_STT
+        return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
 
