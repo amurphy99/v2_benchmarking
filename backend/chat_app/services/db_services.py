@@ -6,7 +6,7 @@ Service for working with chat data
 Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-import logging
+import logging, time
 logger = logging.getLogger(__name__)
 
 # Django imports
@@ -63,6 +63,7 @@ class ChatService:
 
         """
         logger.info(f"{RED}[DB] Closing ChatSession (ID: {BOLD}{session_id}{UNBOLD}) for {BOLD}{username}{UNBOLD}, source: {BOLD}{source}{UNBOLD}. {RESET}")
+        t0 = time.time()
 
         # Get messages for the session & make sure it is valid
         user, session, valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user_id, session_id)
@@ -81,7 +82,7 @@ class ChatService:
         )
 
         # Done
-        logger.info(f"{RED}[DB] ChatSession closed for {BOLD}{user.username}{UNBOLD}. {RESET}")
+        logger.info(f"{RED}[DB] ChatSession {BOLD}{session_id}{UNBOLD} successfully closed for {BOLD}{user.username}{UNBOLD} in {BOLD}{(time.time()-t0):.2f}s{UNBOLD}. {RESET}")
         return session
 
     # --------------------------------------------------------------------------------
