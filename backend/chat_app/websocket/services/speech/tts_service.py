@@ -24,7 +24,7 @@ STYLE_PREFIX = "Say: "  # "Say cheerfully: "
 LANGUAGE_CODE  = "en-US"
 VOICE_NAME     = "en-US-Standard-C"
 AUDIO_FMT      = texttospeech.AudioEncoding.LINEAR16  # LINEAR16 | OGG_OPUS
-SAMPLE_RATE_HZ = 16_000
+SAMPLE_RATE_HZ = 24_000
 
 
 # ================================================================================
