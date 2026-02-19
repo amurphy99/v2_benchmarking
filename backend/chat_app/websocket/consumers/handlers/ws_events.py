@@ -25,10 +25,17 @@ async def handle_receive_json(consumer, data, **kwargs):
     elif data["type"] == "audio_data"        : await consumer._handle_audio_data(data)
     elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, msg_callback=consumer._add_message_CB, send_callback=consumer.send, bio_callback=consumer._utt_bio)
     elif data["type"] == "end_chat"          : consumer.stt_provider.stop(); await consumer.close(code=1000)   
-    elif data["type"] == "toggle_stream"     : consumer._toggle_stream(data)
+    elif data["type"] == "toggle_stream"     : _toggle_stream(consumer, data)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")
+
+
+# Toggle the stream of audio data (pause and unpause on the frontend)
+def _toggle_stream(consumer, data):
+    cmd = data["data"]
+    if   cmd == "start": consumer.stt_provider.start()
+    elif cmd == "stop" : consumer.stt_provider.stop()
 
 
 # --------------------------------------------------------------------------------
@@ -38,5 +45,4 @@ async def _handle_overlap(consumer, data=None):
     consumer.overlapped_speech_count += 1
     consumer.overlapped_speech_events.append(time.time())
     logger.info(f"{lu.YELLOW}Overlapped speech detected. Count: {consumer.overlapped_speech_count} {lu.RESET}")
-
 

@@ -118,9 +118,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={""})
         
-    # --------------------------------------------------------------------------------
+    
+    # ================================================================================
     # Disconnect
-    # --------------------------------------------------------------------------------
+    # ================================================================================
     async def disconnect(self, code):
         """
         TODO: Originally had pausing/resuming in here, but for now disconnects always end the chat.
@@ -178,7 +179,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.monitor", "payload": payload})
 
     # ================================================================================
-    # Handle Incoming Data
+    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
     # ================================================================================
     async def receive_json(self, data, **kwargs):
         await handle_receive_json(self, data)
@@ -193,31 +194,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_audio_data(self, data): await handle_audio_data(self, data)
 
 
-
-
-
-
-        
-    # Toggle the stream of audio data
-    def _toggle_stream(self, data):
-        cmd = data["data"]
-        if   cmd == "start": self.stt_provider.start()
-        elif cmd == "stop" : self.stt_provider.stop()
-
-
-
-    # --------------------------------------------------------------------------------
-    # Access to fields | TODO: Need to be removed
-    # --------------------------------------------------------------------------------
-    def _reply_with_audio(self):
-        return self.reply_with_audio
-    
-    def _reply_on_STT(self):
-        return self.reply_on_STT
-    
-    # --------------------------------------------------------------------------------
-    # Audio Data
-    # --------------------------------------------------------------------------------
+    # ================================================================================
+    # Additional Helpers
+    # ================================================================================
     async def reply_now(self, use_response=None):
         return await ChatHandler.respond_to_user(
             self.context_buffer, 
@@ -227,4 +206,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             reply_audio   = self.reply_with_audio,
             use_response  = use_response,
         )
+
+
+    # Access to fields 
+    # TODO: Need to be removed
+    def _reply_with_audio(self): return self.reply_with_audio
+    def _reply_on_STT    (self): return self.reply_on_STT
 
