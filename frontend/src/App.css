@@ -30,6 +30,13 @@ h1 {
     color: white;
 }
 
+.caregiver-button:active {
+    background-color: oklch(37.635% 0.18932 293.566);
+    border: 1px solid oklch(37.635% 0.18932 293.566);
+    color: white;
+}
+
+
 .caregiver-button-outline {
     border: 1px solid oklch(54.1% 0.281 293.009);
     background-color: transparent;
@@ -40,6 +47,12 @@ h1 {
     background-color: oklch(54.1% 0.281 293.009);
     color: white;
 }
+
+.caregiver-button-outline:active {
+    background-color: oklch(37.635% 0.18932 293.566);
+    color: white;
+}
+
 
 .patient-button {
     background-color: oklch(62.7% 0.194 149.214);
@@ -53,6 +66,12 @@ h1 {
     color: white;
 }
 
+.patient-button:active {
+    background-color: oklch(42.974% 0.12358 148.267);
+    border: 1px solid oklch(42.974% 0.12358 148.267);
+    color: white;
+}
+
 .patient-button-outline {
     border: 1px solid oklch(62.7% 0.194 149.214);
     background-color: transparent;
@@ -61,6 +80,11 @@ h1 {
 
 .patient-button-outline:hover {
     background-color: oklch(62.7% 0.194 149.214);
+    color: white;
+}
+
+.patient-button-outline:active {
+    background-color: oklch(42.974% 0.12358 148.267);
     color: white;
 }
 
@@ -159,4 +183,10 @@ h1 {
 
 .album-img:hover img {
     filter: brightness(100%) grayscale(0%);
+}
+
+.btn-basic {
+    padding: 0.5rem;
+    border-radius: 0.35rem;
+    font-size: 1.25rem;
 }

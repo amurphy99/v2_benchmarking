@@ -9,6 +9,7 @@ export { ChatAlbum       } from "@/pages/album/ChatAlbum";
 export { DaySummary      } from "@/pages/day/DaySummary";
 export { WeekSummary     } from "@/pages/week/WeekSummary";
 export { Analysis        } from "@/pages/analysis/Analysis";
+export { AnalysisFlagged } from "@/pages/analysis/AnalysisFlagged";
 export { Alert           } from "@/pages/alert/Alert";
 export { Transcript      } from "@/pages/transcript/Transcript";
 export { Practice        } from "@/pages/practice/Practice";

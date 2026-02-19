@@ -111,6 +111,6 @@ export default function CircularProgress( {score, role} : {score: number, role: 
     }
 
      return (
-            <ReactApexChart options={options} series={series} type="radialBar" height={"100%"} />
+            <ReactApexChart options={options} series={series} type="radialBar" height={"100%"} width={"100%"} />
         );
     }
