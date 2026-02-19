@@ -31,17 +31,19 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                             <div key={idx} className={`${smallShadow} flex flex-col p-2 rounded-lg hover:cursor-pointer hover:scale-110`}
                             onClick={() => {toDaySummary(session)}}>
                                 <div 
-                                    className="flex-col flex-none flex items-center justify-end pb-2 aspect-square 
-                                        text-white text-shadow-lg bg-cover bg-center bg-purple-200 rounded-lg"
-                                    style={{ backgroundImage: `url(${session?.image?.url})`}}
+                                    className="relative flex-col flex-none flex items-center justify-end 
+                                        text-white text-shadow-lg rounded-lg album-img"
                                 > 
-                                    <div className="flex flex-col justify-center items-center my-auto">
-                                        <p className='m-0 text-lg'>{date.toLocaleDateString("en-US", dateFormatOptionsMonth)}</p>
-                                        <p className="m-0 text-5xl font-semibold">{date.getDate()} </p>
+                                    <img className="w-full h-full object-cover aspect-square" src={session.image.url} />
+                                    <div className="absolute inset-0 flex flex-col justify-center items-center">
+                                        <div className="flex flex-col justify-center items-center my-auto">
+                                            <p className='m-0 text-lg'>{date.toLocaleDateString("en-US", dateFormatOptionsMonth)}</p>
+                                            <p className="m-0 text-5xl font-semibold">{date.getDate()} </p>
+                                        </div>
+                                        <a href={session?.image?.photographer_url} className="text-[8px] text-white m-0 font-thin text-nowrap">
+                                            Image credit: {session?.image?.photographer} at Pexels
+                                        </a>
                                     </div>
-                                    <a href={session?.image?.photographer_url} className="text-[8px] text-white m-0 font-thin text-nowrap">
-                                        Image credit: {session?.image?.photographer} at Pexels
-                                    </a>
                                 </div>
                                 <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics[0]}</p>
                                 <p className="m-0 mx-auto">{Math.round(session.duration / 60 * 100)/100} minutes</p>

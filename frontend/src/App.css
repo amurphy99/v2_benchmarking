@@ -152,3 +152,11 @@ h1 {
     padding: 5rem;
     box-sizing: content-box;
 }
+
+.album-img img {
+    filter: brightness(50%) grayscale(25%);
+}
+
+.album-img:hover img {
+    filter: brightness(100%) grayscale(0%);
+}
