@@ -9,17 +9,16 @@ TODO: Rejoining a chat needs to be handled differently...
 TODO: I'll delete everything we had here for it and then add it back in from a separate branch later
 
 """
-import json, logging, base64
+import json, logging
 logger = logging.getLogger(__name__)
 
-from math     import ceil
 from time     import time as now_ts
 from datetime import datetime, timezone
 
 # From this project
-from   .speechProvider              import TextToSpeechProvider
+from   .speech.tts_streaming        import synthesize_speech
 from   .bg_helpers                  import fire_and_log, trace_await
-from ...services.logging_utils      import RESET, LLM_MAIN, STT_TTS_MAIN, USER_MSG
+from ...services.logging_utils      import RESET, LLM_MAIN, USER_MSG
 from ...services.llm.chat_utilities import get_LLM_response
 
 
@@ -32,8 +31,6 @@ CHUNK_SIZE = 8_192 # How many bytes of audio we can send at a time
 # ================================================================================
 class ChatHandler:
     """
-    ChatHandler
-    -----------
     Static class with methods for handling chat interactions between the user and system.
 
     We can receive user utterances in two ways: (1) the text is received directly from the
@@ -49,80 +46,66 @@ class ChatHandler:
     # ================================================================================
     @staticmethod
     async def handle_transcription(
-        data,          # JSON from chat WS client OR from backend STT result
-        msg_callback,  # Callback to add new messages to the database & update local chat context
-        send_callback, # Callback to send data to the chat WebSocket client
-        bio_callback,  # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
+        data,               # JSON from chat WS client OR from backend STT result
+        msg_callback,       # Callback to add new messages to the database & update local chat context
+        send_callback,      # Callback to send data to the chat WebSocket client
+        bio_callback,       # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
+        reply_on_STT=True,  # Reply on receiving any messages from the user through STT 
+        reply_audio =False  # If we should reply with audio bytes
     ):
         # 1) Process the input TODO: Eventually we might receive timestamps directly within the WS data
         user_text = data["data"] 
-        user_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
+        user_ts   = now_ts()
 
         logger.info(f"{LLM_MAIN}[LLM] User utt received: {USER_MSG}\"{user_text}\"{RESET}")
 
         # Update context and DB for the new *user* message
         context_buffer = await msg_callback(role="user", text=user_text, ts=user_ts)
-        #context_buffer = await trace_await("msg_callback(user)",  msg_callback(role="user", text=user_text, ts=user_ts))
 
         # 2) Get the LLMs response
+        if reply_on_STT:
+            system_resp = await ChatHandler.reply_with_llm(
+                context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio
+            )
+            return system_resp
+        
+        return "" # I don't know how this works totally yet
+    
+    @staticmethod
+    async def reply_with_llm(context_buffer, send_callback, msg_callback, bio_callback, reply_audio=False):
+        # Get the LLMs response
         system_resp = await get_LLM_response(context_buffer)
-        #system_resp = await trace_await("get_LLM_response", get_LLM_response(context_buffer), timeout=10)
-        system_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
+        system_ts   = now_ts() 
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
         await msg_callback(role="assistant", text=system_resp, ts=system_ts)
-        #await trace_await("send_callback(llm_response)", send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts})))
-        #await trace_await("msg_callback(assistant)", msg_callback(role="assistant", text=system_resp, ts=system_ts))
 
-        # 3) On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
+        # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
         fire_and_log(bio_callback(), name="handle_transcription::bio_callback")
-        
+
+        # Synthesize speech with TTS if specified
+        if reply_audio: await synthesize_speech(system_resp, send_callback)
+
         return system_resp
 
-    # ================================================================================
-    # Handle Backend STT output
-    # ================================================================================
-    @staticmethod
-    async def handle_stt_output(data, msg_callback, send_callback, bio_callback):
-        user_text = data["data"] 
-        user_ts   = now_ts() # datetime.now(timezone.utc).strftime("%H:%M:%S")
 
+    # --------------------------------------------------------------------------------
+    # Handle Backend STT output (passed to STT in consumers)
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    async def handle_stt_output(data, msg_callback, send_callback, bio_callback, **kwargs):
         # Send the user's utterance to the frontend TODO: IDK if we should really do this?
-        await send_callback(json.dumps({'type': 'user_utt', 'data': user_text, 'time': user_ts}))
+        await send_callback(json.dumps({'type': 'user_utt', 'data': data["data"], 'time': now_ts()}))
         
         # Forward the user's utterance to `handle_transcription` (and grab the system's response)
-        system_resp = await ChatHandler.handle_transcription(data, msg_callback, send_callback, bio_callback)
+        system_resp = await ChatHandler.handle_transcription(data, msg_callback, send_callback, bio_callback, **kwargs)
 
-        # Synthesize to speech 
-        await ChatHandler.synthesize_speech(system_resp, send_callback)
 
-    # --------------------------------------------------------------------------------
-    # Synthesize the system's response via Text-to-Speech and stream to the frontend
-    # --------------------------------------------------------------------------------
-    @staticmethod
-    async def synthesize_speech(
-        system_resp,   # System's response text (to be vocalized with TTS)
-        send_callback, # Callback from the consumer for sending information to the client
-    ):
-        # Synthesize speech from the system's response
-        tts_provider = TextToSpeechProvider()
-        speech = tts_provider.synthesize_speech(system_resp)
-        
-        # Send the response back to the frontend
-        fire_and_log(ChatHandler.handle_speech(speech, send_callback), name="synthesize_speech::handle_speech")        
-        logger.info(f"{STT_TTS_MAIN}[TTS] Synthesized speech sent to frontend. {RESET}")
 
-    # Splits audio data into smaller chunks so we can send it to the frontend
-    @staticmethod
-    async def handle_speech(audio_bytes: bytes, send_callback) -> None:
-        n_chunks = ceil(len(audio_bytes) / CHUNK_SIZE)
-        for i in range(n_chunks):
-            chunk = audio_bytes[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE]
-            await send_callback(json.dumps({
-                "type": "audio_chunk", 
-                "data": json.dumps({"data": base64.b64encode(chunk).decode('utf-8')})
-            }))
+
+
+
 
 
 
