@@ -8,6 +8,11 @@ Processes incoming messages, scores them, and responds.
 TODO: Might need to add arguments in the URL (like source) for if the backend should
       handle STT and/or TTS.
 
+TODO: Add `reply_audio` to the `on_connect()` logging function
+
+TODO: Probably just need to pass a reference to this around in all of the helpers,
+      rather than the methods themselves.
+
 """
 import asyncio, logging, base64, time
 logger = logging.getLogger(__name__)
@@ -70,8 +75,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4001); return
         
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
-        self.user   = self.scope["user"]
-        self.source = self.scope.get("source", "unknown")
+        self.user        = self.scope["user"]
+        self.source      = self.scope.get("source", "unknown")
+        
+        # Some config based on the source
+        self.reply_audio  = self.source == "webapp"
+        self.reply_on_STT = True # self.source != "webapp"
+
 
         # Accept the connection
         await self.accept()
@@ -118,12 +128,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     
         # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
         self.stt_provider = SpeechToTextProvider(
+            consumer               = self,
             loop                   = asyncio.get_running_loop(),
-            transcript_callback    = ChatHandler.handle_stt_output, 
-            msg_callback           = self._add_message_CB, 
-            send_callback          = self.send, 
-            bio_callback           = self._utt_bio, 
             on_timestamps_callback = None, 
+            reply_audio            = self.reply_audio,
         )
 
         # --------------------------------------------------------------------------------
@@ -264,3 +272,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         cmd = data["data"]
         if   cmd == "start": self.stt_provider.start()
         elif cmd == "stop" : self.stt_provider.stop()
+
+
+    def _reply_on_STT(self):
+        return self.reply_on_STT
+    
+    async def reply_now(self):
+        return await ChatHandler.reply_with_llm(
+            self.context_buffer, 
+            send_callback = self.send, 
+            msg_callback  = self._add_message_CB,
+            bio_callback  = self._utt_bio, 
+            reply_audio   = self.reply_audio,
+        )
