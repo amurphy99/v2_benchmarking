@@ -1,6 +1,6 @@
-# ====================================================================
+# ================================================================================
 # Backend Services (Postgres database & Django server)
-# ====================================================================
+# ================================================================================
 services:
   # -------------------------------------------------------------------- 
   # 1) Postgres Database
@@ -9,29 +9,31 @@ services:
   # (Not needed anymore because because of separate VM for the databases)
   # Uncomment to run the database container locally during development
   # --------------------------------------------------------------------
-  # db:
-  #   image: postgres:17 #ankane/pgvector:latest
-  #   container_name: db
-  #   env_file: [.env]
-  #   networks: [appnet]
-  #   ports:
-  #     - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
-  #   volumes:
-  #     - db_data:/var/lib/postgresql/data
+  db_vector:
+    image: ankane/pgvector:latest
+    container_name: db_vector
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${VECTOR_DB_NAME}
+      POSTGRES_USER: ${VECTOR_DB_USER}
+      POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
+    networks: [appnet]
+    ports:
+      - "5434:5434"
+    volumes:
+      - vector_db_data:/var/lib/postgresql/data
 
-  # db_vector:
-  #   image: ankane/pgvector:latest
-  #   container_name: db_vector
-  #   env_file: [.env]
-  #   environment:
-  #     POSTGRES_DB: ${VECTOR_DB_NAME}
-  #     POSTGRES_USER: ${VECTOR_DB_USER}
-  #     POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
-  #   networks: [appnet]
-  #   ports:
-  #     - "5434:5432"   # expose main DB on localhost:5433
-  #   volumes:
-  #     - vector_db_data:/var/lib/postgresql/data
+  db:
+    image: postgres:17 #ankane/pgvector:latest
+    container_name: db
+    env_file: [.env]
+    networks: [appnet]
+    ports:
+      - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+
     
   # -------------------------------------------------------------------- 
   # 2) Django Backend Server
@@ -42,10 +44,9 @@ services:
       context: .
       dockerfile: Dockerfile-backend
     container_name: backend
-    # track migrations from now on
     command: |
       sh -c "
-        python manage.py makemigrations --check --dry-run && 
+        python manage.py makemigrations --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py seed_demo &&
@@ -54,7 +55,7 @@ services:
     env_file: [.env]
     volumes:
       - .:/app                # general project mount
-    # depends_on: [db, db_vector] # uncomment for local development with DB containers
+    #depends_on: [db, db_vector]
     networks: [appnet]
     ports:                    # expose 8000 to host for Vite
       - "8000:8000"
@@ -65,9 +66,9 @@ services:
 # Docker will also create them automatically if this file is run individually.
 volumes:
   db_data:
-    external: true
+    #external: true
   vector_db_data:
-    external: true
+    #external: true
 networks:
   appnet:
-    external: true
+    #external: true

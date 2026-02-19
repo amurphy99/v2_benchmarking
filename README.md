@@ -81,27 +81,29 @@ SSH:/home/user/
 +│   │   │   │   ├── ragChatHelpers.py # new module for RAG-based chat activity
  │   │   │   │   ├── speechProvider.py
  │   │   │   │   └── ...
- │   │   │   └── websocket/  
- │   │   │   │   ├── consumers.py    # initialization of the chat sessions
- │   │   │   │   └── routing.py      # routing for different chat modes
- │   │   │   └── services/ 
- │   │   │   │   ├── emotionHelpers.py      # Emotion analysis
+ │   │   │   ├── websocket/  
+ │   │   │   │   ├── consumers/    # Consumer classes handling WS clients
+ │   │   │   │   │   └── ...
+ │   │   │   │   └── routing.py    # Routing for different chat modes
+ │   │   │   │
+ │   │   │   ├── services/ 
+ │   │   │   │   ├── emotionHelpers.py   # Emotion analysis
  │   │   │   │   ├── topicHelpers.py        
- │   │   │   │   └── llm/         # LLM providers
+ │   │   │   │   └── llm/                # LLM providers
 +│   │   │   │       ├── langchain_wrapper.py # LC wrapper class for LlamaAPI Chat
  │   │   │   │       ├── llama_api.py
  │   │   │   │       └── dummy_LLM.py
+ │   │   │   └── ... 
+ │   │   │ 
 +│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
 +│   │   ├── .env                 # Created programmatically during startup script
  │   │   ├── requirements-web.txt
- │   │   └── ...
- │   │
-+│   │   ├── rag_vectorstore/     # Vector database app
-+│   │   │   ├── models.py        # VectorStore models
-+│   │   │   ├── services/
-+│   │   │   │   └── vdb_services.py      # Vector DB services
-+│   │   │   └── models/
-+│   │   │       └── MiniLM-L6-v2/        # downloaded programmatically during deployment
++│   │   └── rag_vectorstore/     # Vector database app
++│   │       ├── models.py        # VectorStore models
++│   │       ├── services/
++│   │       │   └── vdb_services.py      # Vector DB services
++│   │       └── models/
++│   │           └── MiniLM-L6-v2/        # downloaded programmatically during deployment
  │   │
  │   ├── frontend/
  │   │   ├── Dockerfile-frontend  # Builds and serves Vite app

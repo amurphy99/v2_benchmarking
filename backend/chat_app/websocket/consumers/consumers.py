@@ -1,0 +1,291 @@
+"""
+Live user chat controller.
+--------------------------------------------------------------------------------
+`backend.chat_app.websocket.consumers.consumers`
+
+Processes incoming messages, scores them, and responds.
+
+TODO: Might need to add arguments in the URL (like source) for if the backend should
+      handle STT and/or TTS.
+
+TODO: Add `reply_audio` to the `on_connect()` logging function
+
+TODO: Probably just need to pass a reference to this around in all of the helpers,
+      rather than the methods themselves.
+
+"""
+import asyncio, logging, base64, time
+logger = logging.getLogger(__name__)
+
+# Django
+from django.apps                import apps
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.db                import database_sync_to_async as db_s2a
+
+# From this project
+from ...services                   import logging_utils as lu 
+from ...services.db_services       import ChatService
+from  ..services.bg_helpers        import fire_and_log
+from  ..services.chatHelpers       import ChatHandler
+from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
+from  ..services.speechProvider    import SpeechToTextProvider
+
+# Consumer-specific utilities
+from .utils   .logging   import ChatConsumerLogging as log
+from .utils   .groups    import leave_all_groups, format_actions_command
+from .handlers.ch_events import handle_ws_command, forward_payload_to_client
+from .handlers.ws_events import handle_receive_json
+
+
+
+SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
+
+# ================================================================================
+# ChatConsumer 
+# ================================================================================
+class ChatConsumer(AsyncJsonWebsocketConsumer):
+    """
+    ChatConsumer
+    ------------
+    Main controller for a live chat session.
+    
+    TODO: Much of this needs to be moved to helper classes. 
+    
+    IDK, stuff that has been here for a while
+    * self.return_biomarkers => should we return the biomarkers to the client? (right now, no)
+
+    """
+    MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
+    SECONDS     = 10  # How often we want to send audio to calculate biomarkers
+
+    # ================================================================================
+    # Connect
+    # ================================================================================
+    async def connect(self):
+        # Miscellaneous setup
+        self.overlapped_speech_count  = 0.0
+        self.audio_windows_count      = 0.0
+        self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
+
+        # --------------------------------------------------------------------------------
+        # 1) Authenticate before accepting connection
+        # --------------------------------------------------------------------------------
+        # Custom "unauth" code
+        if not self.scope["user"].is_authenticated: 
+            await self.close(code=4001); return
+        
+        # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
+        self.user        = self.scope["user"]
+        self.source      = self.scope.get("source", "unknown")
+        
+        # Some config based on the source
+        self.reply_with_audio = self.source == "webapp"
+        self.reply_on_STT     = True # self.source != "webapp"
+
+
+        # Accept the connection
+        await self.accept()
+        log.log_connect(self.user, self.source)
+        
+        # I don't think any frontend uses these during the chat right now, but I'll leave this option in
+        self.return_biomarkers = False # (self.source in ["webapp"])
+
+        # --------------------------------------------------------------------------------
+        # 2) Load or create an active session & Prepare the 'context_buffer'
+        # --------------------------------------------------------------------------------
+        # TODO: Change this back (and fix whatever was wrong) so that we CAN reconnect to old chats
+        # Close any currently-active session for this user (to avoid clashes between multiple connections)
+        await db_s2a(ChatService.close_any_active_session)(self.user)
+
+        # Load the most recent active session for this user
+        self.session = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-start_ts")[: self.MAX_CONTEXT])[::-1])()
+
+        # TODO: I added the timestamps in just now for biomarker scores, but I actually don't really like how this works at the moment...
+        # Actually since I want to remove the "resume" chat thing, probably don't need to do this with the context buffer (loading in old data)
+        self.context_buffer = [(m.role, m.content, m.ts.timestamp()) for m in recent]
+        
+        # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
+        self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
+
+        # --------------------------------------------------------------------------------
+        # 3) Define group ("room") names & Join them
+        # --------------------------------------------------------------------------------
+        sid = self.session.id
+        self.room_group    = f"chat_{sid}"
+        self.monitor_group = f"chat_{sid}_mon"
+        self.control_group = f"chat_{sid}_ctl"
+
+        # Join base room & control room (send updates to listeners, receive commands from listeners)
+        await self.channel_layer.group_add(self.   room_group, self.channel_name)
+        await self.channel_layer.group_add(self.control_group, self.channel_name)
+
+        # --------------------------------------------------------------------------------
+        # 4) Handle STT Setup
+        # --------------------------------------------------------------------------------
+        # Create new audio buffer & speech provider instances
+        self.audio_buffer = bytearray()
+    
+        # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
+        self.stt_provider = SpeechToTextProvider(
+            consumer               = self,
+            loop                   = asyncio.get_running_loop(),
+            on_timestamps_callback = None, 
+        )
+
+        # --------------------------------------------------------------------------------
+        # 5) Send misc information to the frontend (ToDo: biomarkers, etc)
+        # --------------------------------------------------------------------------------
+        # This is where we could potentially have a connection on the robot and web app and monitor the conversation in real time
+        if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
+        
+        # Log the successful connection
+        log.log_connect_done(self.user, self.session.id)
+        
+    # --------------------------------------------------------------------------------
+    # Disconnect
+    # --------------------------------------------------------------------------------
+    async def disconnect(self, code):
+        """
+        TODO: Originally had pausing/resuming in here, but for now disconnects always end the chat.
+        """
+        # Guard for double calls when we are already closing
+        if getattr(self, "_close_scheduled", False): return
+        self._close_scheduled = True
+
+        # Shut down the STT provider
+        if getattr(self, "stt_provider", None): self.stt_provider.stop()
+
+        # Snapshot IDs (don't pass model instances into background tasks)
+        user_id    = getattr(self.user,    "id",    None)
+        session_id = getattr(self.session, "id",    None)
+        username   = getattr(self.user, "username", None)
+
+        # Close the ChatSession in the DB
+        if user_id and session_id:
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source), 
+                         name=f"disconnect::close-session-{session_id}")
+
+        # Cancel background tasks (only connection-based ones; not the close_session task)
+        for task in           getattr(self, "_bg_tasks", []): task.cancel()
+        await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
+
+        # Reset some properties for the next connection
+        self.session                  = None
+        self.context_buffer           = []
+        self.overlapped_speech_count  = 0.0
+        self.audio_windows_count      = 0.0
+        self.overlapped_speech_events = []
+
+        leave_all_groups(self, log)
+        log.log_disconnect(self.user, code)
+
+    # ================================================================================
+    # Group Event Handlers | 
+    # ================================================================================
+    # Receives commands from listener consumers
+    # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
+    async def ws_command  (self, event): await handle_ws_command        (self, event)
+    async def ws_broadcast(self, event): await forward_payload_to_client(self, event)
+    async def ws_monitor  (self, event): await forward_payload_to_client(self, event)
+
+    # --------------------------------------------------------------------------------
+    # Broadcast Helpers
+    # --------------------------------------------------------------------------------
+    # Relays chat messages
+    async def _broadcast_room(self, payload):
+        await self.channel_layer.group_send(self.room_group, {"type": "ws.broadcast", "payload": payload})
+
+    # Relays biomarker scores
+    async def _broadcast_monitor(self, payload):
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.monitor", "payload": payload})
+
+    # ================================================================================
+    # Handle Incoming Data
+    # ================================================================================
+    async def receive_json(self, data, **kwargs):
+        await handle_receive_json(self, data)
+ 
+
+
+    # --------------------------------------------------------------------------------
+    # Text Transcriptions
+    # --------------------------------------------------------------------------------
+    # TODO: Because altered_grammar specifically is so slow, they will actually go to the db out of order. Need to add a manual time setting argument.
+    async def _utt_bio(self):
+        """ On-Utterance Biomarkers (saves them to the DB as soon as we get them). """
+        utterance_biomarkers = await extract_text_biomarkers(self.context_buffer)
+
+        # Save biomarkers to the DB & send them to any listeners
+        fire_and_log(
+            db_s2a(ChatService.add_biomarkers_bulk)(self.session, utterance_biomarkers),
+            name="_utt_bio::add_biomarkers_bulk"    
+        )
+        await self._broadcast_monitor({"type": "biomarker_scores", "data": utterance_biomarkers})
+    
+    # Add messages to the database & update the local context (role must be "user" or "assistant").
+    async def _add_message_CB(self, role, text, ts):
+        # Fire-and-forget DB write for the user message
+        fire_and_log(db_s2a(ChatService.add_message)(self.session, role, text), name="_add_message_CB")
+
+        # Update in memory context
+        self.context_buffer.append((role, text, ts))
+        if len(self.context_buffer) > self.MAX_CONTEXT: self.context_buffer.pop(0)
+
+        # Broadcast updates to any listeners
+        await self._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
+
+        # Return the updated context (if the message was from the user, this will be used for the LLM)
+        return self.context_buffer
+
+
+        
+    # --------------------------------------------------------------------------------
+    # Audio Data
+    # --------------------------------------------------------------------------------
+    async def _handle_audio_data(self, data):
+        
+         # Send audio to the speech to text provider
+        self.stt_provider.send_audio(data)
+                            
+        # # Generate the audio-related biomarker scores
+        self.audio_buffer.extend(base64.b64decode(data['data']))
+        if len(self.audio_buffer) >= (self.SECONDS * SECOND):
+            audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
+            audio_biomarkers = await extract_audio_biomarkers(audio_data, self.overlapped_speech_count)
+            self.audio_buffer.clear()
+
+            # Save biomarkers to the DB & send them to any listeners
+            fire_and_log(
+                db_s2a(ChatService.add_biomarkers_bulk)(self.session, audio_biomarkers),
+                name="_handle_audio_data::add_biomarkers_bulk"    
+            )
+            await self._broadcast_monitor({"type": "biomarker_scores", "data": audio_biomarkers})
+   
+        # Update turntaking (12 audio windows for 1 minute of data)
+        self.audio_windows_count += 1
+        self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+        
+    # Toggle the stream of audio data
+    def _toggle_stream(self, data):
+        cmd = data["data"]
+        if   cmd == "start": self.stt_provider.start()
+        elif cmd == "stop" : self.stt_provider.stop()
+
+
+    def _reply_with_audio(self):
+        return self.reply_with_audio
+    
+    def _reply_on_STT(self):
+        return self.reply_on_STT
+    
+    async def reply_now(self, use_response=None):
+        return await ChatHandler.respond_to_user(
+            self.context_buffer, 
+            send_callback = self.send, 
+            msg_callback  = self._add_message_CB,
+            bio_callback  = self._utt_bio, 
+            reply_audio   = self.reply_with_audio,
+            use_response  = use_response,
+        )
+

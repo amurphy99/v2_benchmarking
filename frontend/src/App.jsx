@@ -4,7 +4,8 @@ import { AuthProvider            } from "@/context/AuthProvider";
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile } from "@/pages";
+    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile, 
+    Admin, AdminChat, AdminChatInactive } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
@@ -76,6 +77,11 @@ export default function App() {
                 <Route path="/day"      element={<DaySummary      />} />
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/transcript" element={<Transcript    />} />
+
+                {/* Admin */}
+                <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/chat/:id" element={<AdminChat />} />
+                <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
                 
             </Route>
 
