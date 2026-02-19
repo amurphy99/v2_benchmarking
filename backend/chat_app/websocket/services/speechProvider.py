@@ -79,7 +79,7 @@ class SpeechToTextProvider:
             except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
 
             delay = now_ts() - ts_in
-            if delay > 0.25: logger.warning(f"[STT] audio queue delay={delay:.3f}s qsize≈{self._audio_buffer.qsize()}")
+            if delay > 0.25: logger.warning(f"{STT_MAIN} audio queue delay={delay:.3f}s qsize≈{self._audio_buffer.qsize()}{RESET}")
 
             # Break the loop if there is still no data
             if data is None: break
@@ -161,6 +161,7 @@ class SpeechToTextProvider:
         # Restart if not streaming OR thread is dead
         # TODO: This might make pausing not work
         if (not self._streaming) or (not getattr(self, "_thread", None)) or (not self._thread.is_alive()): 
+            logger.info(f"{STT_MAIN} Restarting streaming. {RESET}")
             self.start()
     
 
@@ -183,7 +184,7 @@ class SpeechToTextProvider:
                 if not valid: continue
                 
                 # Log the resulting transcription
-                logger.info(f"{STT_MAIN} Received final transcription: {transcript} {RESET}")
+                logger.info(f"{STT_MAIN} Received final transcription: \"{transcript}\" {RESET}")
                 
                 # Prepare references to the ChatConsumer's methods
                 args = self._get_transcript_args()
@@ -198,7 +199,7 @@ class SpeechToTextProvider:
                     name="stt::handle_stt_output",
                 )
                 def _done(f):
-                    logger.info(f"{STT_MAIN} Handler latency={now_ts()-t_sched:.3f}s")
+                    logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-t_sched:.3f}s{UNBOLD}.{RESET}")
                 fut.add_done_callback(_done)
                 
                 # TODO: We don't currently handle STT results with word-level timestamps
