@@ -64,11 +64,11 @@ class SpeechToTextProvider:
         c = self._consumer()
         if c is None: return None
         return dict(
-            msg_callback  = c._add_message_CB,   # Callback to add new messages to the database & update local chat context
-            send_callback = c.send,              # Callback to send data to the chat WebSocket client
-            bio_callback  = c._utt_bio,          # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
-            reply_on_STT  = c._reply_on_STT,     # Should the ChatHandler reply instantly when receiving this
-            reply_audio   = c._reply_with_audio, # Should the ChatHandler reply with audio bytes as well as text 
+            msg_callback  = c._add_message_CB,     # Callback to add new messages to the database & update local chat context
+            send_callback = c.send,                # Callback to send data to the chat WebSocket client
+            bio_callback  = c._utt_bio,            # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
+            reply_on_STT  = c._reply_on_STT(),     # Should the ChatHandler reply instantly when receiving this
+            reply_audio   = c._reply_with_audio(), # Should the ChatHandler reply with audio bytes as well as text 
         )
 
     # Generates StreamingRecognizeRequest objects from the audio Queue
