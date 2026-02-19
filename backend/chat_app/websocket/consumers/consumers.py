@@ -1,23 +1,13 @@
 """
-Live user chat controller. Main controller for a live chat session.
+Main controller for a live chat session. 
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.consumers`
-
-Processes incoming messages, scores them, and responds.
-
-TODO: Might need to add arguments in the URL (like source) for if the backend should
-      handle STT and/or TTS.
-
-TODO: Add `reply_audio` to the `on_connect()` logging function
-
-TODO: Probably just need to pass a reference to this around in all of the helpers,
-      rather than the methods themselves.
 
 TODO: Change the config stuff later as the other platforms (robots) get updated (e.g.
       the stuff like `use_backend_STT`, etc.).
 
 """
-import asyncio, logging, base64, time
+import asyncio, logging, time
 logger = logging.getLogger(__name__)
 
 # Django
@@ -30,7 +20,6 @@ from ...services                   import logging_utils as lu
 from ...services.db_services       import ChatService
 from  ..services.bg_helpers        import fire_and_log
 from  ..services.chatHelpers       import ChatHandler
-from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
 from  ..services.speechProvider    import SpeechToTextProvider
 
 # Consumer-specific utilities
@@ -45,16 +34,12 @@ from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biom
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 
 
-SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
-
-
 # ================================================================================
 # ChatConsumer 
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
     MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
     
-
     # ================================================================================
     # Connect
     # ================================================================================
