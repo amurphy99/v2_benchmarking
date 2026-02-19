@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 # From this project
 from   .speech.tts_streaming        import synthesize_and_stream_tts
 from   .bg_helpers                  import fire_and_log, trace_await
-from ...services.logging_utils      import RESET, LLM_MAIN, USER_MSG
+from ...services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, USER_MSG
 from ...services.llm.chat_utilities import get_LLM_response
 
 
@@ -53,6 +53,8 @@ class ChatHandler:
         reply_on_STT=True,  # Reply on receiving any messages from the user through STT 
         reply_audio =False  # If we should reply with audio bytes
     ):
+        logger.info(f"{lu.ORANGE}[ChatHandler] reply_on_STT={BOLD}{reply_on_STT}{UNBOLD}, reply_audio={BOLD}{reply_audio}{UNBOLD}. {RESET}")
+
         # 1) Process the input TODO: Eventually we might receive timestamps directly within the WS data
         user_text = data["data"] 
         user_ts   = now_ts()

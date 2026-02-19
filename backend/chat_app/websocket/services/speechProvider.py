@@ -29,7 +29,7 @@ CHUNK_SIZE    =  2_048  # 64ms of 16-bit PCM audio = 2048 bytes
 LANGUAGE_CODE = "en-US"
 
 # Config
-KEEPALIVE_SEC = 1.0     # Keep streaming alive during short pauses
+KEEPALIVE_SEC = 0.1     # Keep streaming alive during short pauses
 SILENCE       = b"\x00" * CHUNK_SIZE
 
 # ================================================================================
@@ -75,8 +75,11 @@ class SpeechToTextProvider:
     def _audio_generator(self):
         while self._streaming:
             # Keep streaming alive during short pauses
-            try:          data = self._audio_buffer.get(timeout=KEEPALIVE_SEC)
+            try:          ts_in, data = self._audio_buffer.get(timeout=KEEPALIVE_SEC)
             except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
+
+            delay = now_ts() - ts_in
+            if delay > 0.25: logger.warning(f"[STT] audio queue delay={delay:.3f}s qsize≈{self._audio_buffer.qsize()}")
 
             # Break the loop if there is still no data
             if data is None: break
@@ -153,7 +156,7 @@ class SpeechToTextProvider:
     # --------------------------------------------------------------------------------
     def send_audio(self, data):
         audio_bytes = base64.b64decode(data["data"])
-        self._audio_buffer.put(audio_bytes)
+        self._audio_buffer.put((now_ts(), audio_bytes))
 
         # Restart if not streaming OR thread is dead
         # TODO: This might make pausing not work
@@ -180,7 +183,7 @@ class SpeechToTextProvider:
                 if not valid: continue
                 
                 # Log the resulting transcription
-                logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript} {lu.RESET}")
+                logger.info(f"{STT_MAIN} Received final transcription: {transcript} {RESET}")
                 
                 # Prepare references to the ChatConsumer's methods
                 args = self._get_transcript_args()
@@ -188,10 +191,15 @@ class SpeechToTextProvider:
 
                 # Send the transcript results to the ChatConsumer
                 data = {"type": "user_utt", "data": transcript}
-                threadsafe_fire_and_log(
+
+                t_sched = now_ts()
+                fut = threadsafe_fire_and_log(
                     self._loop, ChatHandler.handle_stt_output(data, **args),
                     name="stt::handle_stt_output",
                 )
+                def _done(f):
+                    logger.info(f"{STT_MAIN} Handler latency={now_ts()-t_sched:.3f}s")
+                fut.add_done_callback(_done)
                 
                 # TODO: We don't currently handle STT results with word-level timestamps
                 if self._ts_callback: 

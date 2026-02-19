@@ -58,7 +58,7 @@ async def handle_ws_command(consumer, event):
     # Parse command from payload
     payload = event  .get("payload", {}) or {}
     command = payload.get("name")
-    logger.info(f"{lu.CC_MAIN} Listener command received: {lu.YELLOW} {payload} {RESET}")
+    logger.info(f"{CC_MAIN} Listener command received: {lu.YELLOW} {payload} {RESET}")
 
     # Act accordingly
     if command == "pause_responses":
