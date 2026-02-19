@@ -14,13 +14,23 @@ from ...services.logging_utils import BOLD, UNBOLD
 # --------------------------------------------------------------------------------
 # Start a background task and log any exception it raises
 # --------------------------------------------------------------------------------
-def fire_and_log(awaitable, *, name: str = "bg-task"):
+def fire_and_log(awaitable, *, name="bg-task"):
     async def _runner():
         try:                           return await awaitable
         except asyncio.CancelledError: logger.debug    (f"Background task cancelled: {BOLD}{name}{UNBOLD}"); raise
         except Exception:              logger.exception(f"Background task crashed:   {BOLD}{name}{UNBOLD}")
     return asyncio.create_task(_runner(), name=name)
 
+# --------------------------------------------------------------------------------
+# Threadsafe version (used in STT)
+# --------------------------------------------------------------------------------
+def threadsafe_fire_and_log(loop, coro, *, name="bg-task"):
+    fut = asyncio.run_coroutine_threadsafe(coro, loop)
+    def _done(f):
+        try: f.result()
+        except Exception: logger.exception(f"Background task crashed: {BOLD}{name}{UNBOLD}")
+    fut.add_done_callback(_done)
+    return fut
 
 # --------------------------------------------------------------------------------
 # "Await" Wrapper Function for Debugging
@@ -37,4 +47,3 @@ async def trace_await(label, awaitable, timeout=3): # timeout = None
     
     except asyncio.CancelledError: logger.  warning("<- %s (CANCELLED)", label); raise
     except Exception:              logger.exception("<- %s (FAILED)",    label); raise
-
