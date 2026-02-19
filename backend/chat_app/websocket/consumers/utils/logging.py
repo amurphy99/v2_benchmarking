@@ -15,7 +15,7 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD
 
 # --------------------------------------------------------------------------------
-# ChatConsumer Utilities
+# ChatConsumer Utilities (GREEN & BRIGHT_GREEN)
 # --------------------------------------------------------------------------------
 from ....services.logging_utils import CC_MAIN, CC_H, CC_R, GREEN, G_LINE_1, G_LINE_2
 
@@ -25,8 +25,12 @@ class ChatConsumerLogging:
         logger.info(f"{G_LINE_1}{CC_MAIN} {CC_H}{user}{CC_R} opened ChatSession from {CC_H}{source}{RESET}{G_LINE_2}")
 
     @staticmethod
-    def log_connect_done(user, session_id):
-        logger.info(f"{CC_MAIN} All setup steps for {CC_H}{user}{CC_R} succeeded. ChatSession ID: {CC_H}{session_id}{RESET}")
+    def log_connect_done(user, session_id, *, config={}):
+        logger.info((
+            f"{CC_MAIN} All setup steps for {CC_H}{user}{CC_R} succeeded. " 
+            f"ChatSession ID: {CC_H}{session_id}{CC_R}, "
+            f"Chat Configs: {lu.BRIGHT_GREEN}{config}{CC_R}. {RESET}"
+        ))
 
     @staticmethod
     def log_disconnect(user, code):
