@@ -4,11 +4,12 @@ Live user chat controller.
 `backend.chat_app.websocket.services.speechProvider`
 
 """
-import logging, threading, asyncio, base64, os
+import logging, threading, asyncio, base64, os, weakref
 logger = logging.getLogger(__name__)
 
 from datetime import datetime, timedelta
-from queue    import Queue
+from queue    import Queue, Empty
+from time     import monotonic as now_ts
 
 # Google imports
 from google.cloud import speech, texttospeech
@@ -19,49 +20,82 @@ from google.genai import types
 from ...services import logging_utils as lu
 from ...services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
-# Constants
-SAMPLE_RATE = 16_000
-CHUNK_SIZE  =  2_048  # 64ms of 16-bit PCM audio = 2048 bytes
+from .chatHelpers import ChatHandler
+from .bg_helpers  import threadsafe_fire_and_log
 
+# Constants
+SAMPLE_RATE   = 16_000
+CHUNK_SIZE    =  2_048  # 64ms of 16-bit PCM audio = 2048 bytes
+LANGUAGE_CODE = "en-US"
+
+# Config
+KEEPALIVE_SEC = 1.0     # Keep streaming alive during short pauses
+SILENCE       = b"\x00" * CHUNK_SIZE
 
 # ================================================================================
 # Streaming STT via audio bytes received from the ChatConsumer client
 # ================================================================================
 class SpeechToTextProvider:
-    '''Speech-to-Text provider that uses Google Cloud's Speech-to-Text API'''
-    def __init__(self, loop, transcript_callback, *, msg_callback=None, send_callback=None, bio_callback=None, on_timestamps_callback=None):
+    def __init__(self, *, consumer, loop, on_timestamps_callback=None, reply_audio=True):
         self._client              = speech.SpeechClient()
         self._streaming_config    = None
         self._audio_buffer        = Queue()
         self._streaming           = False
         self._thread              = None    # The thread we use for streaming
-        self._recent_transcript   = None    # Used to avoid processing duplicate STT results
+
+        # Used to avoid processing duplicate STT results
+        self._recent_transcript    = ""
+        self._recent_transcript_ts = now_ts()
 
         # From ChatConsumer
-        self._loop                = loop                    # Loop from the consumer
-        self._transcript_callback = transcript_callback     # The function to call when a complete transcription is received
-        self._msg_callback        = msg_callback            # Callback to add new messages to the database & update local chat context
-        self._bio_callback        = bio_callback            # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
-        self._ts_callback         = on_timestamps_callback  # The function to call when word-level timestamps are received
-        self._send_callback       = send_callback           # Callback to send data to the chat WebSocket client
+        self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
+        self._loop         = loop                    # Loop from the consumer
+        self._ts_callback  = on_timestamps_callback  # The function to call when word-level timestamps are received
+        self._reply_audio  = reply_audio
 
-        # Re-used for every transcript result
-        self._transcript_args = dict(
-            msg_callback  = self._msg_callback, 
-            send_callback = self._send_callback, 
-            bio_callback  = self._bio_callback
+
+    # --------------------------------------------------------------------------------
+    # Utilities
+    # --------------------------------------------------------------------------------
+    def _consumer(self):
+        return self._consumer_ref()
+    
+    # Re-used for every transcript result
+    def _get_transcript_args(self):
+        c = self._consumer()
+        if c is None: return None
+        return dict(
+            msg_callback  = c._add_message_CB, # Callback to add new messages to the database & update local chat context
+            send_callback = c.send,            # Callback to send data to the chat WebSocket client
+            bio_callback  = c._utt_bio,        # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
+            reply_on_STT  = c._reply_on_STT,   # Should the ChatHandler reply instantly when receiving this
+            reply_audio   = self.reply_audio,  # Should the ChatHandler reply with audio bytes as well as text 
         )
-        
 
+    # Generates StreamingRecognizeRequest objects from the audio Queue
     def _audio_generator(self):
-        '''Generates audio requests from the audio buffer.'''
         while self._streaming:
-            data = self._audio_buffer.get()
+            # Keep streaming alive during short pauses
+            try:          data = self._audio_buffer.get(timeout=KEEPALIVE_SEC)
+            except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
+
+            # Break the loop if there is still no data
             if data is None: break
-            if self._audio_buffer:
-                data = self._audio_buffer.get()
-                if data is None: break
-                yield speech.StreamingRecognizeRequest(audio_content=data)
+            yield speech.StreamingRecognizeRequest(audio_content=data)
+
+    # Validate transcripts from the STT results
+    def _check_transcript(self, transcript):
+        # Check length
+        if len(transcript) < 1: return False, ""
+
+        # Check for duplicate results
+        if (transcript == self._recent_transcript) and ((now_ts()-self._recent_transcript_ts) < 0.5):
+            return False, ""
+        
+        # Valid
+        self._recent_transcript    = transcript
+        self._recent_transcript_ts = now_ts()
+        return True, transcript
 
     # --------------------------------------------------------------------------------
     # Start the stream
@@ -76,12 +110,12 @@ class SpeechToTextProvider:
         config = speech.RecognitionConfig(
             encoding                     = speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz            = SAMPLE_RATE,
-            language_code                = "en-US",
+            language_code                = LANGUAGE_CODE,
             enable_automatic_punctuation = True,
             enable_spoken_punctuation    = True,
             model                        = "latest_long",
             use_enhanced                 = True,
-            enable_word_time_offsets     = True,
+            enable_word_time_offsets     = bool(self._ts_callback),
         )
         self._streaming_config = speech.StreamingRecognitionConfig(
             config          = config, 
@@ -100,7 +134,7 @@ class SpeechToTextProvider:
             self._listen_responses(responses)
         
         # Make sure the streaming attribute gets reset when the thread exits
-        except Exception as e: logger.info(f"{STT_MAIN} STT streaming connection {BOLD}{lu.RED}FAILED{UNBOLD}{lu.BRIGHT_BLUE}: {e} {RESET}")
+        except Exception as e: logger.exception(f"{STT_MAIN} STT streaming connection {BOLD}{lu.RED}FAILED{UNBOLD}{lu.BRIGHT_BLUE}: {e} {RESET}")
         finally: self._streaming = False  
 
     # --------------------------------------------------------------------------------
@@ -123,6 +157,7 @@ class SpeechToTextProvider:
         self._audio_buffer.put(audio_bytes)
 
         # Restart if not streaming OR thread is dead
+        # TODO: This might make pausing not work
         if (not self._streaming) or (not getattr(self, "_thread", None)) or (not self._thread.is_alive()): 
             self.start()
     
@@ -141,23 +176,29 @@ class SpeechToTextProvider:
                 if not result.is_final: continue
 
                 # Make sure this isn't a duplicate transcript
-                transcript = result.alternatives[0].transcript
-                if (transcript == self._recent_transcript) or (len(transcript) < 1): continue
-
+                transcript = result.alternatives[0].transcript.strip()
+                valid, transcript = self._check_transcript(transcript)
+                if not valid: continue
+                
                 # Log the resulting transcription
-                self._recent_transcript = transcript
                 logger.info(f"{lu.RED}[Transcription] Received final transcription: {transcript} {lu.RESET}")
                 
+                # Prepare references to the ChatConsumer's methods
+                args = self._get_transcript_args()
+                if args is None: return  # consumer gone
+
                 # Send the transcript results to the ChatConsumer
                 data = {"type": "user_utt", "data": transcript}
-                asyncio.run_coroutine_threadsafe(self._transcript_callback(data, **self._transcript_args), self._loop)
-                    
+                threadsafe_fire_and_log(
+                    self._loop, ChatHandler.handle_stt_output(data, **args),
+                    name="stt::handle_stt_output",
+                )
+                
                 # TODO: We don't currently handle STT results with word-level timestamps
                 if self._ts_callback: 
                     word_timestamps = SpeechToTextProvider._get_word_timestamps(datetime.now(), result.alternatives[0].words)
-                    asyncio.run_coroutine_threadsafe(self._ts_callback(word_timestamps), self._loop)
+                    threadsafe_fire_and_log(self._loop, self._ts_callback(word_timestamps), name="stt:timestamps")
           
-    
     # TODO: Doesn't work for transcript highlighting
     # TODO: These timestamps need to be related to either the start of the ChatMessage, or real time
     @staticmethod
@@ -167,37 +208,3 @@ class SpeechToTextProvider:
                  "end"   : now + word.end_time
             } for word in words]
 
-
-
-
-
-
-class TextToSpeechProvider:
-    '''TTS provider class. Uses Google's TTS API.'''
-    def __init__(self):
-        self._gemini_client = genai.Client()
-        self._audio_config = None
-    
-    # May not need if we decide to use the Google Cloud TTS instead
-    def synthesize_speech(self, text: str) -> bytes:
-        '''Synthesizes speech using Google's Gemini TTS API. Returns the audio content as bytes.'''
-        try:
-            response = self._gemini_client.models.generate_content(
-                model="gemini-2.5-flash-preview-tts",
-                contents="Say cheerfully: " + text,
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"], # The model will return audio content
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name='Kore',
-                            )
-                        )
-                    ),
-                )
-            )
-            data = response.candidates[0].content.parts[0].inline_data.data
-            logger.info(f"{lu.YELLOW}[TTS] Speech synthesized {lu.RESET}")
-            return data
-        except Exception as e:
-            logger.error(f"{lu.RED}[TTS] Error synthesizing speech: {e} {lu.RESET}")
