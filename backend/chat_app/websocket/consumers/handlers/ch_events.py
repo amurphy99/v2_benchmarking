@@ -63,14 +63,15 @@ async def handle_ws_command(consumer, event):
     # Act accordingly
     if command == "pause_auto":
         logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'pause_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-        consumer.responses_paused = True
+        consumer.reply_on_STT = True
     
     elif command == "resume_auto":
         logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'resume_auto'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
-        consumer.responses_paused = False
+        consumer.reply_on_STT = False
     
     elif command == "respond_now":
         logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'respond_now'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
+        system_resp = await consumer.reply_now()
 
     elif command == "robot_action":
         logger.info(f"{lu.CC_MAIN} Command: {lu.BOLD}'robot_action'{lu.RESET}{lu.GREEN} received. {lu.RESET}")
