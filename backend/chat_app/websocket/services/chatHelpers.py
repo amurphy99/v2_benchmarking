@@ -16,7 +16,7 @@ from time     import time as now_ts
 from datetime import datetime, timezone
 
 # From this project
-from   .speech.tts_streaming        import synthesize_speech
+from   .speech.tts_streaming        import synthesize_and_stream_tts
 from   .bg_helpers                  import fire_and_log, trace_await
 from ...services.logging_utils      import RESET, LLM_MAIN, USER_MSG
 from ...services.llm.chat_utilities import get_LLM_response
@@ -85,7 +85,7 @@ class ChatHandler:
         fire_and_log(bio_callback(), name="handle_transcription::bio_callback")
 
         # Synthesize speech with TTS if specified
-        if reply_audio: await synthesize_speech(system_resp, send_callback)
+        if reply_audio: await synthesize_and_stream_tts(system_resp, send_callback)
 
         return system_resp
 
