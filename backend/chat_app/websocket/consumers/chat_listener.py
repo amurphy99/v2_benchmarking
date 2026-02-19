@@ -40,6 +40,8 @@ TODO: To completely finish this on the backend
 
 * Probably some other stuff... need to look back through each file again
 
+* Add the responding mode to the frontend UI
+
 """
 
 import logging, time
