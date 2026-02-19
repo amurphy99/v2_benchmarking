@@ -32,7 +32,7 @@ from  ..services.speechProvider    import SpeechToTextProvider
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
-from .utils   .groups       import leave_all_groups, format_actions_command
+from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 from .handlers.cc_callbakcs import handle_chat_messages, on_utterance_biomarkers, handle_audio_data
@@ -100,20 +100,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
 
         # --------------------------------------------------------------------------------
-        # 3) Define group ("room") names & Join them
+        # 3) Finish setup (groups & STT)
         # --------------------------------------------------------------------------------
-        sid = self.session.id
-        self.room_group    = f"chat_{sid}"
-        self.monitor_group = f"chat_{sid}_mon"
-        self.control_group = f"chat_{sid}_ctl"
+        # Define group ("room") names & join them
+        await join_chat_consumer_groups(self)
 
-        # Join base room & control room (send updates to listeners, receive commands from listeners)
-        await self.channel_layer.group_add(self.   room_group, self.channel_name)
-        await self.channel_layer.group_add(self.control_group, self.channel_name)
-
-        # --------------------------------------------------------------------------------
-        # 4) Handle STT Setup
-        # --------------------------------------------------------------------------------
         # Create new audio buffer & speech provider instances
         self.audio_buffer = bytearray()
     
