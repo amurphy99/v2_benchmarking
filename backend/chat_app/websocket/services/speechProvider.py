@@ -211,8 +211,9 @@ class SpeechToTextProvider:
     # TODO: These timestamps need to be related to either the start of the ChatMessage, or real time
     @staticmethod
     def _get_word_timestamps(now, words):
-        return [{"word"  : word.word, 
-                 "start" : now + word.start_time, 
-                 "end"   : now + word.end_time
-            } for word in words]
+        return [{
+            "word"  : word.word, 
+            "start" : now + word.start_time, 
+            "end"   : now + word.end_time
+        } for word in words]
 

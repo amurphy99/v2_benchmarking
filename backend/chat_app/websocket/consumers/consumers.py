@@ -80,7 +80,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # Some config based on the source
         self.reply_with_audio = self.source == "webapp"
-        self.reply_on_STT     = False # self.source != "webapp"
+        self.reply_on_STT     = True # self.source != "webapp"
 
 
         # Accept the connection
