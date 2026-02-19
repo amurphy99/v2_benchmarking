@@ -69,7 +69,7 @@ class TextToSpeechProvider_Gemini:
             logger.exception(f"{lu.RED}[TTS] Error synthesizing speech: {e}{RESET}")
             return b""
           
-\
+
 # ================================================================================
 # Text-to-Speech Provider (Google Cloud TTS)
 # ================================================================================
