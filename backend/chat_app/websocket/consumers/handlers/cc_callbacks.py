@@ -1,7 +1,7 @@
 """
 Define a set of "callbacks" for the consumer to help manage the chat.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.consumers.handlers.cc_callbakcs`
+`backend.chat_app.websocket.consumers.handlers.cc_callbacks`
 
 These methods get implemented by the consumers via simple passthroughs.
 
