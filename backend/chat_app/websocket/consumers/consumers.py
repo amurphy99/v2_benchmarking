@@ -48,6 +48,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
+        self.last_response            = None
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -61,10 +62,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.source = self.scope.get("source", "unknown")
         
         # Configuration based on the source platform for the chat
-        
         self.use_backend_STT   = (self.source == "webapp")
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
-        self.reply_on_user_utt = True  # Should the ChatHandler reply instantly when receiving a user utterance
+        self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
     
 
