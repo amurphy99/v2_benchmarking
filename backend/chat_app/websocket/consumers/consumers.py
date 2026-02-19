@@ -153,6 +153,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if getattr(self, "_close_scheduled", False): return
         self._close_scheduled = True
 
+        # Shut down the STT provider
+        if getattr(self, "stt_provider", None): self.stt_provider.stop()
+
         # Snapshot IDs (don't pass model instances into background tasks)
         user_id    = getattr(self.user,    "id",    None)
         session_id = getattr(self.session, "id",    None)
@@ -166,9 +169,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Cancel background tasks (only connection-based ones; not the close_session task)
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
-
-        # Shut down the STT provider
-        if getattr(self, "stt_provider", None): self.stt_provider.stop()
 
         # Reset some properties for the next connection
         self.session                  = None
