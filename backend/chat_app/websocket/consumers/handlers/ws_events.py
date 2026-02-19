@@ -16,14 +16,16 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 # Handling messages
 from  ...services.chatHelpers import ChatHandler
 
+# Import the class for type checking
+from ..consumers import ChatConsumer
 
 # ================================================================================
 # Handle all forms of incoming data | TODO: are we supposed to guard here more?
 # ================================================================================
-async def handle_receive_json(consumer, data, **kwargs):
+async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
     if   data["type"] == "overlapped_speech" : await _handle_overlap(consumer, data=data)
-    elif data["type"] == "audio_data"        : await consumer._handle_audio_data(data)
-    elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, msg_callback=consumer._add_message_CB, send_callback=consumer.send, bio_callback=consumer._utt_bio)
+    elif data["type"] == "audio_data"        : await consumer.handle_audio_data(data)
+    elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
     elif data["type"] == "end_chat"          : consumer.stt_provider.stop(); await consumer.close(code=1000)   
     elif data["type"] == "toggle_stream"     : _toggle_stream(consumer, data)
 
@@ -32,8 +34,9 @@ async def handle_receive_json(consumer, data, **kwargs):
 
 
 # Toggle the stream of audio data (pause and unpause on the frontend)
-def _toggle_stream(consumer, data):
+def _toggle_stream(consumer: ChatConsumer, data):
     cmd = data["data"]
+    logger.info(f"{CC_MAIN} STT toggled: {CC_H}{data}{CC_R} {RESET}")
     if   cmd == "start": consumer.stt_provider.start()
     elif cmd == "stop" : consumer.stt_provider.stop()
 
@@ -41,8 +44,8 @@ def _toggle_stream(consumer, data):
 # --------------------------------------------------------------------------------
 # Overlapped Speech | TODO: Not really used for anything at the moment
 # --------------------------------------------------------------------------------
-async def _handle_overlap(consumer, data=None):
+async def _handle_overlap(consumer: ChatConsumer, data=None):
     consumer.overlapped_speech_count += 1
     consumer.overlapped_speech_events.append(time.time())
-    logger.info(f"{lu.YELLOW}Overlapped speech detected. Count: {consumer.overlapped_speech_count} {lu.RESET}")
+    logger.info(f"{CC_MAIN} Overlapped speech detected. Count: {CC_H}{consumer.overlapped_speech_count}{CC_R} {RESET}")
 
