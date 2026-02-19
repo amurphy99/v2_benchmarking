@@ -36,7 +36,7 @@ SILENCE       = b"\x00" * CHUNK_SIZE
 # Streaming STT via audio bytes received from the ChatConsumer client
 # ================================================================================
 class SpeechToTextProvider:
-    def __init__(self, *, consumer, loop, on_timestamps_callback=None, reply_audio=True):
+    def __init__(self, *, consumer, loop, on_timestamps_callback=None):
         self._client              = speech.SpeechClient()
         self._streaming_config    = None
         self._audio_buffer        = Queue()
@@ -51,8 +51,7 @@ class SpeechToTextProvider:
         self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
         self._loop         = loop                    # Loop from the consumer
         self._ts_callback  = on_timestamps_callback  # The function to call when word-level timestamps are received
-        self._reply_audio  = reply_audio
-
+    
 
     # --------------------------------------------------------------------------------
     # Utilities
@@ -65,11 +64,11 @@ class SpeechToTextProvider:
         c = self._consumer()
         if c is None: return None
         return dict(
-            msg_callback  = c._add_message_CB, # Callback to add new messages to the database & update local chat context
-            send_callback = c.send,            # Callback to send data to the chat WebSocket client
-            bio_callback  = c._utt_bio,        # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
-            reply_on_STT  = c._reply_on_STT,   # Should the ChatHandler reply instantly when receiving this
-            reply_audio   = self.reply_audio,  # Should the ChatHandler reply with audio bytes as well as text 
+            msg_callback  = c._add_message_CB,   # Callback to add new messages to the database & update local chat context
+            send_callback = c.send,              # Callback to send data to the chat WebSocket client
+            bio_callback  = c._utt_bio,          # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
+            reply_on_STT  = c._reply_on_STT,     # Should the ChatHandler reply instantly when receiving this
+            reply_audio   = c._reply_with_audio, # Should the ChatHandler reply with audio bytes as well as text 
         )
 
     # Generates StreamingRecognizeRequest objects from the audio Queue

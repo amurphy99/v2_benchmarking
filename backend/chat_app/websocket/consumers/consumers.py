@@ -79,8 +79,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.source      = self.scope.get("source", "unknown")
         
         # Some config based on the source
-        self.reply_audio  = self.source == "webapp"
-        self.reply_on_STT = True # self.source != "webapp"
+        self.reply_with_audio = self.source == "webapp"
+        self.reply_on_STT     = True # self.source != "webapp"
 
 
         # Accept the connection
@@ -131,7 +131,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             consumer               = self,
             loop                   = asyncio.get_running_loop(),
             on_timestamps_callback = None, 
-            reply_audio            = self.reply_audio,
         )
 
         # --------------------------------------------------------------------------------
@@ -274,6 +273,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif cmd == "stop" : self.stt_provider.stop()
 
 
+    def _reply_with_audio(self):
+        return self.reply_with_audio
+    
     def _reply_on_STT(self):
         return self.reply_on_STT
     
@@ -283,5 +285,5 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             send_callback = self.send, 
             msg_callback  = self._add_message_CB,
             bio_callback  = self._utt_bio, 
-            reply_audio   = self.reply_audio,
+            reply_audio   = self.reply_with_audio,
         )
