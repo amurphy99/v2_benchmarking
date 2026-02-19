@@ -4,6 +4,7 @@
 # Load Packages
 import os, warnings, logging
 from .services.llm.langchain_wrapper import CustomChatModel
+from .services.llm.instructor_client import build_instructor_client, build_openai_client
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -14,6 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
 USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
+INSTRUCTOR_MODEL_NAME = "qwen2.5-3b"  # model name for the Instructor client
 
 # LLM Parameters
 MAX_LENGTH = 128 # 256
@@ -119,7 +121,19 @@ try:
     # Setup the LLM
     llm = LLMClass()
 
-    llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
+    RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
+
+    if RAG_METHOD == "legacy":
+        # Initialize LangChain wrapper for the our fine-tuned phi3 model
+        llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
+        logger.info("LangChain LLM wrapper initialized successfully")
+    else:
+        # Initialize Instructor client (for structured responses)
+        instructor_client = build_instructor_client() if USE_LLM else None
+        # Initialize plain OpenAI client (for plain text responses)
+        openai_client = build_openai_client() if USE_LLM else None
+        logger.info("Instructor and OpenAI clients initialized successfully")
+
     logger.info("LLM initialized successfully")
 
 except Exception as e:
