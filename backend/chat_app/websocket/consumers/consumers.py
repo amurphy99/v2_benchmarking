@@ -1,5 +1,5 @@
 """
-Live user chat controller.
+Live user chat controller. Main controller for a live chat session.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.consumers`
 
@@ -31,32 +31,22 @@ from  ..services.audioHelpers      import extract_audio_biomarkers, extract_text
 from  ..services.speechProvider    import SpeechToTextProvider
 
 # Consumer-specific utilities
-from .utils   .logging   import ChatConsumerLogging as log
-from .utils   .groups    import leave_all_groups, format_actions_command
-from .handlers.ch_events import handle_ws_command, forward_payload_to_client
-from .handlers.ws_events import handle_receive_json
-
+from .utils   .logging      import ChatConsumerLogging as log
+from .utils   .groups       import leave_all_groups, format_actions_command
+from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
+from .handlers.ws_events    import handle_receive_json
+from .handlers.cc_callbakcs import handle_chat_messages, on_utterance_biomarkers, handle_audio_data
 
 
 SECOND = 32_000 # How big a chunk of audio of one second is, in bytes
+
 
 # ================================================================================
 # ChatConsumer 
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
-    """
-    ChatConsumer
-    ------------
-    Main controller for a live chat session.
-    
-    TODO: Much of this needs to be moved to helper classes. 
-    
-    IDK, stuff that has been here for a while
-    * self.return_biomarkers => should we return the biomarkers to the client? (right now, no)
-
-    """
     MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
-    SECONDS     = 10  # How often we want to send audio to calculate biomarkers
+    
 
     # ================================================================================
     # Connect
@@ -78,17 +68,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.user        = self.scope["user"]
         self.source      = self.scope.get("source", "unknown")
         
-        # Some config based on the source
-        self.reply_with_audio = self.source == "webapp"
-        self.reply_on_STT     = True # self.source != "webapp"
-
-
+        # Configuration based on the source platform for the chat
+        # TODO: Change later as the other platforms (robots) get updated
+        self.reply_with_audio  = self.source == "webapp"
+        self.use_backend_STT   = self.source == "webapp" 
+        self.reply_on_STT      = True # self.source != "webapp"
+        self.reply_on_user_utt = True # TODO: Rename `reply_on_STT` to this
+        
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
         
-        # I don't think any frontend uses these during the chat right now, but I'll leave this option in
-        self.return_biomarkers = False # (self.source in ["webapp"])
 
         # --------------------------------------------------------------------------------
         # 2) Load or create an active session & Prepare the 'context_buffer'
@@ -107,6 +97,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
         self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
+
 
         # --------------------------------------------------------------------------------
         # 3) Define group ("room") names & Join them
@@ -133,14 +124,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             on_timestamps_callback = None, 
         )
 
-        # --------------------------------------------------------------------------------
-        # 5) Send misc information to the frontend (ToDo: biomarkers, etc)
-        # --------------------------------------------------------------------------------
-        # This is where we could potentially have a connection on the robot and web app and monitor the conversation in real time
-        if self.return_biomarkers: await self.send_json({"type": "history", "messages": self.context_buffer})
-        
         # Log the successful connection
-        log.log_connect_done(self.user, self.session.id)
+        log.log_connect_done(self.user, self.session.id, config={""})
         
     # --------------------------------------------------------------------------------
     # Disconnect
@@ -177,11 +162,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
 
-        leave_all_groups(self, log)
+        leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, code)
 
+
     # ================================================================================
-    # Group Event Handlers | 
+    # Group Event Handlers
     # ================================================================================
     # Receives commands from listener consumers
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
@@ -206,65 +192,20 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, data, **kwargs):
         await handle_receive_json(self, data)
  
+    # Add messages to the database & update the local context (role must be "user" or "assistant")
+    async def _add_message_CB(self, role, text, ts): return await handle_chat_messages(self, role, text, ts)
+
+    # Handle on-utterance biomarkers
+    async def _utt_bio(self): await on_utterance_biomarkers(self)
+
+    # Handle "streamed" audio data from the frontend client
+    async def _handle_audio_data(self, data): await handle_audio_data(self, data)
 
 
-    # --------------------------------------------------------------------------------
-    # Text Transcriptions
-    # --------------------------------------------------------------------------------
-    # TODO: Because altered_grammar specifically is so slow, they will actually go to the db out of order. Need to add a manual time setting argument.
-    async def _utt_bio(self):
-        """ On-Utterance Biomarkers (saves them to the DB as soon as we get them). """
-        utterance_biomarkers = await extract_text_biomarkers(self.context_buffer)
-
-        # Save biomarkers to the DB & send them to any listeners
-        fire_and_log(
-            db_s2a(ChatService.add_biomarkers_bulk)(self.session, utterance_biomarkers),
-            name="_utt_bio::add_biomarkers_bulk"    
-        )
-        await self._broadcast_monitor({"type": "biomarker_scores", "data": utterance_biomarkers})
-    
-    # Add messages to the database & update the local context (role must be "user" or "assistant").
-    async def _add_message_CB(self, role, text, ts):
-        # Fire-and-forget DB write for the user message
-        fire_and_log(db_s2a(ChatService.add_message)(self.session, role, text), name="_add_message_CB")
-
-        # Update in memory context
-        self.context_buffer.append((role, text, ts))
-        if len(self.context_buffer) > self.MAX_CONTEXT: self.context_buffer.pop(0)
-
-        # Broadcast updates to any listeners
-        await self._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
-
-        # Return the updated context (if the message was from the user, this will be used for the LLM)
-        return self.context_buffer
 
 
-        
-    # --------------------------------------------------------------------------------
-    # Audio Data
-    # --------------------------------------------------------------------------------
-    async def _handle_audio_data(self, data):
-        
-         # Send audio to the speech to text provider
-        self.stt_provider.send_audio(data)
-                            
-        # # Generate the audio-related biomarker scores
-        self.audio_buffer.extend(base64.b64decode(data['data']))
-        if len(self.audio_buffer) >= (self.SECONDS * SECOND):
-            audio_data = {"data": bytes(self.audio_buffer), "sampleRate": data['sampleRate']}
-            audio_biomarkers = await extract_audio_biomarkers(audio_data, self.overlapped_speech_count)
-            self.audio_buffer.clear()
 
-            # Save biomarkers to the DB & send them to any listeners
-            fire_and_log(
-                db_s2a(ChatService.add_biomarkers_bulk)(self.session, audio_biomarkers),
-                name="_handle_audio_data::add_biomarkers_bulk"    
-            )
-            await self._broadcast_monitor({"type": "biomarker_scores", "data": audio_biomarkers})
-   
-        # Update turntaking (12 audio windows for 1 minute of data)
-        self.audio_windows_count += 1
-        self.overlapped_speech_count = self.overlapped_speech_count / (self.audio_windows_count / 12)
+
         
     # Toggle the stream of audio data
     def _toggle_stream(self, data):
@@ -273,12 +214,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         elif cmd == "stop" : self.stt_provider.stop()
 
 
+
+    # --------------------------------------------------------------------------------
+    # Access to fields | TODO: Need to be removed
+    # --------------------------------------------------------------------------------
     def _reply_with_audio(self):
         return self.reply_with_audio
     
     def _reply_on_STT(self):
         return self.reply_on_STT
     
+    # --------------------------------------------------------------------------------
+    # Audio Data
+    # --------------------------------------------------------------------------------
     async def reply_now(self, use_response=None):
         return await ChatHandler.respond_to_user(
             self.context_buffer, 
