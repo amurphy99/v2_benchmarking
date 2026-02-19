@@ -127,7 +127,7 @@ async def on_audio_biomarkers(consumer: ChatConsumer, *, sample_rate=16_000):
 
     # Get audio-based biomarkers
     # TODO: Add the timestamp from the START of the window
-    audio_data = {"data": bytes(consumer.audio_buffer[:window_bytes]), "sampleRate": sample_rate}
+    audio_data = {"data": audio_segment, "sampleRate": sample_rate}
     audio_biomarkers = await extract_audio_biomarkers(audio_data, consumer.overlapped_speech_count)
 
     # Save biomarkers scores to the DB & broadcast them to any listeners
