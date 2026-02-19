@@ -17,7 +17,7 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
 from .tts_service import TextToSpeechProvider
 
 # Config
-CHUNK_SIZE = 8_192  # Chunk size (bytes) of TTS audio streamed back to frontend client
+CHUNK_SIZE = 4_800  # 8_192 | Chunk size (bytes) of TTS audio streamed back to frontend client. 
 
 
 # ================================================================================
