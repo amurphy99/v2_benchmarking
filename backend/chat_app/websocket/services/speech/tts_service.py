@@ -10,20 +10,27 @@ logger = logging.getLogger(__name__)
 # Google imports
 from google       import genai
 from google.genai import types
+from google.cloud import texttospeech
+
 
 # From this project
 from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
 
-# Config
+# Config (Gemini TTS)
 VOICE_NAME   = "Kore"
 STYLE_PREFIX = "Say: "  # "Say cheerfully: "
+
+# Config (Google Cloud TTS)
+LANGUAGE_CODE = "en-US"
+VOICE_NAME    = "en-US-Standard-C"
+AUDIO_FMT     = texttospeech.AudioEncoding.OGG_OPUS
 
 
 # ================================================================================
 # Text-to-Speech Provider (Gemini TTS)
 # ================================================================================
-class TextToSpeechProvider:
+class TextToSpeechProvider_Gemini:
 
     # Initialize client
     def __init__(self):
@@ -55,10 +62,42 @@ class TextToSpeechProvider:
 
             # Extract raw audio bytes from response
             data = response.candidates[0].content.parts[0].inline_data.data
-            logger.info(f"{TTS_MAIN} Speech synthesized ({len(data):,} bytes){RESET}")
+            logger.info(f"{TTS_MAIN} Speech synthesized by Gemini TTS ({len(data):,} bytes){RESET}")
             return data
 
         except Exception as e: 
             logger.exception(f"{lu.RED}[TTS] Error synthesizing speech: {e}{RESET}")
             return b""
           
+
+
+# ================================================================================
+# Text-to-Speech Provider (Google Cloud TTS)
+# ================================================================================
+class TextToSpeechProvider:
+    def __init__(self):
+        self._client = texttospeech.TextToSpeechClient()
+
+    def synthesize_speech(self, text: str) -> bytes:
+        # Guard / normalize input
+        text = (text or "").strip()
+        if not text: return b""
+
+        try:
+            response = self._client.synthesize_speech(
+                input=texttospeech.SynthesisInput(text=text),
+                voice=texttospeech.VoiceSelectionParams(
+                    language_code=LANGUAGE_CODE,
+                    name=VOICE_NAME,
+                ),
+                audio_config=texttospeech.AudioConfig(audio_encoding=AUDIO_FMT),
+            )
+
+            # Extract raw audio bytes from response
+            data = response.audio_content
+            logger.info(f"{TTS_MAIN} Speech synthesized by Google Cloud TTS ({len(data):,} bytes){RESET}")
+            return data
+
+        except Exception as e:
+            logger.exception(f"{lu.RED}[TTS] Error synthesizing speech: {e}{RESET}")
+            return b""
