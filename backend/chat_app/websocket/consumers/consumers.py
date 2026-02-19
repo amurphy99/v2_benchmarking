@@ -118,12 +118,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     
         # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
         self.stt_provider = SpeechToTextProvider(
+            loop                   = asyncio.get_running_loop(),
             transcript_callback    = ChatHandler.handle_stt_output, 
             msg_callback           = self._add_message_CB, 
             send_callback          = self.send, 
             bio_callback           = self._utt_bio, 
             on_timestamps_callback = None, 
-            loop                   = asyncio.get_event_loop(),
         )
 
         # --------------------------------------------------------------------------------
@@ -159,6 +159,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Cancel background tasks (only connection-based ones; not the close_session task)
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
+
+        # Shut down the STT provider
+        if getattr(self, "stt_provider", None): self.stt_provider.stop()
 
         # Reset some properties for the next connection
         self.session                  = None
