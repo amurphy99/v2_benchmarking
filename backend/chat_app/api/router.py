@@ -10,6 +10,7 @@ from .views import (
     CreateAccessView, AccessViewSet,
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
+    LatestChatSessionView,
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
@@ -49,8 +50,9 @@ urlpatterns = [
     path("access/",             AccessView.as_view(), name="access"  ),
     path("access/create/",      CreateAccessView.as_view(), name="create_access"),
     
-    # Single-row resources (not connected to a user)
+    # Single-row resources
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
+    path("chatsession/latest/", LatestChatSessionView.as_view(), name="latest_chatsession"),
 
     # JWT login
     path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),

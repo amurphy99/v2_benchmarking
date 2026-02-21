@@ -125,7 +125,7 @@ export function Chat() {
 	const saveChat = () => {
 		save();
 		setShowModal(false);
-		navigate("/goal");
+		navigate("/chat/end");
 	}; // use the stop speaking callback
 
     // --------------------------------------------------------------------

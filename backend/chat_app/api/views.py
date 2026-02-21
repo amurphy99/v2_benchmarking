@@ -147,7 +147,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 # ======================================================================= ===================================
-# Read-only List & Details (messages, biomarkers)
+# Read-only ChatSession & Details (messages, biomarkers)
 # ======================================================================= ===================================
 class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     """
@@ -166,6 +166,19 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
                 .filter(is_active=False)
                 .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
+        
+class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        profile = self.get_profile()
+        return (ChatSession.objects
+                .filter(profile=profile)
+                .select_related("profile", "image")
+                .prefetch_related("messages", "biomarker_scores")
+                .order_by("-end_ts")
+                .first())
 
 # ======================================================================= ===================================
 # Profile Related Views

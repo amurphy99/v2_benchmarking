@@ -3,7 +3,7 @@ import { AuthProvider            } from "@/context/AuthProvider";
 
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
-import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
+import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary, 
     WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest, 
     PracticePage, Profile } from "@/pages";
 import Home            from "@/pages/Home";
@@ -54,6 +54,7 @@ export default function App() {
                 {/* Patient */}
                 <Route element={ <IsPatient/> }>
                     <Route path="/chat" element={<Chat />} />
+                    <Route path="/chat/end" element={<ChatEnd />} />
                 </Route>
 
                 {/* Caregiver */}

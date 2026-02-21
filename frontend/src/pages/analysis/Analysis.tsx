@@ -34,7 +34,7 @@ export function Analysis() {
 
     return (
         <div className={colStyle}>
-            <div className={`flex flex-col gap-[2rem] md:flex-row md:gap-[1rem]`}>
+            <div className={`flex flex-col gap-[2rem] md:flex-row md:gap-[1rem] w-full`}>
                 <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
                 <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
             </div>
