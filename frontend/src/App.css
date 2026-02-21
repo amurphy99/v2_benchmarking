@@ -190,3 +190,23 @@ h1 {
     border-radius: 0.35rem;
     font-size: 1.25rem;
 }
+
+.arc {
+  --b: 30px; /* the boder thickness */
+  --a: 220deg; /* control the progression */
+  
+  width: 200px;
+  aspect-ratio: 1;
+  padding: var(--b);
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: linear-gradient(#CC333F,#8A9B0F);
+  --_g:/var(--b) var(--b) no-repeat
+    radial-gradient(50% 50%,#000 calc(100% - 1px),#0000);
+  mask:
+    top var(--_g),
+     calc(50% + 50%*sin(var(--a))) 
+     calc(50% - 50%*cos(var(--a))) var(--_g),
+    linear-gradient(#0000 0 0) content-box intersect,
+    conic-gradient(#000 var(--a),#0000 0);
+}

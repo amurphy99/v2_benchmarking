@@ -16,12 +16,16 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
          <div className={blockStyle}>
             <h2 className={`${role}-text`}>General Cognitive Status</h2>
             <p className="text-lg text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
-            <div className="grid grid-cols-2 mx-[-1rem] gap-2">
-                <div className="flex flex-col">
-                    <div className="scale-120">
-                        <CircularProgress score={curScore} role={role} />
-                    </div>
-                    {prevWeek.start ? 
+            <div className="grid grid-cols-2 p-[-1rem] gap-2">
+                <div className="min-h-[150px] max-h-[300px]">
+                    <CircularProgress score={curScore} role={role} />
+                </div>                    
+                <div className="flex flex-col justify-center gap-2 text-lg w-full">
+                    <b className="mb-0">Fairly Good</b>
+                    <p className="mb-0">2 signs flagged</p>
+                    <p className="mb-0">1 factor impact</p>
+                </div>
+                 {prevWeek.start ? 
                     <span className="p-2 mx-2 gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
                         <p className="mb-0 text-center">From last week:</p>
                         {scoreDiff >= 0 ? 
@@ -29,19 +33,12 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
                             <TbArrowBigDown color={"red"} size={"2rem"} />} 
                         {scoreDiff}
                     </span> : null}
-                    
-                </div>
-                <div className="flex flex-col justify-center gap-2 text-lg w-full">
-                    <b>Fairly Good</b>
-                    <p>2 signs flagged</p>
-                    <p>1 factor impact</p>
-                    <button 
+                <button 
                         className={`${role}-button p-2 w-[90%] text-lg rounded-md`}
                         onClick={() => document.getElementById('factors')?.scrollIntoView()}
                     >
                             Check Details
-                    </button>
-                </div>
+                </button>
             </div>
         </div>
     )
