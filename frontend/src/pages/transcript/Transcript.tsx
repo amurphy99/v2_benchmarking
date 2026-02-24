@@ -23,7 +23,7 @@ export function Transcript() {
         const summaryStyle = "flex flex-col gap-2 p-[1rem] rounded-lg"
         if (biomarker == "") {
             return (
-                <div className={`${summaryStyle} bg-gray-200 items-center border-1 border-gray-400`}>
+                <div className={`${summaryStyle} h-[12rem] bg-gray-200 items-center border-1 border-gray-400`}>
                     <GiArchiveResearch size={"10rem"} />
                     <b className="text-lg">Select a sign to define</b>
                     <i className="text-lg text-gray-500">Nothing is selected</i>
@@ -31,7 +31,7 @@ export function Transcript() {
             )
         }
         return (
-            <div className={summaryStyle}>
+            <div className={`${summaryStyle} h-[12rem]`}>
                 <h2 className={`${role}-text mb-0`}>{getBiomarkerDescription(biomarker)}</h2>
                 <h5 className={`text-gray-400 font-normal text-lg mb-0`}>({getBiomarkerName(biomarker)})</h5>
                 <p>{getBiomarkerDefinition(biomarker)}</p>

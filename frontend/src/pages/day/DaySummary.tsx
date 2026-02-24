@@ -29,7 +29,7 @@ export function DaySummary() {
     if (window.isMobile) {
     return (
         <div>
-            <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
+            <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {navigate(-1);}}>
                 ← {chatDate.toLocaleDateString("en-US", dateFormatOptions)}
             </div>
             <div className={colStyle}>
@@ -52,7 +52,7 @@ export function DaySummary() {
     } else {
         return (
             <div>
-                <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
+                <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {navigate(-1);}}>
                     ← {chatDate.toLocaleDateString("en-US", dateFormatOptions)}
                 </div>
                 <div className={colStyle}>

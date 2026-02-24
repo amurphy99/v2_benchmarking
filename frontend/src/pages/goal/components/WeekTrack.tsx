@@ -1,16 +1,25 @@
+import { ChatSession } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
-import { ChatWeek, getNumChatsInWeek } from "@/utils/functions/getChatWeeks";
+import { ChatWeek, getChatsInWeek } from "@/utils/functions/getChatWeeks";
+import { useNavigate } from "react-router-dom";
 
 
 export default function WeekTrack( {week} : {week: ChatWeek} ) {
     const role = useAuth().account.role;
+    const navigate = useNavigate();
 
-    const dayTracks = getNumChatsInWeek(week);
+    const dayTracks = getChatsInWeek(week);
+
+    function toDayChat(sessions: ChatSession[]): void {
+        navigate("/day", { state: { chatSession: sessions[sessions.length - 1], albumDisplay: "grid" } })
+    }
 
     return (
         <div className="flex flex-row justify-between">
             {dayTracks.map((d, idx) => (
-                <DayTrack key={idx} day={d.day} chats={d.chats} role={role}/>
+                <div onClick={() => toDayChat(d.sessions)} className="hover:cursor-pointer">
+                    <DayTrack key={idx} day={d.day} chats={d.sessions.length} role={role}/>
+                </div>
             ))}
         </div>
     )

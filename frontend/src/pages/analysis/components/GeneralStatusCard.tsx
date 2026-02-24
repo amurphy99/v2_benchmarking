@@ -16,17 +16,17 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
          <div className={blockStyle}>
             <h2 className={`${role}-text`}>General Cognitive Status</h2>
             <p className="text-lg text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
-            <div className="grid grid-cols-2 p-[-1rem] gap-2">
-                <div className="min-h-[150px] max-h-[300px]">
+            <div className="grid grid-cols-5 p-[-1rem] gap-2">
+                <div className="col-span-3 min-h-[150px] max-h-[300px]">
                     <CircularProgress score={curScore} role={role} />
                 </div>                    
-                <div className="flex flex-col justify-center gap-2 text-lg w-full">
+                <div className="flex flex-col col-span-2 justify-center gap-2 text-lg w-full">
                     <b className="mb-0">Fairly Good</b>
                     <p className="mb-0">2 signs flagged</p>
                     <p className="mb-0">1 factor impact</p>
                 </div>
                  {prevWeek.start ? 
-                    <span className="p-2 mx-2 gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
+                    <span className="col-span-3 p-2 mx-2 gap-2 border-2 border-solid border-gray-300 rounded-full flex flex-row justify-center items-center">
                         <p className="mb-0 text-center">From last week:</p>
                         {scoreDiff >= 0 ? 
                             <TbArrowBigUp color={"green"} size={"2rem"} /> : 
@@ -34,7 +34,7 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
                         {scoreDiff}
                     </span> : null}
                 <button 
-                        className={`${role}-button p-2 w-[90%] text-lg rounded-md`}
+                        className={`${role}-button p-2 w-[90%] text-lg rounded-md col-span-2`}
                         onClick={() => document.getElementById('factors')?.scrollIntoView()}
                     >
                             Check Details

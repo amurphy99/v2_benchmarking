@@ -35,10 +35,10 @@ export function Goal() {
     }
 
     return (
-        <div className="d-flex flex-col px-[5vw] md:pt-[1rem] pb-[4rem] mb-[5rem] h-full md:gap-5 gap-2">  
-            <br />
+        <>
+       <div className="flex flex-col h-[80vh]">
             {!window.isMobile ? 
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
+                <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
                         <Avatar animation={undefined} animCount={0} model={model} zoom="body" /> 
@@ -55,8 +55,11 @@ export function Goal() {
                     </div>
                 </div>
             }
-            <GoalProgress current={profile.goal.current} target={profile.goal.target} />
-            <WeekTrack week={week} />
+            <div className="mx-[10%]">
+                <GoalProgress current={profile.goal.current} target={profile.goal.target} />
+                <WeekTrack week={week} />
+            </div>
         </div>
+        </>
     );
 }
