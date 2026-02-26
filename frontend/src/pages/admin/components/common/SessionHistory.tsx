@@ -24,10 +24,13 @@ type SessionHistoryProps =
 // Admin ChatSession Messages & Biomarkers View Components
 // ================================================================================
 // Flexible for active & inactive chats
-export function SessionHistory(props: SessionHistoryProps){
+export function SessionHistory(props: SessionHistoryProps) {
+    // Check if chat is active or not
+    const inactive = ("session" in props);
+
     // Normalize inputs once
-    const messages = useMemo(() => {return "session" in props ? (props.session.messages ?? [])                       : props.messages;}, [props]);
-    const series   = useMemo(() => {return "session" in props ? ChatBiomarkerToLocalSeries(props.session.biomarkers) : props.series;  }, [props]);
+    const messages = useMemo(() => {return inactive ? (props.session.messages ?? [])                       : props.messages;}, [props]);
+    const series   = useMemo(() => {return inactive ? ChatBiomarkerToLocalSeries(props.session.biomarkers) : props.series;  }, [props]);
 
     // Keep the heights equal (maybe doing it this way sucks, idk)
     const bioPanelRef    = useRef<HTMLDivElement | null>(null);
@@ -42,7 +45,7 @@ export function SessionHistory(props: SessionHistoryProps){
 
             {/* Chat Messages */}
             <div className={style_messages} style={bioHeight ? { height: bioHeight } : undefined}>
-                <ChatMessages messages={messages}/>
+                <ChatMessages messages={messages} do_auto_scroll={!inactive} />
             </div>
 
             {/* Biomarker Scores */}

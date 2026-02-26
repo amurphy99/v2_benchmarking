@@ -56,9 +56,10 @@ function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage | ChatMessage, 
 // ================================================================================
 // ChatMessages (scroll view)
 // ================================================================================
-export default function ChatMessages({ messages, chatStartTsIso }: { 
+export default function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=true }: { 
     messages        : LocalChatMessage[] | ChatMessage[]; 
-    chatStartTsIso? : string | null; 
+    chatStartTsIso? : string  | null; 
+    do_auto_scroll? : boolean | null;
 }) {
     // Automatically scroll to bottom when messages change
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -66,6 +67,7 @@ export default function ChatMessages({ messages, chatStartTsIso }: {
 
     // Only auto scroll to the bottom if the user is already at/close to the bottom already
     useEffect(() => {
+        if (!do_auto_scroll) return;
         const container = scrollContainerRef.current;
         if (!container) return;
 
