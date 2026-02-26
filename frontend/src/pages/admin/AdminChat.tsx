@@ -13,26 +13,17 @@ import { useLocalChatSession } from "@/hooks/live-chat";
 import { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
 // Components
-import   ChatMessages          from "../chat/components/ChatMessages";
-import { SessionHeader      }  from  "./components/admin_header/SessionHeader";  // TODO: rename this file
-import {     BiomarkerPanel }  from  "./components/common/BiomarkerPanel";
-import { AdminControlsPanel }  from "./components/AdminControlsPanel";
+import { SessionHeader      } from  "./components/admin_header/SessionHeader";
+import { SessionHistory     } from "./components/common/SessionHistory";
+import { AdminControlsPanel } from "./components/AdminControlsPanel";
 
 // Misc. Helpers
-import { useElementHeight                            } from "@/hooks/style/useElementHeight";
 import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/data_utils/adminChatSamples";
 
 // ================================================================================
 // AdminChat -- Monitor a participant's ChatSession in real time
 // ================================================================================
 export function AdminChat() {
-    // Style Helpers
-    const bioPanelRef = useRef<HTMLDivElement | null>(null);
-    const bioHeight = useElementHeight(bioPanelRef);
-
-    // --------------------------------------------------------------------------------
-    // Storage Setup
-    // --------------------------------------------------------------------------------
     // SessionInfo sent initially by the backend
     const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
@@ -66,14 +57,12 @@ export function AdminChat() {
         },
     });
 
-
     // --------------------------------------------------------------------------------
     // [DEBUGGING] Sample Data Methods 
     // --------------------------------------------------------------------------------
     const [isUserRole, setIsUserRole] = useState<boolean>(true);
     function addSampleMessage       () {pushMessageObj(makeSampleMessage(isUserRole)); setIsUserRole((prev) => !prev);}
     function addSampleBiomarkerScore() {  pushScoreObj(makeSampleBiomarkerEvent()); }
-
 
     // --------------------------------------------------------------------------------
     // Control state (commands confirmed by backend)
@@ -84,22 +73,20 @@ export function AdminChat() {
     });
 
     // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)
-    const ackHandlerRef = useRef<(ack: CommandAck) => void>(() => {});
-    const registerAckHandler = (fn: (ack: CommandAck) => void) => { ackHandlerRef.current = fn; };
-
+    const ackHandlerRef      = useRef<(ack: CommandAck) => void>(() => {});
+    const registerAckHandler = (fn:   (ack: CommandAck) => void) => { ackHandlerRef.current = fn; };
 
     // ================================================================================
     // UI Components
     // ================================================================================
     return (
         <div className="pb-[15vh]">
-            {/* -------------------------------------------------------------------------------- */}
+
             {/* Page Header */}
-            {/* -------------------------------------------------------------------------------- */}
             <SessionHeader
                 title         = "Monitor Live Chat Session"
                 sessionId     = {id}
-                username      = {sessionInfo?.username ?? "sample_username"}
+                username      = {sessionInfo?.username ?? "unknown_username"}
                 source        = {sessionInfo?.source   ?? "unknown"}
                 mode          = "listener"
                 wsState       = {connected ? "connected" : "disconnected"}
@@ -110,33 +97,13 @@ export function AdminChat() {
                 inactive_chat = {false}
             />
 
-            {/* ================================================================================ */}
-            {/* Body */}
-            {/* ================================================================================ */}
-            <div className="flex flex-row m-[1rem] gap-[1rem] items-start">
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Chat Messages (set height equal to biomarker panel height) */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div 
-                    className="w-1/2 border border-gray-300 flex flex-col min-h-0 rounded-sm"
-                    style={bioHeight ? { height: bioHeight } : undefined}
-                >
-                    <ChatMessages messages={session.messages}/>
-                </div>
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Biomarkers */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div ref={bioPanelRef} className="w-1/2 border border-gray-300 rounded-sm">
-                   <BiomarkerPanel series={series} windowSeconds={300} />
-                </div>
-
-            </div>
-
             {/* -------------------------------------------------------------------------------- */}
+            {/* Page Body */}
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Chat Messages & Biomarker History */}
+            <SessionHistory messages={session.messages} series={series} /> 
+
             {/* Control Buttons */}
-            {/* -------------------------------------------------------------------------------- */}
             <AdminControlsPanel
                 connected            = {connected}
                 send                 = {send}
@@ -149,11 +116,4 @@ export function AdminChat() {
         </div>
     );
 }
-
-
-
-
-
-
-
 
