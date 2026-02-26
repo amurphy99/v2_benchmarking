@@ -9,6 +9,8 @@ TODO: Rejoining a chat needs to be handled differently...
 TODO: I'll delete everything we had here for it and then add it back in from a separate branch later
 
 """
+from __future__ import annotations
+
 import json, logging
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,8 @@ from ...services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, USER_M
 from ...services.llm.chat_utilities import get_LLM_response
 
 # Import the class for type checking
-from ..consumers.consumers import ChatConsumer
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
 
 # ================================================================================

@@ -12,6 +12,8 @@ TODO: Room here to alter the audio biomarker calculations if I decide to change
       it so that they are only calculated when we know the user was speaking.
 
 """
+from __future__ import annotations
+
 import logging, base64
 logger = logging.getLogger(__name__)
 
@@ -22,14 +24,15 @@ from channels.db import database_sync_to_async as db_s2a
 from ....services import logging_utils as lu 
 from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 
-# Import the class for type checking
-from ..consumers import ChatConsumer
-
 # Handling messages
 from ....services.db_services       import ChatService
 from  ...services.chatHelpers       import ChatHandler
 from  ...services.bg_helpers        import fire_and_log
 from  ...services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
+
+# Import the class for type checking
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 # Config
 SECOND_BYTES   = 32_000  # How big a chunk of audio of one second is, in bytes (2 * sample_rate ?)

@@ -6,6 +6,8 @@ Handle events from channels groups.
 TODO: Can probably structure the command handling better...
 
 """
+from __future__ import annotations
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,8 @@ from ..utils.logging   import ChatConsumerLogging as log
 from ..utils.groups    import format_actions_command
 
 # Import the class for type checking
-from ..consumers import ChatConsumer
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 
 # ================================================================================

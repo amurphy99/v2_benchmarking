@@ -6,6 +6,8 @@ Handle events from the ChatConsumer's WebSocket client.
 These methods get implemented by the consumers via simple passthroughs.
 
 """
+from __future__ import annotations
+
 import logging, time
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,8 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 from  ...services.chatHelpers import ChatHandler
 
 # Import the class for type checking
-from ..consumers import ChatConsumer
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 # ================================================================================
 # Handle all forms of incoming data | TODO: are we supposed to guard here more?
