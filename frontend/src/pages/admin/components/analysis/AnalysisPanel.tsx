@@ -42,6 +42,9 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
         rightHeight                       : null;
     const syncStyle = syncHeight ? { minHeight: syncHeight } : undefined;
 
+    // Style
+    const section_header = "flex flex-row items-end gap-[1rem] ";
+
     // --------------------------------------------------------------------------------
     // Return UI component
     // --------------------------------------------------------------------------------
@@ -64,12 +67,14 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
 
             {/* Summary */}
             <div className={cardClass("")} ref={leftRef}  style={syncStyle} >
-                <div className="px-4 py-3 border-b border-black/10">
-                    <div className="text-sm font-semibold">Summary</div>
-                    <div className="text-xs text-black/60">3-5 sentences of what the conversation covered.</div>
+                <div className="px-[1.5rem] py-[1rem] border-b border-black/10">
+                    <div className={section_header}>
+                        <div className="text-lg   font-semibold">Summary</div>
+                        <div className="text-base text-black/60">3-5 sentences of what the conversation covered.</div>
+                    </div>
                 </div>
 
-                <div className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">{summary || "—"}</div>
+                <div className="px-4 py-3 text-base leading-relaxed whitespace-pre-wrap">{summary || "—"}</div>
             </div>
 
             {/* -------------------------------------------------------------------------------- */}
@@ -78,34 +83,34 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
             <div className={cardClass("")} ref={rightRef} style={syncStyle} >
 
                 {/* Risk Rating */}
-                <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between gap-2">
-                    <div>
-                        <div className="text-sm font-semibold">Risk Factors</div>
-                        <div className="text-xs text-black/60">Rating, supporting quotes, and rationale.</div>
+                <div className="px-[1.5rem] py-[1rem] border-b border-black/10 flex items-center justify-between gap-2">
+                    <div className={section_header}>
+                        <div className="text-lg   font-semibold">Risk Factors</div>
+                        <div className="text-base text-black/60">Rating, supporting quotes, and rationale.</div>
                     </div>
                     {riskBadge(risk_rating)}
                 </div>
 
                 {/* Quotes */}
                 <div className="px-4 py-3">
-                    <div className="text-xs font-semibold text-black/70 mb-2">Flagged quotes</div>
+                    <div className="text-base font-semibold text-black/70 mb-2">Flagged quotes</div>
                     {risk_quotes && risk_quotes.length > 0 ? (
                         <ul className="space-y-2">
                             {risk_quotes.slice(0, 6).map((q, i) => (
-                            <li key={i} className="rounded-lg border border-black/10 bg-black/5 px-3 py-2 text-xs leading-snug">
+                            <li key={i} className="rounded-lg border border-black/10 bg-black/5 px-3 py-2 text-base leading-snug">
                                 <span className="text-black/70">"</span>{q}<span className="text-black/70">"</span>
                             </li>
                             ))}
                         </ul>
                     ) : ( 
-                        <div className="text-xs text-black/50">No flagged quotes.</div> 
+                        <div className="text-base text-black/50">No flagged quotes.</div> 
                     )}
                 </div>
 
                 {/* Reasoning */}
                 <div className="px-4 pb-4">
-                    <div className="text-xs font-semibold text-black/70 mb-2">Justification</div>
-                    <div className="text-xs leading-relaxed whitespace-pre-wrap text-black/80">{risk_reasoning || "—"}</div>
+                    <div className="text-base font-semibold text-black/70 mb-2">Justification</div>
+                    <div className="text-base leading-relaxed whitespace-pre-wrap text-black/80">{risk_reasoning || "—"}</div>
                 </div>
 
             </div>

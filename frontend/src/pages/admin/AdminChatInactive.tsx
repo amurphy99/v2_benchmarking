@@ -24,7 +24,7 @@ export function AdminChatInactive() {
 
             {/* Page Header */}
             <SessionHeader
-                title         = "View Inactive Chat Session"
+                title         = "Viewing Chat Session"
                 sessionId     = {id}
                 username      = {session?.profile.account.user.username ?? "sample_username"}
                 source        = {session?.source ?? "unknown"}
