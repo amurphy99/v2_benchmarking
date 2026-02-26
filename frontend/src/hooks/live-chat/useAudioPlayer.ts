@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState } from "react";
 
 import { pcmToAudioBuffer } from "@/utils/functions/audioHelpers";
-import   useLatencyLogger      from "@/hooks/useLatencyLogger";
+import   useLatencyLogger   from "@/hooks/useLatencyLogger";
 
 /**
  * Audio player hook.
@@ -15,7 +15,7 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
     const [systemSpeaking, setSystemSpeaking] = useState(false);
 	const audioContextRef = useRef<AudioContext>(null);
 	const scheduleTimeRef = useRef<number>(0);
-    const firstAudio = useRef<boolean>(false);
+    const firstAudio      = useRef<boolean>(false);
 
     const { ttsStart, ttsEnd } = useLatencyLogger();
 
@@ -26,47 +26,45 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
 		}
 	}, [bufferAhead]);
 
+    // --------------------------------------------------------------------------------
+    // Passed the "data" field of the LLMs response
+    // --------------------------------------------------------------------------------
 	const sendAudio = useCallback(
 		async (bytes: string) => {
 			if (!audioContextRef.current) return;
-			const ctx = audioContextRef.current;
+
+			const ctx  = audioContextRef.current;
             const data = JSON.parse(bytes).data;
-			const raw = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+			const raw  = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
 			const bufferToDecode = raw.buffer;
+
 			try {
+                // The most important part/line of this file
 				const audioBuffer = pcmToAudioBuffer(bufferToDecode, sampleRate, numChannels, bitsPerSample, ctx);
+
+                // Start speaking
 				const startTime = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead);
-
-				const source = ctx.createBufferSource();
-				source.buffer = audioBuffer;
+				const source    = ctx.createBufferSource();
+				source.buffer   = audioBuffer;
 				source.connect(ctx.destination);
-                if (!firstAudio.current) {
-                    firstAudio.current = true;
-                    ttsStart();
-                    setSystemSpeaking(true);
-                }
-				source.start(startTime);
 
+                // Difference between the first chunk of audio and the "middle" chunks of audio (I think that's what this is for..?)
+                if (!firstAudio.current) { firstAudio.current = true; ttsStart(); setSystemSpeaking(true); }
+				source.start(startTime);
 				scheduleTimeRef.current = startTime + audioBuffer.duration;
 
+                // When the last scheduled chunk ends, mark systemSpeaking false and log end of tts
                 source.onended = () => {
-                    // When the last scheduled chunk ends, mark systemSpeaking false and log end of tts
-                    if (scheduleTimeRef.current <= ctx.currentTime + 0.01) {
-                        setSystemSpeaking(false);
-                        firstAudio.current = false;
-                        ttsEnd();
-                    }
+                    if (scheduleTimeRef.current <= ctx.currentTime + 0.01) { setSystemSpeaking(false); firstAudio.current = false; ttsEnd(); }
                 };
-			} catch (e) {
-				console.error("Could not decode audio data: ", e);
-			}
+
+			} catch (e) { console.error("Could not decode audio data: ", e);}
 		}, [sampleRate, numChannels, bitsPerSample, bufferAhead]);
 
+
+    // Stop speaking
 	const stopPlayer = useCallback(() => {
-		if (audioContextRef.current) {
-			audioContextRef.current.close();
-			audioContextRef.current = null;
-		}
+		if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
 		scheduleTimeRef.current = 0;
 	}, []);
 

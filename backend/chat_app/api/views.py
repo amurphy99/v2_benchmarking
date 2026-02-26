@@ -67,6 +67,20 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
             user=self.request.user, # only allow access to own instructions
         )
         return instructions
+    
+class ChatSessionView(generics.RetrieveAPIView):
+    """
+    GET  /api/rag/<int:sessionid>/  => fetch a single ChatSession
+    """
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        sessionid = self.kwargs["sessionid"]
+        session = ChatSession.objects.get(
+            id=sessionid, 
+        )
+        return session
 
 # ======================================================================= ===================================
 # List + Create
@@ -164,6 +178,32 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         return (ChatSession.objects
                 .filter(profile=profile)
                 .filter(is_active=False)
+                .select_related("profile", "image")
+                .prefetch_related("messages", "biomarker_scores"))
+        
+class ChatSessionViewSetAll(viewsets.ReadOnlyModelViewSet):
+    """
+    ToDo:
+        * I think I need to make sure average scores and duration are included
+        * also add default string values to sentiment/topics
+        * Add functionality to just get the latest chat session?
+    """
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): 
+        return (ChatSession.objects
+                .filter(is_active=False)
+                .select_related("profile", "image")
+                .prefetch_related("messages", "biomarker_scores"))
+        
+class ActiveChatSessionViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): 
+        return (ChatSession.objects
+                .filter(is_active=True)
                 .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
 

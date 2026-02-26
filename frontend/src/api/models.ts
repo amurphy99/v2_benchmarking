@@ -139,7 +139,7 @@ export interface AlbumImage {
 // ChatSessions
 export interface ChatSession {
   id        : number;
-  user      : number; // ForeignKey id
+  profile   : Profile;
   source    : string;
   date      : string;
   is_active : boolean;

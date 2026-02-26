@@ -36,28 +36,17 @@ export default function useChatSocket({
         const response = JSON.parse(event.data);
         const type = response.type;
         const data = response.data;
-        if (type === "llm_response") {
-            onLLMResponse(response);
-        } else if (type === "biomarker_scores") {
-            console.log("On-Utterance scores received");
-            onScores({ type, data });
-        } else if (type === "audio_scores") {
-            console.log("On-Audio scores received");
-            onScores({ type, data });
-        } else if (type === "periodic_scores") {
-            console.log("Periodic scores received");
-            onScores({ type, data });
-        } else if (type === "user_utt") {
-            console.log("User utterance received");
-            onUserUtt(data);
-        } else if (type === "audio_chunk") {
-            onAudio(data);
-        } else if (type === "lipsync_data") {
-            console.log("Received lipsync data")
-        } else if (type === "rag_parse_error" || type === "chat_error") {
-            console.log("Json Parsing Error Occured")
-            onError(response);
-        }
+
+        if (type === "llm_response") { onLLMResponse(response);}
+        else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); onScores ({ type, data }); } 
+        else if (type ===     "audio_scores") { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
+        else if (type ===  "periodic_scores") { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
+        else if (type === "user_utt"        ) { console.log("User utterance received"     ); onUserUtt(        data  ); } 
+        else if (type === "audio_chunk"     ) {                                              onAudio  (        data  ); } 
+        else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
+
+        else if (type === "rag_parse_error" || type === "chat_error") { console.log("Json Parsing Error Occured"); onError(response); }
+
     }, [onLLMResponse, onScores, onUserUtt, onAudio, onError]);
 
     // Open and close the websocket connection on change of the "recording" flag
