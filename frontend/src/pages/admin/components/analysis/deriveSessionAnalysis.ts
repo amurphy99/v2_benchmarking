@@ -93,10 +93,16 @@ export type SessionLike = {
 };
 
 export function deriveSessionAnalysis(session: SessionLike, sep = "\n<|ANALYSIS|>\n") {
-    const parsed = parseNotes(session.notes, sep);
+    const parsed     = parseNotes  (session.notes, sep);
+    const topicsText = formatTopics(session.topics    );
 
     // Prefer future DB fields -- only on fallback use the parsed notes
     return {
+        // Actual fields
+        topics         : topicsText,
+        sentiment      : session.sentiment ?? "neutral",
+        notes          : session.notes     ?? "",
+        // Parsed from notes (for now)
         summary        : session.summary        ?? parsed.summary        ?? "—",
         risk_rating    : session.risk_rating    ?? parsed.risk_rating    ?? null,
         risk_quotes    : session.risk_quotes    ?? parsed.risk_quotes    ?? [],
