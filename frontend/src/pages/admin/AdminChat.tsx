@@ -14,7 +14,7 @@ import { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBi
 
 // Components
 import   ChatMessages          from "../chat/components/ChatMessages";
-import { SessionHeader      }  from  "./components/adminHeader";  // TODO: rename this file
+import { SessionHeader      }  from  "./components/admin_header/SessionHeader";  // TODO: rename this file
 import {     BiomarkerPanel }  from  "./components/BiomarkerPanel";
 import { AdminControlsPanel }  from "./components/AdminControlsPanel";
 

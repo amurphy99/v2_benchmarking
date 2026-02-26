@@ -1,7 +1,5 @@
-
-// From this project
-import      { HeaderPills        } from "./admin_header/HeaderPills";
-import type { SessionHeaderProps } from "./admin_header/StatusComponents";
+import      { HeaderPills        } from "./HeaderPills";
+import type { SessionHeaderProps } from "./StatusComponents";
 
 // ================================================================================
 // SessionHeader (for the chat listener)
@@ -32,9 +30,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = (props) => {
                     </div>
                 </div>
 
-                {/* -------------------------------------------------------------------------------- */}
                 {/* Right: Status Pills */}
-                {/* -------------------------------------------------------------------------------- */}
                 <HeaderPills {...props} />
                 
             </div>

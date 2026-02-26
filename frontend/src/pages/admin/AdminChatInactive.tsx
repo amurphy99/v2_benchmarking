@@ -4,7 +4,7 @@ import { useParams        } from "react-router-dom";
 // Components
 import   ChatMessages          from "../chat/components/ChatMessages";
 import {     BiomarkerPanel }  from  "./components/BiomarkerPanel";
-import { SessionHeader      }  from  "./components/adminHeader";  // TODO: rename this file
+import { SessionHeader      }  from  "./components/admin_header/SessionHeader";
 
 // Misc. Helpers
 import { useElementHeight           } from "@/hooks/style/useElementHeight";
