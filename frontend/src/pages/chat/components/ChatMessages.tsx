@@ -97,14 +97,14 @@ export default function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=
     // Might need to add this back to the header, depends on if it scrolls...
     // border-b border-black/10
     return (
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col h-full min-h-0 rounded-xl border border-black/10 bg-white overflow-hidden">
             {/* Header */}
-            <div className="flex justify-center py-[0.5rem] mb-[1rem] border-b border-black/10">
+            <div className="flex justify-center py-2 border-b border-black/10 shrink-0">
                 <p className="text-base font-semibold m-0">Chat History</p>
             </div>
 
-            {/* This is the ONLY scrollable area */}
-            <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 p-0">
+            {/* Scrollable Area */}
+            <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-[0rem] px-[0rem] py-[0.5rem]">
                 {messages.map((msg) => (
                     <MessageBubble msg={msg} key={msg.id} elapsed={formatElapsed(chatStartMs, msg.ts)} />
                 ))}

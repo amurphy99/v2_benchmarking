@@ -29,7 +29,7 @@ const BIOMARKERS: Array<{ key: BiomarkerKey; label: string }> = [
 ];
 
 const BIG_CHART_W = 800;
-const BIG_CHART_H = 200;
+const BIG_CHART_H = 120;
 
 // --------------------------------------------------------------------------------
 // Helpers
@@ -212,8 +212,8 @@ export function BiomarkerPanel({
         {/* ================================================================================ */}
         {/* "Now" Cards */}
         {/* ================================================================================ */}
-        <div className="flex flex-col gap-[1rem] p-[1rem]">
-            <div className="grid grid-cols-3 gap-[1rem]">
+        <div className="flex flex-col gap-[1rem] p-[0.5rem]">
+            <div className="grid grid-cols-3 gap-[0.5rem]">
                 {cards.map((c) => {
                     const isActive = c.key === selected;
 

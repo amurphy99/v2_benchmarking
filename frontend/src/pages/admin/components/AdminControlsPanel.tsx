@@ -55,42 +55,40 @@ export function AdminControlsPanel({
     // ================================================================================
     // UI Components
     // ================================================================================
-    return (
-        <div className="border-t border-black/10 bg-white p-3">
-            <div className="grid grid-cols-3 gap-3">
+    return (       
+        <div className="px-[1rem] grid grid-cols-3 gap-[1rem]">
 
-                {/* Development Sample Data Buttons */}
-                <DevSamplesGroup
-                    onAddSampleMessage   = {onAddSampleMessage}
-                    onAddSampleBiomarker = {onAddSampleBiomarker}
-                />
+            {/* Development Sample Data Buttons */}
+            <DevSamplesGroup
+                onAddSampleMessage   = {onAddSampleMessage}
+                onAddSampleBiomarker = {onAddSampleBiomarker}
+            />
 
-                {/* Chat Response Controls */}
-                <ChatControlsGroup
-                    connected    = {connected}
-                    controlState = {controlState}
-                    pending={{
-                        pause_listening : pending.pause_listening,
-                        pause_responses : pending.pause_responses,
-                        respond_now     : pending.respond_now,
-                    }}
-                    onToggleListening = {actions.toggleListening}
-                    onToggleResponses = {actions.toggleResponses}
-                    onRespondNow      = {actions.respondNow     }
-                />
-                
-                {/* Avatar Actions */}
-                <AvatarActionsGroup
-                    connected = {connected}
-                    pending   = {{
-                        robot_spin    : pending.robot_spin,
-                        robot_excited : pending.robot_excited,
-                    }}
-                    onSpin    = {actions.robotSpin   }
-                    onExcited = {actions.robotExcited}
-                />
+            {/* Chat Response Controls */}
+            <ChatControlsGroup
+                connected    = {connected}
+                controlState = {controlState}
+                pending={{
+                    pause_listening : pending.pause_listening,
+                    pause_responses : pending.pause_responses,
+                    respond_now     : pending.respond_now,
+                }}
+                onToggleListening = {actions.toggleListening}
+                onToggleResponses = {actions.toggleResponses}
+                onRespondNow      = {actions.respondNow     }
+            />
+            
+            {/* Avatar Actions */}
+            <AvatarActionsGroup
+                connected = {connected}
+                pending   = {{
+                    robot_spin    : pending.robot_spin,
+                    robot_excited : pending.robot_excited,
+                }}
+                onSpin    = {actions.robotSpin   }
+                onExcited = {actions.robotExcited}
+            />
 
-            </div>
         </div>
     );
 }
