@@ -3,8 +3,8 @@ import { useRef    } from "react";
 // From this project
 import { ChatSession    } from "@/api";
 import   ChatMessages     from "../../../chat/components/ChatMessages";
-import { BiomarkerPanel } from "../BiomarkerPanel";
-import { cardClass      } from "../common/commonStyle";
+import { BiomarkerPanel } from "./BiomarkerPanel";
+import { cardClass      } from "./commonStyle";
 
 // Misc. Helpers
 import { useElementHeight           } from "@/hooks/style/useElementHeight";
