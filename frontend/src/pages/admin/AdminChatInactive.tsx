@@ -20,7 +20,7 @@ export function AdminChatInactive() {
 
     // UI Components
     return (
-        <div className="pb-[15vh]">
+        <div className="pb-[15vh] flex flex-col">
 
             {/* Page Header */}
             <SessionHeader
@@ -36,8 +36,8 @@ export function AdminChatInactive() {
             />
 
             {/* Page Body */}
+            <AnalysisPanel  session={session} /> {/* Analysis Panel (topics, sentiment, summary, risk factors) */}
             <SessionHistory session={session} /> {/* Chat Messages & Biomarker History */}
-            <AnalysisPanel  session={session} /> {/* Bottom: Analysis Panel (topics, sentiment, summary, risk factors) */}
 
         </div>
     );
