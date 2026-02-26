@@ -13,7 +13,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = (props) => {
     const show_session_id = sessionId ? `#${sessionId}` : "#--";
 
     const button_back =
-        "shrink-0 w-[2rem] h-[2rem] flex items-center justify-center " +
+        "shrink-0 w-[2.25rem] h-[2.25rem] flex items-center justify-center " +
         "rounded-lg border border-black/10 bg-black/5 hover:bg-black/10 transition " +
         "text-lg leading-none";
 
@@ -23,7 +23,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = (props) => {
             <div className="flex items-center justify-between gap-4 px-4 py-3">
 
                 {/* Left Side: Title + Meta Data */}
-                <div className="min-w-0 flex gap-[1.5rem] items-center">
+                <div className="min-w-0 flex gap-[1rem] items-center">
                     <button type="button" onClick={() => navigate("/admin")} 
                         className={button_back} aria-label="Back to admin" title="Back"
                     >&lsaquo;</button>
