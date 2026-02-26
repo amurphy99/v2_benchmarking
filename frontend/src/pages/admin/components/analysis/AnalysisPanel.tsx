@@ -46,7 +46,7 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
     // Return UI component
     // --------------------------------------------------------------------------------
     return (
-        <section className={`px-4 py-4 ${className}`}>
+        <section className={`px-[1rem] py-[1rem] ${className}`}>
         
         {/* -------------------------------------------------------------------------------- */}
         {/* Top "analysis" Pills */}
