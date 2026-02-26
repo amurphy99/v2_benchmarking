@@ -150,7 +150,7 @@ export interface ChatSession {
 
   topics    : string;        // stored as an unparsed list string
   image     : AlbumImage;
-  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | string;
+  sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
   notes     : string | null;
 
   taskType  : string;
