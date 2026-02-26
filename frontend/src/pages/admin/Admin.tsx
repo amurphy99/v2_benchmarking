@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthProvider";
 import { useActiveChatSessions, useAllChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList } from "./components/chat_lists/ChatList";
 
-
 // ================================================================================
 // Admin ChatSession List Page (split into active and inactive chats)
 // ================================================================================
@@ -27,18 +26,20 @@ export function Admin() {
 
             {/* Active Sessions */}
             <ChatList
-                title     = "Currently Active Chat Sessions"
-                subtitle  = "Live sessions you can open in the listener view."
-                sessions  = {chatSessionsActive}
-                onRefresh = {() => refetch()}
+                title       = "Currently Active Chat Sessions"
+                subtitle    = "Live sessions you can open in the listener view."
+                sessions    = {chatSessionsActive}
+                onRefresh   = {() => refetch()}
+                navigate_to = {"/admin/chat/"}
             />
 
             {/* All Sessions */}
             <ChatList
-                title     = "Completed Chat Sessions"
-                subtitle  = "View post-chat analysis results."
-                sessions  = {chatSessions}
-                onRefresh = {() => refetchAll()}
+                title       = "Completed Chat Sessions"
+                subtitle    = "View post-chat analysis results."
+                sessions    = {chatSessions}
+                onRefresh   = {() => refetchAll()}
+                navigate_to = {"/admin/chat/inactive/"}
             />
 
         </div>

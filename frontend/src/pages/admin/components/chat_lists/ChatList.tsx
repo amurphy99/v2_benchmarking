@@ -7,11 +7,12 @@ import { ChatSessionCard } from "./ChatSessionCard";
 // ================================================================================
 // List of ChatSessions for the Admin page (either only Active chats, or all chats)
 // ================================================================================
-export const ChatList = memo(function ChatList({ title, subtitle="", sessions, onRefresh }: {
+export const ChatList = memo(function ChatList({ title, subtitle="", sessions, onRefresh, navigate_to }: {
     title       : string;
     subtitle  ? : string | null;
     sessions    : ChatSession[];
     onRefresh ? : () => void;
+    navigate_to : string;
 }) {
     const navigate = useNavigate();
 
@@ -50,7 +51,7 @@ export const ChatList = memo(function ChatList({ title, subtitle="", sessions, o
                             <ChatSessionCard 
                                 key     = {session.id} 
                                 session = {session} 
-                                onClick = {() => navigate(`/admin/chat/${session.id}`)} 
+                                onClick = {() => navigate(`${navigate_to}${session.id}`)} 
                             />
                         );})}
                     </div>
