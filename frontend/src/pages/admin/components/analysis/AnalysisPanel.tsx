@@ -1,104 +1,15 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef } from "react";
 
 // From this project
 import { InfoPill } from "../admin_header/StatusComponents";
 import { sentimentBadge, riskBadge } from "./analysisBadges";
+import { cardClass } from "../common/commonStyle";
 
-// --------------------------------------------------------------------------------
-// Style Helpers
-// --------------------------------------------------------------------------------
-function cardClass(extra = "") {
-    return `rounded-xl border border-black/10 bg-white shadow-sm ${extra}`;
-}
+import { formatTopics, parseNotes, deriveSessionAnalysis } from "./deriveSessionAnalysis";
+import type { SessionLike } from "./deriveSessionAnalysis";
 
-// Parse the topics string
-function formatTopics(raw: unknown): string {
-    if (Array.isArray(raw)     ) { return raw.filter(Boolean).join(", "); }
-    if (typeof raw !== "string") { return "—"; }
-    const s = raw.trim();
-
-    // Try JSON array first
-    try { 
-        const parsed = JSON.parse(s); 
-        if (Array.isArray(parsed)) return parsed.filter(Boolean).join(", ");
-    } catch {}
-
-    // Fallback
-    return s
-        .replace(/[\[\]"']/g, "")
-        .split  (",")
-        .map    ((t) => t.trim())
-        .filter (Boolean)
-        .join   (", ");
-}
-
-// --------------------------------------------------------------------------------
-// Temporary "Notes" field parser
-// --------------------------------------------------------------------------------
-// Since the DB object isn't fully set up yet, for now we are just putting multiple
-// fields into the "notes" field and separating them via a tag.
-type ParsedNotes = {
-    summary        ? : string | null;
-    risk_rating    ? : number | null;
-    risk_quotes    ? : string[];
-    risk_reasoning ? : string | null;
-};
-
-// Temporary demo data
-const DEMO_NOTES: ParsedNotes = {
-  summary        : "Demo summary: The user and Buddy discussed a recent daily routine update, including sleep quality and a few errands. The user reported mild stress but also mentioned a positive coping strategy. The conversation ended with Buddy suggesting a simple plan for the rest of the day.",
-  risk_rating    : 1,
-  risk_quotes    : ["I've been feeling a little overwhelmed lately.", "I didn't sleep great last night.", ],
-  risk_reasoning : "Demo reasoning: Low risk due to mild, non-specific stress statements without urgency or escalation. No indications of immediate harm. Suggested follow-up is to check in on sleep and stress coping strategies.",
-};
-
-// Notes will contain these separated in order: 
-// summary, risk_rating, risk_quotes, risk_reasoning
-function parseNotes(notes?: string | null, sep = "\n<|ANALYSIS|>\n"): ParsedNotes {
-    // Start with some default data 
-    // If notes is empty or isn't in the separated format yet, return placeholders
-    const raw = (notes ?? "").trim();
-    if (!raw              ) return DEMO_NOTES;
-    if (!raw.includes(sep)) return DEMO_NOTES;
-
-    // Split on the parts
-    const parts = notes.split(sep).map((p) => p.trim());
-    const [summary, ratingStr, quotesRaw, reasoning] = parts;
-
-    // Risk rating
-    const risk_rating = ratingStr && ratingStr.length > 0 ? Number.parseInt(ratingStr.trim(), 10) : null;
-
-    // Risk quotes (pulled from the transcript)
-    const risk_quotes =
-        quotesRaw && quotesRaw.length > 0
-        ? quotesRaw
-            .split(/\r?\n/)
-            .map((q) => q.trim())
-            .filter(Boolean)
-        : [];
-
-    // Return all fields
-    return {
-        summary        : summary || null,
-        risk_rating    : Number.isFinite(risk_rating as number) ? risk_rating : null,
-        risk_quotes,
-        risk_reasoning : reasoning || null,
-    };
-}
-
-// Fake, temporary version of the session object with all fields accessable
-type SessionLike = {
-    // Existing DB fields
-    topics         ? : unknown;
-    sentiment      ? : string | null;
-    notes          ? : string | null;
-
-    // Future DB fields
-    summary        ? : string | null;
-    risk_rating    ? : number | null;
-    risk_quotes    ? : string[] | null;
-    risk_reasoning ? : string | null;
-};
+// Misc. Helpers
+import { useElementHeight } from "@/hooks/style/useElementHeight";
 
 // ================================================================================
 // Post Chat Analysis Panel
@@ -112,14 +23,24 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
     notesSeparator ? : string;
     className      ? : string;
 }) {
-    const parsed = useMemo(() => parseNotes(session.notes, notesSeparator), [session.notes, notesSeparator]);
+    // Prepare text from the given session data
     const topicsText = useMemo(() => formatTopics(session.topics), [session.topics]);
 
-    // Prefer future DB fields; fall back to parsed notes
-    const summary        = session.summary        ?? parsed.summary        ?? "—";
-    const risk_rating    = session.risk_rating    ?? parsed.risk_rating    ?? null;
-    const risk_quotes    = session.risk_quotes    ?? parsed.risk_quotes    ?? [];
-    const risk_reasoning = session.risk_reasoning ?? parsed.risk_reasoning ?? "—";
+    // Analysis fields (summary + risk) with notes fallback handled inside the helper
+    const analysis = useMemo(() => deriveSessionAnalysis(session, notesSeparator), [session, notesSeparator]);
+    const { summary, risk_rating, risk_quotes, risk_reasoning } = analysis;
+
+    // Sync the heights of both sides
+    const leftRef  = useRef<HTMLDivElement | null>(null);
+    const rightRef = useRef<HTMLDivElement | null>(null);
+
+    const leftHeight  = useElementHeight(leftRef);
+    const rightHeight = useElementHeight(rightRef);
+    const syncHeight  = (leftHeight && rightHeight)     ? 
+        Math.max(leftHeight, rightHeight) : leftHeight  ? 
+        leftHeight                        : rightHeight ? 
+        rightHeight                       : null;
+    const syncStyle = syncHeight ? { minHeight: syncHeight } : undefined;
 
     // --------------------------------------------------------------------------------
     // Return UI component
@@ -140,8 +61,9 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
         {/* Main Cards (Summary + Risk Factors) */}
         {/* ================================================================================ */}
         <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-            {/* Summary (wide) */}
-            <div className={cardClass("")}>
+
+            {/* Summary */}
+            <div className={cardClass("")} ref={leftRef}  style={syncStyle} >
                 <div className="px-4 py-3 border-b border-black/10">
                     <div className="text-sm font-semibold">Summary</div>
                     <div className="text-xs text-black/60">3-5 sentences of what the conversation covered.</div>
@@ -153,7 +75,7 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
             {/* -------------------------------------------------------------------------------- */}
             {/* Risk Factors */}
             {/* -------------------------------------------------------------------------------- */}
-            <div className={cardClass("")}>
+            <div className={cardClass("")} ref={rightRef} style={syncStyle} >
 
                 {/* Risk Rating */}
                 <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between gap-2">
@@ -191,4 +113,3 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
         </section>
     );
 });
-
