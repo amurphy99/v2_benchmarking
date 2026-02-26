@@ -4,6 +4,7 @@ import { useParams        } from "react-router-dom";
 // Components
 import   ChatMessages          from "../chat/components/ChatMessages";
 import {     BiomarkerPanel }  from  "./components/BiomarkerPanel";
+import { SessionHeader      }  from  "./components/adminHeader";  // TODO: rename this file
 
 // Misc. Helpers
 import { useElementHeight           } from "@/hooks/style/useElementHeight";
@@ -18,7 +19,7 @@ export function AdminChatInactive() {
     const { id                       } = useParams();
     const { data: session, isLoading } = useChatSession(id ?? "");
 
-    if (isLoading || !session.id) { return null; }
+    if (isLoading || !session.id) { return <>Still loading</>; }
 
     // Style Helpers
     const bioPanelRef = useRef<HTMLDivElement | null>(null);
@@ -29,7 +30,22 @@ export function AdminChatInactive() {
     // ================================================================================
     return (
         <div className="pb-[15vh]">
-            <h1 className="m-[1rem]">Admin Page</h1>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Page Header */}
+            {/* -------------------------------------------------------------------------------- */}
+            <SessionHeader
+                title         = "View Inactive Chat Session"
+                sessionId     = {id}
+                username      = {session?.profile.account.user.username ?? "sample_username"}
+                source        = {session?.source   ?? "unknown"}
+                mode          = {"history"}
+                wsState       = {"offline"}
+                messageCount  = {session?.messages.length ?? 0}
+                inactive_chat = {true}
+                duration      = {session?.duration}
+            />
+
 
             {/* ================================================================================ */}
             {/* Body */}

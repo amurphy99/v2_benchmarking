@@ -97,16 +97,17 @@ export function AdminChat() {
             {/* Page Header */}
             {/* -------------------------------------------------------------------------------- */}
             <SessionHeader
-                title        = "Live Session Monitor"
-                sessionId    = {id}
-                username     = {sessionInfo?.username ?? "sample_username"}
-                source       = {sessionInfo?.source   ?? "webapp"}
-                mode         = "listener"
-                wsState      = {connected ? "connected" : "disconnected"}
-                lastEventAt  = {lastEventAt} // Date   | null
-                latencyMs    = {latencyMs}   // number | null
-                startTsUnix  = {sessionInfo?.startTs      ?? null}
-                messageCount = {sessionInfo?.messageCount ?? session.messages.length}
+                title         = "Monitor Live Chat Session"
+                sessionId     = {id}
+                username      = {sessionInfo?.username ?? "sample_username"}
+                source        = {sessionInfo?.source   ?? "unknown"}
+                mode          = "listener"
+                wsState       = {connected ? "connected" : "disconnected"}
+                lastEventAt   = {lastEventAt} // Date   | null
+                latencyMs     = {latencyMs}   // number | null
+                startTsUnix   = {sessionInfo?.startTs      ?? null}
+                messageCount  = {sessionInfo?.messageCount ?? session.messages.length}
+                inactive_chat = {false}
             />
 
             {/* ================================================================================ */}
