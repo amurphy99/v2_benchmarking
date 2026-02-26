@@ -41,10 +41,10 @@ function formatDurationFromStart(startTsUnix: number | null | undefined): string
 }
 
 // General "pill" wrapper for different status information
-export const StatPill: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+export const InfoPill: React.FC<{ label: string; value?: React.ReactNode, children?: React.ReactNode }> = ({ label, value, children }) => (
     <div className="flex items-center gap-2 rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs whitespace-nowrap">
-        <span className="text-black/60">{label}</span>
-        <span className="font-medium">  {value}</span>
+        <span className="text-black/60">{label}                    </span>
+        <span className="font-medium">  {value ?? children ?? "—"} </span>
     </div>
 );
 
@@ -66,9 +66,9 @@ export const LivePills = memo(function LivePills({
 
     return (
         <>
-            <StatPill label="Duration"   value={formatDurationFromStart(startTsUnix)} />
-            <StatPill label="Last event" value={formatAgo(lastEventAt)} />
-            <StatPill label="Latency"    value={latencyMs != null ? `${latencyMs} ms` : "—"} />
+            <InfoPill label="Duration"   value={formatDurationFromStart(startTsUnix)} />
+            <InfoPill label="Last event" value={formatAgo(lastEventAt)} />
+            <InfoPill label="Latency"    value={latencyMs != null ? `${latencyMs} ms` : "—"} />
         </>
     );
 });

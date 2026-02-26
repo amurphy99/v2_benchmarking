@@ -2,7 +2,7 @@
 import { memo } from "react";
 
 // From this project
-import { ConnectionPill, LivePills, StatPill, type SessionHeaderProps } from "./StatusComponents";
+import { ConnectionPill, LivePills, InfoPill, type SessionHeaderProps } from "./StatusComponents";
 import { formatElapsedTime } from "@/utils/styling/numFormatting";
 
 // --------------------------------------------------------------------------------
@@ -37,11 +37,11 @@ export const HeaderPills = memo(function HeaderPills({
             <ConnectionPill wsState={wsState} />
 
             {/* Shown for Active & Inactive chats */}
-            <StatPill label="Messages" value={messageCount ?? "—"} />
+            <InfoPill label="Messages" value={messageCount ?? "—"} />
 
             {/* Active-Inactive exclusive pills (live pills update every second) */}
             {inactive_chat ? (
-                <StatPill label="Duration" value={formatElapsedTime(duration)} />
+                <InfoPill label="Duration" value={formatElapsedTime(duration)} />
             ) : (
                 <LivePills startTsUnix={startTsUnix} lastEventAt={lastEventAt} latencyMs={latencyMs} />
             )}
