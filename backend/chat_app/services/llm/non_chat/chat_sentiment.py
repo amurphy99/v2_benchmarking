@@ -43,14 +43,14 @@ SENTIMENT_SYSTEM = (
 def build_sentiment_messages(transcript):
     return [
         {"role": "system", "content": SENTIMENT_SYSTEM},
-        {"role": "user",   "content":
-         
-            "Rate the overall sentiment and emotion of the chat.\n\n"
+        {"role": "user",   "content": (
+                "Rate the overall sentiment and emotion of the chat.\n\n"
 
-            "Rules:\n"
-            "- Base everything strictly on the transcript.\n\n"
+                "Rules:\n"
+                "- Base everything strictly on the transcript.\n\n"
 
-            f"CHAT TRANSCRIPT:\n{transcript}"
+                f"CHAT TRANSCRIPT:\n{transcript}"
+            )
         },
     ]
 
