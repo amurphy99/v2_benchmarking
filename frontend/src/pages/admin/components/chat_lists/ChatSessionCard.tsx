@@ -1,16 +1,16 @@
 import { memo, useMemo } from "react";
 
 // From this project
-import { InfoPill } from "../admin_header/StatusComponents";
-import { sentimentBadge, riskBadge } from "../analysis/analysisBadges";
-import { deriveSessionAnalysis } from "../analysis/deriveSessionAnalysis";
-
-import { ChatSession } from "@/api";
-
+import { ChatSession    } from "@/api";
 import { dateFormatLong } from "@/utils/styling/numFormatting";
 
+// Components
+import { InfoPill                  } from "../admin_header/StatusComponents";
+import { sentimentBadge, riskBadge } from "../analysis/analysisBadges";
+import { deriveSessionAnalysis     } from "../analysis/deriveSessionAnalysis";
+
 // ================================================================================
-// Post Chat Analysis Panel
+// ChatSession Card View for the Admin Page
 // ================================================================================
 export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick }: {session: ChatSession; onClick: () => void}) {
     const analysis = useMemo(() => deriveSessionAnalysis(session), [session]);
@@ -51,7 +51,6 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             <div className="mt-3 flex gap-2 flex-wrap">
                 <InfoPill label="Messages" value={session.messages.length ?? "—"} />
                 <InfoPill label="Duration" value={session.duration        ?? "—"} />
-                
             </div>
 
         </button>
