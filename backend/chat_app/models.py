@@ -86,7 +86,7 @@ class ChatSession(models.Model):
 
     # Optional metadata to be filled when closing
     notes     = models.TextField(**init_args)
-    topics    = models.CharField(**init_args, max_length=255, default="['No','Topics','Available']")
+    topics    = models.TextField(**init_args)
     sentiment = models.CharField(**init_args, max_length=255, default="N/A")
     taskType  = models.CharField(**init_args, max_length=255, default="chat")
     taskSubtype = models.CharField(**init_args, max_length=255, default="N/A")

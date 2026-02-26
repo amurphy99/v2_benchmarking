@@ -16,8 +16,8 @@ def get_topics(message_text): # From freeCodeCamp
     BoW = Counter(alpha_no_stopwords)
     most_common = BoW.most_common(6)
     
-    topics = []
+    topics = {}
     for token in most_common:
-        topics.append(token[0])
+        topics[token[0]] = token[1]
         
     return topics

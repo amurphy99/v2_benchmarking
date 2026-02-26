@@ -87,6 +87,12 @@ DEMO_IMAGES = [
         "photographer_url": "https://www.pexels.com/@pripicart/"
     }
 ]
+DEMO_TOPICS = '''{
+    'Moon Landing': 5,
+    'Gardening': 4,
+    'Granddaughter': 3,
+    'Morning Routine': 2
+}'''
 
 class Command(BaseCommand):
     help = "Seeds demo users and a sample ChatSession with messages+biomarkers."
@@ -226,7 +232,7 @@ class Command(BaseCommand):
 
             # 1) Create a ChatSession object
             session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
-                                                 topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
+                                                 topics=DEMO_TOPICS,
                                                  sentiment="Positive", image=image)
             session.date = started_at
             session.save(update_fields=["date"])
@@ -252,7 +258,7 @@ class Command(BaseCommand):
 
         # 1) Create a ChatSession object
         session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
-                                                topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
+                                                topics=DEMO_TOPICS,
                                                 sentiment="Negative", image=image)
         session.date = (now_utc).replace(hour=9, minute=0, second=0, microsecond=0)
         session.save(update_fields=["date"])

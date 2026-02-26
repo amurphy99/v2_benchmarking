@@ -110,7 +110,7 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True)),
                 ('end_ts', models.DateTimeField(blank=True, null=True)),
                 ('notes', models.TextField(blank=True, null=True)),
-                ('topics', models.CharField(blank=True, default="['No','Topics','Available']", max_length=255, null=True)),
+                ('topics', models.TextField(blank=True, null=True)),
                 ('sentiment', models.CharField(blank=True, default='N/A', max_length=255, null=True)),
                 ('taskType', models.CharField(blank=True, default='chat', max_length=255, null=True)),
                 ('taskSubtype', models.CharField(blank=True, default='N/A', max_length=255, null=True)),

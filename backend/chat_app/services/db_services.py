@@ -63,12 +63,12 @@ class ChatService:
         if topics    is not None and len(topics) > 0: 
             session.topics    = str(topics).strip()
             try: # See if there is already an image for the topic
-                album_image = AlbumImage.objects.get(topic=topics[0])
+                album_image = AlbumImage.objects.get(topic=list(topics)[0])
                 session.image = album_image
             except AlbumImage.DoesNotExist: # If there is not already an image for the topic, get a new one from Pexels
-                image = get_images(topics[0], "pexels", 1)
+                image = get_images(list(topics)[0], "pexels", 1)
                 if image is None:
-                    image = get_images(topics[1], "pexels", 1)
+                    image = get_images(list(topics)[1], "pexels", 1)
                     if image is None:
                         image = {
                             "id": -1,
