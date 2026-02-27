@@ -16,9 +16,9 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
 
 from .tts_service import TextToSpeechProvider
 
-# Config
-CHUNK_SIZE = 4_800  # 8_192 | Chunk size (bytes) of TTS audio streamed back to frontend client. 
-
+# Config 
+# Chunk size (bytes) of TTS audio streamed back to frontend client. 
+CHUNK_SIZE = 8_192   # 8_192 | 4_800
 
 # ================================================================================
 # Stream a TTS audio response to the frontend in base64 chunks
@@ -40,6 +40,8 @@ async def synthesize_and_stream_tts(system_resp, send_callback):
 # --------------------------------------------------------------------------------
 # Split and send audio bytes in chunks to the frontend
 # --------------------------------------------------------------------------------
+# TODO: The frontend might be able to use the other data fields here, especially
+#       "last", but for now I am just leaving it out.
 async def stream_audio_chunks(audio_bytes, send_callback):
     if not audio_bytes: return
 
@@ -47,8 +49,19 @@ async def stream_audio_chunks(audio_bytes, send_callback):
     for i in range(n_chunks):
         chunk = audio_bytes[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE]
 
-        await send_callback(json.dumps({
+        # Build the payload ("audio_chunk" is how the frontend knows to pass this to the audio player).
+        # For now hardcoding payload data into the frontend; check `useAudioPlayer.ts` for more info.
+        payload = {
             "type": "audio_chunk",
-            "data": json.dumps({"data": base64.b64encode(chunk).decode("utf-8")})
-        }))
+            "data": {
+                "b64"  : base64.b64encode(chunk).decode("utf-8"),
+                #"sr"   : 24_000,
+                #"ch"   : 1,
+                #"bps"  : 16,
+                #"seq"  : i,
+                #"last" : (i == n_chunks - 1),
+            }
+        }
 
+        # Stream to the frontend
+        await send_callback(json.dumps(payload))
