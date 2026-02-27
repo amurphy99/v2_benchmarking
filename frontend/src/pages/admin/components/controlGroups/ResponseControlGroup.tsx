@@ -20,10 +20,10 @@ type Props = {
     manualMode  : boolean;
     pending    ?: Pending;
     // Commands (send to backend; parent flips manualMode only on ACK)
-    onPauseAndListen          : () => void;
-    onResumeAndRespond        : () => void;
-    onParaphraseLastQuestion ?: () => void; // not sure how this one will work
-    onSendCustom              : (text: string) => void;
+    onPauseAndListen   : () => void;
+    onResumeAndRespond : () => void;
+    onParaphraseLast   : () => void;
+    onSendCustom       : (text: string) => void;
 
     // If I decide to have the backend ever do "suggested drafts" where the admin can edit it before approving
     suggestedDraft?: string | null;
@@ -39,7 +39,7 @@ export default memo(function ResponseControlGroup({
     pending,
     onPauseAndListen,
     onResumeAndRespond,
-    onParaphraseLastQuestion,
+    onParaphraseLast,
     onSendCustom,
     suggestedDraft = null,
 }: Props) {
@@ -119,10 +119,10 @@ export default memo(function ResponseControlGroup({
         <div className="mt-2 grid grid-cols-2 gap-2">
             {/* Paraphrase Last Question */}
             <button
-                className = {btnClass(disabled(p.paraphrase_last) || !manualMode || !onParaphraseLastQuestion, "secondary")}
-                disabled  = {disabled(p.paraphrase_last) || !manualMode || !onParaphraseLastQuestion}
-                onClick   = {() => onParaphraseLastQuestion?.()}
-            >{p.paraphrase_last ? "Working..." : "Paraphrase Last Question"}</button>
+                className = {btnClass(disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast, "secondary")}
+                disabled  = {disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast}
+                onClick   = {() => onParaphraseLast?.()}
+            >{p.paraphrase_last ? "Working..." : "Repeat Last Response"}</button>
 
             {/* Enable Text Box */}
             <button

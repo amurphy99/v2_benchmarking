@@ -68,10 +68,11 @@ export function AdminControlsPanel({
                     paraphrase_last    : pending.paraphrase_last,
                     send_custom        : pending.send_custom,
                 }}
-                onPauseAndListen   = {actions.toggleResponses} 
-                onResumeAndRespond = {actions.respondNow     } 
-                onSendCustom       = {actions.sendCustom     }
-                suggestedDraft     = {null                   }
+                onPauseAndListen   = {actions.pauseAndListen  } 
+                onResumeAndRespond = {actions.resumeAndRespond}
+                onParaphraseLast   = {actions.paraphraseLast  } 
+                onSendCustom       = {actions.sendCustom      }
+                suggestedDraft     = {null                    }
             />
             
             {/* Chat Response Controls */}

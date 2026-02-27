@@ -9,12 +9,12 @@ import { CommandAck, PendingKey, SendFn, ControlState, RegisterAckHandler } from
 // This let's us know if the command succeeded (and we should change the button to 
 // the opposite function) or if it failed (and we should put it back the way it was).
 export function useCommandAcks({
-    connected,                // Connection with the backend
-    send,                     // Send data through the WebSocket
-    controlState,             // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
-    setControlState,          // Apply state updates to the AdminControlPanel (listening or paused)
-    registerAckHandler,       // Method that allows us to register something from here as the handler for an ack
-    defaultTimeoutMs = 5_000, // Timeout until we "give up" on receiving an ack from the backend (5s)
+    connected,                 // Connection with the backend
+    send,                      // Send data through the WebSocket
+    controlState,              // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
+    setControlState,           // Apply state updates to the AdminControlPanel (listening or paused)
+    registerAckHandler,        // Method that allows us to register something from here as the handler for an ack
+    defaultTimeoutMs = 10_000, // Timeout until we "give up" on receiving an ack from the backend (5s)
 }: {
     connected          : boolean; 
     send               : SendFn;
@@ -110,10 +110,12 @@ export function useCommandAcks({
         robotExcited : () => {sendCommand("robot_excited", "robot_action", { action: "excited" })},
 
         // Manual Response Controls
-        pauseAndListen         : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
-        resumeAndRespond       : () => {sendCommand("resume_and_respond", "resume_and_respond")},
-        paraphraseLastQuestion : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
-        sendCustom             : (text: string) => {sendCommand("send_custom", "send_custom", { data: text })},
+        // The third field in the old ones is ("value": "True"). It would be for more of a toggle I think.
+        // Could add that here too, but I think it's fine...
+        pauseAndListen   : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
+        resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
+        paraphraseLast   : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
+        sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { data: text })},
     };
 
     return { pending, sendCommand, actions };
