@@ -23,7 +23,7 @@ STYLE_PREFIX = "Say: "  # "Say cheerfully: "
 # Config (Google Cloud TTS)
 LANGUAGE_CODE  = "en-US"
 VOICE_NAME     = "en-US-Standard-C"
-AUDIO_FMT      = texttospeech.AudioEncoding.PCM  # LINEAR16 | OGG_OPUS | PCM
+AUDIO_FMT      = texttospeech.AudioEncoding.LINEAR16  # LINEAR16 | OGG_OPUS | PCM
 SAMPLE_RATE_HZ = 24_000
 
 
