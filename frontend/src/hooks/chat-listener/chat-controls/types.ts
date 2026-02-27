@@ -4,8 +4,9 @@
 // Process backend "ack" responses
 // TODO: Shouldn't this also be 
 export type ControlState = {
-    listeningPaused: boolean;
-    responsesPaused: boolean;
+    listeningPaused : boolean;
+    responsesPaused : boolean;
+    manualMode      : boolean;
 };
 export type CommandAck = {
     id        : string;
@@ -20,7 +21,11 @@ export type PendingKey =
     | "pause_responses"
     | "respond_now"
     | "robot_spin"
-    | "robot_excited";
+    | "robot_excited"
+    | "pause_and_listen"
+    | "resume_and_respond"
+    | "paraphrase_last"
+    | "send_custom";
 
 
 // For passing methods between files

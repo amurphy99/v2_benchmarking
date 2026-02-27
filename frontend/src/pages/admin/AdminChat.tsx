@@ -51,8 +51,9 @@ export function AdminChat() {
         onCommandAck      : (ack)  => { ackHandlerRef.current(ack); },
         onControlState    : (st)   => {
             setControlState((s) => ({
-            listeningPaused: st?.listeningPaused ?? s.listeningPaused,
-            responsesPaused: st?.responsesPaused ?? s.responsesPaused,
+            listeningPaused : st?.listeningPaused ?? s.listeningPaused,
+            responsesPaused : st?.responsesPaused ?? s.responsesPaused,
+            manualMode      : st?.manualMode      ?? s.manualMode,
             }));
         },
     });
@@ -70,6 +71,7 @@ export function AdminChat() {
     const [controlState, setControlState] = useState<ControlState>({
         listeningPaused: false,
         responsesPaused: false,
+        manualMode     : false,
     });
 
     // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)

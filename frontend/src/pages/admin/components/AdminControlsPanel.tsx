@@ -13,9 +13,10 @@ import { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/ty
 import { useCommandAcks           } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
 
 // Button Groups
-import    DevSamplesGroup from "./controlGroups/DevSamplesGroup";
-import  ChatControlsGroup from "./controlGroups/ChatControlsGroup";
-import AvatarActionsGroup from "./controlGroups/AvatarActionsGroup";
+import    DevSamplesGroup   from "./controlGroups/DevSamplesGroup";
+import  ChatControlsGroup   from "./controlGroups/ChatControlsGroup";
+import AvatarActionsGroup   from "./controlGroups/AvatarActionsGroup";
+import ResponseControlGroup from "./controlGroups/ResponseControlGroup";
 
 // ================================================================================
 // Control panel with commands the admin can send to the backend
@@ -32,7 +33,6 @@ export function AdminControlsPanel({
     controlState,         // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
     setControlState,      // Apply state updates to the AdminControlPanel (listening or paused)
     registerAckHandler,   // Method that allows us to register something from here as the handler for an ack
-
 }: {
     connected            : boolean;
     onAddSampleMessage   : () => void;
@@ -56,15 +56,26 @@ export function AdminControlsPanel({
     // UI Components
     // ================================================================================
     return (       
-        <div className="px-[1rem] grid grid-cols-3 gap-[1rem]">
+        <div className="px-[1rem] grid grid-cols-2 gap-[1rem]">
 
-            {/* Development Sample Data Buttons */}
-            <DevSamplesGroup
-                onAddSampleMessage   = {onAddSampleMessage}
-                onAddSampleBiomarker = {onAddSampleBiomarker}
+            {/* Manually Control How the Robot Responds */}
+            <ResponseControlGroup 
+                connected          = {connected} 
+                manualMode         = {controlState.manualMode} 
+                pending={{
+                    pause_and_listen   : pending.pause_and_listen,
+                    resume_and_respond : pending.resume_and_respond,
+                    paraphrase_last    : pending.paraphrase_last,
+                    send_custom        : pending.send_custom,
+                }}
+                onPauseAndListen   = {actions.toggleResponses} 
+                onResumeAndRespond = {actions.respondNow     } 
+                onSendCustom       = {actions.sendCustom     }
+                suggestedDraft     = {null                   }
             />
-
+            
             {/* Chat Response Controls */}
+            {/* 
             <ChatControlsGroup
                 connected    = {connected}
                 controlState = {controlState}
@@ -77,7 +88,8 @@ export function AdminControlsPanel({
                 onToggleResponses = {actions.toggleResponses}
                 onRespondNow      = {actions.respondNow     }
             />
-            
+            */}
+
             {/* Avatar Actions */}
             <AvatarActionsGroup
                 connected = {connected}

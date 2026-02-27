@@ -35,6 +35,12 @@ export function useCommandAcks({
         // Avatar or Robot controls
         robot_spin      : false,
         robot_excited   : false,
+
+        // Manual Response Controls
+        pause_and_listen   : false,
+        resume_and_respond : false,
+        paraphrase_last    : false,
+        send_custom        : false, 
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
 
@@ -56,8 +62,9 @@ export function useCommandAcks({
             // Apply confirmed state updates (ONLY on success)
             if (ack.ok && ack.state) {
                 setControlState((s) => ({
-                    listeningPaused: ack.state.listeningPaused ?? s.listeningPaused,
-                    responsesPaused: ack.state.responsesPaused ?? s.responsesPaused,
+                    listeningPaused : ack.state.listeningPaused ?? s.listeningPaused,
+                    responsesPaused : ack.state.responsesPaused ?? s.responsesPaused,
+                    manualMode      : ack.state.manualMode      ?? s.manualMode,
                 }));
             }
         });
