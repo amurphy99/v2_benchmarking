@@ -10,12 +10,20 @@ h1 {
     color: oklch(54.1% 0.281 293.009);
 }
 
+.caregiver-highlight {
+    background-color: oklch(89.4% 0.057 293.283);
+}
+
 .patient-bg {
     background-color: oklch(62.7% 0.194 149.214);
 }
 
 .patient-text {
     color: oklch(62.7% 0.194 149.214);
+}
+
+.patient-highlight {
+    background-color: oklch(92.5% 0.084 155.995);
 }
 
 .caregiver-button {

@@ -104,6 +104,21 @@ const biomarkerDetails: Record<string, BiomarkerDetails> = {
             {"sender": "A", "text": "I loved watching the...birds. They were pretty."}
         ],
     },
+    "perplexity": {
+        "name": "Perplexity Difference",
+        "description": "Description",
+        "definition": "Definition",
+        "exemplarExample": [
+            {"sender": "A", "text": "Speech 1"},
+            {"sender": "B", "text": "Speech 2"},
+            {"sender": "A", "text": "Speech 3"}
+        ],
+        "flaggedExample": [
+            {"sender": "A", "text": "Speech 1"},
+            {"sender": "B", "text": "Speech 2"},
+            {"sender": "A", "text": "Speech 3"}
+        ],
+    },
 }
 
 export function getBiomarkerName(biomarker: BiomarkerType) : string {

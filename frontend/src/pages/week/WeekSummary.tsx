@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthProvider";
-import { ChatWeek, getMessages } from "@/utils/functions/getChatWeeks";
+import { ChatWeek, getMessages, getTopics } from "@/utils/functions/getChatWeeks";
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { useLocation, useNavigate } from "react-router-dom";
 import { TopicsCard } from "../common/TopicsCard";
@@ -17,7 +17,6 @@ export function WeekSummary() {
     const role = useAuth().account.role;
 
     const chatWeek = state.chatWeek;
-    const weeklyMessages = getMessages(chatWeek.sessions);
 
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
 
@@ -28,7 +27,7 @@ export function WeekSummary() {
                 ← {chatWeek.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {chatWeek.end.toLocaleDateString("en-US", dateFormatOptionsShort)}
             </div>
             <div className={colStyle}>
-                <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+                <TopicsCard topics={getTopics(chatWeek.sessions)} type="Weekly" role={role} />
                 <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
                 <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
                 <DropdownModal title="Weekly Analysis" content={content} />
@@ -37,34 +36,34 @@ export function WeekSummary() {
         )
     } else {
         return (
-                    <div>
-                        <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
-                            ← {chatWeek.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {chatWeek.end.toLocaleDateString("en-US", dateFormatOptionsShort)}
-                        </div>
-                        <div className={colStyle}>
-                            <div className="grid grid-cols-4 gap-[1rem] w-full">
-                                <div className={`rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow}`}>
-                                    <h2 className={`${role}-text`}>Mood (Most Recent)</h2>
-                                    <div className="flex flex-col justify-center items-center mt-[4rem]">
-                                        <Icon icon={getMoodIcon(chatWeek.sessions[0].sentiment)} width={"full"}/>
-                                        <h2>{chatWeek.sessions[0].sentiment}</h2>
-                                    </div>
-                                </div>
-                                <div className="flex col-span-2">
-                                    <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
-                                </div>
-                                <div className="flex h-full">
-                                    <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
-                                </div>
+            <div>
+                <div className="font-bold text-2xl font-bold p-[1rem] justify-between hover:cursor-pointer" onClick={() => {toAlbum()}}>
+                    ← {chatWeek.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {chatWeek.end.toLocaleDateString("en-US", dateFormatOptionsShort)}
+                </div>
+                <div className={colStyle}>
+                    <div className="grid grid-cols-4 gap-[1rem] w-full">
+                        <div className={`rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow}`}>
+                            <h2 className={`${role}-text`}>Mood (Most Recent)</h2>
+                            <div className="flex flex-col justify-center items-center mt-[4rem]">
+                                <Icon icon={getMoodIcon(chatWeek.sessions[0].sentiment)} width={"full"}/>
+                                <h2>{chatWeek.sessions[0].sentiment}</h2>
                             </div>
-                            <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
-                            <DropdownModal title="Speech Analysis" content={content} />
-                            <button className={`${role}-button p-[1rem] text-xl rounded-md w-full`}>
-                                Download as PDF
-                            </button>
+                        </div>
+                        <div className="flex col-span-2">
+                            <TopicsCard topics={getTopics(chatWeek.sessions)} type="Weekly" role={role} />
+                        </div>
+                        <div className="flex h-full">
+                            <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
                         </div>
                     </div>
-                )
+                    <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
+                    <DropdownModal title="Speech Analysis" content={content} />
+                    <button className={`${role}-button p-[1rem] text-xl rounded-md w-full`}>
+                        Download as PDF
+                    </button>
+                </div>
+            </div>
+        )
     }
 }
 
