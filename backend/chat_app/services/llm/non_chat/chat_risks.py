@@ -16,27 +16,21 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
-RiskLevel = Literal[0, 1, 2, 3, 4]
+RiskLevel = Literal[0, 1, 2] # [0, 1, 2, 3, 4] 
 
 # --------------------------------------------------------------------------------
 # Define the Pydantic response Model
 # --------------------------------------------------------------------------------
 class ChatRiskAssessment(BaseModel):
-    # Overall risk level (0-4 inclusive)
+    # Overall risk level (0-2 inclusive)
     risk_level: RiskLevel = Field(
         ...,
         description = (
-            "Overall caregiver-alert risk level inferred from the USER's statements, considering context (not flagged words alone), frequency/intensity/repetition, and verb tense/intent.\n"
-            "0 = No concerning user risk signals in context.\n"
-            "1 = Low risk (monitor): mild negative mood, stress/overwhelm, early anxiety (e.g., 'down', 'stressed', 'on edge').\n"
-            "2 = Moderate distress (caregiver awareness if repeated/escalating): clear suffering, loneliness/isolation, depression-like language, or panic symptoms (e.g., 'hopeless', 'worthless', 'lonely', 'panic', 'can't breathe').\n"
-            "3 = High risk (caregiver alert): self-harm ideation without explicit plan or means; passive or explicit ideation (e.g., 'I don't want to live', 'better off without me', 'suicidal') but no plan.\n"
-            "4 = Emergency (immediate escalation protocol): active intent/plan for self-harm OR credible intent to harm others (e.g., 'I'm going to kill myself', 'I have a plan', 'I bought pills', 'I want to kill someone').\n\n"
-
-            "Context rules:\n"
-            "- Do not inflate risk for quoted/media/hypothetical content (e.g., talking about a movie).\n"
-            "- Future intent/planning increases risk more than past/present description.\n"
-            "- If uncertain between adjacent levels, choose the lower level unless future intent/plan is present."
+            "Overall user distress risk level (0, 1, or 2) for caregiver awareness, using context (not keywords), and considering intensity + repetition + tense.\n"
+            "0 = No meaningful distress signals in context.\n"
+            "1 = Low risk (monitor): mild negative mood/stress/early anxiety (e.g., feeling off, drained, on edge).\n"
+            "2 = Moderate distress (flag if repeated/escalating): clear suffering, loneliness/isolation, depression-like language, or panic symptoms.\n"
+            "Do not escalate for quoted/media/hypothetical content; future-intent phrasing is more concerning than past/present."
         ),
     )
 
@@ -46,12 +40,9 @@ class ChatRiskAssessment(BaseModel):
         min_length      = 0,
         max_length      = 5,
         description     = (
-            "0-5 short, verbatim quotes from the USER that most strongly support the chosen risk level. "
-            "Each quote must include enough context to disambiguate meaning (not single keywords). "
-            "Keep each quote to ~5-25 words. Do NOT include assistant text.\n\n"
-
-            "If risk_level = 0, return an empty list.\n"
-            "If risk_level >= 2, include at least 1 quote."
+            "0-5 short verbatim USER quotes that best justify risk_level (around 5-25 words each). "
+            "Include enough surrounding context to disambiguate; do not quote the assistant. "
+            "If risk_level=0 => []. If risk_level is above that, always include at least 1 quote."
         ),
     )
 
@@ -59,8 +50,9 @@ class ChatRiskAssessment(BaseModel):
     reason: str = Field(
         ...,
         description=(
-            "Plain-text explanation (2-5 sentences) of why the provided USER quotes support the selected risk_level. "
-            "Must reference context (e.g., not quoted/media), and consider frequency/intensity/repetition and verb tense/intent (future intent or planning => higher risk). "
+            "Plain text, 2-5 sentences explaining why the quotes justify risk_level. "
+            "Reference context (not quoted/media), and note intensity/repetition and tense where relevant. "
+            "Do not invent details not present in the transcript."
         ),
     )
 
@@ -71,31 +63,25 @@ DEFAULT_RISK = ChatRiskAssessment(risk_level=0, quotes=[], reason="Risk assessme
 # Build System Prompt
 # --------------------------------------------------------------------------------
 RISK_ASSESSMENT_SYSTEM = (
-    "You generate post-chat safety metadata for a conversational system.\n"
-    "You MUST output a single JSON object that matches the provided schema exactly.\n"
-    "Do not output markdown. Do not wrap JSON in code fences. Do not add extra keys.\n"
-    "Only use information present in the transcript; do not invent details.\n\n"
+    "You generate post-chat risk metadata for caregiver awareness.\n"
+    "Return ONLY a single JSON object matching the schema exactly (no markdown, no extra keys).\n"
+    "Use only information in the transcript; do not invent details.\n\n"
 
-    "Critical guidelines:\n"
-    "- Flagged words are never sufficient alone; always consider full context.\n"
-    "- Distinguish user statements from quoted/media/hypothetical content "
-    "(e.g., 'I saw a movie where someone hurt themselves' is not self-harm intent).\n"
-    "- Combine frequency + intensity + repetition across the transcript when choosing a level.\n"
-    "- Consider verb tense/intent: future intent or planning implies higher risk than past/present feelings.\n"
-    "- This output supports human review to facilitate risk assessment.\n\n"
+    "RULES:\n"
+    "- Never use flagged words alone; always judge full context.\n"
+    "- Do not raise risk for quoted/media/hypothetical content.\n"
+    "- Consider intensity + frequency + repetition across the transcript.\n"
+    "- Consider tense/intent: future-oriented language is more concerning than past/present.\n"
+    "- This output supports human review.\n\n"
 
-    "Risk levels:\n"
-    "0 None: no concerning user risk signals in context.\n"
-    "1 Low (monitor): mild negative mood, stress, overwhelm, early anxiety.\n"
-    "2 Moderate (caregiver awareness if repeated/escalating): depression-like language, loneliness/isolation, panic symptoms.\n"
-    "3 High (caregiver alert): self-harm ideation without explicit plan.\n"
-    "4 Emergency (immediate escalation): active intent/plan for self-harm OR credible intent to harm others.\n\n"
+    "RISK LEVELS:\n"
+    "0 = none (no meaningful distress signals in context)\n"
+    "1 = low (monitor): mild negative mood/stress/early anxiety\n"
+    "2 = moderate (flag if repeated/escalating): clear suffering, loneliness/isolation, depression-like language, or panic symptoms\n\n"
 
-    "Output requirements:\n"
-    "- Provide 0-5 SHORT verbatim USER quotes as evidence; do not quote the assistant.\n"
-    "- Quotes must include context and be ~5-25 words each.\n"
-    "- If risk_level = 0 => quotes must be [].\n"
-    "- Provide a concise reason explaining why the quotes support the chosen level."
+    "OUTPUT REQUIREMENTS:\n"
+    "- quotes: 0-5 short verbatim USER quotes with context (around 5-25 words); never quote the assistant.\n"
+    "- reason: 2-5 sentences linking quotes to the chosen level."
 )
 
 # Structure the prompt accordingly
