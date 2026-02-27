@@ -84,8 +84,9 @@ export default function CircularProgress( {score, role} : {score: number, role: 
                 startAngle: -100,
                 endAngle: 100,
                 track: {
-                    background: '#fff',
-                    margin: 0, // margin is in pixels
+                    background: '#cecece',
+                    startAngle: -100,
+                    endAngle: 100,
                 },
                 dataLabels: {
                     show: true,
@@ -124,7 +125,8 @@ export default function CircularProgress( {score, role} : {score: number, role: 
         },
         labels: ['Total Score'],
     }
-    return (
-            <ReactApexChart options={options} series={series} type="radialBar" />
+
+     return (
+            <ReactApexChart options={options} series={series} type="radialBar" width={"100%"} />
         );
 }

@@ -267,7 +267,7 @@ async def rag_response_fn(
             }
 
         # feedback is True → generate summary
-        full_hist = organize_full_conversation(chat_state)
+        full_hist = organize_full_conversation(chat_state, exclude_states=["end_conversation", "ask_for_summary"])
         system_prompt = build_summary_system_prompt()
         human_prompt = f"""\nConversation: \n{full_hist}\n"""
         messages = [

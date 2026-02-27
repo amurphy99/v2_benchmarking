@@ -73,7 +73,8 @@ class ChatSession(models.Model):
     is not active, but I'm not sure I can guaruntee they won't be accessed until 
     then. Other solutions seem clunky right now...
     """
-    SOURCE_CHOICES = [("webapp", "WebApp"), ("mobile", "Mobile"), ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot")]
+    SOURCE_CHOICES = [("webapp", "WebApp"), ("mobile", "Mobile"), ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"), ("demo", "Demo")]
+    RISK_LEVEL_CHOICES = [(1, 'Low'), (2, 'Medium'), (3, 'High'), (4, 'Critical')]
 
     # Initialized on chat creation
     profile    = models.ForeignKey   (Profile, on_delete=models.CASCADE, related_name="chat_sessions")
@@ -83,14 +84,21 @@ class ChatSession(models.Model):
     # Updated on chat end
     is_active = models.BooleanField (default=True)
     end_ts    = models.DateTimeField(**init_args)
+    audio_file = models.CharField(**init_args, max_length=255)
 
     # Optional metadata to be filled when closing
     notes     = models.TextField(**init_args)
+    summary   = models.TextField(**init_args)
     topics    = models.CharField(**init_args, max_length=255, default="['No','Topics','Available']")
     sentiment = models.CharField(**init_args, max_length=255, default="N/A")
     taskType  = models.CharField(**init_args, max_length=255, default="chat")
     taskSubtype = models.CharField(**init_args, max_length=255, default="N/A")
     image     = models.ForeignKey(AlbumImage, on_delete=models.SET_NULL, null=True)
+    
+    # Risk and alerts
+    risk_level = models.CharField(**init_args, max_length=32, choices=RISK_LEVEL_CHOICES)
+    risk_quotes = ArrayField(models.CharField(max_length=255), **init_args)
+    risk_reason = models.TextField(**init_args)
 
     class Meta:
         constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile
@@ -150,7 +158,8 @@ class ChatMessage(models.Model):
 # =======================================================================
 class ChatBiomarkerScore(models.Model):
     BIOMARKER_CHOICES = [("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"), 
-                         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking")]
+                         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
+                         ("perplexity", "Perplexity")]
     
     session    = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="biomarker_scores")
     score_type = models.CharField(max_length=32, choices=BIOMARKER_CHOICES)

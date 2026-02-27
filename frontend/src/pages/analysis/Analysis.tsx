@@ -1,5 +1,5 @@
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
-import { ChatWeek, getMessages, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
+import { ChatWeek, getMessages, getTopics, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
 import { useAuth } from "@/context/AuthProvider";
 
 import { TopicsCard } from "../common/TopicsCard";
@@ -34,9 +34,9 @@ export function Analysis() {
 
     return (
         <div className={colStyle}>
-            <div className={`flex flex-col gap-[2rem] md:flex-row md:gap-[1rem] w-full`}>
+            <div className={`flex flex-col w-full gap-[2rem] md:flex-row md:gap-[1rem]`}>
                 <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
-                <TopicsCard messages={weeklyMessages} type="Weekly" role={role} />
+                <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
             </div>
             <MoodCard week={currentWeek} />
             <p id="factors" className="h-0 w-0 p-0 m-0"/>

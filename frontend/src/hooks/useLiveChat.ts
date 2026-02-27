@@ -54,13 +54,13 @@ export default function useLiveChat({
             onEmotion(response.emotion)
         }
 
-        if (state === "close_chat") {
-            setTimeout(() => {
-                setRecording(false);
-                send({ type: "end_chat", data: Date.now() });
-                onChatClosed?.();
-            }, 500);
-        }
+        // if (state === "close_chat") {
+        //     setTimeout(() => {
+        //         setRecording(false);
+        //         send({ type: "end_chat", data: Date.now() });
+        //         onChatClosed?.();
+        //     }, 500);
+        // }
 	};
     const [recording, setRecording] = useState(false);
 

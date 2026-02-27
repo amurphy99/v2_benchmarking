@@ -1,4 +1,4 @@
-import { ChatMessage, ChatSession } from "@/api";
+import { ChatSession } from "@/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { useAuth } from "@/context/AuthProvider";
@@ -18,13 +18,7 @@ export function DaySummary() {
     const chatDate = new Date(state.chatSession.date)
     const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
 
-    function getSessionMessages(session: ChatSession) : ChatMessage[] {
-        var messages: ChatMessage[] = [];
-        for (var j = 0; j < session.messages.length; j++) {
-            messages.push(session.messages[j]);
-        }
-        return messages;
-    }
+    const topics = state?.chatSession.topics.replace(/[\[\]"']/g, "").split(",");
 
     if (window.isMobile) {
     return (
@@ -39,7 +33,7 @@ export function DaySummary() {
                         <Icon icon={getMoodIcon(state?.chatSession.sentiment)} width={"3rem"}/>
                     </div>
                 </div>
-                <TopicsCard messages={getSessionMessages(state?.chatSession)} type="Daily" role={role} />
+                <TopicsCard topics={topics} type="Daily" role={role} />
                 <ChatLengthCard role={role} sessions={[state.chatSession]} type="" />
                 <ChatSummaryCard role={role} sessions={[state.chatSession]} type="Daily" />
                 <DropdownModal title="Speech Analysis" content={content} />
@@ -60,12 +54,12 @@ export function DaySummary() {
                         <div className={`rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow}`}>
                             <h2 className={`${role}-text`}>Mood</h2>
                             <div className="flex flex-col justify-center items-center mt-[4rem]">
-                                <Icon icon={getMoodIcon(state?.chatSession.sentiment)} width={"full"}/>
+                                <Icon icon={getMoodIcon(state?.chatSession.sentiment)} width={"100%"}/>
                                 <h2>{state?.chatSession.sentiment}</h2>
                             </div>
                         </div>
                         <div className="flex col-span-2">
-                            <TopicsCard messages={getSessionMessages(state?.chatSession)} type="Daily" role={role} />
+                            <TopicsCard topics={topics} type="Daily" role={role} />
                         </div>
                         <div className="flex h-full">
                             <ChatLengthCard role={role} sessions={[state.chatSession]} type="" />

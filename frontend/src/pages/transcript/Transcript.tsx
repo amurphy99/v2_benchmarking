@@ -1,4 +1,4 @@
-import { BiomarkerType, ChatSession } from "@/api";
+import { ChatSession } from "@/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import ChatTranscript from "../chatDetails/components/ChatTranscript";
 import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
@@ -9,7 +9,6 @@ import { GiArchiveResearch } from "react-icons/gi";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
-import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 import { BsPlayCircle } from "react-icons/bs";
 
 export function Transcript() {
@@ -58,6 +57,7 @@ export function Transcript() {
                     <option value="pronunciation">Pronunciation</option>
                     <option value="prosody">Prosody</option>
                     <option value="turntaking">Turn Taking</option>
+                    <option value="perplexity">Perplexity Difference</option>
                 </select>
                 <button className={`p-2 w-full rounded-full flex flex-row items-center bg-white ${smallShadow}`}>
                     <div className={`${role}-text px-[1rem]`}>
@@ -92,6 +92,7 @@ export function Transcript() {
                         <option value="pronunciation">Pronunciation</option>
                         <option value="prosody">Prosody</option>
                         <option value="turntaking">Turn Taking</option>
+                        <option value="perplexity">Perplexity Difference</option>
                     </select>
                     <BiomarkerSummary biomarker={biomarker} />
                     <h2 className="mt-[1rem]">Overview</h2>
