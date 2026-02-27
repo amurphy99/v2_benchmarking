@@ -40,7 +40,7 @@ export function AdminControlsPanel({
     send                 : (msg: any) => void;
     controlState         : ControlState;
     setControlState      : (fn: (prev: ControlState) => ControlState) => void;
-    registerAckHandler   : (fn: (ack: CommandAck) => void) => void;
+    registerAckHandler   : (fn: (ack:  CommandAck  ) => void        ) => void;
 }) {
 
     // Use the prebuilt hook for handling commands & acks

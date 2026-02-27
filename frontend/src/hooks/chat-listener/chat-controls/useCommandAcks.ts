@@ -106,8 +106,14 @@ export function useCommandAcks({
         respondNow     : () => {sendCommand("respond_now",     "respond_now")},
         
         // Control avatar or robot actions
-        robotSpin      : () => {sendCommand("robot_spin",      "robot_action", { action: "spin"    })},
-        robotExcited   : () => {sendCommand("robot_excited",   "robot_action", { action: "excited" })},
+        robotSpin    : () => {sendCommand("robot_spin",    "robot_action", { action: "spin"    })},
+        robotExcited : () => {sendCommand("robot_excited", "robot_action", { action: "excited" })},
+
+        // Manual Response Controls
+        pauseAndListen         : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
+        resumeAndRespond       : () => {sendCommand("resume_and_respond", "resume_and_respond")},
+        paraphraseLastQuestion : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
+        sendCustom             : (text: string) => {sendCommand("send_custom", "send_custom", { data: text })},
     };
 
     return { pending, sendCommand, actions };
