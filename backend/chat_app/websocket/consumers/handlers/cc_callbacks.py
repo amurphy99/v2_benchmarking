@@ -61,7 +61,7 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
     # Log update
     logger.info((
         f"{CC_MAIN} New {lu.BRIGHT_GREEN}{role}{lu.GREEN} message processed "
-        f"({lu.BRIGHT_GREEN}context size: {len(consumer.context_buffer)}/{consumer.MAX_CONTENT}{lu.GREEN}). {RESET}"
+        f"({lu.BRIGHT_GREEN}context size: {len(consumer.context_buffer)}/{consumer.MAX_CONTEXT}{lu.GREEN}). {RESET}"
     ))
 
     # Broadcast updates to any listeners
