@@ -116,6 +116,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         self.room_group    = f"chat_{sid}"       # all listeners + primary (message events)
         self.monitor_group = f"chat_{sid}_mon"   # listeners (biomarker events)
         self.control_group = f"chat_{sid}_ctl"   # primaries only (commands)
+        self.ack_group     = f"chat_{sid}_ack"   # for relaying command acks to frontend
 
         # 6) Accept the websocket (must be done before send_json / receiving messages)
         await self.accept()
@@ -129,6 +130,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # 7) Join groups
         await self.channel_layer.group_add(self.   room_group, self.channel_name)
         await self.channel_layer.group_add(self.monitor_group, self.channel_name)
+        await self.channel_layer.group_add(self.    ack_group, self.channel_name)
 
         # 8) Collect and send all data required on-connection by the frontend
         num_messages, num_biomarkers = await send_initial_data(self.session_info, self)
@@ -139,7 +141,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # --------------------------------------------------------------------------------
     async def disconnect(self, code):      
         leave_all_groups(self, log)
-        log.log_disconnect(self.user.username, code)
+        log.log_disconnect(self.user.username, self.session_id, code)
 
     # ================================================================================
     # Group Event Handlers | Handle all messages send from consumer-to-consumer
@@ -163,6 +165,10 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Receives biomarker updates broadcast from the primary consumer.
     async def ws_monitor(self, event):
         await self.send_json(format_biomarker_broadcast(event))
+
+    # ChatConsumer sends acks to us, pass them along
+    async def ws_command_acks(self, event):
+        await self.send_json(event.get("payload", {}))
 
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
@@ -195,11 +201,11 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
             )
 
             # Log update
-            logger.info(f"{lu.CL_MAIN} Client command relayed:    {lu.GREEN} {payload} {lu.RESET}")
+            logger.info(f"{lu.CL_MAIN} Client command relayed:    {lu.GREEN}{payload}{lu.RESET}")
 
         # --------------------------------------------------------------------------------
         # Unknown message type received from the client
         # --------------------------------------------------------------------------------
         else:
-            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN} {payload} {lu.RESET}")
+            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN}{payload}{lu.RESET}")
             return

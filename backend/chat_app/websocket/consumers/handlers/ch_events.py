@@ -77,7 +77,7 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     # TODO: This might need to get acks from the avatar itself, and forward those..?
     elif command == "robot_action":
         await format_actions_command(consumer, payload)
-        await send_command_ack(consumer, {"id": id, "ok": True, "state": {}})
+        await send_command_ack(consumer, {"id": id, "ok": True, "state": {}}, command)
 
     # --------------------------------------------------------------------------------
     # Manual Response Control
@@ -86,27 +86,28 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     # Pause automatic responses and just listen
     elif command == "pause_and_listen":
         consumer.reply_on_user_utt = False
-        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}})
+        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}}, command)
 
     # Respond immediately and resume automatic responses
     elif command == "resume_and_respond":
         await consumer.reply_now(use_response=payload.get("data", None))
         consumer.reply_on_user_utt = True
-        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}})
+        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}}, command)
 
     # Repeat the robots last message
     elif command == "paraphrase_last": 
         await consumer.reply_now(use_response=consumer.last_response)
-        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}})
+        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}}, command)
 
     # Admin has sent a custom message for the robot to say
     elif command == "send_custom": 
-        custom_response = payload.get("text")
+        custom_response = payload        .get("value",   {}) or {}
+        custom_response = custom_response.get("message", {})
         if custom_response:
             await consumer.reply_now(use_response=custom_response)
-            await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}})
+            await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}}, command)
         else:
-            await send_command_ack(consumer, {"id": id, "ok": False, "state": {"manualMode": True}})
+            await send_command_ack(consumer, {"id": id, "ok": False, "state": {"manualMode": True}}, command)
 
 
     # Unknown/unhandled command
@@ -117,8 +118,9 @@ async def handle_ws_command(consumer: ChatConsumer, event):
 # Respond with "ack"
 # ================================================================================
 async def send_command_ack(consumer: ChatConsumer, data: dict, command: str = "command"):
-    await consumer.send(json.dumps({"type": "command_ack", "data": data}))
-    logger.info(f"{CC_MAIN} Sent ack for {CC_H}{command}{CC_R}: {lu.YELLOW}{data}{RESET}")
+    payload = {"type": "ws.command_acks", "payload": {"type": "command_ack", "data": data}}
+    await consumer.channel_layer.group_send(consumer.ack_group, payload)
+    logger.info(f"{CC_MAIN} Sent ack for command:      {lu.YELLOW}{data}{CC_R} ({CC_H}{command}{CC_R}) {RESET}")
 
 # Double logs the commands that aren't set up yet
 def log_command(command_type):
@@ -128,7 +130,7 @@ def log_command(command_type):
 # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
 # ================================================================================
 # TODO: No need to separately send things to the client, just forward it from here after broadcasting
-async def forward_payload_to_client(consumer, event):
+async def forward_payload_to_client(consumer: ChatConsumer, event):
     await consumer.send_json(event["payload"])
 
 

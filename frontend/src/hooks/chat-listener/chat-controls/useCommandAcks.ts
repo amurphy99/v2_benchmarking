@@ -49,6 +49,7 @@ export function useCommandAcks({
     // --------------------------------------------------------------------------------
     useEffect(() => {
         registerAckHandler((ack: CommandAck) => {
+            console.log(ack);
             const rec = pendingByIdRef.current.get(ack.id);
             if (!rec) return;
 
@@ -115,7 +116,7 @@ export function useCommandAcks({
         pauseAndListen   : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
         resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
         paraphraseLast   : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
-        sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { data: text })},
+        sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { message: text })},
     };
 
     return { pending, sendCommand, actions };

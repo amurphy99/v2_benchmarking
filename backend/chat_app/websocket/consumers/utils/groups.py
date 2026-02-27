@@ -34,6 +34,7 @@ async def join_chat_consumer_groups(consumer):
     consumer.room_group    = f"chat_{session_id}"
     consumer.monitor_group = f"chat_{session_id}_mon"
     consumer.control_group = f"chat_{session_id}_ctl"
+    consumer.ack_group     = f"chat_{session_id}_ack"   # for relaying command acks to frontend
 
     # Join base room & control room (send updates to listeners, receive commands from listeners)
     await consumer.channel_layer.group_add(consumer.   room_group, consumer.channel_name)
@@ -49,6 +50,7 @@ async def leave_all_groups(consumer, log_util):
         getattr(consumer,    "room_group", None), 
         getattr(consumer, "monitor_group", None),
         getattr(consumer, "control_group", None),
+        getattr(consumer,     "ack_group", None),
     ]
     for group in consumer_groups:
         if group: 

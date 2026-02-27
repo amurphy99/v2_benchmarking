@@ -147,7 +147,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
-        log.log_disconnect(self.user, code)
+        log.log_disconnect(self.user, session_id, code)
 
 
     # ================================================================================

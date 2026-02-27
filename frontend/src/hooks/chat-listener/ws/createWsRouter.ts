@@ -43,6 +43,8 @@ export function createWsRouter({
             return;
         }
 
+        // console.log(event);
+
         // Update the last event (for real data or acks only)
         setLastEventAt(new Date());
 

@@ -81,6 +81,7 @@ class ChatHandler:
         if use_response is None: system_resp = await get_LLM_response(context_buffer)
         else:                    system_resp = use_response
         system_ts = now_ts() 
+        consumer.last_response = system_resp
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await consumer.send(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
