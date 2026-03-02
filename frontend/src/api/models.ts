@@ -140,7 +140,7 @@ export interface AlbumImage {
 // ChatSessions
 export interface ChatSession {
   id        : number;
-  user      : number; // ForeignKey id
+  profile   : Profile;
   source    : string;
   date      : string;
   is_active : boolean;
@@ -152,7 +152,7 @@ export interface ChatSession {
 
   topics    : string;        // stored as an unparsed list string
   image     : AlbumImage;
-  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | string;
+  sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
   notes     : string | null;
   summary   : string | null;
 

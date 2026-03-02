@@ -42,7 +42,7 @@ def handle_audio_data(data):
     try:
         # Decode the received base64 data to bytes & get the sample rate
         audio_bytes, sample_rate = data["data"], data["sampleRate"]
-        logger.info(f"{lu.CYAN}[Aud] Audio data received: {len(audio_bytes):,} bytes at {sample_rate:,}Hz {lu.RESET}")
+        #logger.info(f"{lu.CYAN}[Aud] Audio data received: {len(audio_bytes):,} bytes at {sample_rate:,}Hz {lu.RESET}")
         
         # Normalize audio data
         audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
@@ -83,11 +83,11 @@ async def extract_audio_biomarkers(data, overlapped_speech_count):
     # 1) Run heavy function in thread pool
     prosody_features, pronunciation_features = await loop.run_in_executor(_POOL, handle_audio_data, data)
     t1 = time()
-    logger.info(f"{lu.CYAN}[Aud] Audio data processed:    {(t1-t0):5.4f}s {lu.RESET}")
+    #logger.info(f"{lu.CYAN}[Aud] Audio data processed:    {(t1-t0):5.4f}s {lu.RESET}")
 
     # 2) Generate the audio-related biomarker scores
     audio_biomarkers = generate_audio_biomarkers(prosody_features, pronunciation_features, overlapped_speech_count)
-    logger.info(f"{lu.CYAN}[Bio] Audio biomarkers done:   {(time()-t1):5.4f}s {lu.RESET}")
+    #logger.info(f"{lu.CYAN}[Bio] Audio biomarkers done:   {(time()-t1):5.4f}s {lu.RESET}")
 
     return audio_biomarkers
 
@@ -102,7 +102,7 @@ async def extract_text_biomarkers(context_buffer):
     
     # Run heavy function in thread pool
     utterance_biomarkers = await loop.run_in_executor(_POOL, lambda: generate_utterance_biomarkers(context_buffer))
-    logger.info(f"{lu.MAGENTA}[Bio] Biomarkers done in:      {(time()-t0):5.4f}s {lu.RESET}")
+    #logger.info(f"{lu.MAGENTA}[Bio] Biomarkers done in:      {(time()-t0):5.4f}s {lu.RESET}")
 
     # Return the biomarkers
     return utterance_biomarkers 

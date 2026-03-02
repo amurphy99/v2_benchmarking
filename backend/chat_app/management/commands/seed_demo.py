@@ -132,7 +132,7 @@ class Command(BaseCommand):
         # Second profile
         # --------------------------------------------------------------------
         plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
-        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
+        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver", is_staff=True)
         plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"})
         care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
         profile_2, _ = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",})

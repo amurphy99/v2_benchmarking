@@ -29,11 +29,13 @@ const TITLES: Record<string, string> = {
     "/transcript"   : "Transcript",
     "/practice"     : "Practice",
     "/alert"        : "Alerts",
+    "/admin"        : "Admin",
+    "/profile"      : "Profile",
     default         : "Cognibot",
 };
 
 const SHOW_HEADER: string[] = ["/chat", "/chat/end", "/album", "/analysis", "/analysis/flagged", "/goal", 
-    "/practice", "/schedule", "/alert", "/settings", "/profile"]
+    "/practice", "/schedule", "/alert", "/settings", "/profile", "/admin"]
 
 // ====================================================================
 // Header
