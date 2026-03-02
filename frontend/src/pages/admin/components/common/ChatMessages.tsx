@@ -41,15 +41,17 @@ function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage | ChatMessage, 
 export function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=true } : { 
     messages        : LocalChatMessage[] | ChatMessage[]; 
     chatStartTsIso? : string  | null; 
-    do_auto_scroll? : boolean | null;
+    do_auto_scroll? : boolean | null; // False for inactive chat sessions
 }) {
     // Automatically scroll to bottom when messages change
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const bottomRef          = useRef<HTMLDivElement | null>(null);
 
+    // If for an INACTIVE chat, reverse the message order so earliest are first
     // Collapse consecutive USER messages into one bubble
     const renderMessages = useMemo(() => {
-        const arr = messages as Array<LocalChatMessage | ChatMessage>;
+        const arr  = messages as Array<LocalChatMessage | ChatMessage>;
+        //const msgs = do_auto_scroll ? arr : [...arr].reverse();
         return collapseConsecutiveMessages(arr);
     }, [messages]);
 
