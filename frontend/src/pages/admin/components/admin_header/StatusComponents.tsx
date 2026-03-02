@@ -2,7 +2,7 @@
 // Admin Chat Header Status Components
 // ================================================================================
 import { memo, useMemo, useState, useEffect } from "react";
-import { formatAgo, formatElapsedTime } from "@/utils/styling/numFormatting";
+import { formatAgo, formatElapsedTime, formatDurationFromStart } from "@/utils/styling/numFormatting";
 
 // --------------------------------------------------------------------------------
 // Connection State Indicator
@@ -33,13 +33,6 @@ export const ConnectionPill = memo(function ConnPill({ wsState }: { wsState: Con
 // ================================================================================
 // Live-updating StatusPills for the AdminChat page headers
 // ================================================================================
-// Format the "chat duration" field
-function formatDurationFromStart(startTsUnix: number | null | undefined): string {
-    if (!startTsUnix) return "—";
-    const elapsed = Math.max(0, Math.floor(Date.now() / 1_000 - startTsUnix));
-    return formatElapsedTime(elapsed);
-}
-
 // General "pill" wrapper for different status information
 export const InfoPill: React.FC<{ label: string; value?: React.ReactNode, children?: React.ReactNode }> = ({ label, value, children }) => (
     <div className="flex items-center gap-2 rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs whitespace-nowrap">
