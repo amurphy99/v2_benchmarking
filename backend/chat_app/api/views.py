@@ -161,7 +161,7 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 # ======================================================================= ===================================
-# Read-only List & Details (messages, biomarkers)
+# Read-only ChatSession & Details (messages, biomarkers)
 # ======================================================================= ===================================
 class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     """
@@ -175,37 +175,35 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self): 
         profile = self.get_profile()
+        active = self.kwargs["active"]
+        demo = self.kwargs["demo"]
+        
+        objs = (ChatSession.objects
+                .filter(profile=profile)
+                .select_related("profile", "image")
+                .prefetch_related("messages", "biomarker_scores"))
+        if int(active) == 0:
+            objs = objs.filter(is_active=False)
+        elif int(active) == 1:
+            objs = objs.filter(is_active=True)
+        if int(demo) == 0:
+            objs = objs.exclude(source="demo")
+        elif int(demo) == 1:
+            objs = objs.filter(source="demo")
+        return objs
+        
+class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        profile = self.get_profile()
         return (ChatSession.objects
                 .filter(profile=profile)
-                .filter(is_active=False)
                 .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores"))
-        
-class ChatSessionViewSetAll(viewsets.ReadOnlyModelViewSet):
-    """
-    ToDo:
-        * I think I need to make sure average scores and duration are included
-        * also add default string values to sentiment/topics
-        * Add functionality to just get the latest chat session?
-    """
-    serializer_class   = ChatSessionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self): 
-        return (ChatSession.objects
-                .filter(is_active=False)
-                .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores"))
-        
-class ActiveChatSessionViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class   = ChatSessionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self): 
-        return (ChatSession.objects
-                .filter(is_active=True)
-                .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores"))
+                .prefetch_related("messages", "biomarker_scores")
+                .order_by("-end_ts")
+                .first())
 
 # ======================================================================= ===================================
 # Profile Related Views

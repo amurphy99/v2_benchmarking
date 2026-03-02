@@ -10,12 +10,20 @@ h1 {
     color: oklch(54.1% 0.281 293.009);
 }
 
+.caregiver-highlight {
+    background-color: oklch(89.4% 0.057 293.283);
+}
+
 .patient-bg {
     background-color: oklch(62.7% 0.194 149.214);
 }
 
 .patient-text {
     color: oklch(62.7% 0.194 149.214);
+}
+
+.patient-highlight {
+    background-color: oklch(92.5% 0.084 155.995);
 }
 
 .caregiver-button {
@@ -30,6 +38,13 @@ h1 {
     color: white;
 }
 
+.caregiver-button:active {
+    background-color: oklch(37.635% 0.18932 293.566);
+    border: 1px solid oklch(37.635% 0.18932 293.566);
+    color: white;
+}
+
+
 .caregiver-button-outline {
     border: 1px solid oklch(54.1% 0.281 293.009);
     background-color: transparent;
@@ -40,6 +55,12 @@ h1 {
     background-color: oklch(54.1% 0.281 293.009);
     color: white;
 }
+
+.caregiver-button-outline:active {
+    background-color: oklch(37.635% 0.18932 293.566);
+    color: white;
+}
+
 
 .patient-button {
     background-color: oklch(62.7% 0.194 149.214);
@@ -53,6 +74,12 @@ h1 {
     color: white;
 }
 
+.patient-button:active {
+    background-color: oklch(42.974% 0.12358 148.267);
+    border: 1px solid oklch(42.974% 0.12358 148.267);
+    color: white;
+}
+
 .patient-button-outline {
     border: 1px solid oklch(62.7% 0.194 149.214);
     background-color: transparent;
@@ -61,6 +88,11 @@ h1 {
 
 .patient-button-outline:hover {
     background-color: oklch(62.7% 0.194 149.214);
+    color: white;
+}
+
+.patient-button-outline:active {
+    background-color: oklch(42.974% 0.12358 148.267);
     color: white;
 }
 
@@ -151,4 +183,38 @@ h1 {
     margin: -5rem;
     padding: 5rem;
     box-sizing: content-box;
+}
+
+.album-img img {
+    filter: brightness(50%) grayscale(25%);
+}
+
+.album-img:hover img {
+    filter: brightness(100%) grayscale(0%);
+}
+
+.btn-basic {
+    padding: 0.5rem;
+    border-radius: 0.35rem;
+    font-size: 1.25rem;
+}
+
+.arc {
+  --b: 30px; /* the boder thickness */
+  --a: 220deg; /* control the progression */
+  
+  width: 200px;
+  aspect-ratio: 1;
+  padding: var(--b);
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: linear-gradient(#CC333F,#8A9B0F);
+  --_g:/var(--b) var(--b) no-repeat
+    radial-gradient(50% 50%,#000 calc(100% - 1px),#0000);
+  mask:
+    top var(--_g),
+     calc(50% + 50%*sin(var(--a))) 
+     calc(50% - 50%*cos(var(--a))) var(--_g),
+    linear-gradient(#0000 0 0) content-box intersect,
+    conic-gradient(#000 var(--a),#0000 0);
 }

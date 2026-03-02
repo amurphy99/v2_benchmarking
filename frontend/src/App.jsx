@@ -3,9 +3,9 @@ import { AuthProvider            } from "@/context/AuthProvider";
 
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
 
-import { Dashboard, History, ChatDetails, Chat, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, Alert, Transcript, Practice, Settings, AnimationTest, PracticePage, Profile, 
-    Admin, AdminChat, AdminChatInactive } from "@/pages";
+import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary, 
+    WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest, 
+    PracticePage, Profile, Admin, AdminChat, AdminChatInactive } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
@@ -54,6 +54,7 @@ export default function App() {
                 {/* Patient */}
                 <Route element={ <IsPatient/> }>
                     <Route path="/chat" element={<Chat />} />
+                    <Route path="/chat/end" element={<ChatEnd />} />
                 </Route>
 
                 {/* Caregiver */}
@@ -76,6 +77,7 @@ export default function App() {
                 <Route path="/week"     element={<WeekSummary     />} />
                 <Route path="/day"      element={<DaySummary      />} />
                 <Route path="/analysis" element={<Analysis        />} />
+                <Route path="/analysis/flagged" element={<AnalysisFlagged />} />
                 <Route path="/transcript" element={<Transcript    />} />
 
                 {/* Admin */}

@@ -3,6 +3,7 @@
 from django.conf import settings
 import django.contrib.postgres.fields
 from django.db import migrations, models
+from django.contrib.postgres.fields import ArrayField
 import django.db.models.deletion
 import django.utils.timezone
 
@@ -105,16 +106,21 @@ class Migration(migrations.Migration):
             name='ChatSession',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('source', models.CharField(choices=[('webapp', 'WebApp'), ('mobile', 'Mobile'), ('qtrobot', 'QTRobot'), ('buddyrobot', 'BuddyRobot')], default='webapp', max_length=32)),
+                ('source', models.CharField(choices=[('webapp', 'WebApp'), ('mobile', 'Mobile'), ('qtrobot', 'QTRobot'), ('buddyrobot', 'BuddyRobot'), ("demo", "Demo")], default='webapp', max_length=32)),
                 ('date', models.DateTimeField(auto_now_add=True)),
                 ('is_active', models.BooleanField(default=True)),
                 ('end_ts', models.DateTimeField(blank=True, null=True)),
+                ('audio_file', models.CharField(blank=True, max_length=255, null=True)),
                 ('notes', models.TextField(blank=True, null=True)),
+                ('summary', models.TextField(blank=True, null=True)),
                 ('topics', models.CharField(blank=True, default="['No','Topics','Available']", max_length=255, null=True)),
                 ('sentiment', models.CharField(blank=True, default='N/A', max_length=255, null=True)),
                 ('taskType', models.CharField(blank=True, default='chat', max_length=255, null=True)),
                 ('taskSubtype', models.CharField(blank=True, default='N/A', max_length=255, null=True)),
                 ('image', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to='chat_app.albumimage')),
+                ('risk_level', models.CharField(blank=True, null=True, max_length=32, choices=[(1, 'Low'), (2, 'Medium'), (3, 'High'), (4, 'Critical')])),
+                ('risk_quotes', ArrayField(models.CharField(max_length=255), null=True, blank=True)),
+                ('risk_reason', models.TextField(blank=True, null=True)),
                 ('profile', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='chat_sessions', to='chat_app.profile')),
             ],
             options={
@@ -140,7 +146,7 @@ class Migration(migrations.Migration):
             name='ChatBiomarkerScore',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('score_type', models.CharField(choices=[('alteredgrammar', 'AlteredGrammar'), ('anomia', 'Anomia'), ('pragmatic', 'Pragmatic'), ('pronunciation', 'Pronunciation'), ('prosody', 'Prosody'), ('turntaking', 'Turntaking')], max_length=32)),
+                ('score_type', models.CharField(choices=[('alteredgrammar', 'AlteredGrammar'), ('anomia', 'Anomia'), ('pragmatic', 'Pragmatic'), ('pronunciation', 'Pronunciation'), ('prosody', 'Prosody'), ('turntaking', 'Turntaking'), ("perplexity", "Perplexity")], max_length=32)),
                 ('score', models.FloatField()),
                 ('ts', models.DateTimeField(auto_now_add=True)),
                 ('session', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='biomarker_scores', to='chat_app.chatsession')),
