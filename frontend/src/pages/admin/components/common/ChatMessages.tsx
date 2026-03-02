@@ -22,9 +22,9 @@ function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage | ChatMessage, 
     const { sender, marginFar, marginClose, bubbleColor } = (messageStyle as any)[msg.role] || messageStyle.default;
 
     // Styles
-    const messageBubbleStyle = `flex flex-col my-[0rem] ${marginFar} ${marginClose} gap-0`;
+    const messageBubbleStyle = `flex flex-col my-[0rem] ${marginFar} ${marginClose} gap-0 pb-[0rem]`;
     const messageTextStyle   = `${bubbleColor} px-[0.5em] py-[0.5em] w-fit rounded-sm leading-snug m-0`;
-    const messageTimeStyle   = `${marginFar} text-gray-500 text-xs leading-none mt-[0.25em] font-mono tabular-nums`;
+    const messageTimeStyle   = `${marginFar} text-gray-500 text-xs leading-none mt-[0.25rem] mb-[0.5rem] font-mono tabular-nums`;
 
     // UI elment for a text bubble & timestamp
     return (
