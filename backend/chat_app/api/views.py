@@ -160,38 +160,42 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
         # Delete from default DB
         instance.delete()
 
-# ======================================================================= ===================================
-# Read-only ChatSession & Details (messages, biomarkers)
-# ======================================================================= ===================================
+# ================================================================================ 
+# [Read-Only] ChatSession & Details (messages, biomarkers)
+# ================================================================================ 
 class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     """
-    ToDo:
-        * I think I need to make sure average scores and duration are included
-        * also add default string values to sentiment/topics
-        * Add functionality to just get the latest chat session?
+    TODO: Should this be protected based on what kind of user you are?
     """
     serializer_class   = ChatSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
         profile = self.get_profile()
-        active = self.kwargs["active"]
-        demo = self.kwargs["demo"]
+        
+        # Filtering objects  
+        active  = self.kwargs["active"]
+        demo    = self.kwargs["demo"  ]
         
         objs = (ChatSession.objects
                 .filter(profile=profile)
-                .select_related("profile", "image")
+                .select_related  ("profile",  "image")
                 .prefetch_related("messages", "biomarker_scores"))
-        if int(active) == 0:
-            objs = objs.filter(is_active=False)
-        elif int(active) == 1:
-            objs = objs.filter(is_active=True)
-        if int(demo) == 0:
-            objs = objs.exclude(source="demo")
-        elif int(demo) == 1:
-            objs = objs.filter(source="demo")
-        return objs
         
+        # Filter for active / inactive chats
+        if   int(active) == 0: objs = objs.filter(is_active=False)
+        elif int(active) == 1: objs = objs.filter(is_active=True )
+
+        # Filter for demo vs. real data
+        if   int(demo) == 0:  objs = objs.exclude(source="demo")
+        elif int(demo) == 1:  objs = objs.filter (source="demo")
+
+        # Return ChatSessions ordered by creation date
+        return objs.order_by("-date")
+
+# --------------------------------------------------------------------------------
+# Return just the most recent ChatSession
+# --------------------------------------------------------------------------------
 class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
     serializer_class   = ChatSessionSerializer
     permission_classes = [permissions.IsAuthenticated]

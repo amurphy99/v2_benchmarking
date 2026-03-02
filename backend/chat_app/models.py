@@ -11,9 +11,9 @@ from datetime import date, timedelta
 init_args    = dict(null=True, blank=True)
 DAYS_OF_WEEK = ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday'), (5, 'Saturday'), (6, 'Sunday'),)
 
-# =======================================================================
+# ================================================================================
 # Non-Chat Models
-# =======================================================================
+# ================================================================================
 class Account(models.Model):
     ROLE_CHOICES = [("Patient", "patient"), ("Caregiver", "caregiver"), ("Family", "family"), ("Physician", "physician"), ("Other", "other")]
     user        = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="account_user")
@@ -51,9 +51,9 @@ class Reminder(models.Model):
     def __str__(self): return f"Reminder {self.title}"
 
 
-# =======================================================================
+# ================================================================================
 # AlbumImage 
-# =======================================================================
+# ================================================================================
 # Every topic (from conversations) has one associated image, and every ChatSession has a main topic
 class AlbumImage(models.Model):
     topic = models.CharField(max_length=100, unique=True)
@@ -61,49 +61,82 @@ class AlbumImage(models.Model):
     photographer = models.CharField(max_length=100)
     photographer_url = models.CharField(max_length=255)
     
-# =======================================================================
+# ================================================================================
 # ChatSession 
-# =======================================================================
-# Every conversation is a ChatSession, but only one is ever active at once
+# ================================================================================
+# Only one ChatSession per user should be "active" at once
 class ChatSession(models.Model):
     """
-    * overlapped speech needs to be handled
-
-    These properties would work totally fine as cached properties once the session 
-    is not active, but I'm not sure I can guaruntee they won't be accessed until 
-    then. Other solutions seem clunky right now...
+    TODO: overlapped speech needs to be handled (?)
     """
-    SOURCE_CHOICES = [("webapp", "WebApp"), ("mobile", "Mobile"), ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"), ("demo", "Demo")]
+    # Sources are given on connection to the chat
+    SOURCE_CHOICES = [
+        ("webapp",  "WebApp" ), ("mobile",     "Mobile"    ),  # Web app frontend UI
+        ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"),  # Access via physical robots
+        ("demo", "Demo"),                                      # Demo/preset data
+    ]
+
+    # Levels of risk evaluated in the post-chat analysis
     RISK_LEVEL_CHOICES = [(1, 'Low'), (2, 'Medium'), (3, 'High'), (4, 'Critical')]
 
+    # --------------------------------------------------------------------------------
     # Initialized on chat creation
-    profile    = models.ForeignKey   (Profile, on_delete=models.CASCADE, related_name="chat_sessions")
-    source     = models.CharField    (max_length=32, choices=SOURCE_CHOICES, default="webapp")
-    date       = models.DateTimeField(auto_now_add=True)
+    # --------------------------------------------------------------------------------
+    profile = models.ForeignKey   (Profile, on_delete=models.CASCADE, related_name="chat_sessions")
+    source  = models.CharField    (max_length=32, choices=SOURCE_CHOICES, default="webapp")
+    date    = models.DateTimeField(auto_now_add=True)
 
+    # TODO: Future field for what LLM version was used
+    LLM_version = models.TextField(**init_args)
+
+    # Flexible field -- would be used for clinicians or users to save notes about chats
+    notes = models.TextField(**init_args)
+
+    # --------------------------------------------------------------------------------
     # Updated on chat end
-    is_active = models.BooleanField (default=True)
-    end_ts    = models.DateTimeField(**init_args)
-    audio_file = models.CharField(**init_args, max_length=255)
+    # --------------------------------------------------------------------------------
+    # TODO: `start_ts`, `end_ts`, and `duration` should all be defined once upon chat 
+    #       end, or as properties...
+    is_active  = models.BooleanField (default=True)
+    end_ts     = models.DateTimeField(**init_args) # `start_ts` is a property defined elsewhere
+    audio_file = models.CharField    (**init_args, max_length=255)
 
-    # Optional metadata to be filled when closing
-    notes     = models.TextField(**init_args)
-    summary   = models.TextField(**init_args)
-    topics    = models.CharField(**init_args, max_length=255, default="['No','Topics','Available']")
-    sentiment = models.CharField(**init_args, max_length=255, default="N/A")
-    taskType  = models.CharField(**init_args, max_length=255, default="chat")
+    # These are filled out based on the user's current settings at the time the chat ends
+    taskType    = models.CharField(**init_args, max_length=255, default="chat")
     taskSubtype = models.CharField(**init_args, max_length=255, default="N/A")
-    image     = models.ForeignKey(AlbumImage, on_delete=models.SET_NULL, null=True)
+
+    # Based on the first listed topic
+    image = models.ForeignKey(AlbumImage, on_delete=models.SET_NULL, null=True)
+
+    # --------------------------------------------------------------------------------
+    # Post-chat analysis filled out when chats are completed
+    # --------------------------------------------------------------------------------
+    # Summary & Topics (stage 1 of post-chat analysis)
+    # TODO: Should change topics to be a list of strings field
+    summary   = models.TextField(**init_args)
+    topics    = models.CharField(**init_args, max_length=255, default="['N/A']")
     
-    # Risk and alerts
-    risk_level = models.CharField(**init_args, max_length=32, choices=RISK_LEVEL_CHOICES)
+    # Sentiment & Emotion (stage 2 of post-chat analysis)
+    sentiment = models.CharField(**init_args, max_length=255, default="N/A")
+    emotion   = models.CharField(**init_args, max_length=255, default="N/A")
+
+    # Risk Alerts (stage 3 of post-chat analysis)
+    risk_level  = models.CharField(**init_args, max_length=32, choices=RISK_LEVEL_CHOICES)
     risk_quotes = ArrayField(models.CharField(max_length=255), **init_args)
     risk_reason = models.TextField(**init_args)
 
-    class Meta:
-        constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile
-        ordering    = ["-date", "id"]
-
+    # --------------------------------------------------------------------------------
+    # Properties
+    # --------------------------------------------------------------------------------
+    # TODO: We only really need to define this once?
+    @property
+    def start_ts(self):
+        """Returns the earliest timestamp from related biomarker scores or messages"""
+        biomarker_ts = self.biomarker_scores.aggregate(min_ts=Min("ts"))["min_ts"]
+        message_ts   = self.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
+        timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
+        return min(timestamps) if timestamps else None
+    
     @property
     def duration(self):
         start = self.start_ts
@@ -117,65 +150,67 @@ class ChatSession(models.Model):
         """ Returns {'prosody': 0.71, 'pragmatic': 0.42, ...} (missing biomarkers are omitted) """
         qs = (self.biomarker_scores.values("score_type").annotate(avg=Avg("score")))
         return {row["score_type"]: row["avg"] for row in qs}
-
-    @property
-    def start_ts(self):
-        """Returns the earliest timestamp from related biomarker scores or messages"""
-        biomarker_ts = self.biomarker_scores.aggregate(min_ts=Min("ts"))["min_ts"]
-        message_ts   = self.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
-        timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
-        return min(timestamps) if timestamps else None
+    
+    class Meta:
+        constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile
+        ordering    = ["-date", "id"]
 
     def __str__(self): return self.date
 
-# =======================================================================
+# ================================================================================
 # ChatMessage -- an array of these is assigned to each ChatSession
-# =======================================================================
+# ================================================================================
 class ChatMessage(models.Model):
     """
     Once start/end timestamps are implemented, add a duration property.
     More may have to change later if word-level timestamps are added.
     """
-    ROLE_CHOICES = [("user", "User"), ("assistant", "Assistant")]
-    SOURCE_CHOICES = [("llm", "LLM"), ("admin", "Admin"), ("other", "Other")]
+    # Speaker
+    ROLE_CHOICES   = [("user", "User"), ("assistant", "Assistant")]
+
+    # If from the assistant, how was the message sent? (e.g. were admin controls used to sent it?)
+    #SOURCE_CHOICES = [("llm", "LLM"), ("admin", "Admin"), ("other", "Other")]
     
     session   = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
     role      = models.CharField(max_length=32, choices=ROLE_CHOICES)
     content   = models.TextField()
     ts        = models.DateTimeField(auto_now_add=True)
-    source    = models.CharField(max_length=32, choices=SOURCE_CHOICES, default="llm")
+    source    = models.CharField(max_length=128, default="") # TODO: For now, not going to constrain this by a choice
 
-    # ToDo: we don't realy have anything implemented yet that could get these here
+    # TODO: We don't realy have anything implemented yet that could get these here. 
+    # TODO: Temporarily adding the auto thing for end_ts, but should be set with the actual timestamp
     start_ts  = models.DateTimeField(**init_args)
-    end_ts    = models.DateTimeField(**init_args)
+    end_ts    = models.DateTimeField(auto_now_add=True) 
 
     class Meta:
-        ordering = ["-ts", "id"]
+        ordering = ["ts", "id"]
         indexes  = [models.Index(fields=['session', 'ts'])]
     
     def __str__(self): return f"{self.role}: {self.content}"
 
-# =======================================================================
+# ================================================================================
 # ChatBiomarkerScore -- an array of these is assigned to each ChatSession
-# =======================================================================
+# ================================================================================
 class ChatBiomarkerScore(models.Model):
-    BIOMARKER_CHOICES = [("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"), 
-                         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
-                         ("perplexity", "Perplexity")]
+    BIOMARKER_CHOICES = [
+        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"), 
+        ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
+        ("perplexity", "Perplexity")
+    ]
     
     session    = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="biomarker_scores")
-    score_type = models.CharField(max_length=32, choices=BIOMARKER_CHOICES)
+    score_type = models.CharField (max_length=32, choices=BIOMARKER_CHOICES)
     score      = models.FloatField()
     ts         = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-ts", "score_type", "id"]
+        ordering = ["ts", "score_type", "id"]
 
     def __str__(self): return f"{self.score_type:16}: {self.score:.4f}"
 
-# =======================================================================
+# ================================================================================
 # One-to-one Models
-# =======================================================================
+# ================================================================================
 class Goal(models.Model):
     PERIOD_NONE    = "N"   # no rollover
     PERIOD_WEEKLY  = "W"
@@ -190,9 +225,9 @@ class Goal(models.Model):
     start_date  = models.DateField(default=timezone.localdate)                      # anchor
     start_dow   = models.PositiveSmallIntegerField(default=0, choices=DAYS_OF_WEEK) # only used when period = WEEKLY
 
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------------------------
     # Properties
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------------------------
     # To calculate 'current', use the 'date' property of ChatSessions
     @property
     def current(self) -> int:
@@ -202,9 +237,9 @@ class Goal(models.Model):
     @property
     def remaining(self) -> int: return max(0, self.target - self.current)
 
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------------------------
     # Helper –- figure out current period window
-    # --------------------------------------------------------------------
+    # --------------------------------------------------------------------------------
     def current_period_start(self) -> date:
         today = timezone.localdate()
 
@@ -276,9 +311,9 @@ def get_profile(user):
         except Access.DoesNotExist:
             raise NotFound("This Account does not have access to any Profiles.")
 
-# =======================================================================
+# ================================================================================
 # Activities and RAG Instructions Models
-# =======================================================================
+# ================================================================================
 
 class Activity(models.Model):
     name = models.CharField(max_length=100, unique=True)
