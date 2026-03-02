@@ -17,7 +17,6 @@ export function Admin() {
     // Query the DB for a list of ChatSessions
     const { data: chatSessionsActive,            isLoading,           refetch    } = useChatSessions(ACTIVE_ONLY, NON_DEMO_ONLY);
     const { data: chatSessionsInactive, isLoading: loadingAll, refetch: refetchAll } = useChatSessions(INACTIVE_ONLY, NON_DEMO_ONLY);
-
     // --------------------------------------------------------------------------------
     // Return UI component
     // --------------------------------------------------------------------------------
