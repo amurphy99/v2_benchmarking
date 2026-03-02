@@ -175,11 +175,20 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self): 
         profile = self.get_profile()
-        return (ChatSession.objects
+        active = self.kwargs["active"]
+        demo = self.kwargs["demo"]
+        
+        objs = (ChatSession.objects
                 .filter(profile=profile)
-                .filter(is_active=False)
                 .select_related("profile", "image")
                 .prefetch_related("messages", "biomarker_scores"))
+        if active in [0, 1]:
+            objs = objs.filter(is_active=bool(active))
+        if demo == 0:
+            objs = objs.exclude(source="demo")
+        elif demo == 1:
+            objs = objs.filter(source="demo")
+        return objs
         
 class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
     serializer_class   = ChatSessionSerializer

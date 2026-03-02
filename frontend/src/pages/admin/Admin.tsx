@@ -2,8 +2,9 @@ import { Spinner } from "react-bootstrap";
 
 // From this project
 import { useAuth } from "@/context/AuthProvider";
-import { useActiveChatSessions, useAllChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList } from "./components/chat_lists/ChatList";
+import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constants";
 
 // ================================================================================
 // Admin ChatSession List Page (split into active and inactive chats)
@@ -14,8 +15,8 @@ export function Admin() {
     if (!account.user.is_staff) { return <h1 className="m-[2rem]">You don't have access to the admin page.</h1> }
 
     // Query the DB for a list of ChatSessions
-    const { data: chatSessionsActive,            isLoading,           refetch    } = useActiveChatSessions();
-    const { data: chatSessions,       isLoading: loadingAll, refetch: refetchAll } = useAllChatSessions   ();
+    const { data: chatSessionsActive,            isLoading,           refetch    } = useChatSessions(ACTIVE_ONLY, NON_DEMO_ONLY);
+    const { data: chatSessionsInactive, isLoading: loadingAll, refetch: refetchAll } = useChatSessions(INACTIVE_ONLY, NON_DEMO_ONLY);
 
     // --------------------------------------------------------------------------------
     // Return UI component
@@ -37,7 +38,7 @@ export function Admin() {
             <ChatList
                 title       = "Completed Chat Sessions"
                 subtitle    = "View post-chat analysis results."
-                sessions    = {chatSessions}
+                sessions    = {chatSessionsInactive}
                 onRefresh   = {() => refetchAll()}
                 navigate_to = {"/admin/chat/inactive/"}
             />

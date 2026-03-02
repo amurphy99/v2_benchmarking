@@ -9,14 +9,14 @@ import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
 import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
+import { useChatSession } from "@/hooks/queries/useChatSessions";
 
 export function DaySummary() {
     const role = useAuth().account.role;
     const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };
-    const chatDate = new Date(state.chatSession.date)
-    const toAlbum = () => navigate("/album", {state: state?.albumDisplay});
+    const chatDate = new Date(state.chatSession.date);
 
     const topics = state?.chatSession.topics.replace(/[\[\]"']/g, "").split(",");
 

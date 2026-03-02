@@ -2,10 +2,11 @@ import { ChatSession, getChatSession, listActiveChatSessions, listAllChatSession
 import { useModelQuery } from "@/hooks/queries/common";
 
 // Hook to wrap useQuery for retrieving ChatSession objects
-export const useChatSessions = () =>
+// Default to inactive sessions only and all sessions (non-demo and demo both)
+export const useChatSessions = (active: number = 0, demo: number = 2) =>
     useModelQuery<ChatSession[]>({
         queryKey: "chatSessions",
-        queryFn : listChatSessions,
+        queryFn : () => listChatSessions(active, demo),
         empty   : [],
     });
 

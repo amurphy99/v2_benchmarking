@@ -137,11 +137,13 @@ class ChatMessage(models.Model):
     More may have to change later if word-level timestamps are added.
     """
     ROLE_CHOICES = [("user", "User"), ("assistant", "Assistant")]
+    SOURCE_CHOICES = [("llm", "LLM"), ("admin", "Admin"), ("other", "Other")]
     
     session   = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
     role      = models.CharField(max_length=32, choices=ROLE_CHOICES)
     content   = models.TextField()
     ts        = models.DateTimeField(auto_now_add=True)
+    source    = models.CharField(max_length=32, choices=SOURCE_CHOICES, default="llm")
 
     # ToDo: we don't realy have anything implemented yet that could get these here
     start_ts  = models.DateTimeField(**init_args)

@@ -2,9 +2,9 @@ import { request     } from "../client";
 import { ChatSession } from "../models";
 
 // GET
-export const listChatSessions = () => request<ChatSession[]>("/chatsessions/");
+export const listChatSessions = (active: number = 0, demo: number = 2) => request<ChatSession[]>(`/chatsessions/${active}/${demo}/`);
 
-export const getChatSession = (id: string) => request<ChatSession>(`/chatsession/${id}/`);
+export const getChatSession = (id: string) => request<ChatSession>(`/chatsessions/${id}/`);
 
 export const listAllChatSessions = () => request<ChatSession[]>("/allchatsessions/");
 
