@@ -1,28 +1,34 @@
 import { useState } from "react";
+
+// From this project
 import { toIsoTs  } from "../chat-listener/data_utils/transforms";
+import { ChatRole } from "@/api";
 
 // --------------------------------------------------------------------------------
 // Models for frontend display use only
 // --------------------------------------------------------------------------------
-type Role = "user" | "assistant";
-
 export interface LocalChatSession {
     id       : string;                // random UUID until backend assigns
     messages : LocalChatMessage[];
     started  : string; 
 };
 export interface LocalChatMessage {
-    id      : string;
-    ts      : string; // ISO string (?)
-    role    : Role;
-    content : string;
+    id         : string;
+    role       : ChatRole;
+    content    : string;
+    ts         : string; // ISO string (?)
+    start_ts ? : string | null;
+    end_ts   ? : string | null;
 };
 
+// TODO: Figure out what the backend is actually sending for this....
 // What the backend sends in the "data" field
 export type MessageInput = {
-    ts      : unknown; // ISO string (?)
-    role    : Role;
-    content : string;
+    role       : ChatRole;
+    content    : string;
+    ts         : unknown; // ISO string (?)
+    start_ts ? : unknown; // optional ISO-ish
+    end_ts   ? : unknown; // optional ISO-ish
 };
 
 // ================================================================================
@@ -44,16 +50,30 @@ export function useLocalChatSession () {
     // --------------------------------------------------------------------------------
     // Handling the ChatListener WebSocket data
     // --------------------------------------------------------------------------------
-    const pushMessageObj = ({ ts, role, content }: MessageInput) => {
+    const pushMessageObj = ({ role, content, ts, start_ts, end_ts }: MessageInput) => {
         setSession((s) => ({
-            ...s, messages: [...s.messages, { id: crypto.randomUUID(), ts: toIsoTs(ts), role, content }],
+            ...s, messages: [...s.messages, { 
+                id       : crypto.randomUUID(), 
+                role, 
+                content, 
+                ts       : toIsoTs(ts), 
+                start_ts : (start_ts !== undefined ? toIsoTs(start_ts) : undefined),
+                end_ts   : (  end_ts !== undefined ? toIsoTs(  end_ts) : undefined),
+            }],
         }));
     };
 
     // Replace all messages at once (for loading history)
     const setMessages = (messages: MessageInput[]) => {
         setSession((s) => ({
-            ...s, messages: messages.map(({ ts, role, content }) => ({ id: crypto.randomUUID(), ts: toIsoTs(ts), role, content })),
+            ...s, messages: messages.map(({ role, content, ts, start_ts, end_ts }) => ({ 
+                id       : crypto.randomUUID(), 
+                role, 
+                content, 
+                ts       : toIsoTs(ts),  
+                start_ts : (start_ts !== undefined ? toIsoTs(start_ts) : undefined),
+                end_ts   : (  end_ts !== undefined ? toIsoTs(  end_ts) : undefined),
+            })),
         }));
     };
 

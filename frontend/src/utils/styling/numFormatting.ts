@@ -132,7 +132,7 @@ export function formatDurationFromStart(startTsUnix: number | null | undefined):
 }
 
 // --------------------------------------------------------------------------------
-// Format Timestamps
+// Format Timestamps (from ChatMessages)
 // --------------------------------------------------------------------------------
 export function parseTs(ts: string): number {
   const t = Date.parse(ts);                   // Convert ISO string into epoch ms
