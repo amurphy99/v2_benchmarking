@@ -26,14 +26,6 @@ export const useAllChatSessions = () => {
     });
 }
 
-export const useActiveChatSessions = () => {
-    return useModelQuery<ChatSession[]>({
-        queryKey: "activeChatSessions",
-        queryFn : listActiveChatSessions,
-        empty   : [],
-    });
-}
-
 export const useLatestChatSession = () => {
     useModelQuery<ChatSession>({
         queryKey: "chatSessions",
@@ -41,3 +33,21 @@ export const useLatestChatSession = () => {
         empty   : {} as ChatSession,
     });
 }
+
+// --------------------------------------------------------------------------------
+// Admin ChatSession Queries 
+// --------------------------------------------------------------------------------
+// (need to do separately because the query is "saving" the results for both)
+export const useActiveChatSessions = (demo: number = 2) =>
+    useModelQuery<ChatSession[]>({
+        queryKey: "activeChatSessions",
+        queryFn : () => listChatSessions(1, demo),
+        empty   : [],
+    });
+
+export const useInactiveChatSessions = (demo: number = 2) =>
+    useModelQuery<ChatSession[]>({
+        queryKey: "inactiveChatSessions",
+        queryFn : () => listChatSessions(0, demo),
+        empty   : [],
+    });
