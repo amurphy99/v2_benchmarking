@@ -130,3 +130,26 @@ export function formatDurationFromStart(startTsUnix: number | null | undefined):
     const elapsed = Math.max(0, Math.floor(Date.now() / 1_000 - startTsUnix));
     return formatElapsedTime(elapsed);
 }
+
+// --------------------------------------------------------------------------------
+// Format Timestamps
+// --------------------------------------------------------------------------------
+export function parseTs(ts: string): number {
+  const t = Date.parse(ts);                   // Convert ISO string into epoch ms
+  return Number.isFinite(t) ? t : Date.now(); // Fallback to "now" if invalid
+}
+
+// Display elapsed time since chat start in M:SS.xx (xx = centiseconds)
+export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: string): string {
+  if (!chatStartMs) return "—";
+
+  const msgMs  = parseTs(msgTsIso);
+  const diffMs = Math.max(0, msgMs - chatStartMs);
+
+  const minutes = Math.floor( diffMs / 60_000);
+  const seconds = Math.floor((diffMs % 60_000) / 1_000);
+  const centis  = Math.floor((diffMs %  1_000) /    10); // 2 decimals of milliseconds
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
+
