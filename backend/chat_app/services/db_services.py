@@ -75,9 +75,10 @@ class ChatService:
 
         # Create the "notes" field  
         # TODO: We need this for now until we update the DB fields for the new results.
-        risk_rating = analysis.get('risk_rating', 0)
-        risk_quotes = "\n".join(q.strip() for q in analysis.get("risk_quotes", ["No quotes given."]) if q and q.strip())
-        risk_reason = analysis.get('risk_reason', 'No reason given.')
+        risk_rating  = analysis.get('risk_rating', 0)
+        risk_quotes  = "\n".join(q.strip() for q in analysis.get("risk_quotes", ["No quotes given."]) if q and q.strip())
+        risk_reason  = analysis.get('risk_reason', 'No reason given.')
+        chat_emotion = analysis.get('emotion', 'No emotion.')
         summary        = (
             f"{analysis.get('summary', 'No summary available.')} \n"
             f"Emotion: {analysis.get('emotion', 'No emotion.')} \n"
@@ -85,14 +86,14 @@ class ChatService:
         )
         # Frontend expects fields to be separated by: 
         sep = "\n<|ANALYSIS|>\n"
-        notes = sep.join([summary, str(risk_rating), risk_quotes, risk_reason])
+        notes = sep.join([summary, str(risk_rating), risk_quotes, risk_reason, chat_emotion])
 
         # Use the results to save the rest of the fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
             user, session, messages, 
             notes     = notes, 
-            sentiment =           analysis.get("emotion", "Neutral"    ).capitalize(), 
-            topics    = ", ".join(analysis.get("topics", ["N/A"]       ))
+            sentiment =           analysis.get("sentiment", "Neutral"   ).capitalize(), 
+            topics    = ", ".join(analysis.get("topics",    ["N/A"]     ))
         )
 
         # Done
