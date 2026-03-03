@@ -51,7 +51,9 @@ class ChatHandler:
         send_callback,      # Callback to send data to the chat WebSocket client
         bio_callback,       # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
         reply_on_STT=True,  # Reply on receiving any messages from the user through STT 
-        reply_audio =False  # If we should reply with audio bytes
+        reply_audio =False, # If we should reply with audio bytes
+        response_fn=None,        # Optionally, a custom function to generate the LLM response (instead of the default get_LLM_response) 
+        response_fn_kwargs=None, # response_fn_kwargs to pass to the custom response_fn
     ):
         logger.info(f"{lu.ORANGE}[ChatHandler] reply_on_STT={BOLD}{reply_on_STT}{UNBOLD}, reply_audio={BOLD}{reply_audio}{UNBOLD}. {RESET}")
 
@@ -66,18 +68,25 @@ class ChatHandler:
 
         # 2) Get the LLMs response
         if reply_on_STT:
-            system_resp = await ChatHandler.respond_to_user(
-                context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio
-            )
+            if response_fn is None:
+                system_resp = await ChatHandler.respond_to_user(
+                    context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio
+                )
+            else:
+                system_resp = await ChatHandler.respond_to_user(
+                    context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
+                )
             return system_resp
+            
         
         return "" # I don't know how this works totally yet
     
     @staticmethod
-    async def respond_to_user(context_buffer, send_callback, msg_callback, bio_callback, *, reply_audio=False, use_response=None):
+    async def respond_to_user(context_buffer, send_callback, msg_callback, bio_callback, *, reply_audio=False, use_response=None, response_fn=None, response_fn_kwargs=None):
         # Get the LLMs response
-        if use_response is None: system_resp = await get_LLM_response(context_buffer)
-        else:                    system_resp = use_response
+        if   use_response is not None: system_resp = use_response # directly use the provided response instead of calling the LLM
+        elif response_fn  is not None: system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
+        else:                          system_resp = await get_LLM_response(context_buffer) # use the default response function
         system_ts = now_ts() 
 
         # Immediately send the response back through the websocket & update the DB + chat context
