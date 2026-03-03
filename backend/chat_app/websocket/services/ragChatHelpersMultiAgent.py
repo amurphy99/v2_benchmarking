@@ -71,8 +71,8 @@ async def _await_pending_scenario_update(rag_state: dict, trace_id: str) -> None
 
 def build_agent1_system_prompt(*, agent2_instructions: str) -> str:
     return f"""
-    You are an assistant whose job is to respond to user queries. You will be given instructions 
-    by your superiors on how to respond to the user. You will need to follow those instructions.
+    Your name is QT robot. People call you QT. You are an assistant whose job is to respond to user queries. 
+    You will be given instructions by your superiors on how to respond to the user. You will need to follow those instructions.
     But **Remember, your intructions will only provide general guidelines on how to respond, 
     and you need to match them to the specific context of the conversation based on conversation history.**
 
