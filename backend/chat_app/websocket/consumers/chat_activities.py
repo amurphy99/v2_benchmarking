@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 from  .consumers                   import ChatConsumer
 from ..services.chatHelpers        import handle_transcription0
 from ..services.speechProvider     import SpeechToTextProvider
-from ..services.activityChatHelper import rag_response_fn, START_SCENARIO
+from ..services.ragChatHelpersMultiAgent import rag_response_fn, START_SCENARIO
 
 # ================================================================================ 
 # ActivityChatConsumer
