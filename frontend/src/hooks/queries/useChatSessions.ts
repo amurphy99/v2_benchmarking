@@ -12,9 +12,10 @@ export const useChatSessions = (active: number = 0, demo: number = 2) =>
 
 export const useChatSession = (id: string) =>
     useModelQuery<ChatSession>({
-        queryKey: "chatSession",
-        queryFn : () => getChatSession(id),
-        empty   : {} as ChatSession,
+        queryKey  : `chatSession:${id}`,
+        queryFn   : () => getChatSession(id),
+        empty     : {} as ChatSession,
+        staleTime : 10_000, // 10 seconds
     });
 
 
