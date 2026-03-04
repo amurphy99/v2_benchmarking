@@ -28,9 +28,9 @@ backend/staticfiles/
 backend/logs/
 backend/script/
 # backend/websocket.log
-backend/chat_app/migrations/
-backend/chat_app/migrations/0001_initial.py
-backend/chat_app/migrations/!__init__.py
+#backend/chat_app/migrations/
+#backend/chat_app/migrations/0001_initial.py
+#backend/chat_app/migrations/!__init__.py
 backend/rag_vectorstore/models/MiniLM-L6-v2/
 #backend/rag_vectorstore/migrations/
 
