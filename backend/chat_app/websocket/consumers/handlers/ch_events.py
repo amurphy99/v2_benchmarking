@@ -106,6 +106,7 @@ async def handle_ws_command(consumer: ChatConsumer, event):
         if custom_response:
             await consumer.reply_now(use_response=custom_response)
             await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}}, command)
+            consumer.reply_on_user_utt = True
         else:
             await send_command_ack(consumer, {"id": id, "ok": False, "state": {"manualMode": True}}, command)
 
