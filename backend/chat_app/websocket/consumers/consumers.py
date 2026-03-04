@@ -66,8 +66,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
         self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
-    
-
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
@@ -89,7 +87,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
         self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
-
 
         # --------------------------------------------------------------------------------
         # 3) Finish setup (groups & STT)

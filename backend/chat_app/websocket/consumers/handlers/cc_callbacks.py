@@ -51,8 +51,11 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
     TODO: I feel like we shouldn't limit the buffer here, we should do it in the other areas of 
           the chat (e.g. preparing LLM input, biomarker calculations).
     """
+    # Snapshot ID so we aren't depending on an instance from the consumer
+    session_id = getattr(consumer.session, "id", None)
+
     # Fire-and-forget DB write for the message
-    fire_and_log(db_s2a(ChatService.add_message)(consumer.session, role, text), name="handle_chat_messages::add_message")
+    fire_and_log(db_s2a(ChatService.add_message)(session_id, role, text), name="handle_chat_messages::add_message")
 
     # Update in memory context (pop one if we are at the limit)
     consumer.context_buffer.append((role, text, ts))
@@ -103,11 +106,14 @@ async def on_utterance_biomarkers(consumer: ChatConsumer):
     TODO: Because altered_grammar specifically is so slow, they will actually go 
           to the db out of order. Need to add a manual time setting argument.
     """
+    # Snapshot ID so we aren't depending on an instance from the consumer
+    session_id = getattr(consumer.session, "id", None)
+
     # Get text-based biomarkers 
     text_biomarkers = await extract_text_biomarkers(consumer.context_buffer)
 
     # Save biomarkers scores to the DB & broadcast them to any listeners
-    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(consumer.session, text_biomarkers), name="on_utt_bio::add_biomarkers_bulk")
+    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(session_id, text_biomarkers), name="on_utt_bio::add_biomarkers_bulk")
     await consumer._broadcast_monitor({"type": "biomarker_scores", "data": text_biomarkers})
 
 # --------------------------------------------------------------------------------
@@ -120,6 +126,9 @@ async def on_audio_biomarkers(consumer: ChatConsumer, *, sample_rate=16_000):
           Different sources could have different sample rates from the mic, and
           we need to make sure we have the right duration for the models to work.
     """
+    # Snapshot ID so we aren't depending on an instance from the consumer
+    session_id = getattr(consumer.session, "id", None)
+
     # Guard for the proper audio duration before pulling 
     window_bytes = AUDIO_WINDOW_S * SECOND_BYTES # Bytes of audio data needed for the biomarker
     if len(consumer.audio_buffer) < (window_bytes): return
@@ -134,6 +143,6 @@ async def on_audio_biomarkers(consumer: ChatConsumer, *, sample_rate=16_000):
     audio_biomarkers = await extract_audio_biomarkers(audio_data, consumer.overlapped_speech_count)
 
     # Save biomarkers scores to the DB & broadcast them to any listeners
-    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(consumer.session, audio_biomarkers), name="handle_audio_data::add_biomarkers_bulk")
+    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(session_id, audio_biomarkers), name="handle_audio_data::add_biomarkers_bulk")
     await consumer._broadcast_monitor({"type": "biomarker_scores", "data": audio_biomarkers})
 

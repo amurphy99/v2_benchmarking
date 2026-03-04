@@ -200,16 +200,20 @@ class ChatService:
     # ================================================================================
     # Messages
     @staticmethod
-    def add_message(session, role, text, *, start_ts=None, end_ts=None):
+    def add_message(session_id, role, text, *, start_ts=None, end_ts=None):
+        session = ChatSession.objects.get(id=session_id)
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
     
-    # Biomarker Scores
+    # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
+    # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
     @staticmethod
     def add_biomarker(session, score_type, score):
         return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
     
+    # Biomarker scores (in bulk)
     @staticmethod
-    def add_biomarkers_bulk(session, scores: dict):
+    def add_biomarkers_bulk(session_id, scores: dict):
+        session = ChatSession.objects.get(id=session_id)
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
 
 
