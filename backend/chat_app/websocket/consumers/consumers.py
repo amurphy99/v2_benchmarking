@@ -78,7 +78,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await db_s2a(ChatService.close_any_active_session)(self.user)
 
         # Load the most recent active session for this user
-        self.session = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        self.session    = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        self.session_id = self.session.id
+
+        # Load existing messages
+        # TODO: This behavior is for resuming existing chats; doesn't do anything here yet
         recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-start_ts")[: self.MAX_CONTEXT])[::-1])()
 
         # TODO: I added the timestamps in just now for biomarker scores, but I actually don't really like how this works at the moment...

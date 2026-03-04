@@ -52,7 +52,7 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
           the chat (e.g. preparing LLM input, biomarker calculations).
     """
     # Snapshot ID so we aren't depending on an instance from the consumer
-    session_id = getattr(consumer.session, "id", None)
+    session_id = getattr(consumer, "session_id", None)
 
     # Fire-and-forget DB write for the message
     fire_and_log(db_s2a(ChatService.add_message)(session_id, role, text), name="handle_chat_messages::add_message")
@@ -107,7 +107,7 @@ async def on_utterance_biomarkers(consumer: ChatConsumer):
           to the db out of order. Need to add a manual time setting argument.
     """
     # Snapshot ID so we aren't depending on an instance from the consumer
-    session_id = getattr(consumer.session, "id", None)
+    session_id = getattr(consumer, "session_id", None)
 
     # Get text-based biomarkers 
     text_biomarkers = await extract_text_biomarkers(consumer.context_buffer)
@@ -127,7 +127,7 @@ async def on_audio_biomarkers(consumer: ChatConsumer, *, sample_rate=16_000):
           we need to make sure we have the right duration for the models to work.
     """
     # Snapshot ID so we aren't depending on an instance from the consumer
-    session_id = getattr(consumer.session, "id", None)
+    session_id = getattr(consumer, "session_id", None)
 
     # Guard for the proper audio duration before pulling 
     window_bytes = AUDIO_WINDOW_S * SECOND_BYTES # Bytes of audio data needed for the biomarker
