@@ -1,7 +1,6 @@
 import { Spinner } from "react-bootstrap";
 
 // From this project
-import { useAuth } from "@/context/AuthProvider";
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList } from "./components/chat_lists/ChatList";
 import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constants";
@@ -10,10 +9,6 @@ import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constant
 // Admin ChatSession List Page (split into active and inactive chats)
 // ================================================================================
 export function Admin() {
-    // Guard for users without access
-    const { account } = useAuth();
-    if (!account.user.is_staff) { return <h1 className="m-[2rem]">You don't have access to the admin page.</h1> }
-
     // Query the DB for a list of ChatSessions
     const { data: chatSessionsActive,            isLoading,           refetch    } = useChatSessions(ACTIVE_ONLY, NON_DEMO_ONLY);
     const { data: chatSessionsInactive, isLoading: loadingAll, refetch: refetchAll } = useChatSessions(INACTIVE_ONLY, NON_DEMO_ONLY);
