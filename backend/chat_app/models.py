@@ -87,7 +87,7 @@ class ChatSession(models.Model):
     date    = models.DateTimeField(auto_now_add=True)
 
     # TODO: Future field for what LLM version was used
-    llmVersion = models.CharField(max_length=255, default="phi3_finetuned")
+    #llmVersion = models.CharField(max_length=255, default="phi3_finetuned")
 
     # Flexible field -- would be used for clinicians or users to save notes about chats
     notes = models.TextField(**init_args)
