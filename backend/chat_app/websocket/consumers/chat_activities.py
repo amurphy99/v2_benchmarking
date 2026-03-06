@@ -41,23 +41,23 @@ class ActivityChatConsumer(ChatConsumer):
             "rag_state"     : self.rag_state,
         }
 
-    # ================================================================================
-    # Text Transcriptions — use new ChatHandler path instead of legacy handle_transcription0
-    # ================================================================================
     async def receive_json(self, data, **kwargs):
         if data["type"] == "transcription":
             await ChatHandler.handle_transcription(
                 data,
-                msg_callback = self._add_message_CB,
-                send_callback= self.send,
-                bio_callback = self._utt_bio,
-                reply_on_STT = self.reply_on_STT,
-                reply_audio  = self.reply_with_audio,
-                response_fn  = rag_response_fn,      
-                response_fn_kwargs = self._rag_kwargs(),
+                self,
+                response_fn=rag_response_fn,
+                response_fn_kwargs=self._rag_kwargs(),
             )
-            # reply_now is called inside handle_transcription -> respond_to_user,
-            # but respond_to_user doesn't call reply_now directly yet — see note below
             return
 
         return await super().receive_json(data, **kwargs)
+
+    async def reply_now(self, use_response=None):
+        return await ChatHandler.respond_to_user(
+            self.context_buffer,
+            self,
+            use_response=use_response,
+            response_fn=None if use_response is not None else rag_response_fn,
+            response_fn_kwargs=None if use_response is not None else self._rag_kwargs(),
+        )

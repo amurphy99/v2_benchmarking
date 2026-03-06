@@ -52,6 +52,8 @@ class ChatHandler:
         consumer: ChatConsumer,  # ChatConsumer object for this chat
         *,
         relay_user_utt=False,    # If using backend STT, the client might want the user's utterances
+        response_fn=None,        # Optionally provide a custom function for generating the LLM response (e.g. for RAG)
+        response_fn_kwargs=None, # Optional kwargs for the custom response function
     ):
         # 1) Process the input
         user_text = data["data"] 
@@ -75,7 +77,7 @@ class ChatHandler:
                 system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
             else:
                 system_resp = await ChatHandler.respond_to_user(
-                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
+                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs,
                 )
             return system_resp
             
@@ -86,25 +88,39 @@ class ChatHandler:
     # Part 2 of `handle_transcription`
     # --------------------------------------------------------------------------------
     @staticmethod
-    async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None):
+    async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None, response_fn=None, response_fn_kwargs=None):
         # Get the LLMs response
-        if   use_response is not None: system_resp = use_response # directly use the provided response instead of calling the LLM
-        elif response_fn  is not None: system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
-        else:                          system_resp = await get_LLM_response(context_buffer) # use the default response function
+        if   use_response is not None:
+            system_resp = use_response # directly use the provided response instead of calling the LLM
+        elif response_fn  is not None: 
+            system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
+        else:                          
+            system_resp = await get_LLM_response(context_buffer) # use the default response function
+
+         # Normalize string vs structured dict response from RAG pipeline
+        if isinstance(system_resp, dict):
+            response_text = system_resp.get("text", "")
+        else:
+            response_text = system_resp
+
+        if not isinstance(response_text, str):
+            response_text = str(response_text or "")
+
 
         system_ts = now_ts() 
-        consumer.last_response = system_resp
+        consumer.last_response = response_text
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await consumer.send(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
-        await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts)
+        await consumer.handle_chat_messages(role="assistant", text=response_text, ts=system_ts)
 
         # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
         fire_and_log(consumer.on_utterance_biomarkers(), name="respond_to_user::bio_callback")
 
         # Synthesize speech with TTS if specified
         # TODO: Pass the consumer again?
-        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send)
+        if consumer.use_backend_TTS and response_text: 
+            await synthesize_and_stream_tts(response_text, consumer.send)
 
         return system_resp
 
