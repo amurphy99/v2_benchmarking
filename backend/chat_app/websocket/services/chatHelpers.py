@@ -69,17 +69,29 @@ class ChatHandler:
 
         # 4) Get the LLMs response if the consumer is on "auto reply" mode
         system_resp = ""
-        if consumer.reply_on_user_utt: system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
-        return system_resp
- 
+
+        if consumer.reply_on_user_utt:
+            if response_fn is None:
+                system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
+            else:
+                system_resp = await ChatHandler.respond_to_user(
+                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
+                )
+            return system_resp
+            
+        
+        return "" # I don't know how this works totally yet
+    
     # --------------------------------------------------------------------------------
     # Part 2 of `handle_transcription`
     # --------------------------------------------------------------------------------
     @staticmethod
     async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None):
-        # Get the LLMs response if we weren't passed a default response to use
-        if use_response is None: system_resp = await get_LLM_response(context_buffer)
-        else:                    system_resp = use_response
+        # Get the LLMs response
+        if   use_response is not None: system_resp = use_response # directly use the provided response instead of calling the LLM
+        elif response_fn  is not None: system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
+        else:                          system_resp = await get_LLM_response(context_buffer) # use the default response function
+
         system_ts = now_ts() 
         consumer.last_response = system_resp
 
