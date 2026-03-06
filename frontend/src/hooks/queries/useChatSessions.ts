@@ -1,19 +1,21 @@
-import { ChatSession, getChatSession, listActiveChatSessions, listAllChatSessions, listChatSessions } from "@/api";
+import { ChatSession, getChatSession, listActiveChatSessions, listAllChatSessions, getLatestSession, listChatSessions } from "@/api";
 import { useModelQuery } from "@/hooks/queries/common";
 
 // Hook to wrap useQuery for retrieving ChatSession objects
-export const useChatSessions = () =>
+// Default to inactive sessions only and all sessions (non-demo and demo both)
+export const useChatSessions = (active: number = 0, demo: number = 2) =>
     useModelQuery<ChatSession[]>({
         queryKey: "chatSessions",
-        queryFn : listChatSessions,
+        queryFn : () => listChatSessions(active, demo),
         empty   : [],
     });
 
 export const useChatSession = (id: string) =>
     useModelQuery<ChatSession>({
-        queryKey: "chatSession",
-        queryFn : () => getChatSession(id),
-        empty   : {} as ChatSession,
+        queryKey  : `chatSession:${id}`,
+        queryFn   : () => getChatSession(id),
+        empty     : {} as ChatSession,
+        staleTime : 10_000, // 10 seconds
     });
 
 
@@ -25,10 +27,28 @@ export const useAllChatSessions = () => {
     });
 }
 
-export const useActiveChatSessions = () => {
-    return useModelQuery<ChatSession[]>({
-        queryKey: "activeChatSessions",
-        queryFn : listActiveChatSessions,
-        empty   : [],
+export const useLatestChatSession = () => {
+    useModelQuery<ChatSession>({
+        queryKey: "chatSessions",
+        queryFn : getLatestSession,
+        empty   : {} as ChatSession,
     });
 }
+
+// --------------------------------------------------------------------------------
+// Admin ChatSession Queries 
+// --------------------------------------------------------------------------------
+// (need to do separately because the query is "saving" the results for both)
+export const useActiveChatSessions = (demo: number = 2) =>
+    useModelQuery<ChatSession[]>({
+        queryKey: "activeChatSessions",
+        queryFn : () => listChatSessions(1, demo),
+        empty   : [],
+    });
+
+export const useInactiveChatSessions = (demo: number = 2) =>
+    useModelQuery<ChatSession[]>({
+        queryKey: "inactiveChatSessions",
+        queryFn : () => listChatSessions(0, demo),
+        empty   : [],
+    });

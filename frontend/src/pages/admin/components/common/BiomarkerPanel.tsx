@@ -3,6 +3,9 @@
 // ================================================================================
 //   - Expects the `series` object from `useLocalBiomarkers()`
 //   - Assumes timestamps are ISO strings
+//
+// TODO: a LOT of this should be in component / helper files...
+//
 // ================================================================================
 
 import { useMemo, useState } from "react";
@@ -11,9 +14,9 @@ import { BiomarkerScoreSet, LocalBiomarkerSeries } from "@/hooks/chat-listener/d
 type BiomarkerKey = keyof BiomarkerScoreSet;
 type XAxisMode    = "time" | "index";
 
-// ================================================================================
+// --------------------------------------------------------------------------------
 // Constants
-// ================================================================================
+// --------------------------------------------------------------------------------
 // NOTE: I think we already have this somewhere, but whatever
 // NOTE: Also could add colors? Maybe...
 const BIOMARKERS: Array<{ key: BiomarkerKey; label: string }> = [
@@ -25,12 +28,12 @@ const BIOMARKERS: Array<{ key: BiomarkerKey; label: string }> = [
     { key: "pragmatic",      label: "Pragmatic Impairment"},
 ];
 
-const BIG_CHART_W = 760;
-const BIG_CHART_H = 220;
+const BIG_CHART_W = 800;
+const BIG_CHART_H = 120;
 
-// ================================================================================
+// --------------------------------------------------------------------------------
 // Helpers
-// ================================================================================
+// --------------------------------------------------------------------------------
 function parseTs(ts: string): number {
     const t = Date.parse(ts);                   // Convert ISO string into epoch ms
     return Number.isFinite(t) ? t : Date.now(); // Fallback to "now" if invalid
@@ -50,7 +53,7 @@ function formatDelta(d: number | null) {
 }
 
 // Return (latest-prev) if both are valid numbers
-function computeDelta(latest?: number, prev?: number): number | null {
+function calculateDelta(latest?: number, prev?: number): number | null {
     if (latest == null || prev == null) return null;
     if (!Number.isFinite(latest) || !Number.isFinite(prev)) return null;
     return latest - prev;
@@ -176,7 +179,7 @@ export function BiomarkerPanel({
             const latest = latestPoint?.scores[key];
             const prev   = prevPoint  ?.scores[key];
 
-            const delta = computeDelta(
+            const delta = calculateDelta(
                 typeof latest === "number" ? latest : undefined,
                 typeof prev   === "number" ? prev   : undefined
             );
@@ -195,18 +198,22 @@ export function BiomarkerPanel({
 
     const selectedLabel = BIOMARKERS.find((b) => b.key === selected)?.label ?? String(selected);
 
-    // ================================================================================
+
+    // --------------------------------------------------------------------------------
     // Return Component
-    // ================================================================================
+    // --------------------------------------------------------------------------------
     return (
         <> 
-        <p className="flex justify-center py-1 border-b border-black/10 text-base font-semibold">Biomarkers</p>
-        <div className="flex flex-col gap-3 p-3">
-            
-            {/* ================================================================================ */}
-            {/* "Now" Cards */}
-            {/* ================================================================================ */}
-            <div className="grid grid-cols-2 gap-2">
+        {/* Header */}
+        <div className="flex justify-center py-[0.5rem] border-b border-black/10">
+            <p className="text-base font-semibold m-0">Biomarker Scores</p>
+        </div>
+        
+        {/* ================================================================================ */}
+        {/* "Now" Cards */}
+        {/* ================================================================================ */}
+        <div className="flex flex-col gap-[1rem] p-[0.5rem]">
+            <div className="grid grid-cols-3 gap-[0.5rem]">
                 {cards.map((c) => {
                     const isActive = c.key === selected;
 

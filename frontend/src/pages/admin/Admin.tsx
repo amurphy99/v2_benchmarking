@@ -1,59 +1,48 @@
-import { useAuth } from "@/context/AuthProvider";
-import { useActiveChatSessions, useAllChatSessions } from "@/hooks/queries/useChatSessions";
-import { dateFormatOptionsLong } from "@/utils/styling/numFormatting";
 import { Spinner } from "react-bootstrap";
-import { NavLink } from "react-router-dom";
 
+// From this project
+import { useAuth } from "@/context/AuthProvider";
+import { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
+import { ChatList } from "./components/chat_lists/ChatList";
+import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constants";
+
+// ================================================================================
+// Admin ChatSession List Page (split into active and inactive chats)
+// ================================================================================
 export function Admin() {
+    // Guard for users without access
     const { account } = useAuth();
-    const { data: chatSessionsActive, isLoading, refetch } = useActiveChatSessions();
-    const { data: chatSessions, isLoading: loadingAll, refetch: refetchAll } = useAllChatSessions();
+    if (!account.user.is_staff) { return <h1 className="m-[2rem]">You don't have access to the admin page.</h1> }
 
-    if (!account.user.is_staff) {
-        return <h1 className="m-[2rem]">You don't have access to the admin page.</h1>
-    }
+    // Query the DB for a list of ChatSessions
+    const { data:   active, isLoading: loading_1, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
+    const { data: inactive, isLoading: loading_2, refetch: refetchInactive } = useInactiveChatSessions(NON_DEMO_ONLY);
 
-    if (isLoading || loadingAll) {
-        return <Spinner />
-    }
-
+    // --------------------------------------------------------------------------------
+    // Return UI component
+    // --------------------------------------------------------------------------------
+    if (loading_1 || loading_2) { return <Spinner /> }
     return (
-        <div className="mx-[2rem] pb-[15vh]">
-            <div className="flex flex-row gap-[2rem] mb-[2rem] ">
-                <h2>Currently Active Chat Sessions</h2>
-                <button onClick={() => refetch()} className="text-sm px-2 py-1 rounded-lg bg-gray-200 hover:bg-gray-300">Refresh</button>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mb-2 min-h-[10vh]">
-                {chatSessionsActive.map((chat, idx) => {
-                    return (
-                        <NavLink to={`/admin/chat/${chat.id}`} key={idx} 
-                        className="flex flex-col p-4 rounded-lg border-1 border-black no-underline text-black hover:bg-gray-100">
-                            <p>Chat Session ID: {chat.id}</p>
-                            <p>User: {chat.profile.account.user.first_name} {chat.profile.account.user.last_name} </p>
-                            <p>Source: {chat.source} </p>
-                            <p>Start: {new Date(chat.start_ts).toLocaleDateString("en-US", dateFormatOptionsLong)} </p>
-                        </NavLink>
-                    )
-                })}
-            </div>
-            <div className="flex flex-row gap-[2rem] mb-[2rem] ">
-                <h2>All Chat Sessions</h2>
-                <button onClick={() => refetchAll()} className="text-sm px-2 py-1 rounded-lg bg-gray-200 hover:bg-gray-300">Refresh</button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-                {chatSessions.map((chat, idx) => {
-                    return (
-                        <NavLink to={`/admin/chat/inactive/${chat.id}`} key={idx} 
-                        className="flex flex-col p-4 rounded-lg border-1 border-black no-underline text-black hover:bg-gray-100">
-                            <p>Chat Session ID: {chat.id}</p>
-                            <p>User: {chat.profile.account.user.first_name} {chat.profile.account.user.last_name} </p>
-                            <p>Source: {chat.source} </p>
-                            <p>Start: {new Date(chat.start_ts).toLocaleDateString("en-US", dateFormatOptionsLong)} </p>
-                            <p>End: {chat.end_ts ? new Date(chat.end_ts).toLocaleDateString("en-US", dateFormatOptionsLong) : null}</p>
-                        </NavLink>
-                    )
-                })}
-            </div>
+        <div className="mx-[2rem] pb-[15vh] flex flex-col gap-[1rem]">
+
+            {/* Active Sessions */}
+            <ChatList
+                title       = "Currently Active Chat Sessions"
+                subtitle    = "Live sessions you can open in the listener view."
+                sessions    = {active}
+                onRefresh   = {() => refetchActive()}
+                navigate_to = {"/admin/chat/"}
+            />
+
+            {/* All Sessions */}
+            <ChatList
+                title       = "Completed Chat Sessions"
+                subtitle    = "View post-chat analysis results."
+                sessions    = {inactive}
+                onRefresh   = {() => refetchInactive()}
+                navigate_to = {"/admin/chat/inactive/"}
+            />
+
         </div>
     );
 }

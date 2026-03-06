@@ -4,7 +4,7 @@
 // --------------------------------------------------------------------------------
 export function pillClass(active: boolean) {
     return [
-        "rounded-full px-2 py-0.5 text-[11px] border",
+        "rounded-full px-2 py-0.5 text-[13px] border",
         active ? "bg-black/5 border-black/20 text-black" : "bg-white border-black/10 text-black/60",
     ].join(" ");
 }
@@ -28,6 +28,6 @@ export function btnClass(
 // General Style Helpers
 // --------------------------------------------------------------------------------
 export const groupDivStyle       = "rounded-xl border border-black/10 p-3";
-export const buttonSectionHeader = "text-xs font-semibold text-black/70";
+export const buttonSectionHeader = "text-base font-semibold text-black/70";
 
 

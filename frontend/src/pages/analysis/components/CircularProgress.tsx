@@ -1,5 +1,4 @@
 import { ApexOptions } from "apexcharts";
-import { useState } from "react";
 import ReactApexChart from "react-apexcharts";
 
 export default function CircularProgress( {score, role} : {score: number, role: string}) {
@@ -61,16 +60,33 @@ export default function CircularProgress( {score, role} : {score: number, role: 
     ]
     const options: ApexOptions = {
         chart: {
-            height: "100%",
+            height: '100%',
+            width: '100%',
+            parentHeightOffset: 15,
+            redrawOnParentResize: true,
+            redrawOnWindowResize: true,
             type: 'radialBar',
+        },
+        states: {
+            hover: {
+                filter: {
+                    type: 'none',
+                }
+            },
+            active: {
+                filter: {
+                    type: 'none',
+                }
+            }
         },
         plotOptions: {
             radialBar: {
                 startAngle: -100,
                 endAngle: 100,
                 track: {
-                    background: '#fff',
-                    margin: 0, // margin is in pixels
+                    background: '#cecece',
+                    startAngle: -100,
+                    endAngle: 100,
                 },
                 dataLabels: {
                     show: true,
@@ -89,7 +105,7 @@ export default function CircularProgress( {score, role} : {score: number, role: 
                         fontSize: '30px',
                         show: true,
                     }
-                }
+                },
             }
         },
         fill: {
@@ -111,6 +127,6 @@ export default function CircularProgress( {score, role} : {score: number, role: 
     }
 
      return (
-            <ReactApexChart options={options} series={series} type="radialBar" height={"100%"} />
+            <ReactApexChart options={options} series={series} type="radialBar" width={"100%"} />
         );
-    }
+}

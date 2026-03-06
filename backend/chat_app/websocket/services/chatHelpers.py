@@ -9,6 +9,8 @@ TODO: Rejoining a chat needs to be handled differently...
 TODO: I'll delete everything we had here for it and then add it back in from a separate branch later
 
 """
+from __future__ import annotations
+
 import json, logging
 logger = logging.getLogger(__name__)
 
@@ -21,9 +23,9 @@ from   .bg_helpers                  import fire_and_log, trace_await
 from ...services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, USER_MSG
 from ...services.llm.chat_utilities import get_LLM_response
 
-
-# Chunk sizes of TTS audio streamed back to frontend client
-CHUNK_SIZE = 8_192 # How many bytes of audio we can send at a time
+# Import the class for type checking
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
 
 # ================================================================================
@@ -46,76 +48,65 @@ class ChatHandler:
     # ================================================================================
     @staticmethod
     async def handle_transcription(
-        data,               # JSON from chat WS client OR from backend STT result
-        msg_callback,       # Callback to add new messages to the database & update local chat context
-        send_callback,      # Callback to send data to the chat WebSocket client
-        bio_callback,       # On utterance received, calculate audio-biomarkers (we know the user was just speaking)
-        reply_on_STT=True,  # Reply on receiving any messages from the user through STT 
-        reply_audio =False, # If we should reply with audio bytes
-        response_fn=None,        # Optionally, a custom function to generate the LLM response (instead of the default get_LLM_response) 
-        response_fn_kwargs=None, # response_fn_kwargs to pass to the custom response_fn
+        data,                    # JSON from chat WS client OR from backend STT result
+        consumer: ChatConsumer,  # ChatConsumer object for this chat
+        *,
+        relay_user_utt=False,    # If using backend STT, the client might want the user's utterances
     ):
-        logger.info(f"{lu.ORANGE}[ChatHandler] reply_on_STT={BOLD}{reply_on_STT}{UNBOLD}, reply_audio={BOLD}{reply_audio}{UNBOLD}. {RESET}")
-
-        # 1) Process the input TODO: Eventually we might receive timestamps directly within the WS data
+        # 1) Process the input
         user_text = data["data"] 
         user_ts   = now_ts()
 
-        logger.info(f"{LLM_MAIN}[LLM] User utt received: {USER_MSG}\"{user_text}\"{RESET}")
+        # 2) If this is using STT from the backend, also send the utterance back to the frontend
+        if relay_user_utt: await consumer.send(json.dumps({'type': 'user_utt', 'data': user_text, 'time': user_ts}))
 
-        # Update context and DB for the new *user* message
-        context_buffer = await msg_callback(role="user", text=user_text, ts=user_ts)
+        # 3) Update context and DB for the new *user* message
+        context_buffer = await consumer.handle_chat_messages(role="user", text=user_text, ts=user_ts)
 
-        # 2) Get the LLMs response
-        if reply_on_STT:
+        # Log an update
+        logger.info((f"{lu.ORANGE}[ChatHandler] auto_reply={BOLD}{consumer.reply_on_user_utt}{UNBOLD}, " 
+                     f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
+
+        # 4) Get the LLMs response if the consumer is on "auto reply" mode
+        system_resp = ""
+
+        if consumer.reply_on_user_utt:
             if response_fn is None:
-                system_resp = await ChatHandler.respond_to_user(
-                    context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio
-                )
+                system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
             else:
                 system_resp = await ChatHandler.respond_to_user(
-                    context_buffer, send_callback, msg_callback, bio_callback, reply_audio=reply_audio, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
+                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
                 )
             return system_resp
             
         
         return "" # I don't know how this works totally yet
     
+    # --------------------------------------------------------------------------------
+    # Part 2 of `handle_transcription`
+    # --------------------------------------------------------------------------------
     @staticmethod
-    async def respond_to_user(context_buffer, send_callback, msg_callback, bio_callback, *, reply_audio=False, use_response=None, response_fn=None, response_fn_kwargs=None):
+    async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None):
         # Get the LLMs response
         if   use_response is not None: system_resp = use_response # directly use the provided response instead of calling the LLM
         elif response_fn  is not None: system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
         else:                          system_resp = await get_LLM_response(context_buffer) # use the default response function
+
         system_ts = now_ts() 
+        consumer.last_response = system_resp
 
         # Immediately send the response back through the websocket & update the DB + chat context
-        await send_callback(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
-        await msg_callback(role="assistant", text=system_resp, ts=system_ts)
+        await consumer.send(json.dumps({'type': 'llm_response', 'data': system_resp, 'time': system_ts}))
+        await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts)
 
         # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
-        fire_and_log(bio_callback(), name="handle_transcription::bio_callback")
+        fire_and_log(consumer.on_utterance_biomarkers(), name="respond_to_user::bio_callback")
 
         # Synthesize speech with TTS if specified
-        if reply_audio: await synthesize_and_stream_tts(system_resp, send_callback)
+        # TODO: Pass the consumer again?
+        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send)
 
         return system_resp
-
-
-    # --------------------------------------------------------------------------------
-    # Handle Backend STT output (passed to STT in consumers)
-    # --------------------------------------------------------------------------------
-    @staticmethod
-    async def handle_stt_output(data, msg_callback, send_callback, bio_callback, **kwargs):
-        # Send the user's utterance to the frontend TODO: IDK if we should really do this?
-        await send_callback(json.dumps({'type': 'user_utt', 'data': data["data"], 'time': now_ts()}))
-        
-        # Forward the user's utterance to `handle_transcription` (and grab the system's response)
-        system_resp = await ChatHandler.handle_transcription(data, msg_callback, send_callback, bio_callback, **kwargs)
-
-
-
-
 
 
 

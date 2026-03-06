@@ -3,7 +3,18 @@ Shared channel group methods.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.utils.groups`
 
-TODO: Need to move more of this shared stuff into here 
+Broadcast rooms:
+* "room_group"
+    - From `ChatConsumer` to `ChatListener`
+    - Gets incoming messages from the chat (user & robot)
+
+* "monitor_group"
+    - From `ChatConsumer` to `ChatListener`
+    - Gets all biomarker scores upon calculation
+
+* "control_group"
+    - From `ChatListener` to `ChatConsumer`
+    - Relays commands sent to the ChatListener (e.g. "respond_now")
 
 """
 
@@ -15,10 +26,19 @@ from ....services.logging_utils import CC_MAIN, CC_H, CC_R
 
 
 # --------------------------------------------------------------------------------
-# Channel group connect helper
+# [ChatConsumer] Channel group connect helper
 # --------------------------------------------------------------------------------
-# TODO: Use given consumer object and session_id to add the names as attributes
-# TODO: Then add the channel layers like in chat_listener...
+# Use given consumer object and session_id to add the names as attributes, then add the channel layers.
+async def join_chat_consumer_groups(consumer):
+    session_id = consumer.session.id
+    consumer.room_group    = f"chat_{session_id}"
+    consumer.monitor_group = f"chat_{session_id}_mon"
+    consumer.control_group = f"chat_{session_id}_ctl"
+    consumer.ack_group     = f"chat_{session_id}_ack"   # for relaying command acks to frontend
+
+    # Join base room & control room (send updates to listeners, receive commands from listeners)
+    await consumer.channel_layer.group_add(consumer.   room_group, consumer.channel_name)
+    await consumer.channel_layer.group_add(consumer.control_group, consumer.channel_name)
 
 
 # --------------------------------------------------------------------------------
@@ -30,6 +50,7 @@ async def leave_all_groups(consumer, log_util):
         getattr(consumer,    "room_group", None), 
         getattr(consumer, "monitor_group", None),
         getattr(consumer, "control_group", None),
+        getattr(consumer,     "ack_group", None),
     ]
     for group in consumer_groups:
         if group: 

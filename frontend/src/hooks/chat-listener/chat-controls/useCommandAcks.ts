@@ -9,12 +9,12 @@ import { CommandAck, PendingKey, SendFn, ControlState, RegisterAckHandler } from
 // This let's us know if the command succeeded (and we should change the button to 
 // the opposite function) or if it failed (and we should put it back the way it was).
 export function useCommandAcks({
-    connected,                // Connection with the backend
-    send,                     // Send data through the WebSocket
-    controlState,             // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
-    setControlState,          // Apply state updates to the AdminControlPanel (listening or paused)
-    registerAckHandler,       // Method that allows us to register something from here as the handler for an ack
-    defaultTimeoutMs = 5_000, // Timeout until we "give up" on receiving an ack from the backend (5s)
+    connected,                 // Connection with the backend
+    send,                      // Send data through the WebSocket
+    controlState,              // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
+    setControlState,           // Apply state updates to the AdminControlPanel (listening or paused)
+    registerAckHandler,        // Method that allows us to register something from here as the handler for an ack
+    defaultTimeoutMs = 10_000, // Timeout until we "give up" on receiving an ack from the backend (5s)
 }: {
     connected          : boolean; 
     send               : SendFn;
@@ -35,6 +35,12 @@ export function useCommandAcks({
         // Avatar or Robot controls
         robot_spin      : false,
         robot_excited   : false,
+
+        // Manual Response Controls
+        pause_and_listen   : false,
+        resume_and_respond : false,
+        paraphrase_last    : false,
+        send_custom        : false, 
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
 
@@ -43,6 +49,7 @@ export function useCommandAcks({
     // --------------------------------------------------------------------------------
     useEffect(() => {
         registerAckHandler((ack: CommandAck) => {
+            console.log(ack);
             const rec = pendingByIdRef.current.get(ack.id);
             if (!rec) return;
 
@@ -56,8 +63,9 @@ export function useCommandAcks({
             // Apply confirmed state updates (ONLY on success)
             if (ack.ok && ack.state) {
                 setControlState((s) => ({
-                    listeningPaused: ack.state.listeningPaused ?? s.listeningPaused,
-                    responsesPaused: ack.state.responsesPaused ?? s.responsesPaused,
+                    listeningPaused : ack.state.listeningPaused ?? s.listeningPaused,
+                    responsesPaused : ack.state.responsesPaused ?? s.responsesPaused,
+                    manualMode      : ack.state.manualMode      ?? s.manualMode,
                 }));
             }
         });
@@ -99,8 +107,16 @@ export function useCommandAcks({
         respondNow     : () => {sendCommand("respond_now",     "respond_now")},
         
         // Control avatar or robot actions
-        robotSpin      : () => {sendCommand("robot_spin",      "robot_action", { action: "spin"    })},
-        robotExcited   : () => {sendCommand("robot_excited",   "robot_action", { action: "excited" })},
+        robotSpin    : () => {sendCommand("robot_spin",    "robot_action", { action: "spin"    })},
+        robotExcited : () => {sendCommand("robot_excited", "robot_action", { action: "excited" })},
+
+        // Manual Response Controls
+        // The third field in the old ones is ("value": "True"). It would be for more of a toggle I think.
+        // Could add that here too, but I think it's fine...
+        pauseAndListen   : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
+        resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
+        paraphraseLast   : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
+        sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { message: text })},
     };
 
     return { pending, sendCommand, actions };

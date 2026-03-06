@@ -73,12 +73,27 @@ class ChatService:
         # Run a post-chat analysis to fill out the rest of the fields
         analysis = await post_chat_analysis(messages) # summary, topics, sentiment, emotion
 
-        # Use the results to save the rest of the fields  TODO: combining summary with emotion for display
+        # Create the "notes" field  
+        # TODO: We need this for now until we update the DB fields for the new results.
+        risk_rating  = analysis.get('risk_rating', 0)
+        risk_quotes  = "\n".join(q.strip() for q in analysis.get("risk_quotes", ["No quotes given."]) if q and q.strip())
+        risk_reason  = analysis.get('risk_reason', 'No reason given.')
+        chat_emotion = analysis.get('emotion', 'No emotion.')
+        summary        = (
+            f"{analysis.get('summary', 'No summary available.')} \n"
+            f"Emotion: {analysis.get('emotion', 'No emotion.')} \n"
+            f"Sentiment: {analysis.get('sentiment', 'No sentiment')}"
+        )
+        # Frontend expects fields to be separated by: 
+        sep = "\n<|ANALYSIS|>\n"
+        notes = sep.join([summary, str(risk_rating), risk_quotes, risk_reason, chat_emotion])
+
+        # Use the results to save the rest of the fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
             user, session, messages, 
-            notes     =           analysis.get("summary", "So summary.") + " \n\n Sentiment:" + analysis.get("sentiment", "no sentiment"),
-            sentiment =           analysis.get("emotion", "Neutral"    ).capitalize(), 
-            topics    = ", ".join(analysis.get("topics", ["N/A"]       ))
+            notes     = notes, 
+            sentiment =           analysis.get("sentiment", "Neutral"   ).capitalize(), 
+            topics    = ", ".join(analysis.get("topics",    ["N/A"]     ))
         )
 
         # Done
@@ -185,16 +200,20 @@ class ChatService:
     # ================================================================================
     # Messages
     @staticmethod
-    def add_message(session, role, text, *, start_ts=None, end_ts=None):
+    def add_message(session_id, role, text, *, start_ts=None, end_ts=None):
+        session = ChatSession.objects.get(id=session_id)
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
     
-    # Biomarker Scores
+    # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
+    # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
     @staticmethod
     def add_biomarker(session, score_type, score):
         return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
     
+    # Biomarker scores (in bulk)
     @staticmethod
-    def add_biomarkers_bulk(session, scores: dict):
+    def add_biomarkers_bulk(session_id, scores: dict):
+        session = ChatSession.objects.get(id=session_id)
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
 
 

@@ -125,7 +125,7 @@ export function Chat() {
 	const saveChat = () => {
 		save();
 		setShowModal(false);
-		navigate("/goal");
+		navigate("/chat/end");
 	}; // use the stop speaking callback
 
     // --------------------------------------------------------------------
@@ -135,9 +135,8 @@ export function Chat() {
     return (
     <>
         <div className="flex flex-col h-[85vh]">
-            {/* View of the chatHistory and/or Avatar */}
             {!window.isMobile ? 
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
+                <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
                         <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 

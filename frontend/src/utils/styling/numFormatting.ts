@@ -1,4 +1,5 @@
 // Misc. Formatting Helpers
+// TODO: Can probably get the elapsed time + some of these other calculations to share logic here...
 
 export const dateFormat = new Intl.DateTimeFormat("en-US", {
     year  : "numeric",
@@ -60,6 +61,9 @@ export const msgDateFormat = new Intl.DateTimeFormat("en-US", {
 });
 
 
+// ================================================================================
+// Input time given in milliseconds (older methods)
+// ================================================================================
 export function formatElapsed_s(ms: number) {
     const totalSeconds = Math.floor(ms / 1000);
     const h = Math.floor( totalSeconds / 3600);
@@ -87,3 +91,65 @@ export function formatElapsed(ms: number) {
         ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${msStr}`
         : `${m}:${String(s).padStart(2, "0")}.${msStr}`;
 }
+
+// --------------------------------------------------------------------------------
+// From the admin chat page headers
+// --------------------------------------------------------------------------------
+export function formatElapsedTime(elapsed: number | null | undefined): string {
+    if (!elapsed) return "-";
+
+    // Hours, minutes, seconds
+    const h = Math.floor( elapsed / 3_600);
+    const m = Math.floor((elapsed % 3_600) / 60);
+    const s = Math.floor( elapsed %    60);
+
+    // Format as a string
+    if (h > 0) { return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; }
+    else       { return `${m}:${String(s).padStart(2, "0")}`; }
+}
+
+// Format the "time since last update" field (this gets time in MS though...)
+export function formatAgo(d: Date | null | undefined): string {
+    if (!d) return "—";
+    // Get the elapsed time in 
+    const elapsed = Date.now() - d.getTime();
+    const s = Math.max(0, Math.floor(elapsed / 1_000));
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+
+    // Return an estimation
+    if      (s <  5) { return  "just now"; }
+    else if (s < 60) { return `${s}s ago`; }
+    else if (m < 60) { return `${m}m ago`; }
+    else             { return `${h}h ago`; }
+}
+
+// Format the "chat duration" field
+export function formatDurationFromStart(startTsUnix: number | null | undefined): string {
+    if (!startTsUnix) return "—";
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1_000 - startTsUnix));
+    return formatElapsedTime(elapsed);
+}
+
+// --------------------------------------------------------------------------------
+// Format Timestamps (from ChatMessages)
+// --------------------------------------------------------------------------------
+export function parseTs(ts: string): number {
+  const t = Date.parse(ts);                   // Convert ISO string into epoch ms
+  return Number.isFinite(t) ? t : Date.now(); // Fallback to "now" if invalid
+}
+
+// Display elapsed time since chat start in M:SS.xx (xx = centiseconds)
+export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: string): string {
+  if (!chatStartMs) return "—";
+
+  const msgMs  = parseTs(msgTsIso);
+  const diffMs = Math.max(0, msgMs - chatStartMs);
+
+  const minutes = Math.floor( diffMs / 60_000);
+  const seconds = Math.floor((diffMs % 60_000) / 1_000);
+  const centis  = Math.floor((diffMs %  1_000) /    10); // 2 decimals of milliseconds
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
+

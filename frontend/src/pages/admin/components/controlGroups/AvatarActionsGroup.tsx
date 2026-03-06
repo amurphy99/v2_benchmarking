@@ -29,7 +29,7 @@ export default function AvatarActionsGroup({
             <div className={buttonSectionHeader}>Avatar Actions</div>
 
             {/* Buttons */}
-            <div className="mt-2 flex flex-col gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2">
 
                 {/* -------------------------------------------------------------------------------- */}
                 {/* Spin */}

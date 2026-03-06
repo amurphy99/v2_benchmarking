@@ -1,6 +1,7 @@
 import { ChatSession, BiomarkerType, ChatMessage, AlbumImage      } from "@/api";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { matchImage } from "./matchImage";
+import { sortUniqueByFrequency } from "./sortUniqueByFrequency";
 
 // Interface for the ChatWeek objects we return
 export interface ChatWeek {
@@ -153,6 +154,21 @@ export function getMessages(sessions: ChatSession[]) {
         }
     }
     return messages;
+}
+
+export function getTopics(sessions: ChatSession[]): string[] {
+    var topics: string[] = [];
+    for (var i = 0; i < sessions.length; i++) {
+        var session: ChatSession = sessions[i];
+        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        for (var j = 0; j < sessionTopics.length; j++) {
+            var topic = sessionTopics[j].trim();
+            if (topic && !topics.includes(topic)) {
+                topics.push(topic);
+            }
+        }
+    }
+    return sortUniqueByFrequency(topics);
 }
 
 export function getMainTopic(sessions: ChatSession[]) {

@@ -19,8 +19,9 @@ from ....config                 import USE_LLM
 # Import helper methods 
 from .utils            import to_transcript
 from .instruct_wrapper import InstructWrapper
-from .chat_summary     import ChatSummaryTopics, DEFAULT_TOPICS,    build_summary_topics_messages, log_summary_response
-from .chat_sentiment   import ChatSentimentRisk, DEFAULT_SENTIMENT, build_sentiment_messages,      log_sentiment_response
+from .chat_summary     import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summary_topics_messages,  log_summary_response
+from .chat_sentiment   import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
+from .chat_risks       import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
 
 # Config
 DEFAULT_MODEL = "qwen2.5-3b"
@@ -47,35 +48,63 @@ async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
         return DEF_ANALYSIS
 
     # Build formatted messages for each (system prompts are already included)
-    msgs_summary   = build_summary_topics_messages(transcript)
-    msgs_sentiment = build_sentiment_messages     (transcript)
+    msgs_summary   = build_summary_topics_messages (transcript)
+    msgs_sentiment = build_sentiment_messages      (transcript)
+    msgs_risk      = build_risk_assessment_messages(transcript)
 
-    # --------------------------------------------------------------------------------
+    # ================================================================================
     # Make LLM calls
-    # --------------------------------------------------------------------------------
+    # ================================================================================
     # Initialize the client to use
     client = InstructWrapper.init_async_client()
 
+    # --------------------------------------------------------------------------------
     # Call 1: Summary & Topics
+    # --------------------------------------------------------------------------------
     t0 = time.time()
-    summary_response = await InstructWrapper.call_with_retries_async(
-        client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, temperature=TEMPERATURE, default=DEFAULT_TOPICS, name="summary",
+    summary_response: ChatSummaryTopics = await InstructWrapper.call_with_retries_async(
+        client, model=model, response_model=ChatSummaryTopics, messages=msgs_summary, 
+        temperature=TEMPERATURE, default=DEFAULT_TOPICS, name="summary",
     )
     t1 = time.time()
     log_summary_response(summary_response, t0, t1)
 
-    # Call 2:  Sentiment & Emotions
+    # --------------------------------------------------------------------------------
+    # Call 2: Sentiment & Emotions
+    # --------------------------------------------------------------------------------
+    # Emotions isn't used anywhere yet; comparing how it does vs. sentiment.
     t0 = time.time()
-    sentiment_response = await InstructWrapper.call_with_retries_async(
-        client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, temperature=TEMPERATURE, default=DEFAULT_SENTIMENT, name="sentiment",
+    sentiment_response: ChatSentimentRisk = await InstructWrapper.call_with_retries_async(
+        client, model=model, response_model=ChatSentimentRisk, messages=msgs_sentiment, 
+        temperature=TEMPERATURE, default=DEFAULT_SENTIMENT, name="sentiment",
     )
     t1 = time.time()
     log_sentiment_response(sentiment_response, t0, t1)
 
+    # --------------------------------------------------------------------------------
+    # Call 3: Risk Factors
+    # --------------------------------------------------------------------------------
+    t0 = time.time()
+    risk_response: ChatRiskAssessment = await InstructWrapper.call_with_retries_async(
+        client, model=model, response_model=ChatRiskAssessment, messages=msgs_risk, 
+        temperature=TEMPERATURE, default=DEFAULT_RISK, name="risk_factors",
+    )
+    t1 = time.time()
+    log_risk_response(risk_response, t0, t1)
+
+
     # Return a combined analysis object
     return {
-        "summary"   :   summary_response.summary, 
-        "topics"    :   summary_response.topics,
+        # Summary & Topics
+        "summary" : summary_response.summary, 
+        "topics"  : summary_response.topics,
+
+        # Sentiment & Emotions 
         "sentiment" : sentiment_response.sentiment_label,
         "emotion"   : sentiment_response.  emotion_label,
+
+        # Risk Factors
+        "risk_rating" : risk_response.risk_level,
+        "risk_quotes" : risk_response.quotes,
+        "risk_reason" : risk_response.reason,
     }

@@ -120,6 +120,7 @@ export type BiomarkerType =
   | "Pronunciation"
   | "Prosody"
   | "Turntaking"
+  | "Perplexity"
   | string; 
 export interface ChatBiomarkerScore {
   id         : number;
@@ -147,14 +148,20 @@ export interface ChatSession {
   start_ts  : string;
   end_ts    : string | null;
   duration  : number;          // in seconds
+  audio_file: string | null;
 
   topics    : string;        // stored as an unparsed list string
   image     : AlbumImage;
-  sentiment : "Positive" | "Negative" | "Neutral" | "N/A" | string;
+  sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
   notes     : string | null;
+  summary   : string | null;
 
-  taskType  : string;
-  taskSubtype: string | null;
+  risk_level    : number;
+  risk_quotes   : string[];
+  risk_reason   : string;
+
+  taskType      : string;
+  taskSubtype   : string | null;
 
   messages        : ChatMessage[];
   biomarkers      : ChatBiomarkerScore[];

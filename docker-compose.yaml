@@ -17,9 +17,9 @@ services:
   # -------------------------------------------------------------------------------- 
   # 1) Database (postgres)
   # --------------------------------------------------------------------------------
-  # db:
-  #   extends: { file: ./backend/docker-compose.backend.yaml, service: db }
-  #   networks: [appnet]
+  db:
+    extends: { file: ./backend/docker-compose.backend.yaml, service: db }
+    networks: [appnet]
 
   # --------------------------------------------------------------------------------
   # 2) Backend (websocket server, LLM calls, biomarker logic)

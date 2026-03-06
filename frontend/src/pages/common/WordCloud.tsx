@@ -1,56 +1,24 @@
-import { WordCloud } from "@isoterik/react-word-cloud";
-import { ChatMessage } from "@/api";
+import { Word, WordCloud } from "@isoterik/react-word-cloud";
 
-function MyWordCloud( { messages } : { messages: ChatMessage[] }) {
-    const tokenize = () => {
-        // Initialize an empty object to store word frequencies
-        const wordFrequency: Record<string, number> = {};
-        // Iterate over each message in the data array
-        messages.forEach(item => {
-            // Split the message into words, remove punctuation, and convert to lowercase
-            if (item.role === "user") {
-                const words = item.content.replace(/[^\w\s]/g, '').toLowerCase().split(/\s+/);
+function MyWordCloud( { topics } : { topics: string[] }) {
+    const words: Word[] = topics.map((topic, i) => ({
+        text: topic,
+        value: getWordValue(i, topic),
+    }))
 
-                // Count the frequency of each word
-                words.forEach(word => {
-                    if (word.length > 3) {
-                        if (wordFrequency[word]) {
-                            wordFrequency[word]++;
-                        } else {
-                            wordFrequency[word] = 1;
-                        }
-                    }
-                });
-            }
-        });
-        // Convert the wordFrequency object into an array of objects with 'text' and 'value' properties
-        const result = Object.keys(wordFrequency).map(word => ({
-            text: word,
-            value: wordFrequency[word]
-        }));
-        const minOccurences = Math.min(...result.map(w => w.value));
-        const maxOccurences = Math.max(...result.map(w => w.value)) + 1;
-
-        return {words: result, minOccurences: minOccurences, maxOccurences: maxOccurences};
-    }
-
-    const {words, minOccurences, maxOccurences} = tokenize();
-
-    const resolveFontSize = (word: any) => {
-        const minFontSize = 8;
-        const maxFontSize = 36;
-        const normalizedValue = (word.value - minOccurences) / (maxOccurences - minOccurences);
-        const fontSize = minFontSize + normalizedValue * (maxFontSize - minFontSize);
+    function getWordValue(i: number, word: string): number {
+        const minFontSize = 25;
+        const maxFontSize = 200;
+        const fontSize = ((topics.length - i) / topics.length) * (maxFontSize - minFontSize) + minFontSize;
         return Math.round(fontSize);
     }
 
-    if (messages.length > 0) {
+    if (topics.length > 0) {
         return (
             <WordCloud 
                 words={words} 
-                width={100} 
+                width={150} 
                 height={100} 
-                fontSize={resolveFontSize}
                 transition="all .3s ease"
                 padding={1}
                 rotate={() => { return 0;}}
