@@ -155,10 +155,8 @@ DATABASES = {
         'USER'     : config('POSTGRES_USER'),
         'PASSWORD' : config('POSTGRES_PASSWORD'),
         # kept the defaults, so old deployments should still work
-        'HOST'     : "db", 
-        'PORT'     : "5432",
-        #'HOST'     : config('POSTGRES_HOST', default='db'), 
-        #'PORT'     : config('POSTGRES_PORT', default='5432'),
+        'HOST'     : config('POSTGRES_HOST', default='db'), 
+        'PORT'     : config('POSTGRES_PORT', default='5432'),
     },
     'vector': {
         'ENGINE'   : 'django.db.backends.postgresql',
