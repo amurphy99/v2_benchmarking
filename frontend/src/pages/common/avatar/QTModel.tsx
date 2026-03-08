@@ -7,7 +7,7 @@ import { useGLTF, useAnimations } from "@react-three/drei";
 import { LoopOnce, LoopPingPong, Mesh, Material, AnimationClip } from "three";
 
 export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion: string, emoCount: number, zoom: string }) {
-	const { nodes, materials, animations } = useGLTF("/models/QT_Robot.glb") as unknown as { 
+	const { nodes, materials, animations } = useGLTF("/models/QT_combined.glb") as unknown as { 
         nodes: Record<string, Mesh>, 
         materials: Record<string, Material>, 
         animations: AnimationClip[] 
@@ -227,4 +227,4 @@ export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion
 	);
 }
 
-useGLTF.preload("/models/QT_Robot.glb");
+useGLTF.preload("/models/QT_combined.glb");
