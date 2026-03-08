@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { LoopOnce, LoopPingPong, Mesh, Material, AnimationClip } from "three";
 
-export default function QTModel({ animation, animCount, zoom, ...props } : {animation: string, animCount: number, zoom: string }) {
+export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion: string, emoCount: number, zoom: string }) {
 	const { nodes, materials, animations } = useGLTF("/models/QT_Robot.glb") as unknown as { 
         nodes: Record<string, Mesh>, 
         materials: Record<string, Material>, 
@@ -15,6 +15,15 @@ export default function QTModel({ animation, animCount, zoom, ...props } : {anim
 	const group = useRef(null);
 	const { actions, mixer } = useAnimations(animations, group);
 
+    const animMap: Record<string, string> = {
+        Happy: "DANCE",
+        Sad: "SHAKE NO",
+        Surprised: "EMBARRASSED",
+        Scared: "SHAKE NO",
+        Angry: "EMBARRASSED",
+        Neutral: "HEAD TILT",
+    };
+
     const zoomMap: Record<string, any> = {
         head: {scale: 5.25, position: [0, -12.75, 0]},
         body: {scale: 1.75, position: [0, -2, 0]},
@@ -22,7 +31,9 @@ export default function QTModel({ animation, animCount, zoom, ...props } : {anim
     const {scale, position} = zoomMap[zoom] || zoomMap['body'];
 
 	useEffect(() => {
-		if (!actions || !animation) return;
+		if (!actions || !emotion) return;
+
+        const animation = animMap[emotion] || "NOD YES";
 
 		Object.values(actions).forEach((a) => a?.stop());
 		const action = actions[animation];
@@ -39,7 +50,7 @@ export default function QTModel({ animation, animCount, zoom, ...props } : {anim
 
 		mixer.addEventListener("finished", handleFinish);
 		return () => mixer.removeEventListener("finished", handleFinish);
-	}, [animation, animCount, actions]);
+	}, [emotion, emoCount, actions]);
 
 	return (
 		<group scale={scale} position={position} {...props} dispose={null}>
