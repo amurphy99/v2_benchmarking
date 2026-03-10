@@ -9,6 +9,7 @@ import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
 import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
+import { getWeeklyAnalysis } from "@/utils/functions/getAnalysis";
 
 export function WeekSummary() {
     const { state } = useLocation() as { state: { chatWeek: ChatWeek, albumDisplay?: string } };
@@ -30,7 +31,7 @@ export function WeekSummary() {
                 <TopicsCard topics={getTopics(chatWeek.sessions)} type="Weekly" role={role} />
                 <ChatLengthCard role={role} sessions={chatWeek.sessions} type={"Average"} />
                 <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
-                <DropdownModal title="Weekly Analysis" content={content} />
+                <DropdownModal title="Weekly Analysis" content={getWeeklyAnalysis(chatWeek)} />
             </div>
         </div>
         )
@@ -57,7 +58,7 @@ export function WeekSummary() {
                         </div>
                     </div>
                     <ChatSummaryCard role={role} sessions={chatWeek.sessions} type="Weekly" />
-                    <DropdownModal title="Speech Analysis" content={content} />
+                    <DropdownModal title="Speech Analysis" content={getWeeklyAnalysis(chatWeek)} />
                     <button className={`${role}-button p-[1rem] text-xl rounded-md w-full`}>
                         Download as PDF
                     </button>
