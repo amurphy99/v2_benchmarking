@@ -1,4 +1,4 @@
-import { PerspectiveCamera  } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera  } from "@react-three/drei";
 import { Canvas             } from "@react-three/fiber";
 import BuddyModel from "./BuddyModel"
 import QTModel from "./QTModel";
