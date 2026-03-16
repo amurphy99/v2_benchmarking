@@ -7,11 +7,11 @@ import { useGLTF, useAnimations } from '@react-three/drei'
 import { LoopOnce, LoopPingPong } from 'three';
 
 export default function BuddyModel({
-    emotion,
+    emotion = "Neutral",
     emoCount,
-    zoom,
+    zoom = "body",
     ...props
-} : {emotion: string, emoCount: number, zoom: string }) {
+} : {emotion?: string, emoCount?: number, zoom?: string }) {
     const { nodes, animations } = useGLTF('/models/Buddy_Robot.glb') //animations: DANCE, NOD YES, SHAKE NO, HEAD TILT, EMBARRASSED
     const group = useRef(null);
     const { actions, mixer } = useAnimations(animations, group);

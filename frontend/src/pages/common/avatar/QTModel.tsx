@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { LoopOnce, LoopPingPong, Mesh, Material, AnimationClip, Object3D } from "three";
 
-export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion: string, emoCount: number, zoom: string }) {
+export default function QTModel({ emotion = "Neutral", emoCount, zoom = "body", ...props } : {emotion?: string, emoCount?: number, zoom?: string }) {
 	const { nodes, materials, animations } = useGLTF("/models/QT_combined.glb") as unknown as { 
         nodes: Record<string, Mesh>, 
         materials: Record<string, Material>, 
@@ -19,24 +19,30 @@ export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion
         Listening: "metarigAction.002",
         Nod: "metarigAction.003",
         Thinking: "metarigAction.004",
-        "Head Tilt": "metarigAction.005",
-        "Duck Head": "metarigAction.006",
+        HeadTilt: "metarigAction.005",
+        DuckHead: "metarigAction.006",
         Shrug: "metarigAction.008",
-        "Fold Arms": "metarigAction.009",
+        FoldArms: "metarigAction.009",
         Idle: "metarigAction.011",
         Embarrassed: "metarigAction.012",
         Thoughtful: "metarigAction.014",
-        "Shake Head": "metarigAction.020",
-        "Cover Mouth": "metarigAction.022",
+        ShakeHead: "metarigAction.020",
+        CoverMouth: "metarigAction.022",
     }
 
     const emotionMap: Record<string, string> = {
         Happy: "Nod",
-        Sad: "Shake Head",
-        Surprised: "Cover Mouth",
-        Scared: "Embarrasesd",
-        Angry: "Duck Head",
+        Sad: "ShakeHead",
+        Surprised: "CoverMouth",
+        Scared: "Embarrassed",
+        Angry: "DuckHead",
         Neutral: "Idle",
+        Listening: "Listening",
+        Thinking: "Thinking",
+        HeadTilt: "HeadTilt",
+        Shrug: "Shrug",
+        FoldArms: "FoldArms",
+        Thoughtful: "Thoughtful",
     };
 
     const zoomMap: Record<string, any> = {
@@ -48,7 +54,8 @@ export default function QTModel({ emotion, emoCount, zoom, ...props } : {emotion
 	useEffect(() => {
 		if (!actions || !emotion) return;
 
-        const animation = animMap[emotionMap[emotion]] || "Idle";
+        const animation = animMap[emotionMap[emotion]] || animMap["Idle"];
+        console.log(animation)
         Object.values(actions).forEach((a) => a?.stop());
 
         const action = mixer.clipAction(animations.find((a) => a.name === animation) as AnimationClip);
