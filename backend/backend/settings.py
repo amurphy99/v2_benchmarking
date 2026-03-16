@@ -134,7 +134,19 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 ASGI_APPLICATION = 'backend.asgi.application'
 
 
+
+# --------------------------------------------------------------------------------
+# Channels (for consumers communicating with eachother)
+# --------------------------------------------------------------------------------
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
+
+# --------------------------------------------------------------------------------
 # Database
+# --------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 DATABASES = {
     'default': {
@@ -143,8 +155,10 @@ DATABASES = {
         'USER'     : config('POSTGRES_USER'),
         'PASSWORD' : config('POSTGRES_PASSWORD'),
         # kept the defaults, so old deployments should still work
-        'HOST'     : config('POSTGRES_HOST', default='db'), 
-        'PORT'     : config('POSTGRES_PORT', default='5432'),
+        'HOST'     : "db", 
+        'PORT'     : "5432",
+        #'HOST'     : config('POSTGRES_HOST', default='db'), 
+        #'PORT'     : config('POSTGRES_PORT', default='5432'),
     },
     'vector': {
         'ENGINE'   : 'django.db.backends.postgresql',

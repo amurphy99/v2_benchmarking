@@ -132,7 +132,7 @@ class Command(BaseCommand):
         # Second profile
         # --------------------------------------------------------------------
         plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
-        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver")
+        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver", is_staff=True)
         plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"})
         care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
         profile_2, _ = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",})
@@ -225,7 +225,7 @@ class Command(BaseCommand):
             image = AlbumImage.objects.get(topic=topic)
 
             # 1) Create a ChatSession object
-            session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
+            session = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at, 
                                                  topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
                                                  sentiment="Positive", image=image)
             session.date = started_at
@@ -246,12 +246,12 @@ class Command(BaseCommand):
                     score = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3), ts=ts)
                     score.ts = ts
                     score.save(update_fields=["ts"])
-        # Seed the alert chat
+        # Seed the chat that will have flagged words and sentiment
         topic = DEMO_IMAGES[0]['topic']
         image = AlbumImage.objects.get(topic=topic)
 
         # 1) Create a ChatSession object
-        session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at, 
+        session = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at, 
                                                 topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
                                                 sentiment="Negative", image=image)
         session.date = (now_utc).replace(hour=9, minute=0, second=0, microsecond=0)

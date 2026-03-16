@@ -1,51 +1,38 @@
 import { useEffect, useState } from "react";
 import Avatar from "../common/avatar/Avatar";
-import { NavLink } from "react-router-dom";
-import { footerLinkChat, footerLinkPatientCls } from "@/utils/styling/colors";
-import { GiAlliedStar } from "react-icons/gi";
-import { LuImage } from "react-icons/lu";
-import { IoCalendarOutline } from "react-icons/io5";
-import { FaChartBar } from "react-icons/fa";
 
 export function AnimationTest() {
     const [botMessage, setBotMessage] = useState<string>("Chat with me!");
-    const [animation, setAnimation] = useState<string>();
+    const [animation, setAnimation] = useState<string>("Idle");
     const [animCount, setAnimCount] = useState<number>(0);
     const [emotion, setEmotion] = useState<string>("Neutral");
 
-    const [width, setWidth] = useState(window.innerWidth);
-    
-    function handleWindowSizeChange() {
-        setWidth(window.innerWidth);
+    const mapAnim: Record<string, string> = {
+        Happy: "Nod",
+        Sad: "ShakeHead",
+        Surprised: "CoverMouth",
+        Scared: "Embarrassed",
+        Angry: "DuckHead",
+        Neutral: "Idle",
+        Listening: "Listening",
+        Thinking: "Thinking",
+        HeadTilt: "HeadTilt",
+        Shrug: "Shrug",
+        FoldArms: "FoldArms",
+        Thoughtful: "Thoughtful",
+    };
+
+    const mapMsg: Record<string, string> = {
+        Happy: "This is a happy message!",
+        Sad: "This is a sad message.",
+        Surprised: "This is a surprised message!",
+        Scared: "This is a scared message.",
+        Angry: "This is an angry message.",
+        Neutral: "This is a neutral message.",
     }
 
-    useEffect(() => {
-        window.addEventListener('resize', handleWindowSizeChange);
-        return () => {
-            window.removeEventListener('resize', handleWindowSizeChange);
-        }
-    }, []);
-
-    const isMobile = width <= 768;
-
-    useEffect(() =>{
-        const mapAnim: Record<string, string> = {
-            Happy: "DANCE",
-            Sad: "SHAKE NO",
-            Surprised: "EMBARRASSED",
-            Scared: "SHAKE NO",
-            Angry: "EMBARRASSED",
-            Neutral: "HEAD TILT",
-        };
-        const mapMsg: Record<string, string> = {
-            Happy: "This is a happy message!",
-            Sad: "This is a sad message.",
-            Surprised: "This is a surprised message!",
-            Scared: "This is a scared message.",
-            Angry: "This is an angry message.",
-            Neutral: "This is a neutral message.",
-        }
-        const animVal: string = mapAnim[emotion] || "NOD YES";
+    useEffect(() =>{ 
+        const animVal: string = mapAnim[emotion] || "Idle";
         const msgVal: string = mapMsg[emotion] || "This is a neutral message.";
         setAnimation(animVal);
         setBotMessage(msgVal);
@@ -59,21 +46,17 @@ export function AnimationTest() {
             className={`p-2 border-1 border-solid border-gray-400 rounded-lg m-[1rem] bg-red-50 text-center text-xl hover:cursor-pointer`}
             defaultValue="select"
         >
-            <option value="select" disabled>Choose An Emotion</option>
-            <option value="Happy">Happy</option>
-            <option value="Sad">Sad</option>
-            <option value="Suprrised">Surprised</option>
-            <option value="Scared">Scared</option>
-            <option value="Angry">Angry</option>
-            <option value="Neutral">Neutral</option>
+            {Object.keys(mapAnim).map((emotion, idx) => {
+                return <option key={idx} value={emotion}>{emotion}</option>
+            })}
         </select>
         <p className="m-[1rem] text-lg">Current animation playing: {animation}</p>
         <div className="flex flex-col justify-between h-[85vh]">
-            {!isMobile ? 
+            {!window.isMobile ? 
                 <div className="flex flex-row justify-center h-[70vh] m-[1rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} model={"buddy"} /> 
+                        <Avatar emotion={emotion} emoCount={animCount} zoom="body" model="qt" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -82,44 +65,12 @@ export function AnimationTest() {
                 :
                     
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} model={"buddy"} />
+                    <Avatar emotion={emotion} emoCount={animCount} zoom="body" model="qt" /> 
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
                 </div>
             }
-        </div>
-        <div className="fixed bottom-0 left-0 right-0 shadow-inner flex flex-row justify-between items-center px-5 pb-2 bg-white">
-            <div className="flex flex-col items-center">
-                <NavLink to="/animation-test" className={footerLinkPatientCls}>
-                    <GiAlliedStar size={"2rem"} />
-                    Goal
-                </NavLink>
-            </div>
-            <div className="flex flex-col items-center">
-                <NavLink to="/animation-test" className={footerLinkPatientCls}>
-                    <LuImage size={"2rem"} />
-                    Album
-                </NavLink>
-            </div>
-            <div className="flex flex-col items-center">
-                <NavLink to="/animation-test" className={footerLinkChat}>
-                    <img className="aspect-square w-[2rem] " src="/images/Robot_icon.svg" />
-                    Chat
-                </NavLink>
-            </div>
-            <div className="flex flex-col items-center">
-                <NavLink to="/animation-test" className={footerLinkPatientCls}>
-                    <IoCalendarOutline size={"2rem"} />
-                    Schedule
-                </NavLink>
-            </div>
-            <div className="flex flex-col items-center">
-                <NavLink to="/animation-test" className={footerLinkPatientCls}>
-                    <FaChartBar size={"2rem"} />
-                    Analysis
-                </NavLink>
-            </div>
         </div>
     </>
     )

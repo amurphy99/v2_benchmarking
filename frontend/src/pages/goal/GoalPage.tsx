@@ -35,14 +35,31 @@ export function Goal() {
     }
 
     return (
-        <div className="d-flex flex-col px-[5vw] md:pt-[1rem] pb-[4rem] mb-[5rem] h-full md:gap-5 gap-2">  
-            <br />
-            <div className="lg:size-1/4 md:size-1/2 size-3/4 self-center"> 
-                <Avatar animation={undefined} animCount={0} model={model} zoom="head" /> 
-            </div> 
-            <h3 className="m-[2rem] text-center"><b>{getMsg()}</b></h3>
-            <GoalProgress current={profile.goal.current} target={profile.goal.target} />
-            <WeekTrack week={week} />
+        <>
+       <div className="flex flex-col h-[80vh]">
+            {!window.isMobile ? 
+                <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
+                    <div className="sm:w-1/5" />
+                    <div className="mt-[1rem] w-full sm:w-1/2"> 
+                        <Avatar model={model} zoom="body" /> 
+                    </div> 
+                    <div className="hidden sm:inline-block bubble"> 
+                        {getMsg()} 
+                    </div>
+                </div>
+                :  
+                <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
+                    <Avatar model={model} zoom="head"/>
+                    <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
+                        {getMsg()}
+                    </div>
+                </div>
+            }
+            <div className="mx-[10%]">
+                <GoalProgress current={profile.goal.current} target={profile.goal.target} />
+                <WeekTrack week={week} />
+            </div>
         </div>
+        </>
     );
 }

@@ -19,15 +19,18 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
             <h2>{week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}</h2>
             <div className="w-full aspect-square flex self-center">
-                <div className="flex items-end justify-between size-full p-4 bg-cover bg-center bg-blue-200 hover:cursor-pointer hover:shadow-lg/30" 
+                <div className="relative flex items-end justify-between size-full hover:cursor-pointer album-img hover:shadow-lg/30" 
                 onClick={() => {toWeeklySummary(week)}}
-                style={{ backgroundImage: `url(${week?.image?.url})`}}>
-                    <h1 className="text-white font-bold underline text-shadow-lg">
-                        {week.sessions.length} Chat{week.sessions.length > 1 ? "s" : ""}
-                    </h1>
-                    <a href={week?.image?.photographer_url} className="text-xs float-right text-white m-[-16px]">
-                        Image credit: {week?.image?.photographer} at Pexels
-                    </a>
+                >   
+                    <img className="w-full h-full object-cover" src={week?.image?.url} />
+                    <div className="absolute inset-0 flex flex-row items-end justify-between">
+                        <h1 className="text-white font-bold underline text-shadow-lg p-4">
+                            {week.sessions.length} Chat{week.sessions.length > 1 ? "s" : ""}
+                        </h1>
+                        <a href={week?.image?.photographer_url} className="text-xs float-right text-white p-1">
+                            Image credit: {week?.image?.photographer} at Pexels
+                        </a>
+                    </div>
                 </div>
             </div>
             <div className="grid grid-flow-col auto-cols-[20%] gap-2 overflow-x-auto hidden-scrollbar">
@@ -38,16 +41,17 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
                     return (
                         <div 
                             key={idx} 
-                            className="flex-col flex-none flex items-center justify-end pb-2 aspect-square 
-                                text-white font-bold underline text-shadow-lg bg-cover bg-center bg-purple-200
-                                hover:cursor-pointer hover:shadow-lg/30 hover:scale-90"
+                            className="relative aspect-square text-white font-bold underline text-shadow-lg
+                                hover:cursor-pointer album-img hover:shadow-lg/30 hover:scale-90"
                             onClick={() => {toDaySummary(session)}}
-                            style={{ backgroundImage: `url(${session?.image?.url})`}}
                         > 
-                            {new Date(session.date).toLocaleDateString("en-US", dateFormatOptionsShort)} 
-                            <a href={session?.image?.photographer_url} className="text-[8px] text-white m-0 font-thin text-nowrap">
-                                Image credit: {session?.image?.photographer} at Pexels
-                            </a>
+                            <img className="w-full h-full object-cover" src={session.image.url} />
+                            <div className="absolute inset-0 p-1 flex flex-col items-center justify-end brightness-100">
+                                {new Date(session.date).toLocaleDateString("en-US", dateFormatOptionsShort)} 
+                                <a href={session?.image?.photographer_url} className="text-[6px] text-white m-0 font-thin text-nowrap">
+                                    Image credit: {session?.image?.photographer} at Pexels
+                                </a>
+                            </div>
                         </div>
                     )
                 })}

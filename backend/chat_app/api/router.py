@@ -10,7 +10,9 @@ from .views import (
     CreateAccessView, AccessViewSet,
     MyTokenObtainPairView,                   # JWT login
     MyTokenRefreshView,                      # JWT token refresh
+    LatestChatSessionView,
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
+    ChatSessionView,
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
     RAGInstructionsViewSet                   # RAG Instructions list endpoint
@@ -20,7 +22,8 @@ from .views import (
 # ViewSets go in a DRF router
 # ------------------------------------------------------------------
 router = DefaultRouter()
-router.register(r"chatsessions", ChatSessionViewSet, basename="chatsession")
+# The regex allows us to filter by active and demo status: 0 for false, 1 for true
+router.register(r"chatsessions/(?P<active>\d+)/(?P<demo>\d+)", ChatSessionViewSet, basename="chatsession")
 router.register(r"reminders",    ReminderViewSet,    basename="reminder"   )
 router.register(r"accesses",       AccessViewSet,      basename="accesses" )
 router.register(r"rags",          RAGInstructionsViewSet, basename="rag_instructions")
@@ -49,8 +52,10 @@ urlpatterns = [
     path("access/",             AccessView.as_view(), name="access"  ),
     path("access/create/",      CreateAccessView.as_view(), name="create_access"),
     
-    # Single-row resources (not connected to a user)
+    # Single-row resources
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
+    path("chatsession/<int:sessionid>/", ChatSessionView.as_view(), name="chatsession"),
+    path("chatsession/latest/", LatestChatSessionView.as_view(), name="latest_chatsession"),
 
     # JWT login
     path("token/",              MyTokenObtainPairView.as_view(), name="token"        ),

@@ -40,14 +40,14 @@ if BioConfig.TIME_BIOMARKERS:
         score = generate_biomarker_score(biomarker, generate_score, args)
         
         # Log & return score
-        logger.info(f"{biomarker} {score:.4f} ({(time()-start_time):5.4f}s) {RESET}")
+        #logger.info(f"{biomarker} {score:.4f} ({(time()-start_time):5.4f}s) {RESET}")
         return score
 
 else:
     # Don't need to time the calculations
     def gen_score(biomarker: str, generate_score, args):
         score = generate_biomarker_score(biomarker, generate_score, args)
-        logger.info(f"{biomarker} {score:.4f} {RESET}")
+        #logger.info(f"{biomarker} {score:.4f} {RESET}")
         return score
 
 # =======================================================================

@@ -7,14 +7,24 @@ import { useGLTF, useAnimations } from '@react-three/drei'
 import { LoopOnce, LoopPingPong } from 'three';
 
 export default function BuddyModel({
-    animation,
-    animCount,
-    zoom,
+    emotion = "Neutral",
+    emoCount,
+    zoom = "body",
     ...props
-} : {animation: string, animCount: number, zoom: string }) {
+} : {emotion?: string, emoCount?: number, zoom?: string }) {
     const { nodes, animations } = useGLTF('/models/Buddy_Robot.glb') //animations: DANCE, NOD YES, SHAKE NO, HEAD TILT, EMBARRASSED
     const group = useRef(null);
     const { actions, mixer } = useAnimations(animations, group);
+
+    const animMap: Record<string, string> = {
+        Happy: "DANCE",
+        Sad: "SHAKE NO",
+        Surprised: "EMBARRASSED",
+        Scared: "SHAKE NO",
+        Angry: "EMBARRASSED",
+        Neutral: "HEAD TILT",
+    };
+
     const zoomMap: Record<string, any> = {
         head: {scale: 345, position: [0, -23.5, 0]},
         body: {scale: 100, position: [0, -4, 0]},
@@ -22,8 +32,9 @@ export default function BuddyModel({
     const {scale, position} = zoomMap[zoom] || zoomMap['body'];
 
     useEffect(() => {
-        if (!actions || !animation) return;
+        if (!actions || !emotion) return;
 
+        const animation = animMap[emotion] || "HEAD TILT";
         Object.values(actions).forEach((a) => a?.stop());
         const action = actions[animation];
         if (!action) return;
@@ -39,7 +50,7 @@ export default function BuddyModel({
 
         mixer.addEventListener("finished", handleFinish);
         return () => mixer.removeEventListener("finished", handleFinish);
-    }, [animation, animCount, actions]);
+    }, [emotion, emoCount, actions]);
 
 
       return (

@@ -39,7 +39,7 @@ export function ChatAlbum() {
     // Return UI Component
     if (window.isMobile) {
         return (
-            <div className="bg-gray-100 p-[1rem] pb-[15vh]">
+            <div className="bg-gray-100 p-[1rem] pb-[15vh] overflow-y-scroll">
                 <div className="ml-[1rem]">
                     <button onClick={() => {changeDisplay()}} >
                         { display == "list" ?

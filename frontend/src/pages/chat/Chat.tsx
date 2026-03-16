@@ -20,8 +20,8 @@ export function Chat() {
     const navigate = useNavigate();
     const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [animation, setAnimation] = useState<string>();
-    const [animCount, setAnimCount] = useState<number>(0);
+    const [emotion, setEmotion] = useState<string>("Neutral");
+    const [emoCount, setEmoCount] = useState<number>(0);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
@@ -42,17 +42,8 @@ export function Chat() {
     };
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
-        const map: Record<string, string> = {
-            Happy: "DANCE",
-            Sad: "SHAKE NO",
-            Surprised: "EMBARRASSED",
-            Scared: "SHAKE NO",
-            Angry: "EMBARRASSED",
-            Neutral: "HEAD TILT",
-        };
-        const value = map[emotion] || "NOD YES";
-        setAnimation(value);
-        setAnimCount((t) => t + 1);
+        setEmotion(emotion);
+        setEmoCount((t) => t + 1);
     }
 
     // selecting the type of chat
@@ -69,7 +60,6 @@ export function Chat() {
     const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
 
     // Live-chat hook
-    // const { start, stop, save } = useLiveChat({ onUserUtterance, onSystemUtterance, onScores: () => {}, onEmotion});
 
     const { start, stop, save } = useLiveChat({
         onUserUtterance,
@@ -125,7 +115,7 @@ export function Chat() {
 	const saveChat = () => {
 		save();
 		setShowModal(false);
-		navigate("/goal");
+		navigate("/chat/end");
 	}; // use the stop speaking callback
 
     // --------------------------------------------------------------------
@@ -135,12 +125,11 @@ export function Chat() {
     return (
     <>
         <div className="flex flex-col h-[85vh]">
-            {/* View of the chatHistory and/or Avatar */}
             {!window.isMobile ? 
-                <div className="flex flex-row justify-center h-[70vh] m-[1rem] mt-[4rem]">
+                <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 
+                        <Avatar emotion={emotion} emoCount={emoCount} model={"qt"} zoom="body" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -148,7 +137,7 @@ export function Chat() {
                 </div>
                 :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} model={model} zoom="head"/>
+                    <Avatar emotion={emotion} emoCount={emoCount} model={model} zoom="head"/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
