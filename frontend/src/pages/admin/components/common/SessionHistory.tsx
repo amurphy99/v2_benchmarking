@@ -7,7 +7,7 @@ import { LocalChatMessage     } from "@/hooks/live-chat";
 import { LocalBiomarkerSeries } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
 // Components
-import   ChatMessages     from "@/pages/chat/components/ChatMessages";
+import { ChatMessages   } from "./ChatMessages";
 import { BiomarkerPanel } from "./BiomarkerPanel";
 import { cardClass      } from "./commonStyle";
 

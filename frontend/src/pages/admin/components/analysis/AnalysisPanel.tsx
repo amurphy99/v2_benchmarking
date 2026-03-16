@@ -2,7 +2,7 @@ import { memo, useMemo, useRef } from "react";
 
 // From this project
 import { InfoPill } from "../admin_header/StatusComponents";
-import { sentimentBadge, riskBadge } from "./analysisBadges";
+import { sentimentBadge, emotionBadge, riskBadge, topicsBadges } from "./analysisBadges";
 import { cardClass } from "../common/commonStyle";
 
 import { formatTopics, parseNotes, deriveSessionAnalysis } from "./deriveSessionAnalysis";
@@ -48,6 +48,7 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
     // --------------------------------------------------------------------------------
     // Return UI component
     // --------------------------------------------------------------------------------
+    // <InfoPill label="Topics"    ><span className="max-w-[40ch] truncate">{topicsText}</span></InfoPill>
     return (
         <section className={`px-[1rem] py-[1rem] ${className}`}>
         
@@ -55,9 +56,10 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
         {/* Top "analysis" Pills */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="flex flex-wrap items-center gap-2">
-            <InfoPill label="Topics"    ><span className="max-w-[40ch] truncate">{topicsText}</span></InfoPill>
-            <InfoPill label="Sentiment" >{sentimentBadge(session.sentiment)}                        </InfoPill>
-            <InfoPill label="Risk"      >{riskBadge(risk_rating)}                                   </InfoPill>
+            <InfoPill label="Topics"    >{topicsBadges  (topicsText       )}</InfoPill>
+            <InfoPill label="Sentiment" >{sentimentBadge(session.sentiment)}</InfoPill>
+            <InfoPill label="Emotion"   >{emotionBadge  (session.emotion  )}</InfoPill>
+            <InfoPill label="Risk"      >{riskBadge     (risk_rating      )}</InfoPill>
         </div>
 
         {/* ================================================================================ */}

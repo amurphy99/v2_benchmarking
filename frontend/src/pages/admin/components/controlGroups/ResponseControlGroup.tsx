@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
 
-
 // --------------------------------------------------------------------------------
 // Define Types
 // --------------------------------------------------------------------------------
@@ -19,6 +18,7 @@ type Props = {
     connected   : boolean;
     manualMode  : boolean;
     pending    ?: Pending;
+
     // Commands (send to backend; parent flips manualMode only on ACK)
     onPauseAndListen   : () => void;
     onResumeAndRespond : () => void;

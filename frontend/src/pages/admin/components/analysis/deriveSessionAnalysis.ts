@@ -32,6 +32,7 @@ export type ParsedNotes = {
     risk_rating    ? : number | null;
     risk_quotes    ? : string[];
     risk_reasoning ? : string | null;
+    emotion        ? : string | null;
 };
 
 // Temporary demo data
@@ -40,10 +41,11 @@ const DEMO_NOTES: ParsedNotes = {
   risk_rating    : 1,
   risk_quotes    : ["I've been feeling a little overwhelmed lately.", "I didn't sleep great last night.", ],
   risk_reasoning : "Demo reasoning: Low risk due to mild, non-specific stress statements without urgency or escalation. No indications of immediate harm. Suggested follow-up is to check in on sleep and stress coping strategies.",
+  emotion        : "Neutral",
 };
 
 // Notes will contain these separated in order: 
-// summary, risk_rating, risk_quotes, risk_reasoning
+// summary, risk_rating, risk_quotes, risk_reasoning, emotion
 export function parseNotes(notes?: string | null, sep = "\n<|ANALYSIS|>\n"): ParsedNotes {
     // Start with some default data 
     // If notes is empty or isn't in the separated format yet, return placeholders
@@ -53,7 +55,7 @@ export function parseNotes(notes?: string | null, sep = "\n<|ANALYSIS|>\n"): Par
 
     // Split on the parts
     const parts = notes.split(sep).map((p) => p.trim());
-    const [summary, ratingStr, quotesRaw, reasoning] = parts;
+    const [summary, ratingStr, quotesRaw, reasoning, emotion] = parts;
 
     // Risk rating
     const risk_rating = ratingStr && ratingStr.length > 0 ? Number.parseInt(ratingStr.trim(), 10) : null;
@@ -73,6 +75,7 @@ export function parseNotes(notes?: string | null, sep = "\n<|ANALYSIS|>\n"): Par
         risk_rating    : Number.isFinite(risk_rating as number) ? risk_rating : null,
         risk_quotes,
         risk_reasoning : reasoning || null,
+        emotion        : emotion   || null,
     };
 }
 
@@ -83,6 +86,7 @@ export type SessionLike = {
     // Existing DB fields
     topics         ? : unknown;
     sentiment      ? : string | null;
+    emotion        ? : string | null;
     notes          ? : string | null;
 
     // Future DB fields
@@ -100,8 +104,9 @@ export function deriveSessionAnalysis(session: SessionLike, sep = "\n<|ANALYSIS|
     return {
         // Actual fields
         topics         : topicsText,
-        sentiment      : session.sentiment ?? "neutral",
-        notes          : session.notes     ?? "",
+        sentiment      : session.sentiment                   ?? "neutral",
+        emotion        : session.emotion   ?? parsed.emotion ?? "neutral",
+        notes          : session.notes                       ?? "",
         // Parsed from notes (for now)
         summary        : session.summary        ?? parsed.summary        ?? "—",
         risk_rating    : session.risk_rating    ?? parsed.risk_rating    ?? null,

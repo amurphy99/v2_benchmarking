@@ -62,7 +62,7 @@ export const msgDateFormat = new Intl.DateTimeFormat("en-US", {
 
 
 // ================================================================================
-// IDK, there's just three of these I guess...
+// Input time given in milliseconds (older methods)
 // ================================================================================
 export function formatElapsed_s(ms: number) {
     const totalSeconds = Math.floor(ms / 1000);
@@ -101,7 +101,7 @@ export function formatElapsedTime(elapsed: number | null | undefined): string {
     // Hours, minutes, seconds
     const h = Math.floor( elapsed / 3_600);
     const m = Math.floor((elapsed % 3_600) / 60);
-    const s = elapsed % 60;
+    const s = Math.floor( elapsed %    60);
 
     // Format as a string
     if (h > 0) { return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; }
@@ -124,4 +124,32 @@ export function formatAgo(d: Date | null | undefined): string {
     else             { return `${h}h ago`; }
 }
 
+// Format the "chat duration" field
+export function formatDurationFromStart(startTsUnix: number | null | undefined): string {
+    if (!startTsUnix) return "—";
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1_000 - startTsUnix));
+    return formatElapsedTime(elapsed);
+}
+
+// --------------------------------------------------------------------------------
+// Format Timestamps (from ChatMessages)
+// --------------------------------------------------------------------------------
+export function parseTs(ts: string): number {
+  const t = Date.parse(ts);                   // Convert ISO string into epoch ms
+  return Number.isFinite(t) ? t : Date.now(); // Fallback to "now" if invalid
+}
+
+// Display elapsed time since chat start in M:SS.xx (xx = centiseconds)
+export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: string): string {
+  if (!chatStartMs) return "—";
+
+  const msgMs  = parseTs(msgTsIso);
+  const diffMs = Math.max(0, msgMs - chatStartMs);
+
+  const minutes = Math.floor( diffMs / 60_000);
+  const seconds = Math.floor((diffMs % 60_000) / 1_000);
+  const centis  = Math.floor((diffMs %  1_000) /    10); // 2 decimals of milliseconds
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
 

@@ -1,8 +1,8 @@
 import { memo, useMemo } from "react";
 
 // From this project
-import { ChatSession    } from "@/api";
-import { dateFormatLong } from "@/utils/styling/numFormatting";
+import { ChatSession } from "@/api";
+import { dateFormatLong, formatElapsedTime } from "@/utils/styling/numFormatting";
 
 // Components
 import { InfoPill                  } from "../admin_header/StatusComponents";
@@ -58,8 +58,8 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
 
             {/* Messages & Duration */}
             <div className="mt-3 flex gap-2 flex-wrap">
-                <InfoPill label="Messages" value={session.messages.length ?? "—"} />
-                <InfoPill label="Duration" value={session.duration        ?? "—"} />
+                <InfoPill label="Messages" value={session.messages.length ?? "—"     } />
+                <InfoPill label="Duration" value={formatElapsedTime(session.duration)} />
             </div>
 
         </button>

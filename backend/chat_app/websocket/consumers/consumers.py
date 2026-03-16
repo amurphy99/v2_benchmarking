@@ -66,8 +66,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
         self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
-    
-
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
@@ -80,7 +78,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await db_s2a(ChatService.close_any_active_session)(self.user)
 
         # Load the most recent active session for this user
-        self.session = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        self.session    = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        self.session_id = self.session.id
+
+        # Load existing messages
+        # TODO: This behavior is for resuming existing chats; doesn't do anything here yet
         recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-start_ts")[: self.MAX_CONTEXT])[::-1])()
 
         # TODO: I added the timestamps in just now for biomarker scores, but I actually don't really like how this works at the moment...
@@ -89,7 +91,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
         self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
-
 
         # --------------------------------------------------------------------------------
         # 3) Finish setup (groups & STT)

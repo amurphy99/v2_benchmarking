@@ -1,7 +1,7 @@
 import { Spinner } from "react-bootstrap";
 
 // From this project
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList } from "./components/chat_lists/ChatList";
 import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constants";
 
@@ -10,12 +10,13 @@ import { ACTIVE_ONLY, INACTIVE_ONLY, NON_DEMO_ONLY } from "@/utils/misc/constant
 // ================================================================================
 export function Admin() {
     // Query the DB for a list of ChatSessions
-    const { data: chatSessionsActive,            isLoading,           refetch    } = useChatSessions(ACTIVE_ONLY, NON_DEMO_ONLY);
-    const { data: chatSessionsInactive, isLoading: loadingAll, refetch: refetchAll } = useChatSessions(INACTIVE_ONLY, NON_DEMO_ONLY);
+    const { data:   active, isLoading: loading_1, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
+    const { data: inactive, isLoading: loading_2, refetch: refetchInactive } = useInactiveChatSessions(NON_DEMO_ONLY);
+
     // --------------------------------------------------------------------------------
     // Return UI component
     // --------------------------------------------------------------------------------
-    if (isLoading || loadingAll) { return <Spinner /> }
+    if (loading_1 || loading_2) { return <Spinner /> }
     return (
         <div className="mx-[2rem] pb-[15vh] flex flex-col gap-[1rem]">
 
@@ -23,8 +24,8 @@ export function Admin() {
             <ChatList
                 title       = "Currently Active Chat Sessions"
                 subtitle    = "Live sessions you can open in the listener view."
-                sessions    = {chatSessionsActive}
-                onRefresh   = {() => refetch()}
+                sessions    = {active}
+                onRefresh   = {() => refetchActive()}
                 navigate_to = {"/admin/chat/"}
             />
 
@@ -32,8 +33,8 @@ export function Admin() {
             <ChatList
                 title       = "Completed Chat Sessions"
                 subtitle    = "View post-chat analysis results."
-                sessions    = {chatSessionsInactive}
-                onRefresh   = {() => refetchAll()}
+                sessions    = {inactive}
+                onRefresh   = {() => refetchInactive()}
                 navigate_to = {"/admin/chat/inactive/"}
             />
 
