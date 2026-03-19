@@ -40,9 +40,6 @@ from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 class ChatConsumer(AsyncJsonWebsocketConsumer):
     # How many recent messages to keep for the LLM
     MAX_CONTEXT =  20  
-    
-    # Define the response generation method to be used in the chat
-    response_method = ChatHandler.respond_to_user
 
     # ================================================================================
     # Connect
@@ -53,6 +50,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
         self.last_response            = None
+
+        # Define the response generation method to be used in the chat
+        self.response_method = ChatHandler.respond_to_user
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection

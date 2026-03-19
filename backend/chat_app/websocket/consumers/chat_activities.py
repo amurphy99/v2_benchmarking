@@ -26,13 +26,17 @@ class ActivityChatConsumer(ChatConsumer):
     Same session handling + persistence + biomarkers as ChatConsumer (through inheritance),
     but swaps response generation to the scenario-based RAG pipeline.
     """
-
     ACTIVITY_NAME = "memory_activity"
+
+    
 
     async def connect(self):
         await super().connect()
 
         self.rag_state = {"current_scenario": START_SCENARIO}
+
+        # Define the response generation method to be used in the chat
+        self.response_method = lambda x: rag_response_fn(x, **self._rag_kwargs())
 
     def _rag_kwargs(self):
         return {
@@ -46,16 +50,7 @@ class ActivityChatConsumer(ChatConsumer):
     # ================================================================================
     async def receive_json(self, data, **kwargs):
         if data["type"] == "transcription":
-            await ChatHandler.handle_transcription(
-                data,
-                msg_callback = self._add_message_CB,
-                send_callback= self.send,
-                bio_callback = self._utt_bio,
-                reply_on_STT = self.reply_on_STT,
-                reply_audio  = self.reply_with_audio,
-                response_fn  = rag_response_fn,      
-                response_fn_kwargs = self._rag_kwargs(),
-            )
+            await ChatHandler.handle_transcription(data, self)
             # reply_now is called inside handle_transcription -> respond_to_user,
             # but respond_to_user doesn't call reply_now directly yet — see note below
             return
