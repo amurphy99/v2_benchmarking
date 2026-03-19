@@ -1,8 +1,17 @@
 # Dementia Speech System
 
-This project aims to create a progressive web app to run a speech system oriented for dementia patients. 
-* <b>Sandbox:</b> cognibot.sandbox.org
-* <b>Deployment:</b> cognibot.org
+Our speech system, "CogniBot", hosts an AI/LLM-based conversational companion for older adults living with dementia, providing engaging interactions while passively analyzing speech and language patterns. Using machine learning and speech analytics, a range of cognitive biomarkers are extracted from conversations and shared with users, caregivers, and clinicians through a web-based monitoring interface. This feedback, alongside detailed conversation history, can help support memory, communication, and care planning. The system is accessible through both a progressive web app and two different physical robotic companions. All user interactions, conversation histories, and biomarker data are synchronized for a seamless experience regardless of which platform is used.
+
+We have multiple versions:
+* [Current deployed version](https://www.cognibot.org) (only official updates)
+* [Sandbox #1](https://sandbox.cognibot.org) 
+* [Sandbox #2](https://sandbox2.cognibot.org) (current most recent testing version)
+* [Sandbox #3](https://sandbox3.cognibot.org)
+
+
+<br><br><br>
+
+
 
 ## How it works
 The app uses 4 different docker containers:
