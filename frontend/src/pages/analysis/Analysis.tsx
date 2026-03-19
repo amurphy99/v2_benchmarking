@@ -1,5 +1,5 @@
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
-import { ChatWeek, getMessages, getTopics, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
+import { ChatWeek, getTopics, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
 import { useAuth } from "@/context/AuthProvider";
 
 import { TopicsCard } from "../common/TopicsCard";
@@ -30,7 +30,6 @@ export function Analysis() {
     const sorted = sortScores(avg);
     const flaggedBiomarkers = getFlaggedBiomarkers(avg);
     const exemplarBiomarkers = getExemplarBiomarkers(avg);
-    const weeklyMessages = getMessages(currentWeek.sessions);
 
     return (
         <div className={colStyle}>

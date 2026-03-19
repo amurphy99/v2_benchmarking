@@ -70,17 +70,20 @@ class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     
 class ChatSessionView(generics.RetrieveAPIView):
     """
-    GET  /api/rag/<int:sessionid>/  => fetch a single ChatSession
+    GET  /api/chatsession/<int:sessionid>/  => fetch a single ChatSession
     """
     serializer_class   = ChatSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
-        session = ChatSession.objects.get(
-            id=sessionid, 
-        )
-        return session
+        try:
+            session = ChatSession.objects.get(
+                id=sessionid, 
+            )
+            return session
+        except:
+            raise (f"ChatSession with id {sessionid} does not exist.")
 
 # ======================================================================= ===================================
 # List + Create

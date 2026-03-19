@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 // Components
 import { SessionHeader  } from "./components/admin_header/SessionHeader";
@@ -7,6 +7,7 @@ import { AnalysisPanel  } from "./components/analysis/AnalysisPanel";
 
 // Misc. Helpers
 import { useChatSession } from "@/hooks/queries/useChatSessions";
+import toast from "react-hot-toast";
 
 // ================================================================================
 // [INACTIVE] Admin view for completed chats
@@ -14,9 +15,14 @@ import { useChatSession } from "@/hooks/queries/useChatSessions";
 export function AdminChatInactive() {
     // Load data for the given chat (ID received on page load)
     const { id                       } = useParams();
-    const { data: session, isLoading } = useChatSession(id ?? "");
+    const { data: session, isLoading, isError } = useChatSession(id ?? "");
+    const navigate = useNavigate();
 
     if (isLoading || !session.id) { return <>Still loading</>; }
+    if (isError) {
+        toast.error("Error fetching chat session data. Returning to admin dashboard.");
+        navigate("/admin");
+    }
 
     // UI Components
     return (

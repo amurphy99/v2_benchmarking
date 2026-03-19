@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider            } from "@/context/AuthProvider";
 
-import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient } from "@/routes";
+import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient, IsStaff } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary, 
     WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest, 
@@ -81,10 +81,11 @@ export default function App() {
                 <Route path="/transcript" element={<Transcript    />} />
 
                 {/* Admin */}
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/admin/chat/:id" element={<AdminChat />} />
-                <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
-                
+                <Route element={ <IsStaff /> } >
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="/admin/chat/:id" element={<AdminChat />} />
+                    <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
+                </Route>
             </Route>
 
             <Route path="/animation-test" element={<AnimationTest />} />

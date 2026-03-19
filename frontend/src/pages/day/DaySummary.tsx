@@ -9,7 +9,7 @@ import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
 import ChatLengthCard from "@/components/graphics/ChatLengthCard";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
-import { useChatSession } from "@/hooks/queries/useChatSessions";
+import { getDailyAnalysis } from "@/utils/functions/getAnalysis";
 
 export function DaySummary() {
     const role = useAuth().account.role;
@@ -36,7 +36,7 @@ export function DaySummary() {
                 <TopicsCard topics={topics} type="Daily" role={role} />
                 <ChatLengthCard role={role} sessions={[state.chatSession]} type="" />
                 <ChatSummaryCard role={role} sessions={[state.chatSession]} type="Daily" />
-                <DropdownModal title="Speech Analysis" content={content} />
+                <DropdownModal title="Speech Analysis" content={getDailyAnalysis(state.chatSession)} />
                 <button className={`${role}-button p-[1rem] text-xl rounded-md sm:w-3/4 ${widthStyle}`}>
                     Download as PDF
                 </button>
@@ -66,7 +66,7 @@ export function DaySummary() {
                         </div>
                     </div>
                     <ChatSummaryCard role={role} sessions={[state.chatSession]} type="Daily" />
-                    <DropdownModal title="Speech Analysis" content={content} />
+                    <DropdownModal title="Speech Analysis" content={getDailyAnalysis(state.chatSession)} />
                     <button className={`${role}-button p-[1rem] text-xl rounded-md w-full`}>
                         Download as PDF
                     </button>
@@ -75,7 +75,3 @@ export function DaySummary() {
         )
     }
 }
-
-const content = [`You speech reflects perfect pronunciation. You have focused on all the topics as well.`, 
-                `You sometimes get stuck finding and your sentence complexity can be improved as well.`, 
-                `You can play word games or read out loud to practice your speech abilities in daily life.`]
