@@ -50,15 +50,13 @@ class ChatHandler:
     async def handle_transcription(
         data,                    # JSON from chat WS client OR from backend STT result
         consumer: ChatConsumer,  # ChatConsumer object for this chat
-        *,
-        relay_user_utt=False,    # If using backend STT, the client might want the user's utterances
     ):
         # 1) Process the input
         user_text = data["data"] 
         user_ts   = now_ts()
 
         # 2) If this is using STT from the backend, also send the utterance back to the frontend
-        if relay_user_utt: await consumer.send(json.dumps({'type': 'user_utt', 'data': user_text, 'time': user_ts}))
+        if consumer.use_backend_STT: await consumer.send(json.dumps({"type": "user_utt", "data": user_text, "time": user_ts}))
 
         # 3) Update context and DB for the new *user* message
         context_buffer = await consumer.handle_chat_messages(role="user", text=user_text, ts=user_ts)
@@ -68,29 +66,20 @@ class ChatHandler:
                      f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
 
         # 4) Get the LLMs response if the consumer is on "auto reply" mode
-        system_resp = ""
+        if consumer.reply_on_user_utt: return await ChatHandler.respond_to_user(context_buffer, consumer)
+        else:                          return ""
 
-        if consumer.reply_on_user_utt:
-            if response_fn is None:
-                system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
-            else:
-                system_resp = await ChatHandler.respond_to_user(
-                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs
-                )
-            return system_resp
-            
-        
-        return "" # I don't know how this works totally yet
-    
+
     # --------------------------------------------------------------------------------
     # Part 2 of `handle_transcription`
     # --------------------------------------------------------------------------------
+    # Response generation method is defined inside the ChatConsumer instance
+    # TODO: If kwargs are required, could probably add that in
     @staticmethod
     async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None):
-        # Get the LLMs response
-        if   use_response is not None: system_resp = use_response # directly use the provided response instead of calling the LLM
-        elif response_fn  is not None: system_resp = await response_fn(context_buffer, **(response_fn_kwargs or {})) # use a custom response function (e.g. for RAG)
-        else:                          system_resp = await get_LLM_response(context_buffer) # use the default response function
+        # Get the LLMs response if we weren't passed a default response to use
+        if use_response is None: system_resp = await consumer.response_method(context_buffer)
+        else:                    system_resp = use_response
 
         system_ts = now_ts() 
         consumer.last_response = system_resp

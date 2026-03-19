@@ -38,8 +38,12 @@ from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 # ChatConsumer 
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
-    MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
+    # How many recent messages to keep for the LLM
+    MAX_CONTEXT =  20  
     
+    # Define the response generation method to be used in the chat
+    response_method = ChatHandler.respond_to_user
+
     # ================================================================================
     # Connect
     # ================================================================================
@@ -62,7 +66,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.source = self.scope.get("source", "unknown")
         
         # Configuration based on the source platform for the chat
-        self.use_backend_STT   = (self.source == "webapp")
+        self.use_backend_STT   = (self.source == "webapp") # Send the user text to the frontend so it can see it too
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
         self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
@@ -150,6 +154,26 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
 
+    # ================================================================================
+    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
+    # ================================================================================
+    # Overall communication handler; all incoming messages come through here first
+    async def receive_json(self, data, **kwargs):
+        await handle_receive_json(self, data)
+ 
+    # Add messages to the database & update the local context (role must be "user" or "assistant")
+    # TODO: Working on replacing _add_message_CB
+    async def _add_message_CB(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
+    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
+
+    # Handle on-utterance biomarkers
+    async def _utt_bio(self): await _on_utterance_biomarkers(self)
+    async def on_utterance_biomarkers(self): await _on_utterance_biomarkers(self)
+
+    # Handle "streamed" audio data from the frontend client
+    async def _handle_audio_data(self, data): await _handle_audio_data(self, data)
+    async def  handle_audio_data(self, data): await _handle_audio_data(self, data)
+
 
     # ================================================================================
     # Group Event Handlers
@@ -170,25 +194,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Relays biomarker scores
     async def _broadcast_monitor(self, payload):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.monitor", "payload": payload})
-
-    # ================================================================================
-    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
-    # ================================================================================
-    async def receive_json(self, data, **kwargs):
-        await handle_receive_json(self, data)
- 
-    # Add messages to the database & update the local context (role must be "user" or "assistant")
-    # TODO: Working on replacing _add_message_CB
-    async def _add_message_CB(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
-    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
-
-    # Handle on-utterance biomarkers
-    async def _utt_bio(self): await _on_utterance_biomarkers(self)
-    async def on_utterance_biomarkers(self): await _on_utterance_biomarkers(self)
-
-    # Handle "streamed" audio data from the frontend client
-    async def _handle_audio_data(self, data): await _handle_audio_data(self, data)
-    async def  handle_audio_data(self, data): await _handle_audio_data(self, data)
 
 
     # ================================================================================
