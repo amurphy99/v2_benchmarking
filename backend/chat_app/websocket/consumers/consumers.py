@@ -16,11 +16,13 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
 # From this project
-from ...services                   import logging_utils as lu 
-from ...services.db_services       import ChatService
-from  ..services.bg_helpers        import fire_and_log
-from  ..services.chatHelpers       import ChatHandler
-from  ..services.speechProvider    import SpeechToTextProvider
+from ...services                    import logging_utils as lu 
+from ...services.db_services        import ChatService
+from ...services.llm.chat_utilities import get_LLM_response
+from  ..services.bg_helpers         import fire_and_log
+from  ..services.chatHelpers        import ChatHandler
+from  ..services.speechProvider     import SpeechToTextProvider
+
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
@@ -52,7 +54,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.last_response            = None
 
         # Define the response generation method to be used in the chat
-        self.response_method = ChatHandler.respond_to_user
+        self.response_method = get_LLM_response
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -162,17 +164,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await handle_receive_json(self, data)
  
     # Add messages to the database & update the local context (role must be "user" or "assistant")
-    # TODO: Working on replacing _add_message_CB
-    async def _add_message_CB(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
     async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
 
     # Handle on-utterance biomarkers
-    async def _utt_bio(self): await _on_utterance_biomarkers(self)
-    async def on_utterance_biomarkers(self): await _on_utterance_biomarkers(self)
+    async def on_utterance_biomarkers(self): return await _on_utterance_biomarkers(self)
 
     # Handle "streamed" audio data from the frontend client
-    async def _handle_audio_data(self, data): await _handle_audio_data(self, data)
-    async def  handle_audio_data(self, data): await _handle_audio_data(self, data)
+    async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)
 
 
     # ================================================================================

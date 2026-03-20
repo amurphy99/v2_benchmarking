@@ -183,7 +183,7 @@ class SpeechToTextProvider:
 
                 t_sched = now_ts()
                 fut = thread_fl(
-                    self._loop, ChatHandler.handle_transcription(data, consumer, relay_user_utt=True), 
+                    self._loop, ChatHandler.handle_transcription(data, consumer), 
                     name="stt::handle_stt_output"
                 )
                 def _done(f): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-t_sched:.3f}s{UNBOLD}.{RESET}")
