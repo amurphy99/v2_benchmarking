@@ -2,10 +2,8 @@ import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { dateFormatShort              } from "@/utils/styling/numFormatting";
 import { h4, switchStyle, switchLabel } from "@/utils/styling/sharedStyles";
 import { toastMessage                 } from "@/utils/functions/toast_helper";
-import { useAuth                      } from "@/context/AuthProvider";
 
-import { updateUserSettings     } from "@/api";
-import { useGoal, useUpdateGoal } from "@/hooks/queries/useGoal";
+import { useGoal } from "@/hooks/queries/useGoal";
 
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -23,12 +21,12 @@ export const GoalForm = forwardRef<Methods>((props, ref) => {
     useImperativeHandle(ref, () => ({ submit() { formRef.current?.requestSubmit(); } }));
 
     // Get the current values from the profile & set them as state values for the form
-    const { profile } = useAuth();
-    const [autoRenew, setAutoRenew] = useState<boolean        >(profile.goal.auto_renew);
-    const [target,    setTarget   ] = useState<number         >(profile.goal.target);
-    const [period,    setPeriod   ] = useState<"N" | "W" | "M">(profile.goal.period);
-    const [startDay,  setStartDay ] = useState<string         >(profile.goal.start_date);
-    const [startDOW,  setStartDOW ] = useState<number         >(profile.goal.start_dow);
+    const { data: goal, isLoading } = useGoal();
+    const [autoRenew, setAutoRenew] = useState<boolean        >(goal.auto_renew);
+    const [target,    setTarget   ] = useState<number         >(goal.target);
+    const [period,    setPeriod   ] = useState<"N" | "W" | "M">(goal.period);
+    const [startDay,  setStartDay ] = useState<string         >(goal.start_date);
+    const [startDOW,  setStartDOW ] = useState<number         >(goal.start_dow);
     const { windowLabel, todayIdx } = getWindowLabel(startDOW);
 
     // Form submission logic 

@@ -3,6 +3,8 @@
 # ================================================================================
 # Load Packages
 import os, warnings, logging
+from .services.llm.langchain_wrapper import CustomChatModel
+from .services.llm.instructor_client import build_instructor_client, build_openai_client
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -13,15 +15,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
 USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
+INSTRUCTOR_MODEL_NAME = "qwen2.5-3b"  # model name for the Instructor client
 
 # LLM Parameters
 MAX_LENGTH = 128 # 256
 #PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
 
-DEVICE_CONTEXT = "You could be in the users phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
+DEVICE_CONTEXT = "You could be in the user's phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
 PROMPT = f"""
 You are Buddy, a warm, calm conversational assistant for people living with memory problems or dementia.
-
 {DEVICE_CONTEXT}
 
 Your job:
@@ -46,14 +48,12 @@ Style guidelines:
    - If they ask for medical advice, say you can't decide that and suggest talking to a doctor or caregiver.
 8. You cannot control real-world devices. You can only talk and offer ideas or suggestions.
 9. Do not mention that you are an AI or language model unless the user asks directly.
-10. If the user seems tired or overwhelmed, offer to slow down or keep things simple.
 
 When you answer:
 - Be brief.
-- Be kind.
 - Stay on topic with what the user just said.
-- Do not add emojis or emoticons.
-- Most of the time, end with one short question that keeps the conversation going.
+- NEVER add emojis or emoticons.
+- Always end with one short question that keeps the conversation going.
 
 """
 
@@ -117,6 +117,20 @@ try:
        
     # Setup the LLM
     llm = LLMClass()
+
+    RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
+
+    if RAG_METHOD == "legacy":
+        # Initialize LangChain wrapper for the our fine-tuned phi3 model
+        llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
+        logger.info("LangChain LLM wrapper initialized successfully")
+    else:
+        # Initialize Instructor client (for structured responses)
+        instructor_client = build_instructor_client() if USE_LLM else None
+        # Initialize plain OpenAI client (for plain text responses)
+        openai_client = build_openai_client() if USE_LLM else None
+        logger.info("Instructor and OpenAI clients initialized successfully")
+
     logger.info("LLM initialized successfully")
 
 except Exception as e:

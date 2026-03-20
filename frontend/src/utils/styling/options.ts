@@ -5,6 +5,7 @@ export const biomarkerKeys = [
     "Pronunciation",
     "Prosody",
     "Turntaking",
+    "Perplexity",
 ] as const;
 
 export type CanonicalKey = typeof biomarkerKeys[number];
@@ -16,6 +17,7 @@ export const biomarkerKeysLower = [
     "pronunciation",
     "prosody",
     "turntaking",
+    "perplexity"
 ] as const;
 
 export const biomarkerColors = {
@@ -25,4 +27,5 @@ export const biomarkerColors = {
     Pronunciation:   "#34d399",
     Prosody:         "#fcd34d",
     Turntaking:      "#60a5fa",
+    Perplexity:      "#f6a64b"
 } satisfies Record<(typeof biomarkerKeys)[number], string>;

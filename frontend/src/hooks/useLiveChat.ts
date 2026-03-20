@@ -3,8 +3,6 @@ import { useQueryClient      } from "@tanstack/react-query";
 import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
 import { useAudioPlayer } from "./live-chat/useAudioPlayer";
 
-import { logText } from '@/utils/loggingHelpers';
-
 // --------------------------------------------------------------------
 // Hook that handles everything involved with the chat
 // --------------------------------------------------------------------
@@ -14,29 +12,83 @@ export default function useLiveChat({
     onUserUtterance,
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
+    onEmotion         = (         ) => {},
+    wsPath = "/ws/chat/",
+    onDebugTurn,
+    onRagParseError,
+    onChatError,
+    onChatClosed,
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
+    onEmotion         : (emotion: string) => void;
+    wsPath           ?: string;
+    onDebugTurn      ?: (turn: {
+                            role: "user" | "assistant";
+                            text: string;
+                            state?: string;
+                        }) => void;
+    onRagParseError  ?: () => void;
+    onChatError      ?: () => void;
+    onChatClosed     ?: () => void; 
 }) {
     // Misc. setup
     const qc = useQueryClient();
-    const onLLMres = (text: string) => {
-		logText(`[LLM] Response:   ${text}`);
-		onSystemUtterance(text);
+    const onLLMres = (response: any) => {
+		const payload = response.data;
+
+        const text = typeof payload === "string" ? payload : payload?.text ?? "";
+
+        onSystemUtterance(text);
+
+        const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
+
+        onDebugTurn?.({
+            role: "assistant",
+            text,
+            state,
+        });
+
+        if (response.emotion) {
+            onEmotion(response.emotion)
+        }
+
+        // if (state === "close_chat") {
+        //     setTimeout(() => {
+        //         setRecording(false);
+        //         send({ type: "end_chat", data: Date.now() });
+        //         onChatClosed?.();
+        //     }, 500);
+        // }
 	};
     const [recording, setRecording] = useState(false);
 
-    const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 32, bufferAhead: 0.2})
+    const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16, bufferAhead: 0.2})
+
+    // wrap the user utterances
+    const onUserUttWrapped = (text: string) => {
+        onUserUtterance(text);
+        onDebugTurn?.({ role: "user", text });
+    };
 
 	const { send } = useChatSocket({
 		recording,
-		onLLMResponse: (text: string) => {
-			onLLMres(text);
-		},
+        wsPath,
+		onLLMResponse: onLLMres,
 		onScores,
-		onUserUtt: onUserUtterance,
+		onUserUtt: onUserUttWrapped,
 		onAudio: sendAudio,
+        onError: (msg) => {
+            if (msg?.type === "rag_parse_error") {
+                onRagParseError?.();
+                return;
+            }
+            if (msg?.type === "chat_error") {
+                onChatError?.();
+                return;
+            }
+        },
 	});
 	const { start: startAud, stop: stopAud } = useAudioStreamer({
 		chunkMs: 64,

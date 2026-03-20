@@ -20,30 +20,43 @@ export default function Login() {
         try {
             setLoading(true);
             await login(form.username, form.password);
-            toast.success("Logged in!"); navigate("/dashboard");
-        } catch (err) { toast.error((err as Error).message); console.log((err as Error).message);
-        } finally     { setLoading(false); }
+            toast.success("Logged in!"); 
+            navigate("/goal");
+        } catch (err) { 
+            toast.error((err as Error).message); 
+            console.log((err as Error).message);
+        } finally     { 
+            setLoading(false); 
+        }
     };
 
-    const loginStyle = "p-2 border-b-1 border-gray-400";
+    const loginStyle = "p-2 border-1 border-gray-400 rounded-sm";
     
     // Return UI Component
     return (
-    <form onSubmit={handleSubmit}>
-        <div className="flex flex-col h-[100vh] justify-center items-center  ">
-       
-            <h1 className="font-mono text-lg">AI Assistant Chat</h1>
-
-            <div className="flex flex-col gap-2 border-1 border-gray-400 rounded-lg p-4 md:w-1/2">
-                <label>Username</label><input required autoComplete="username"                          name="username" value={form.username} onChange={handleChange} className={loginStyle}/>
-                <label>Password</label><input required autoComplete="current-password" type="password"  name="password" value={form.password} onChange={handleChange} className={loginStyle}/>
-
-                <button type="submit" className="btn btn-primary"> Log In </button>
+    <div className="mt-[1rem] md:mt-[3rem] ml-[1rem] md:ml-[3rem]">
+        <h1>Cognibot</h1>
+        <div className="flex justify-center mt-[5rem]">
+            <div className="flex flex-row w-full">
+                <div className="w-0 sm:w-1/3">
+                    <img src="/images/robot_face.png"></img>
+                </div>
+                <div className="flex flex-col w-full sm:w-2/3 mb-[2rem] text-center">
+                    <form onSubmit={handleSubmit}>
+                        <div className="flex flex-col mt-[5em] justify-center items-center">
+                            <h1>Welcome Back!</h1>
+                            <h2>Log In</h2>
+                            <div className="flex flex-col gap-2 p-4 w-3/4">
+                                <input required autoComplete="username" placeholder="Username" name="username" value={form.username} onChange={handleChange} className={loginStyle}/>
+                                <input required autoComplete="current-password" placeholder="Password" type="password"  name="password" value={form.password} onChange={handleChange} className={loginStyle}/>
+                                <button type="submit" className="btn btn-primary"> Log In </button>
+                            </div>
+                            <p>Don't have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/")}>Sign Up</a></p>
+                        </div>
+                    </form>
+                </div>
             </div>
-
-            <p>Don't have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/signup")}>Sign Up</a></p>
-
         </div>
-    </form>
+    </div>
     );
 }

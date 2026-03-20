@@ -2,10 +2,9 @@ import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
 
-import { useAuth } from "@/context/AuthProvider";
 import { ChatSession, ChatMessage } from "@/api";
 import { formatElapsed } from "@/utils/styling/numFormatting";
-import { h2            } from "@/utils/styling/sharedStyles";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 // ====================================================================
 // Chat Transcription
@@ -13,8 +12,12 @@ import { h2            } from "@/utils/styling/sharedStyles";
 // ToDo: Timestamp should be time from start of the chat in seconds
 export default function ChatTranscript({ chatSession } : { chatSession: ChatSession }) {
     // Get the patients name & chat start time
-    const { profile } = useAuth();
-    const patient_name = `${profile.plwd.first_name} ${profile.plwd.last_name}`;
+    const { data: profile, isLoading } = useProfile();
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
+    const patient_name = `${profile.account.user.first_name} ${profile.account.user.last_name}`;
     const chatStart = new Date(chatSession.start_ts);
 
     // Make a copy and sort from earliest to latest
@@ -25,16 +28,11 @@ export default function ChatTranscript({ chatSession } : { chatSession: ChatSess
 
     // Return UI Component
     return (
-    <div className="mt-[1rem]">
-        <div className={h2}> Transcript: </div>
-
-        <div className="overflow-y-auto mt-[1rem] border-1 rounded-lg border-gray-200 p-[1rem]">
-
-            <div className="flex flex-col w-50">
+    <div>
+        <div className="overflow-y-auto">
+            <div className="flex flex-col">
                 {sortedMessages.map((msg) => (<MessageBubble msg={msg} key={msg.id} pName={patient_name} chatStart={chatStart} />))}
             </div>
-
-
         </div>
     </div>
     );

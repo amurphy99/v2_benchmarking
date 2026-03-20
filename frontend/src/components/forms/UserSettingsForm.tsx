@@ -1,8 +1,8 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { h4, switchStyle, switchLabel } from "@/utils/styling/sharedStyles";
 import { toastMessage                 } from "@/utils/functions/toast_helper";
-import { useAuth                      } from "@/context/AuthProvider";
-import { updateUserSettings           } from "@/api";
+import { useUserSettings } from "@/hooks/queries/useUserSettings";
+import { Spinner } from "react-bootstrap";
 
 type Methods = { submit: () => void };
 
@@ -15,15 +15,20 @@ export const UserSettingsForm = forwardRef<Methods>((props, ref) => {
     useImperativeHandle(ref, () => ({ submit() { formRef.current?.requestSubmit(); } }));
 
     // Get the current values from the profile & set them as state values for the form
-    const { profile } = useAuth();
-    const [patientViewOverall, setPatientViewOverall] = useState<boolean>(profile.settings.patientViewOverall);
-    const [patientCanSchedule, setPatientCanSchedule] = useState<boolean>(profile.settings.patientCanSchedule);
+    const { data: settings, isLoading, refetch } = useUserSettings();
+
+    if (isLoading) {
+        return <Spinner />
+    }
+    const [patientViewOverall, setPatientViewOverall] = useState<boolean>(settings.patientViewOverall);
+    const [patientCanSchedule, setPatientCanSchedule] = useState<boolean>(settings.patientCanSchedule);
 
     // Form submission logic 
     // ToDo: actually change the settings -- maybe do the async/await here + try and except
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         toastMessage("User settings updated", true); 
+        refetch();
     };
 
 

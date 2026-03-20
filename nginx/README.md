@@ -2,23 +2,16 @@
 
 Infrastructure/networking setup
 
-Each version has their own subdomain, or site 'prefix' (i.e. "sandbox.cognibot.org" or "sandbox2.cognibot.org"). Each version also includes the main domain. just "cognibot.org" in the nginx configuration file, but only one will actually have traffic mapped to it from the DNS server. When switching which version is set as the "main" version of the site, we simply change the IP that "cognibot.org" is mapped to and manually request the certificate for that domain on that VM. In sum, each VM always has its own subdomain, and one VM gets the real domain in addition to its subdomain. 
-
-
-<br>
-
-1. Install Nginx and Certbot
-2. Create `default.conf` from the template file (filling in `.env` variables)
-3. Certbot retreives certificates
-4. Nginx serves the frontend webapp as well as the API
-5. Start recurring cron task to renew certificates (every day at 3:00 AM)
+* [I don't know for sure what happens if there is no existing certificate in the volume...]
+* Install Nginx and Certbot
+* Create `default.conf` from the template file (filling in `.env` variables)
+* Certbot retreives certificates
+* Nginx serves the frontend webapp as well as the API
+* Start recurring cron task to renew certificates (every day at 3:00 AM)
 
 <hr>
 
-
-
-<details closed> <summary>Useful Commands</summary>
-<br>
+### Useful Commands:
 
 ```
 # Check logs
@@ -37,5 +30,8 @@ sudo docker exec -it nginx sh -lc '/usr/bin/certbot renew --webroot -w /var/www/
 ```
 
 <hr>
-</details>
 
+We should expect these environment variables when run:
+* DOMAIN: "sandbox.cognibot.org" | "cognibot.org"
+* DOMAIN_WWW:
+* CERT_EMAIL: 

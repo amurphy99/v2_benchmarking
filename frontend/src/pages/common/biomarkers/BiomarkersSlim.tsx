@@ -12,7 +12,7 @@ import { biomarkerKeys, biomarkerColors } from "@/utils/styling/options";
 export default function ChatBiomarkers({ chatSession, prevScores } : { chatSession: ChatSession, prevScores: Record<BiomarkerType, number> }) {
     const averages = chatSession.average_scores;
     return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-6 gap-2">
         {biomarkerKeys.map((key) => (
             <BiomarkerAnalysis key={key} 
                 score_type = {key} 
@@ -36,9 +36,13 @@ function BiomarkerAnalysis({ score_type, score, prev }: { score_type: string, sc
     
     // {background: bioColor} {border: `2px solid ${bioColor}`}
     return (
-        <div style={{borderBottom: `4px solid ${bioColor}`}} 
-             className="d-inline-flex p-[0.25rem] align-items-center justify-content-center ">
-            {ScoreChangeHelper(score, prev)}
+        <div className="flex flex-col">
+            <div style={{borderBottom: `4px solid ${bioColor}`}} 
+                className="d-inline-flex p-[0.25rem] align-items-center justify-content-center ">
+                {ScoreChangeHelper(score, prev)}
+                <p className="mb-0 text-xs">{Math.round(score * 100) / 100}</p>
+            </div>
+            <p className="mb-0 text-xs">{score_type.substring(0, 8)}</p>
         </div>
     );    
 }

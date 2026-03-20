@@ -1,15 +1,18 @@
-import os
-import stanza
+
+import numpy  as np
 import pandas as pd
-from nltk.tree import Tree
-import re
-from datetime import datetime
+
+import logging, os, re
+import stanza, pickle, shutil
+
+from nltk.tree  import Tree
 from nltk.parse import stanford
-import numpy as np
-import pickle
-import logging
-import shutil
-from time import time
+
+from datetime import datetime
+from time     import time
+
+from ..biomarker_config import LOG_GRAMMAR
+
 
 # Configure logging (logging config should only be in config.py ... pretty sure)
 #logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -77,7 +80,7 @@ where  the weights of the trained ML model and these features are used to calcul
 """
 def generate_grammar_score(list_sentences, speech_duration_seconds):
     start_time = time()
-    logger.info(f"\nGenerating grammar score for {list_sentences} sentences over {speech_duration_seconds:.2f} seconds")
+    if LOG_GRAMMAR: logger.info(f"\nGenerating grammar score for {list_sentences} sentences over {speech_duration_seconds:.2f} seconds")
 
     # Stanza is not available
     if nlp is None: return 1
@@ -93,7 +96,7 @@ def generate_grammar_score(list_sentences, speech_duration_seconds):
         coordinated_sentences, subordinated_sentences, reduced_sentences, production_rules, function_words = pos_tags_features(list_sentences)
 
         POS_end_time = time()
-        logger.info(f"Alt Gram Features 1: {POS_end_time-start_time:.4f} seconds")
+        if LOG_GRAMMAR: logger.info(f"Alt Gram Features 1: {POS_end_time-start_time:.4f} seconds")
 
         # Predicates calling
         num_predicates              = 0
@@ -113,7 +116,7 @@ def generate_grammar_score(list_sentences, speech_duration_seconds):
             num_predicates              += count_predicates(doc)
 
         predicates_end_time = time()
-        logger.info(f"Alt Gram Features 2: {predicates_end_time-POS_end_time:.4f} seconds")
+        if LOG_GRAMMAR: logger.info(f"Alt Gram Features 2: {predicates_end_time-POS_end_time:.4f} seconds")
 
         # -----------------------------------------------------------------------
         # Finish formatting features & run the model
@@ -130,7 +133,7 @@ def generate_grammar_score(list_sentences, speech_duration_seconds):
 
         # Calculate the altered grammer score
         altered_grammar_score = calculate_probability(extracted_features_per_minute)
-        logger.info(f"Alt Gram Model Ran:  {time()-predicates_end_time:.4f} seconds, Score: {altered_grammar_score:.4f}")
+        if LOG_GRAMMAR: logger.info(f"Alt Gram Model Ran:  {time()-predicates_end_time:.4f} seconds, Score: {altered_grammar_score:.4f}")
 
         return altered_grammar_score
     

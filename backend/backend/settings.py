@@ -32,6 +32,8 @@ ALLOWED_HOSTS = [
     "cognibot.org",            "www.cognibot.org", 
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
+    "sandbox2.cognibot.org",   "www.sandbox2.cognibot.org",
+    "sandbox3.cognibot.org",   "www.sandbox3.cognibot.org",
     "10.0.2.2", # for android dev
 ]
 
@@ -49,6 +51,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
+    'pgvector.django',   # enables pgvector extension support for Django
+    'rag_vectorstore',   # custom RAG vectorstore app for creating/storing embeddings.
 ]
 
 MIDDLEWARE = [
@@ -86,10 +90,10 @@ REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES'  : ('rest_framework_simplejwt
                   'DEFAULT_PERMISSION_CLASSES'      : ('rest_framework.permissions.IsAuthenticated',                ),}
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME"     : timedelta(days=1),
-    "REFRESH_TOKEN_LIFETIME"    : timedelta(days=15),
+    "ACCESS_TOKEN_LIFETIME"     : timedelta(days=5),
+    "REFRESH_TOKEN_LIFETIME"    : timedelta(days=30),
     "ROTATE_REFRESH_TOKENS"     : True,
-    "BLACKLIST_AFTER_ROTATION"  : True,
+    "BLACKLIST_AFTER_ROTATION"  : False,
     "UPDATE_LAST_LOGIN"         : False,
 
     "ALGORITHM"     : "HS256",
@@ -114,8 +118,8 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 
     "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME"         : timedelta(days=1),
-    "SLIDING_TOKEN_REFRESH_LIFETIME" : timedelta(days=5),
+    "SLIDING_TOKEN_LIFETIME"         : timedelta(days=15),
+    "SLIDING_TOKEN_REFRESH_LIFETIME" : timedelta(days=30),
 
     "TOKEN_OBTAIN_SERIALIZER"           : "rest_framework_simplejwt.serializers.MyTokenObtainPairSerializer",
     "TOKEN_REFRESH_SERIALIZER"          : "rest_framework_simplejwt.serializers.TokenRefreshSerializer",
@@ -130,18 +134,45 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 ASGI_APPLICATION = 'backend.asgi.application'
 
 
+
+# --------------------------------------------------------------------------------
+# Channels (for consumers communicating with eachother)
+# --------------------------------------------------------------------------------
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
+
+# --------------------------------------------------------------------------------
 # Database
+# --------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE'    : 'django.db.backends.postgresql',
-        'NAME'      : config('POSTGRES_DB'),
-        'USER'      : config('POSTGRES_USER'),
-        'PASSWORD'  : config('POSTGRES_PASSWORD'),
-        'HOST'      : 'db',
-        'PORT'      : '5432',
+        'ENGINE'   : 'django.db.backends.postgresql',
+        'NAME'     : config('POSTGRES_DB'),
+        'USER'     : config('POSTGRES_USER'),
+        'PASSWORD' : config('POSTGRES_PASSWORD'),
+        # kept the defaults, so old deployments should still work
+        'HOST'     : "db", 
+        'PORT'     : "5432",
+        #'HOST'     : config('POSTGRES_HOST', default='db'), 
+        #'PORT'     : config('POSTGRES_PORT', default='5432'),
+    },
+    'vector': {
+        'ENGINE'   : 'django.db.backends.postgresql',
+        'NAME'     : config('VECTOR_DB_NAME'),
+        'USER'     : config('VECTOR_DB_USER'),
+        'PASSWORD' : config('VECTOR_DB_PASSWORD'),
+        'HOST'     : config('VECTOR_DB_HOST', default='db_vector'),
+        'PORT'     : config('VECTOR_DB_PORT', default='5432'),
     }
 }
+
+DATABASE_ROUTERS = [
+    'backend.db_routers.VectorDBRouter',
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators

@@ -1,16 +1,17 @@
-import   ProgressBar   from "react-bootstrap/ProgressBar";
-import { useAuth     } from "@/context/AuthProvider";
-import { PATIENT_HEX } from "@/utils/styling/colors";
+import { useAuth } from "@/context/AuthProvider";
 
-// Patient Goal Progress Bar
-export default function GoalProgress () {
-    const { profile } = useAuth();
-    const current = profile.goal.current;
-    const target  = profile.goal.target
+export default function GoalProgress ( {current, target} : {current: number, target: number}) {
+    const { account } = useAuth();
 
-    const percent = Math.round((current / target) * 100);
-    const label   = `${current} / ${target}`;
-    const bgColor = `background-color=${PATIENT_HEX}`;
+    const percent = Math.min(Math.round((current / target) * 100), 100);
 
-    return  <ProgressBar variant={bgColor} now={percent} label={label} />;
+    return (
+        <div className={`${account.role}-text h-[2rem] flex flex-row items-center justify-between pb-2`}>
+            <div className="h-full w-[95%] rounded-full bg-white border-gray-500 border-2 border-solid">
+                <div className={`${account.role}-bg h-full rounded-full`} style={{width: `${percent}%`}}>
+                </div>
+            </div>
+            <p className="h-full text-black font-bold text-xl align-middle mb-0">{current} / {target} </p>
+        </div>
+    )
 }
