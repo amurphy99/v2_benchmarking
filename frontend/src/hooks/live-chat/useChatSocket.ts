@@ -1,8 +1,5 @@
+import { getAccess } from "@/context/AuthProvider";
 import { useRef, useEffect, useState, useCallback } from "react";
-
-import { getAccess } from "@/api";
-
-interface WSMessage { type: string; data: unknown; }
 
 // ====================================================================
 // Handle the WebSocket Connection to the Backend
@@ -10,11 +7,13 @@ interface WSMessage { type: string; data: unknown; }
 // ws://localhost:8000/ws/chat/?token=<ACCESS>&source=webapp
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
 export default function useChatSocket({ 
-    recording, 
+    recording,
+    wsPath        = "/ws/chat/", 
     onLLMResponse = (unknown)   => {}, 
     onScores      = (WSMessage) => {},
     onUserUtt     = (text) => {},
     onAudio       = (data) => {},
+    onError       = (_) => {},
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -28,31 +27,27 @@ export default function useChatSocket({
     */
     const wsUrlBase =
         location.hostname === "localhost"
-            ? `ws://localhost:8000/ws/chat/`
-            : `wss://${location.host}/ws/chat/`;
+            ? `ws://localhost:8000${wsPath}`
+            : `wss://${location.host}${wsPath}`;
     const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
 
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
     const onMessage = useCallback((event: MessageEvent) => {
-        const { type, data } = JSON.parse(event.data) as WSMessage;
-        if (type === "llm_response") {
-            onLLMResponse(data);
-        } else if (type === "biomarker_scores") {
-            console.log("On-Utterance scores received");
-            onScores({ type, data });
-        } else if (type === "audio_scores") {
-            console.log("On-Audio scores received");
-            onScores({ type, data });
-        } else if (type === "periodic_scores") {
-            console.log("Periodic scores received");
-            onScores({ type, data });
-        } else if (type === "user_utt") {
-            console.log("User utterance received");
-            onUserUtt(data);
-        } else if (type === "audio_chunk") {
-            onAudio(data);
-        }
-    }, [onLLMResponse, onScores]);
+        const response = JSON.parse(event.data);
+        const type = response.type;
+        const data = response.data;
+
+        if (type === "llm_response") { onLLMResponse(response);}
+        else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); onScores ({ type, data }); } 
+        else if (type ===     "audio_scores") { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
+        else if (type ===  "periodic_scores") { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
+        else if (type === "user_utt"        ) { console.log("User utterance received"     ); onUserUtt(        data  ); } 
+        else if (type === "audio_chunk"     ) {                                              onAudio  (        data  ); } 
+        else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
+
+        else if (type === "rag_parse_error" || type === "chat_error") { console.log("Json Parsing Error Occured"); onError(response); }
+
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onError]);
 
     // Open and close the websocket connection on change of the "recording" flag
     const wsRef = useRef<WebSocket | null>(null); 
@@ -69,7 +64,7 @@ export default function useChatSocket({
     }, [recording]);
 
     // Send helper
-    const send = useCallback((msg: WSMessage) => {
+    const send = useCallback((msg: any) => {
         const ws = wsRef.current;
         if (ws?.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg));                         }
         else                                   { console.warn("WebSocket not open; message not sent"); }

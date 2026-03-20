@@ -8,6 +8,7 @@ export const useGoal = () =>
     useModelQuery<Goal>({
         queryKey: "goal",
         queryFn : getGoal,
+        empty   : {} as Goal,
     });
 
 // [POST] Hook to wrap useQueryClient for updating Goal objects

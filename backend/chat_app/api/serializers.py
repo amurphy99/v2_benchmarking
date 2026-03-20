@@ -1,47 +1,17 @@
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Profile, UserSettings, Reminder, Goal
+from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
+from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
 from django.db           import transaction
 
 # =======================================================================
-# ChatSession Related Data
-# =======================================================================
-class ChatMessageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = ChatMessage
-        fields = ("id", "role", "content", "ts", "start_ts", "end_ts")
-        read_only_fields = fields
-
-class BiomarkerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = ChatBiomarkerScore
-        fields = ("id", "score_type", "score", "ts")
-        read_only_fields = fields
-
-class ChatSessionSerializer(serializers.ModelSerializer):
-    messages       = ChatMessageSerializer(many=True, read_only=True)
-    biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
-    start_ts       = serializers.SerializerMethodField()
-    duration       = serializers.SerializerMethodField()
-    average_scores = serializers.SerializerMethodField()
-
-    class Meta:
-        model  = ChatSession
-        fields = ("id", "user", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics", "sentiment", "notes", "messages", "biomarkers", "average_scores")
-        read_only_fields = fields # ToDo: "notes" shouldn't be read only...
-
-    def get_start_ts      (self, obj): return obj.start_ts
-    def get_duration      (self, obj): return obj.duration
-    def get_average_scores(self, obj): return obj.average_scores
-
-# =======================================================================
-# Other Data
+# Profiles and Profile-related Data
 # =======================================================================
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule")
+        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
         
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,49 +28,148 @@ class GoalSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "current", "remaining")
 
     def get_remaining(self, obj): return obj.remaining
-
-# =======================================================================
-# Profiles
-# =======================================================================
+    
+class RAGInstructionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = RAGInstructions
+        fields = ("id", "name", "instructions", "description", "user", "activity", "instruction_order")
+        read_only_fields = ("id", "user", "activity")
+    
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model  = get_user_model()
         fields = ("id", "username", "first_name", "last_name", "is_staff")
         read_only_fields = fields   # (all set by Django)
 
+class AccountSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = Account
+        fields = ("id", "user", "role")
+        read_only_fields = fields
 class ProfileSerializer(serializers.ModelSerializer):
-    plwd      = UserSerializer        (read_only=True)
-    caregiver = UserSerializer        (read_only=True)
-    settings  = UserSettingsSerializer(read_only=True, source = "settings_user")
+    account   = AccountSerializer(read_only=True)
+    settings  = UserSettingsSerializer(read_only=True, source="settings_user")
     goal      = GoalSerializer        (read_only=True)
-    role      = serializers.SerializerMethodField()
     class Meta:
         model  = Profile
-        fields = ("id", "plwd", "caregiver", "settings", "goal", "role")
-        read_only_fields = fields # Not sure...
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
+        read_only_fields = ("id",) # Not sure...
+        
+class AccessSerializer(serializers.ModelSerializer):
+    account     = AccountSerializer(read_only=True)
+    profile     = ProfileSerializer(read_only=True)
+    
+    class Meta:
+        model   = Access
+        fields  = ("id", "account", "profile")
+        
+class CreateAccessSerializer(serializers.Serializer):
+    # Fields from the frontend
+    profileId    = serializers.IntegerField()
+    accountId    = serializers.IntegerField()
+    permissions  = serializers.CharField()
+    
+    # Creates an Access object
+    @transaction.atomic
+    def create(self, validated):
+        profile = Profile.objects.get(id=validated['profileId'])
+        account = Account.objects.get(id=validated['accountId'])
+        
+        # Use get_or_create to handle duplicate access gracefully
+        access, created = Access.objects.get_or_create(
+            account=account,
+            defaults={
+                'profile': profile,
+                'permissions': validated['permissions']
+            }
+        )
+        
+        # Update permissions if access already existed and permissions differ
+        if not created and access.permissions != validated['permissions']:
+            access.permissions = validated['permissions']
+            access.save()
+        
+        return access
+    
+    def to_representation(self, access: Access):
+        return {"success"   : True,
+                "name"      : f'Account {access.account.id} has {access.permissions} access to Profile {access.profile.id}',}
+# =======================================================================
+# ChatSession Related Data
+# =======================================================================
+class AlbumImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlbumImage
+        fields = ("id", "topic", "url", "photographer", "photographer_url")
+        read_only_fields = fields
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ChatMessage
+        fields = ("id", "role", "content", "ts", "start_ts", "end_ts")
+        read_only_fields = fields
 
-    def get_role(self, obj):
-        req_user = self.context["request"].user
-        return "Patient" if obj.plwd == req_user else "Caregiver"
+class BiomarkerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ChatBiomarkerScore
+        fields = ("id", "score_type", "score", "ts")
+        read_only_fields = fields
+
+class ChatSessionSerializer(serializers.ModelSerializer):
+    profile        = ProfileSerializer(read_only=True)
+    image          = AlbumImageSerializer(read_only=True)
+    messages       = ChatMessageSerializer(many=True, read_only=True)
+    biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
+    start_ts       = serializers.SerializerMethodField()
+    duration       = serializers.SerializerMethodField()
+    average_scores = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ChatSession
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio_file", "duration", "topics", 
+                  "sentiment", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
+                  "image", "risk_level", "risk_quotes", "risk_reason")
+        read_only_fields = fields # ToDo: "notes" shouldn't be read only...
+
+    def get_start_ts      (self, obj): return obj.start_ts
+    def get_duration      (self, obj): return obj.duration
+    def get_average_scores(self, obj): return obj.average_scores
+
+# =======================================================================
+# Other Data
+# =======================================================================
+class DownloadDataSerializer(serializers.ModelSerializer):
+    fileName = serializers.SerializerMethodField()
+    fileContents = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Profile
+        fields = ("fileName", "fileContents")
+    
+    def get_fileName(self, obj: Profile):
+        return f"{obj.account.user.first_name}_{obj.account.user.last_name}_data"
+    
+    def get_fileContents(self, obj):
+        return get_download_data(obj)
 
 # =======================================================================
 # Signup
 # =======================================================================
-class SignupSerializer(serializers.Serializer):
+class SignupPatientSerializer(serializers.Serializer):
+    '''
+    Because all the data is connected to the Patient, on creation of a Patient account, we also create an empty Profile,
+    UserSettings, and Goal object.
+    '''
     # Fields expected from the frontend
-    plwdUsername        = serializers.CharField()
-    plwdPassword        = serializers.CharField(write_only=True)
-    plwdFirstName       = serializers.CharField()
-    plwdLastName        = serializers.CharField()
-    caregiverUsername   = serializers.CharField()
-    caregiverPassword   = serializers.CharField(write_only=True)
-    caregiverFirstName  = serializers.CharField()
-    caregiverLastName   = serializers.CharField()
+    username        = serializers.CharField()
+    password        = serializers.CharField(write_only=True)
+    firstName       = serializers.CharField()
+    lastName        = serializers.CharField()
 
     def validate(self, attrs):
         User = get_user_model()
-        if User.objects.filter(username=attrs[     "plwdUsername"]).exists(): raise serializers.ValidationError(  "Patient username already exists.")
-        if User.objects.filter(username=attrs["caregiverUsername"]).exists(): raise serializers.ValidationError("Caregiver username already exists.")
+        if User.objects.filter(username=attrs["username"]).exists(): raise serializers.ValidationError(  "Username already exists.")
         return attrs
 
     # Create user entries for both the patient and caregiver
@@ -109,24 +178,55 @@ class SignupSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated):
         User = get_user_model()
-        plwd = User.objects.create_user(
-            username   = validated["plwdUsername"],
-            password   = validated["plwdPassword"],
-            first_name = validated["plwdFirstName"],
-            last_name  = validated["plwdLastName"],
+        user = User.objects.create_user(
+            username   = validated["username"],
+            password   = validated["password"],
+            first_name = validated["firstName"],
+            last_name  = validated["lastName"],
         )
-        caregiver = User.objects.create_user(
-            username   = validated["caregiverUsername"],
-            password   = validated["caregiverPassword"],
-            first_name = validated["caregiverFirstName"],
-            last_name  = validated["caregiverLastName"],
-        )
-        profile = Profile.objects.create(plwd=plwd, caregiver=caregiver)
-        UserSettings.objects.create(user=profile)
-        Goal        .objects.create(user=profile)
-        return profile
+        account = Account.objects.create(user=user, role="patient")
+        profile = Profile.objects.create(account=account)
+        UserSettings.objects.create(profile=profile)
+        Goal        .objects.create(profile=profile)
+        return account
 
-    def to_representation(self, profile):
-        return {"success"           : True,
-                "plwdUsername"      : profile.plwd     .username,
-                "caregiverUsername" : profile.caregiver.username,}
+    def to_representation(self, account: Account):
+        return {"success"   : True,
+                "username"  : account.user.username,
+                "name"      : f'{account.user.first_name} {account.user.last_name}',}
+        
+class SignupAccountSerializer(serializers.Serializer):
+    '''
+    Just need to create a User and Account object
+    '''
+    # Fields expected from the frontend
+    username        = serializers.CharField()
+    password        = serializers.CharField(write_only=True)
+    firstName       = serializers.CharField()
+    lastName        = serializers.CharField()
+    role            = serializers.CharField()
+
+    def validate(self, attrs):
+        User = get_user_model()
+        if User.objects.filter(username=attrs["username"]).exists(): raise serializers.ValidationError("Username already exists.")
+        return attrs
+
+    # Create user entries for both the patient and caregiver
+    # Also create settings and goal objects for the new Profile
+    # Can return whatever the API needs
+    @transaction.atomic
+    def create(self, validated):
+        User = get_user_model()
+        user = User.objects.create_user(
+            username   = validated["username"],
+            password   = validated["password"],
+            first_name = validated["firstName"],
+            last_name  = validated["lastName"],
+        )
+        account = Account.objects.create(user=user, role=validated["role"])
+        return account
+
+    def to_representation(self, account: Account):
+        return {"success"   : True,
+                "username"  : account.user.username,
+                "name"      : f'{account.user.first_name} {account.user.last_name}',}

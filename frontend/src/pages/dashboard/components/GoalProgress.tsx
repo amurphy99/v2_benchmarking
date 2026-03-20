@@ -1,12 +1,16 @@
 import   ProgressBar   from "react-bootstrap/ProgressBar";
 import { useAuth     } from "@/context/AuthProvider";
-import { PATIENT_HEX } from "@/utils/styling/colors";
+import { useGoal } from "@/hooks/queries/useGoal";
+import { Spinner } from "react-bootstrap";
 
 // Patient Goal Progress Bar
-export default function GoalProgress () {
-    const { profile } = useAuth();
-    const current = profile.goal.current;
-    const target  = profile.goal.target
+export default function GoalProgressBar () {
+    const { data: goal, isLoading } = useGoal();
+    if (isLoading) {
+        return <Spinner />
+    }
+    const current = goal.current;
+    const target  = goal.target
 
     const percent = Math.round((current / target) * 100);
 

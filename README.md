@@ -1,8 +1,17 @@
 # Dementia Speech System
 
-This project aims to create a progressive web app to run a speech system oriented for dementia patients. 
-* <b>Sandbox:</b> cognibot.sandbox.org
-* <b>Deployment:</b> cognibot.org
+Our speech system, "CogniBot", hosts an AI/LLM-based conversational companion for older adults living with dementia, providing engaging interactions while passively analyzing speech and language patterns. Using machine learning and speech analytics, a range of cognitive biomarkers are extracted from conversations and shared with users, caregivers, and clinicians through a web-based monitoring interface. This feedback, alongside detailed conversation history, can help support memory, communication, and care planning. The system is accessible through both a progressive web app and two different physical robotic companions. All user interactions, conversation histories, and biomarker data are synchronized for a seamless experience regardless of which platform is used.
+
+We have multiple versions:
+* [Current deployed version](https://www.cognibot.org) (only official updates)
+* [Sandbox #1](https://sandbox.cognibot.org) 
+* [Sandbox #2](https://sandbox2.cognibot.org) (current most recent testing version)
+* [Sandbox #3](https://sandbox3.cognibot.org)
+
+
+<br><br><br>
+
+
 
 ## How it works
 The app uses 4 different docker containers:
@@ -18,21 +27,20 @@ Everything is wrapped in docker-compose.yaml and the frontend and backend APIs a
 
 <details closed> <summary>Locally</summary>
 
-You will need Docker Desktop and a code editor.
-
-1. Clone the repository
 ### Frontend
 1. `cd` into the `frontend` directory
-2. Run `npm install` (only need to do once if you haven't already)
-3. Run `npm run dev`
+2. `npm install` (only need to do once if you haven't already)
+3. `npm run dev`
 
 ### Backend
-1. Acquire and place copies of `new_LSA.csv` and the stanford-parser models file in their correct directories (highlighted green in the Project Architecture section).
-2. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out all `external: true` lines and uncomment all lines under db_vector and db under `services`
-3. Open Docker Desktop
-4. `cd` into the `backend` directory
-5. Run `docker compose -f docker-compose.backend.yaml up --build`
-6. Wait until you see the "Listening on TCP ..." message.
+1. Need to have copies of `new_LSA.csv` and the stanford-parser models file placed in their correct directories.
+2. Open Docker Desktop
+3. `cd` into the `backend` directory
+4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines. Also, Uncomment the database related services, since this branch uses external database connection during deployment.
+5. `docker compose -f docker-compose.backend.yaml up --build`
+6. If this was the first time you created the volume for the vector database. Then also run-
+`docker exec -it db_vector psql -U postgres -d dementia_chat_vector_db -c "CREATE EXTENSION IF NOT EXISTS vector;"` (only required once).
+
 
 The web app can be accessed through localhost:5173 in your browser.
 
@@ -74,12 +82,37 @@ SSH:/home/user/
 +│   │   │   │   ├── stanford-parser-full-2020-11-17/stanford-parser-4.2.0-models.jar
 +│   │   │   │   ├── new_LSA.csv
  │   │   │   │   └── ...
- │   │   │   └── ...
- │   │   │
+ │   │   │   ├── websocket/services/
+ │   │   │   │   ├── audioHelpers.py
+ │   │   │   │   ├── bg_helpers.py
+ │   │   │   │   ├── chatHelpers.py # main module for default chat functionalities
++│   │   │   │   ├── parsingHelpers.py # parsers required by the ragChatHelpers.py
++│   │   │   │   ├── ragChatHelpers.py # new module for RAG-based chat activity
+ │   │   │   │   ├── speechProvider.py
+ │   │   │   │   └── ...
+ │   │   │   ├── websocket/  
+ │   │   │   │   ├── consumers/    # Consumer classes handling WS clients
+ │   │   │   │   │   └── ...
+ │   │   │   │   └── routing.py    # Routing for different chat modes
+ │   │   │   │
+ │   │   │   ├── services/ 
+ │   │   │   │   ├── emotionHelpers.py   # Emotion analysis
+ │   │   │   │   ├── topicHelpers.py        
+ │   │   │   │   └── llm/                # LLM providers
++│   │   │   │       ├── langchain_wrapper.py # LC wrapper class for LlamaAPI Chat
+ │   │   │   │       ├── llama_api.py
+ │   │   │   │       └── dummy_LLM.py
+ │   │   │   └── ... 
+ │   │   │ 
 +│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
 +│   │   ├── .env                 # Created programmatically during startup script
  │   │   ├── requirements-web.txt
- │   │   └── ...
++│   │   └── rag_vectorstore/     # Vector database app
++│   │       ├── models.py        # VectorStore models
++│   │       ├── services/
++│   │       │   └── vdb_services.py      # Vector DB services
++│   │       └── models/
++│   │           └── MiniLM-L6-v2/        # downloaded programmatically during deployment
  │   │
  │   ├── frontend/
  │   │   ├── Dockerfile-frontend  # Builds and serves Vite app

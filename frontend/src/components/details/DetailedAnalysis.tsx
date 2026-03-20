@@ -17,8 +17,8 @@ export default function DetailedAnalysis ({ session }: { session: ChatSession })
     const thisScores = session.average_scores;
 
     // Mood icon (ToDo: No idea what this is about)
-    const icon = session.sentiment == 0 ? 
-        "fluent-emoji:beaming-face-with-smiling-eyes" : session.sentiment == 1 ? 
+    const icon = session.sentiment == "Positive" ? 
+        "fluent-emoji:beaming-face-with-smiling-eyes" : session.sentiment == "Negative" ? 
             "fluent-emoji:confused-face" : "fluent-emoji:face-with-diagonal-mouth";
 
     // Return UI component

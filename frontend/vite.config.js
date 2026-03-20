@@ -30,14 +30,14 @@ export default defineConfig({
             '/ws'  : {target: 'http://127.0.0.1:8000', ws: true}, // backend
             '/api' : {target: 'http://127.0.0.1:8000', },         // changeOrigin: true,
         },
-        allowedHosts : ["localhost", "127.0.0.1", "frontend", "cognibot.org", "deployment.cognibot.org", "sandbox.cognibot.org"], 
+        allowedHosts : ["localhost", "127.0.0.1", "frontend", "cognibot.org", "deployment.cognibot.org", "sandbox.cognibot.org", "sandbox2.cognibot.org", "sandbox3.cognibot.org"], 
     },
     preview: {
         host         : "0.0.0.0",
         port         : 5173,
         strictPort   : true,
         cors         : true,
-        allowedHosts : ["localhost", "127.0.0.1", "frontend", "cognibot.org", "deployment.cognibot.org", "sandbox.cognibot.org"],
+        allowedHosts : ["localhost", "127.0.0.1", "frontend", "cognibot.org", "deployment.cognibot.org", "sandbox.cognibot.org", "sandbox2.cognibot.org", "sandbox3.cognibot.org"],
     },
     resolve: { alias: { "@": path.resolve(__dirname, "src"), },}, // sets the "@" symbol to the src directory, makes things quicker sometimes
 })
