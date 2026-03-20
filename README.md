@@ -13,7 +13,7 @@ Find CogniBot on our web interface: [CogniBot.org](https://www.cognibot.org).
 
 </details>
 
-
+<br>
 
 ## How it works
 
