@@ -15,7 +15,7 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
 ChatSentiment = Literal["very_negative", "negative", "neutral", "positive", "very_positive"]
-ChatEmotion   = Literal["neutral", "happy", "sad", "scared", "surprised", "angry"]
+ChatEmotion   = Literal["neutral", "happy", "sad", "scared", "surprised", "angry", "frustrated", "confused"]
 
 # --------------------------------------------------------------------------------
 # Define the Pydantic response Model
