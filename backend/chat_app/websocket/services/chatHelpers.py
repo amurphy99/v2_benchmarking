@@ -70,21 +70,23 @@ class ChatHandler:
         consumer._staged_utterances.append(user_text  )
         consumer._staged_words     .append(words or [])
 
-        # 4) Cancel any running response task (it will retry with the newly accumulated staged text)
-        task = consumer._pending_response_task
-        if task and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
-
         # Log an update 
         # TODO: Might want to do this somewhere else with the text content included ?
         logger.info((f"{ORANGE}[ChatHandler] " 
                      f"auto_reply={BOLD}{consumer.reply_on_user_utt}{UNBOLD}, " 
                      f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
 
-        # 5) Create new cancellable response task
-        if consumer.reply_on_user_utt:
-            consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
+        # 4) "Pause & Listen" mode: stage and echo user text, but don't start a response task
+        if not consumer.reply_on_user_utt: return
+
+        # 5) Cancel any running response task (it will retry with the newly accumulated staged text)
+        task = consumer._pending_response_task
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+        # 6) Create new cancellable response task
+        consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
 
     # --------------------------------------------------------------------------------
     # Wrapper for the text-input path (ws_events.py calls handle_transcription directly)
@@ -93,6 +95,31 @@ class ChatHandler:
     async def handle_transcription(data, consumer: ChatConsumer):
         await ChatHandler.stage_and_schedule(data, consumer, words=None)
 
+    # --------------------------------------------------------------------------------
+    # Flush staged utterances before any admin-triggered or manual response
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    async def flush_staged_utterances(consumer: ChatConsumer):
+        """
+        Combine any accumulated staged utterances into a single user message and commit
+        it to DB + context buffer. Called before admin-triggered responses and at disconnect.
+
+        TODO: I feel like there are a lot of places where we need to look at if the words
+              are getting saved before they are cleared...
+        """
+        if not consumer._staged_utterances: return None
+        
+        # Concatenate text from all of the users turns
+        combined_text = " ".join(consumer._staged_utterances)
+        combined_ts   = now_ts()
+
+        # Clear staged words
+        consumer._staged_utterances.clear()
+        #consumer._staged_words     .clear()
+        
+        # Update the DB and context buffer
+        _, msg = await consumer.handle_chat_messages(role="user", text=combined_text, ts=combined_ts)
+        return msg
 
     # ================================================================================
     # Cancellable Response Task (body)

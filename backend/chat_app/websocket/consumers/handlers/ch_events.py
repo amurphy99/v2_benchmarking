@@ -8,7 +8,7 @@ TODO: Can probably structure the command handling better...
 """
 from __future__ import annotations
 
-import logging, json
+import logging, json, asyncio
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -45,6 +45,12 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     # --------------------------------------------------------------------------------
     # TODO: Deprecated
     if command == "pause_responses":
+        # This cancels the current response from the LLM/TTS
+        task = getattr(consumer, "_pending_response_task", None)
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
         consumer.reply_on_user_utt = False
     
     elif command == "resume_responses":

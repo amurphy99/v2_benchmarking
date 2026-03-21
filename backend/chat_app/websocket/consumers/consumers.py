@@ -150,6 +150,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         session_id = getattr(self.session, "id",    None)
         username   = getattr(self.user, "username", None)
 
+        # Flush any staged utterances to DB before post-chat analysis runs
+        # (awaited so the message exists before close_session queries for it)
+        staged = getattr(self, "_staged_utterances", [])
+        if staged:
+            try: await db_s2a(ChatService.add_message)(session_id, "user", (" ".join(staged)))
+            except Exception: pass
+            self._staged_utterances.clear()
+            self._staged_words     .clear()
+
         # Close the ChatSession in the DB
         if user_id and session_id:
             fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source),
@@ -223,5 +232,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     # Reply to the user immediately. Can pass a message, otherwise will query the LLM.
     async def reply_now(self, use_response=None):
+        await ChatHandler.flush_staged_utterances(self)
         return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
 
