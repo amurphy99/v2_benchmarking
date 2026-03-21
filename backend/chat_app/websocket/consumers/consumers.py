@@ -106,13 +106,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Create new audio buffer & speech provider instances
         self.audio_buffer = bytearray()
-    
-        # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
         self.stt_provider = SpeechToTextProvider(
-            consumer               = self,
-            loop                   = asyncio.get_running_loop(),
-            on_timestamps_callback = None, 
+            consumer = self,
+            loop     = asyncio.get_running_loop(),
         )
+
+        # Response task state
+        self._staged_utterances     = []     # Raw STT transcripts waiting to be committed
+        self._staged_words          = []     # Parallel list of word-timestamp lists (per utterance)
+        self._pending_response_task = None   # Current asyncio.Task for _execute_response
+        self._tts_streaming         = False  # True while audio chunks are actively being sent to the frontend
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -136,6 +139,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         try: await self._broadcast_stream_status("ended")
         except Exception: pass
 
+        # Cancel any pending response task (LLM -> TTS tasks)
+        pending = getattr(self, "_pending_response_task", None)
+        if pending and not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
         # Snapshot IDs (don't pass model instances into background tasks)
         user_id    = getattr(self.user,    "id",    None)
         session_id = getattr(self.session, "id",    None)
@@ -143,7 +152,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Close the ChatSession in the DB
         if user_id and session_id:
-            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source), 
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source),
                          name=f"disconnect::close-session-{session_id}")
 
         # Cancel background tasks (only connection-based ones; not the close_session task)
@@ -156,6 +165,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_count  = 0.0
         self.audio_windows_count      = 0.0
         self.overlapped_speech_events = []
+
+        # Clear response task state
+        self._staged_utterances       = []
+        self._staged_words            = []
+        self._pending_response_task   = None
+        self._tts_streaming           = False
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)

@@ -43,19 +43,15 @@ AUDIO_WINDOW_S = 10      # Seconds of audio needed for audio-based biomarkers
 # Handle "User" & "Robot" messages (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
 async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
-    """ 
+    """
     Add messages to the database & update the local context (role must be "user" or "assistant").
-
-    TODO: Concatenate consecutive messages from the user
-
-    TODO: I feel like we shouldn't limit the buffer here, we should do it in the other areas of 
-          the chat (e.g. preparing LLM input, biomarker calculations).
+    Returns (context_buffer, message) where message is the created ChatMessage instance.
     """
     # Snapshot ID so we aren't depending on an instance from the consumer
     session_id = getattr(consumer, "session_id", None)
 
-    # Fire-and-forget DB write for the message
-    fire_and_log(db_s2a(ChatService.add_message)(session_id, role, text), name="handle_chat_messages::add_message")
+    # Await DB write so we can return the message instance (needed for word-timestamp association)
+    message = await db_s2a(ChatService.add_message)(session_id, role, text)
 
     # Update in memory context (pop one if we are at the limit)
     consumer.context_buffer.append((role, text, ts))
@@ -63,15 +59,15 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
 
     # Log update
     logger.info((
-        f"{CC_MAIN} New {lu.BRIGHT_GREEN}{role}{lu.GREEN} message processed "
+        f"{CC_MAIN} New {lu.BRIGHT_GREEN}{role:9}{lu.GREEN} message processed "
         f"({lu.BRIGHT_GREEN}context size: {len(consumer.context_buffer)}/{consumer.MAX_CONTEXT}{lu.GREEN}). {RESET}"
     ))
 
     # Broadcast updates to any listeners
     await consumer._broadcast_room({"type": "message", "role": role, "text": text, "ts": ts})
 
-    # Return the updated context (if the message was from the user, this will be used for LLM input)
-    return consumer.context_buffer
+    # Return the updated context & the created ChatMessage instance
+    return consumer.context_buffer, message
 
 # --------------------------------------------------------------------------------
 # Handle "streamed" audio data from the frontend client

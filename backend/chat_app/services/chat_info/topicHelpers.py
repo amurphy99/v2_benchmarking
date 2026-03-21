@@ -14,10 +14,11 @@ def get_topics(message_text): # From freeCodeCamp
     alpha_lower_tokens = [word.lower() for word in tokens if word.isalpha()]
     alpha_no_stopwords = [word for word in alpha_lower_tokens if word not in english_stopwords]
     BoW = Counter(alpha_no_stopwords)
-    most_common = BoW.most_common(6)
+    most_common = BoW.most_common(4)
     
     topics = []
     for token in most_common:
         topics.append(token[0])
         
     return topics
+

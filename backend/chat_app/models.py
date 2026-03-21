@@ -198,19 +198,48 @@ class ChatMessage(models.Model):
     def __str__(self): return f"{self.role}: {self.content}"
 
 # ================================================================================
+# ChatWord -- word-level STT timestamps associated with a ChatMessage
+# ================================================================================
+class ChatWord(models.Model):
+    message  = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name="words")
+    word     = models.CharField(max_length=64)
+    start_ts = models.DateTimeField()
+    end_ts   = models.DateTimeField()
+    index    = models.PositiveSmallIntegerField()  # 0-based position within the utterance
+
+    class Meta:
+        ordering = ["message", "index"]
+        indexes  = [models.Index(fields=["message", "index"])]
+
+    def __str__(self): return f"{self.index}: {self.word} ({self.start_ts} - {self.end_ts})"
+
+# ================================================================================
 # ChatBiomarkerScore -- an array of these is assigned to each ChatSession
 # ================================================================================
 class ChatBiomarkerScore(models.Model):
+    """
+    TODO: Some biomarkers may be linked to messages/utterances directly while others are
+    linked to timestamps (e.g., 5 seconds of audio)
+    """
     BIOMARKER_CHOICES = [
-        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"), 
+        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"),
         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
         ("perplexity", "Perplexity")
     ]
-    
-    session    = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="biomarker_scores")
+
+    session    = models.ForeignKey(ChatSession,  on_delete=models.CASCADE,  related_name="biomarker_scores")
+
+    # Nullable foreign to the specific utterance this score was calculated from
+    message    = models.ForeignKey(ChatMessage,  on_delete=models.SET_NULL, related_name="biomarker_scores", **init_args)
+
+    # Score information
     score_type = models.CharField (max_length=32, choices=BIOMARKER_CHOICES)
     score      = models.FloatField()
     ts         = models.DateTimeField(auto_now_add=True)
+    
+    # Time range of the audio/text window this score was derived from
+    start_ts   = models.DateTimeField(**init_args)
+    end_ts     = models.DateTimeField(**init_args)
 
     class Meta:
         ordering = ["ts", "score_type", "id"]

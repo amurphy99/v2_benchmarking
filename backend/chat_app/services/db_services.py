@@ -3,7 +3,7 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-Later on may need to specifically add start/end timestamps to chats/messages...
+TODO: Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
 import logging, time
@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
+from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -208,6 +208,18 @@ class ChatService:
     def add_biomarkers_bulk(session_id, scores: dict):
         session = ChatSession.objects.get(id=session_id)
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+
+    # Word-level STT timestamps for a confirmed user message
+    @staticmethod
+    def add_words_bulk(message_id: int, words: list):
+        """
+        Bulk-insert ChatWord records for a committed user message.
+        words: [{"word": str, "start": datetime, "end": datetime}, ...]
+        """
+        ChatWord.objects.bulk_create([
+            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
+            for i, w in enumerate(words)
+        ])
 
 
 
