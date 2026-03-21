@@ -70,9 +70,9 @@ services:
 # Docker will also create them automatically if this file is run individually.
 volumes:
   db_data:
-    #external: true
+    external: true
   vector_db_data:
-    #external: true
+    external: true
 networks:
   appnet:
-    #external: true
+    external: true
