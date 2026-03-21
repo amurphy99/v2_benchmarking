@@ -127,8 +127,8 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ChatSession
-        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio_file", "duration", "topics", 
-                  "sentiment", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio_file", "duration", "topics",
+                  "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
                   "image", "risk_level", "risk_quotes", "risk_reason")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 

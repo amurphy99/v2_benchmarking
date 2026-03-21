@@ -1,3 +1,13 @@
+"""
+Postgres Database Schema
+--------------------------------------------------------------------------------
+`backend.chat_app.models`
+
+TODO: Add a field to the ChatMessage model for the "source." This field should 
+      represent how the message was created (LLM, repeated message, admin user,
+      opening greeting, etc.).
+
+"""
 from django.db        import models
 from django.db.models import UniqueConstraint, Q, Avg, Min
 from django.conf      import settings
@@ -112,16 +122,15 @@ class ChatSession(models.Model):
     # Post-chat analysis filled out when chats are completed
     # --------------------------------------------------------------------------------
     # Summary & Topics (stage 1 of post-chat analysis)
-    # TODO: Should change topics to be a list of strings field
     summary   = models.TextField(**init_args)
-    topics    = models.CharField(**init_args, max_length=255, default="['N/A']")
-    
+    topics    = ArrayField(models.CharField(max_length=100), **init_args)
+
     # Sentiment & Emotion (stage 2 of post-chat analysis)
     sentiment = models.CharField(**init_args, max_length=255, default="N/A")
     emotion   = models.CharField(**init_args, max_length=255, default="N/A")
 
     # Risk Alerts (stage 3 of post-chat analysis)
-    risk_level  = models.CharField(**init_args, max_length=32, choices=RISK_LEVEL_CHOICES)
+    risk_level  = models.SmallIntegerField(**init_args, choices=RISK_LEVEL_CHOICES)
     risk_quotes = ArrayField(models.CharField(max_length=255), **init_args)
     risk_reason = models.TextField(**init_args)
 

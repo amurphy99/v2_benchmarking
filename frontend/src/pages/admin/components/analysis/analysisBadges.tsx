@@ -56,16 +56,15 @@ export function topicBadge(topic?: string | null) {
     return         <span className={`${base} bg-gray-50 text-gray-700 border-gray-200`}>{t}</span>;
 }
 
-export function topicsBadges(topicsText?: string | null) {
-    const topics = (topicsText ?? "")
-        .split (",")
-        .map   ((s) => s.trim())
-        .filter((s) => s.length > 0);
+export function topicsBadges(topics?: string[] | string | null) {
+    const list: string[] = Array.isArray(topics)
+        ? topics.map((s) => s.trim()).filter(Boolean)
+        : (topics ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
-    if (topics.length === 0) return topicBadge(null);
+    if (list.length === 0) return topicBadge(null);
     return (
         <div className="flex flex-wrap gap-1">
-            {topics.map((t, i) => (
+            {list.map((t, i) => (
                 <span key={`${t}-${i}`}>{topicBadge(t)}</span>
             ))}
         </div>
