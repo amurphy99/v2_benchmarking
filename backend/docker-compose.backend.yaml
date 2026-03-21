@@ -19,9 +19,14 @@ services:
       POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
     networks: [appnet]
     ports:
-      - "5434:5434"
+      - "5434:5432"
     volumes:
       - vector_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VECTOR_DB_USER} -d ${VECTOR_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   db:
     image: postgres:17 #ankane/pgvector:latest
@@ -36,6 +41,11 @@ services:
       - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 
     
@@ -59,7 +69,11 @@ services:
     env_file: [.env]
     volumes:
       - .:/app                # general project mount
-    #depends_on: [db, db_vector]
+    depends_on:
+      db:
+        condition: service_healthy
+      db_vector:
+        condition: service_healthy
     networks: [appnet]
     ports:                    # expose 8000 to host for Vite
       - "8000:8000"
