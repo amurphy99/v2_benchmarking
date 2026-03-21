@@ -26,6 +26,7 @@ export default function useChatListener({
     // Handle commands sent to the backend (and the confirmation responses)
     onCommandAck      = noopAny, // Relay "acks" confirming commands were received
     onControlState    = noopAny, // Relay new control states (depending on result of commands)
+    onStreamStatus    = noopAny, // Relay stream status changes ("active" | "paused" | "ended")
 }) {
     // --------------------------------------------------------------------------------
     // Timing (header UI)
@@ -59,8 +60,8 @@ export default function useChatListener({
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
     // Acks
-    const controlHandlersRef = useRef({ onCommandAck, onControlState });
-    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState };}, [onCommandAck, onControlState]);
+    const controlHandlersRef = useRef({ onCommandAck, onControlState, onStreamStatus });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus };}, [onCommandAck, onControlState, onStreamStatus]);
 
     // --------------------------------------------------------------------------------
     // Message Handling
@@ -73,6 +74,7 @@ export default function useChatListener({
             getHandlers    : (   ) => handlersRef.current,
             onCommandAck   : (ack) => controlHandlersRef.current.onCommandAck  (ack),
             onControlState : (st ) => controlHandlersRef.current.onControlState(st ),
+            onStreamStatus : (st ) => controlHandlersRef.current.onStreamStatus(st ),
         });
     }, []);
 

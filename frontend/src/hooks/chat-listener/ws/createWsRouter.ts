@@ -12,6 +12,7 @@ export function createWsRouter({
     getHandlers,
     onCommandAck,
     onControlState,
+    onStreamStatus,
 }: {
     setLastEventAt : (d: Date         ) => void;
     setLatencyMs   : (n: number | null) => void;
@@ -24,8 +25,9 @@ export function createWsRouter({
         addNewBiomarkers  : (d: any) => void;
     };
 
-    onCommandAck  : (ack   : any) => void;
-    onControlState: (state : any) => void;
+    onCommandAck    : (ack    : any) => void;
+    onControlState  : (state  : any) => void;
+    onStreamStatus  : (status : any) => void;
 }) {
     return function onMessage(event: MessageEvent) {
         // Parse the initial event
@@ -61,6 +63,7 @@ export function createWsRouter({
         // Confirmations from the backend following commands
         else if (type === "command_ack"      )   onCommandAck     (data);
         else if (type === "control_state"    )   onControlState   (data);
+        else if (type === "stream_status"    )   onStreamStatus   (data);
 
         // Unhandled events
         else { console.debug("Unhandled WS event type:", type, response); }

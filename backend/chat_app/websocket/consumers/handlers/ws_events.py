@@ -30,18 +30,20 @@ async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
     elif data["type"] == "audio_data"        : await consumer.handle_audio_data(data)
     elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
     elif data["type"] == "end_chat"          : consumer.stt_provider.stop(); await consumer.close(code=1000)   
-    elif data["type"] == "toggle_stream"     : _toggle_stream(consumer, data)
+    elif data["type"] == "toggle_stream"     : await _toggle_stream(consumer, data)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")
 
 
 # Toggle the stream of audio data (pause and unpause on the frontend)
-def _toggle_stream(consumer: ChatConsumer, data):
+async def _toggle_stream(consumer: ChatConsumer, data):
     cmd = data["data"]
     logger.info(f"{CC_MAIN} STT toggled: {CC_H}{data}{CC_R} {RESET}")
-    if   cmd == "start": consumer.stt_provider.start()
-    elif cmd == "stop" : consumer.stt_provider.stop()
+    if   cmd == "start": consumer.stt_provider.start(); status = "active"
+    elif cmd == "stop" : consumer.stt_provider.stop (); status = "paused"
+    else: return
+    await consumer._broadcast_stream_status(status)
 
 
 # --------------------------------------------------------------------------------

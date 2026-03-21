@@ -132,6 +132,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Shut down the STT provider
         if getattr(self, "stt_provider", None): self.stt_provider.stop()
 
+        # Notify listeners that the user has disconnected
+        try: await self._broadcast_stream_status("ended")
+        except Exception: pass
+
         # Snapshot IDs (don't pass model instances into background tasks)
         user_id    = getattr(self.user,    "id",    None)
         session_id = getattr(self.session, "id",    None)
@@ -192,6 +196,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Relays biomarker scores
     async def _broadcast_monitor(self, payload):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.monitor", "payload": payload})
+
+    # Broadcasts stream status changes ("active" | "paused" | "ended") to listeners
+    async def _broadcast_stream_status(self, status: str):
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.stream_status", "data": {"status": status}})
 
 
     # ================================================================================
