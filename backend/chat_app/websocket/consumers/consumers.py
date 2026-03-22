@@ -23,7 +23,6 @@ from  ..services.bg_helpers         import fire_and_log
 from  ..services.chatHelpers        import ChatHandler
 from  ..services.speechProvider     import SpeechToTextProvider
 
-
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
@@ -34,6 +33,7 @@ from .handlers.ws_events    import handle_receive_json
 from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
 from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
+from .handlers.ws_events    import _toggle_stream
 
 
 # ================================================================================
@@ -51,11 +51,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Connect
     # ================================================================================
     async def connect(self):
-        # Miscellaneous setup
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0
-        self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
-        self.last_response            = None
+        # Initialize all per-session state attributes (also called on disconnect to reset them)
+        self._init_response_state()
 
         # Define the response generation method to be used in the chat
         self.response_method = get_LLM_response
@@ -109,18 +106,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await join_chat_consumer_groups(self)
 
         # Create new audio buffer & speech provider instances
-        self.audio_buffer = bytearray()
-        self.stt_provider = SpeechToTextProvider(
-            consumer = self,
-            loop     = asyncio.get_running_loop(),
-        )
-
-        # Response task state
-        self._staged_utterances     = []     # Raw STT transcripts waiting to be committed
-        self._staged_words          = []     # Parallel list of word-timestamp lists (per utterance)
-        self._pending_response_task = None   # Current asyncio.Task for _execute_response
-        self._tts_streaming         = False  # True while audio chunks are actively being sent to the frontend
-        self._pending_action        = None   # Tracks pending user-initiated action ("end_chat" | None)
+        self.audio_buffer     = bytearray()
+        self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
+        self.streaming_active = True
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -173,19 +161,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
 
-        # Reset some properties for the next connection
-        self.session                  = None
-        self.context_buffer           = []
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0
-        self.overlapped_speech_events = []
-
-        # Clear response task state
-        self._staged_utterances       = []
-        self._staged_words            = []
-        self._pending_response_task   = None
-        self._tts_streaming           = False
-        self._pending_action          = None
+        # Reset all per-session attributes for the next connection
+        self.session        = None
+        self.context_buffer = []
+        self._init_response_state()
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
@@ -235,9 +214,40 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # ================================================================================
     # Additional Helpers
     # ================================================================================
-
     # Reply to the user immediately. Can pass a message, otherwise will query the LLM.
     async def reply_now(self, use_response=None):
         await ChatHandler.flush_staged_utterances(self)
         return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
+
+    # Pause/Resume -- Toggle the STT stream (wrapper for '_toggle_stream' in ws_events.py)
+    async def toggle_stream(self, data_or_cmd):
+        """
+        Accepts either a raw command string ("start" | "stop") or a full data dictionary (JSON).
+        """
+        data = data_or_cmd if isinstance(data_or_cmd, dict) else {"data": data_or_cmd}
+        await _toggle_stream(self, data)
+
+    # Session State Attributes
+    def _init_response_state(self):
+        """
+        Initialize (or reset) all per-session state attributes. 
+        Called in connect() and disconnect().
+        """
+        # Conveniently access the LLMs last response (for 'repeat_last_response()')
+        self.last_response            = None
+
+        # Old turn-taking/overlapped speech functionality
+        self.overlapped_speech_count  = 0.0
+        self.audio_windows_count      = 0.0 
+        self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
+
+        # Response task state
+        self._staged_utterances       = []     # Raw STT transcripts waiting to be committed
+        self._staged_words            = []     # Parallel list of word-timestamp lists (per utterance)
+        self._pending_response_task   = None   # Current 'asyncio.Task' for '_execute_response'
+
+        # Chat status tracking
+        self.streaming_active         = False  # True while STT stream is active (paused state)
+        self._tts_streaming           = False  # True while audio chunks are actively being sent to the frontend
+        self._pending_action          = None   # Tracks pending user-initiated action ("end_chat" | None)
 

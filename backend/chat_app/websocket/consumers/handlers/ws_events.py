@@ -8,7 +8,7 @@ These methods get implemented by the consumers via simple passthroughs.
 """
 from __future__ import annotations
 
-import logging, time
+import logging, time, json
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -22,6 +22,7 @@ from  ...services.chatHelpers import ChatHandler
 from typing import TYPE_CHECKING
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
+
 # ================================================================================
 # Handle all forms of incoming data | TODO: are we supposed to guard here more?
 # ================================================================================
@@ -29,20 +30,46 @@ async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
     if   data["type"] == "overlapped_speech" : await _handle_overlap(consumer, data=data)
     elif data["type"] == "audio_data"        : await consumer.handle_audio_data(data)
     elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
-    elif data["type"] == "end_chat"          : consumer.stt_provider.stop(); await consumer.close(code=1000)   
+    elif data["type"] == "end_chat"          : await consumer.close(code=1000)   
     elif data["type"] == "toggle_stream"     : await _toggle_stream(consumer, data)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")
 
 
+# --------------------------------------------------------------------------------
 # Toggle the stream of audio data (pause and unpause on the frontend)
-async def _toggle_stream(consumer: ChatConsumer, data):
-    cmd = data["data"]
-    logger.info(f"{CC_MAIN} STT toggled: {CC_H}{data}{CC_R} {RESET}")
-    if   cmd == "start": consumer.stt_provider.start(); status = "active"
-    elif cmd == "stop" : consumer.stt_provider.stop (); status = "paused"
+# --------------------------------------------------------------------------------
+# TODO: In the future this is where any TTS controls would also go (e.g., pause TTS playback)
+async def _toggle_stream(consumer: ChatConsumer, data: dict):
+    # Parse the input
+    cmd = data.get("data", None)
+
+    # Log the command
+    stream_status = "active" if (consumer.streaming_active) else "paused"
+    new_status    = "active" if (cmd == "start"           ) else "paused"
+    logger.info(f"{CC_MAIN} STT toggled: {CC_H}{stream_status} -> {new_status}{CC_R} | {CC_H}{data}{CC_R} {RESET}")
+
+    # Stop the stream (unpause)
+    if cmd == "start":
+        if getattr(consumer, "streaming_active", False): return   # already active
+        consumer.stt_provider.start()
+        consumer.streaming_active = True
+        status = "active"
+
+    # Stop the STT stream (pause)
+    elif cmd == "stop":
+        if not getattr(consumer, "streaming_active", True): return   # already stopped
+        consumer.stt_provider.stop()
+        consumer.streaming_active = False
+        status = "paused"
+
+    # Unknown command / new status given
     else: return
+
+    # Notify the frontend chat client directly, then broadcast to ChatListener
+    try: await consumer.send(json.dumps({"type": "stream_status", "data": status}))
+    except Exception: pass
     await consumer._broadcast_stream_status(status)
 
 

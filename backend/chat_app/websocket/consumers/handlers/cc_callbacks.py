@@ -22,7 +22,7 @@ from channels.db import database_sync_to_async as db_s2a
 
 # From this project
 from ....services import logging_utils as lu 
-from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
+from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R, ROBO_MSG, USER_MSG
 
 # Handling messages
 from ....services.db_services       import ChatService
@@ -58,9 +58,11 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
     if len(consumer.context_buffer) > consumer.MAX_CONTEXT: consumer.context_buffer.pop(0)
 
     # Log update
+    message_style = USER_MSG if (role == "user") else ROBO_MSG
     logger.info((
-        f"{CC_MAIN} New {lu.BRIGHT_GREEN}{role:9}{lu.GREEN} message processed "
-        f"({lu.BRIGHT_GREEN}context size: {len(consumer.context_buffer)}/{consumer.MAX_CONTEXT}{lu.GREEN}). {RESET}"
+        f"{CC_MAIN} New {CC_H}{role:9}{CC_R} message processed "
+        f"({CC_H}context size: {len(consumer.context_buffer)}/{consumer.MAX_CONTEXT}{CC_R}): " 
+        f"{message_style}\"{text}\"{RESET}"
     ))
 
     # Broadcast updates to any listeners

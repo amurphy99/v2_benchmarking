@@ -161,7 +161,7 @@ async def handle_user_intent(consumer: ChatConsumer, text: str) -> tuple[str | N
     # Case B: User indicates they want to PAUSE the chat
     if _check_pause_intent(text):
         logger.info(f"{ORANGE}[Intent] User indicates they wish to {BOLD}PAUSE{UNBOLD} the chat.{RESET}")
-        consumer.reply_on_user_utt = False
+        await consumer.toggle_stream("stop")   # stops STT + notifies frontend client and ChatListener
         return MSG_PAUSE, False
 
     # Return default response if none of our pre-programmed intents were detected

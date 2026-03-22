@@ -155,7 +155,7 @@ class ChatHandler:
 
             # Not cancelled: commit everything to DB + context buffer
             _, user_msg = await consumer.handle_chat_messages(role="user", text=combined_text, ts=combined_ts) # User message
-            logger.info(f"{ORANGE}[ChatHandler] Full user message: {USER_MSG}\"{user_msg}\"{RESET}")
+            #logger.info(f"{ORANGE}[ChatHandler] Full user message: {USER_MSG}\"{user_msg}\"{RESET}")
 
             # We updated the DB and context buffer so we can clear the staged text
             consumer._staged_utterances.clear()
@@ -198,7 +198,10 @@ class ChatHandler:
                 finally: consumer._tts_streaming = False
 
             # Close the WebSocket if the user confirmed they wish to end the chat (disconnect() is called automatically)
-            if close_after: await consumer.close()
+            if close_after:
+                try: await consumer.send(json.dumps({"type": "chat_ended"}))
+                except Exception: pass
+                await consumer.close()
 
         # Staged utterances are intentionally NOT cleared; they accumulate for the next response attempt
         except asyncio.CancelledError: raise
