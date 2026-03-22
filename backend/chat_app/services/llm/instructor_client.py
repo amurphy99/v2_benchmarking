@@ -7,19 +7,26 @@ from ...services import logging_utils as lu
 
 logger = logging.getLogger(__name__)
 
+def get_full_llm_url(base):
+    """
+    Helper function to construct the full LLM URL based on the provided base.
+    If the base already includes a protocol, it is returned as is. Otherwise, it is treated as a hostname and combined with the default port.
+    """
+    if base.startswith("http://") or base.startswith("https://"):
+        return base  # Base already includes protocol
+    else:
+        # this for our internal Gcloud llm server.
+        port = "8080"
+        return f"http://{base}:{port}/v1"
+
+
 def build_openai_client():
     """
     Builds a plain AsyncOpenAI client for unstructured/plain text responses.
     """
     base = os.getenv("LLM_BASE_URL", "127.0.0.1")
 
-    if base.startswith("http://") or base.startswith("https://"):
-        # if the base already includes the protocol, use it directly (and ignore the default port)
-        llm_url = base
-    else:
-        # otherwise, construct the URL with the default port (for our custom LLM gateway)
-        port = "8080"
-        llm_url = f"http://{base}:{port}/v1"
+    llm_url = get_full_llm_url(base)
 
     llm_key = os.getenv("LLM_GATEWAY_TOKEN") or "SAMPLE_TOKEN"
     timeout = float(os.getenv("LLM_TIMEOUT", "20"))
@@ -37,8 +44,8 @@ def build_instructor_client():
     
     # For chat completions we want base like: http://host:PORT/v1
     base = os.getenv("LLM_BASE_URL", "127.0.0.1")
-    port = "8080"
-    llm_url = f"http://{base}:{port}/v1"
+    
+    llm_url = get_full_llm_url(base)
 
     llm_key = os.getenv("LLM_GATEWAY_TOKEN") or "SAMPLE_TOKEN"
     timeout = float(os.getenv("LLM_TIMEOUT", "20"))
