@@ -219,8 +219,8 @@ Rules:
 
 async def rag_response_fn(
     context_buffer, # context_buffer not used anymore, but I am keeping this for now for persistence
-    user_text: str,
     *,
+    user_text: str,
     user,
     activity_name: str,
     rag_state: dict,

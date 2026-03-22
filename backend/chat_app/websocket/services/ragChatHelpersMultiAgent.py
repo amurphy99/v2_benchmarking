@@ -234,8 +234,8 @@ async def _predict_and_update_next_scenario(
 
 async def rag_response_fn(
     context_buffer,
-    user_text: str,
     *,
+    user_text: str,
     user,
     activity_name: str,
     rag_state: dict,

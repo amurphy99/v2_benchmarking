@@ -77,7 +77,8 @@ class ChatHandler:
                 system_resp = await ChatHandler.respond_to_user(context_buffer, consumer)
             else:
                 system_resp = await ChatHandler.respond_to_user(
-                    context_buffer, consumer, response_fn=response_fn, response_fn_kwargs=response_fn_kwargs,
+                    context_buffer, consumer, 
+                    response_fn=response_fn, response_fn_kwargs={**(response_fn_kwargs or {}), "user_text": user_text},
                 )
             return system_resp
             
