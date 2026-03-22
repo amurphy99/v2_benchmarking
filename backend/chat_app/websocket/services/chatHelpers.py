@@ -21,13 +21,12 @@ from time        import time                   as now_ts
 from datetime    import datetime, timezone
 
 # From this project
-from   .speech.tts_streaming        import synthesize_and_stream_tts
-from   .bg_helpers                  import fire_and_log, trace_await
-from ...services                    import logging_utils as lu
-from ...services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, USER_MSG, ORANGE
-from ...services.llm.chat_utilities import get_LLM_response
-from ...services.db_services        import ChatService
-
+from   .speech.tts_streaming              import synthesize_and_stream_tts
+from   .bg_helpers                        import fire_and_log, trace_await
+from ..services.behavior.intent_detection import handle_user_intent
+from ...services                          import logging_utils as lu
+from ...services.logging_utils            import RESET, BOLD, UNBOLD, LLM_MAIN, USER_MSG, ORANGE
+from ...services.db_services              import ChatService
 
 
 # Import the class for type checking
@@ -146,11 +145,13 @@ class ChatHandler:
             temp_context = list(consumer.context_buffer) + [("user", combined_text, combined_ts)]
 
             # --------------------------------------------------------------------------------
-            # 2) Get response from the LLM (this is our primary cancellation window)
+            # 2) Get response from the LLM (this is the primary cancellation window)
             # --------------------------------------------------------------------------------
-            # LLM call 
-            system_resp = await consumer.response_method(temp_context)
-            system_ts   = now_ts()
+            # Intent detection (may skip the LLM call with a scripted response)
+            scripted_resp, close_after = await handle_user_intent(consumer, combined_text)           # 'close_after' checked at method end
+            if scripted_resp is not None: system_resp = scripted_resp                                # Scripted response
+            else:                         system_resp = await consumer.response_method(temp_context) # LLM call
+            system_ts = now_ts()
 
             # Not cancelled: commit everything to DB + context buffer
             _, user_msg = await consumer.handle_chat_messages(role="user", text=combined_text, ts=combined_ts) # User message
@@ -195,6 +196,9 @@ class ChatHandler:
 
                 # Update the consumer state
                 finally: consumer._tts_streaming = False
+
+            # Close the WebSocket if the user confirmed they wish to end the chat (disconnect() is called automatically)
+            if close_after: await consumer.close()
 
         # Staged utterances are intentionally NOT cleared; they accumulate for the next response attempt
         except asyncio.CancelledError: raise

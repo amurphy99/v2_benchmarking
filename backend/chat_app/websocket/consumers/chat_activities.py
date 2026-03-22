@@ -26,6 +26,8 @@ class ActivityChatConsumer(ChatConsumer):
     Same session handling + persistence + biomarkers as ChatConsumer (through inheritance),
     but swaps response generation to the scenario-based RAG pipeline.
     """
+    # Helps us decide what behavior to use in other areas ("standard" | "activity")
+    CHAT_TYPE     = "activity"
     ACTIVITY_NAME = "memory_activity"
 
     

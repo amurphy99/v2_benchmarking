@@ -40,8 +40,12 @@ from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 # ChatConsumer 
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
+    # Helps us decide what behavior to use in other areas ("standard" | "activity")
+    # TODO: Could probably just use this as an argument in close_session for the DB save
+    CHAT_TYPE = "standard"
+
     # How many recent messages to keep for the LLM
-    MAX_CONTEXT =  20  
+    MAX_CONTEXT = 30  
 
     # ================================================================================
     # Connect
@@ -116,6 +120,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._staged_words          = []     # Parallel list of word-timestamp lists (per utterance)
         self._pending_response_task = None   # Current asyncio.Task for _execute_response
         self._tts_streaming         = False  # True while audio chunks are actively being sent to the frontend
+        self._pending_action        = None   # Tracks pending user-initiated action ("end_chat" | None)
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -180,6 +185,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._staged_words            = []
         self._pending_response_task   = None
         self._tts_streaming           = False
+        self._pending_action          = None
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
