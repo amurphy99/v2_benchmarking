@@ -57,7 +57,7 @@ def build_instructor_client():
     )
 
     # Initialize Instructor
-    instructor_client = instructor.from_openai(openai_client, mode=instructor.Mode.TOOLS)
+    instructor_client = instructor.from_openai(openai_client, mode=instructor.Mode.MD_JSON)
 
     # Define the INPUT Hook (Fires BEFORE API call)
     def log_input_hook(*args, **kwargs):
