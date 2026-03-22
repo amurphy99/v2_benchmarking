@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate    } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import      { HeaderPills        } from "./HeaderPills";
 import type { SessionHeaderProps } from "./StatusComponents";
@@ -7,11 +8,20 @@ import type { SessionHeaderProps } from "./StatusComponents";
 // SessionHeader (for the chat listener)
 // ================================================================================
 export const SessionHeader: React.FC<SessionHeaderProps> = (props) => {
-    const navigate = useNavigate();
+    const navigate = useNavigate   (); // Navigate back to the main admin page
+    const qc       = useQueryClient(); // Invalidate DB query results to force a refresh when we go back
 
+    // onClick of the "back" button 
+    const handleBackClick = () => {
+        qc.invalidateQueries({ queryKey: ["activeChatSessions", "inactiveChatSessions"] });
+        navigate("/admin");
+    };
+
+    // ChatSession information
     const { title, sessionId, username, source, mode, } = props;
     const show_session_id = sessionId ? `#${sessionId}` : "#--";
 
+    // Style
     const button_back =
         "shrink-0 w-[2.25rem] h-[2.25rem] flex items-center justify-center " +
         "rounded-lg border border-black/10 bg-black/5 hover:bg-black/10 transition " +
@@ -24,7 +34,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = (props) => {
 
                 {/* Left Side: Title + Meta Data */}
                 <div className="min-w-0 flex gap-[1rem] items-center">
-                    <button type="button" onClick={() => navigate("/admin")} 
+                    <button type="button" onClick={handleBackClick} 
                         className={button_back} aria-label="Back to admin" title="Back"
                     >&lsaquo;</button>
                     
