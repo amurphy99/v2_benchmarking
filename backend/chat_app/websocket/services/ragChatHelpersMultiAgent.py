@@ -29,9 +29,8 @@ START_SCENARIO = "start_conversation"
 _available_scenarios_logged = False
 
 class Agent2Output(BaseModel):
-    thought: str = Field(..., description="Brief internal reasoning about your decision.")
     agent1_instructions: str = Field(
-        description="Natural language instructions that guide your assistant on how to respond next turn."
+        description="Natural language instructions that guide your assistant on how to respond next turn. Keep it specific and actionable."
     )
     next_state: str = Field(
         description="The next state name. Must be either the current state or one of the available states."
@@ -123,7 +122,8 @@ def build_agent2_system_prompt(
     - Be specific about what to address or ask
     - Include any key information to convey
     - Specify the tone or approach needed
-    - Don't write the response - give clear guidance
+    - Give clear guidance to the agent, rather than directly telling it what to say. 
+    - For example, instead of "Say 'Hello, how are you?'", say "Greet the user and ask about their feelings."
 
     State Transition Rules:
     - Only advance states when current objectives are complete
@@ -133,7 +133,6 @@ def build_agent2_system_prompt(
     Output format: Valid JSON only, no markdown.
     
     Required fields:
-    - "thought": Your analysis of conversation progress and next steps
     - "agent1_instructions": Specific guidance for the assistant's response
     - "next_state": Current state name or next appropriate state
 
@@ -204,10 +203,9 @@ async def _predict_and_update_next_scenario(
                 messages=openai_messages,
                 response_model=Agent2Output,
                 temperature=0.2,
-                max_tokens=400,
+                #max_tokens=400,
             )
 
-            logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 thought: {resp.thought}{lu.RESET}")
             logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 instructions for Agent-1: {resp.agent1_instructions}{lu.RESET}")
             logger.info(f"{lu.BLUE}[RAG-PHI3][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
 
