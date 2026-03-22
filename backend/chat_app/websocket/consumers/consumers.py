@@ -199,3 +199,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def reply_now(self, use_response=None):
         return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
 
+    # called by the SpeechToTextProvider when a final transcript is ready
+    # making a class level method allows me to override in the ActivityChatConsumer 
+    # for the RAG pipeline without having to change the SpeechToTextProvider code
+    async def handle_stt_output(self, data):
+        await ChatHandler.handle_transcription(data, self, relay_user_utt=True)
+

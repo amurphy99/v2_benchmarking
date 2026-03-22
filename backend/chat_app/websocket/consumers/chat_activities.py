@@ -61,3 +61,12 @@ class ActivityChatConsumer(ChatConsumer):
             response_fn=None if use_response is not None else rag_response_fn,
             response_fn_kwargs=None if use_response is not None else self._rag_kwargs(),
         )
+
+    async def handle_stt_output(self, data):
+        await ChatHandler.handle_transcription(
+            data,
+            self,
+            relay_user_utt=True,
+            response_fn=rag_response_fn,
+            response_fn_kwargs=self._rag_kwargs(),
+        )
