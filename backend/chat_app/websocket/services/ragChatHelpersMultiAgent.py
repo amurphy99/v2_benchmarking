@@ -249,7 +249,7 @@ async def rag_response_fn(
     global _available_scenarios_logged
 
     trace_id = uuid.uuid4().hex[:8]
-    await _await_pending_scenario_update(rag_state, trace_id=trace_id) # wait for any pending scenario prediction to complete
+    # await _await_pending_scenario_update(rag_state, trace_id=trace_id) # wait for any pending scenario prediction to complete
 
     t0 = time.time()
     logger.info(f"{lu.RLINE_1}{lu.MAGENTA}[RAG-PHI3][{trace_id}] Start{lu.RESET}{lu.RLINE_2}")
@@ -307,6 +307,15 @@ async def rag_response_fn(
 
     logger.debug(f"{lu.MAGENTA}[RAG-PHI3][{trace_id}] msg_history_len={len(msg_history)} user_text_len={len(user_text or '')}{lu.RESET}")
 
+    await _predict_and_update_next_scenario(
+        trace_id=trace_id,
+        msg_history=list(tail_history) + [HumanMessage(content=user_text)],
+        available_scenarios_text=available_scenarios_text,
+        current=current,
+        instructions_text=instructions_text_call_1,
+        rag_state=rag_state,
+    )
+
     try:
         agent2_instructions = rag_state.get("agent2_instructions") or "Respond warmly and briefly. Ask one gentle follow-up question."
 
@@ -326,8 +335,8 @@ async def rag_response_fn(
         )
         assistant_text = (assistant_text or "").strip()
 
-        chat_state.add_message(HumanMessage(content=user_text), scenario=current)
-        chat_state.add_message(AIMessage(content=assistant_text), scenario=current)
+        chat_state.add_message(HumanMessage(content=user_text), scenario=rag_state["current_scenario"])
+        chat_state.add_message(AIMessage(content=assistant_text), scenario=rag_state["current_scenario"])
 
         tail_history.append(HumanMessage(content=user_text))
         tail_history.append(AIMessage(content=assistant_text))
@@ -343,31 +352,31 @@ async def rag_response_fn(
         logger.exception(f"{lu.BG_RED}[RAG-PHI3][{trace_id}] CALL#1 failed: {e}{lu.RESET}")
         raise
 
-    # --- AGENT-2: Analyze conversation and prepare for next turn ---
-    # This runs in background to prepare for the next user message
-    msg_history_call2 = list(tail_history)
+    # # --- AGENT-2: Analyze conversation and prepare for next turn ---
+    # # This runs in background to prepare for the next user message
+    # msg_history_call2 = list(tail_history)
 
-    async def _runner():
-        # ensure only one CALL#2 mutates rag_state at a time
-        await _predict_and_update_next_scenario(
-            trace_id=trace_id,
-            msg_history=msg_history_call2,  
-            available_scenarios_text=available_scenarios_text,
-            current=current,
-            instructions_text=instructions_text_call_1,
-            rag_state=rag_state,
-        )
+    # async def _runner():
+    #     # ensure only one CALL#2 mutates rag_state at a time
+    #     await _predict_and_update_next_scenario(
+    #         trace_id=trace_id,
+    #         msg_history=msg_history_call2,  
+    #         available_scenarios_text=available_scenarios_text,
+    #         current=current,
+    #         instructions_text=instructions_text_call_1,
+    #         rag_state=rag_state,
+    #     )
 
-    # create an asyncio task object
-    task = asyncio.create_task(_runner())
-    rag_state["_pending_scenario_task"] = task
+    # # create an asyncio task object
+    # task = asyncio.create_task(_runner())
+    # rag_state["_pending_scenario_task"] = task
 
     # Return immediately
     t_end = time.time()
-    logger.info(f"{lu.GREEN}[RAG-PHI3][{trace_id}] End (fast-return) current={current} total={(t_end - t0):.3f}s{lu.RESET}")
+    logger.info(f"{lu.GREEN}[RAG-PHI3][{trace_id}] End current turn={rag_state['current_scenario']} total={(t_end - t0):.3f}s{lu.RESET}")
 
     return {
         "text": assistant_text,
-        "current_scenario": current,
+        "current_scenario": rag_state["current_scenario"],
         "next_scenario": "",  # frontend doesn’t need this at the moment
     }
