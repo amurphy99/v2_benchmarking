@@ -16,24 +16,23 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
 # From this project
-from ...services                    import logging_utils as lu 
-from ...services.db_services        import ChatService
-from ...services.llm.chat_utilities import get_LLM_response
-from  ..services.bg_helpers         import fire_and_log
-from  ..services.chatHelpers        import ChatHandler
-from  ..services.speechProvider     import SpeechToTextProvider
+from ...services                           import logging_utils as lu 
+from ...services.db_services               import ChatService
+from ...services.llm.chat_utilities        import get_LLM_response
+from  ..services.bg_helpers                import fire_and_log
+from  ..services.chatHelpers               import ChatHandler
+from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
-from .handlers.ws_events    import handle_receive_json
+from .handlers.ws_events    import handle_receive_json, _toggle_stream
 
 # Delegation / passthroughs
 from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
 from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
-from .handlers.ws_events    import _toggle_stream
 
 
 # ================================================================================

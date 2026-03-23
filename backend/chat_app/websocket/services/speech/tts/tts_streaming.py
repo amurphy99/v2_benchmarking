@@ -1,7 +1,9 @@
 """
 Text-to-Speech Audio Streaming
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.speech.tts_streaming`
+`backend.chat_app.websocket.services.speech.tts.tts_streaming`
+
+Entry point from other parts of the project is `synthesize_and_stream_tts`
 
 """
 import logging, asyncio, base64, json
@@ -12,11 +14,10 @@ from math         import ceil
 from time         import monotonic as now_ts
 
 # From this project
-from ....services               import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
-from    .tts_service            import TextToSpeechProvider
+from .....services               import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
+from     .tts_google             import TextToSpeechProvider
 
-# Config 
 # Chunk size (bytes) of TTS audio streamed back to frontend client. 
 CHUNK_SIZE = 8_192   # 8_192 | 4_800
 

@@ -1,7 +1,9 @@
 """
 Text-to-Speech Provider (using Gemini TTS)
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.speech.tts_service`
+`backend.chat_app.websocket.services.speech.tts.tts_google`
+
+Google-sourced text-to-speech. This
 
 """
 import logging, io, wave
@@ -10,11 +12,11 @@ logger = logging.getLogger(__name__)
 # Google imports
 from google       import genai
 from google.genai import types
-from google.cloud import texttospeech as tts
+from google.cloud import texttospeech as g_tts
 
 # From this project
-from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
 
 # Config (Gemini TTS)
 GEMINI_VOICE_NAME = "Kore"
@@ -22,9 +24,9 @@ STYLE_PREFIX      = "Say: "  # "Say cheerfully: "
 
 # Config (Google Cloud TTS)
 LANGUAGE_CODE    = "en-US"
-CLOUD_VOICE_NAME = "en-US-Chirp-HD-F"          # "en-US-Standard-C" | en-US-Chirp-HD-F
-VOICE_GENDER     = tts.SsmlVoiceGender.NEUTRAL # Not needed for Chirp voices
-AUDIO_FMT        = tts.AudioEncoding.LINEAR16  # LINEAR16 | OGG_OPUS | PCM
+CLOUD_VOICE_NAME = "en-US-Chirp-HD-F"            # "en-US-Standard-C" | en-US-Chirp-HD-F
+VOICE_GENDER     = g_tts.SsmlVoiceGender.NEUTRAL # Not needed for Chirp voices
+AUDIO_FMT        = g_tts.AudioEncoding.LINEAR16  # LINEAR16 | OGG_OPUS | PCM
 SAMPLE_RATE_HZ   = 24_000
 
 # Aoede | en-US-Chirp-HD-F |  en-US-Chirp3-HD-Aoede | en-US-Neural2-F | en-US-Neural2-F
@@ -80,12 +82,12 @@ class TextToSpeechProvider_Gemini:
 # ================================================================================
 class TextToSpeechProvider:
     def __init__(self):
-        self._client = tts.TextToSpeechClient()
-        self._voice  = tts.VoiceSelectionParams(
+        self._client = g_tts.TextToSpeechClient()
+        self._voice  = g_tts.VoiceSelectionParams(
             language_code = LANGUAGE_CODE,
             name          = CLOUD_VOICE_NAME,
         )
-        self._audio_config = tts.AudioConfig(
+        self._audio_config = g_tts.AudioConfig(
             audio_encoding    = AUDIO_FMT,
             sample_rate_hertz = SAMPLE_RATE_HZ,
         )
@@ -104,7 +106,7 @@ class TextToSpeechProvider:
         if not text: return b""
         try:
             response = self._client.synthesize_speech(
-                input        = tts.SynthesisInput(text=text),
+                input        = g_tts.SynthesisInput(text=text),
                 voice        = self._voice,
                 audio_config = self._audio_config,
             )

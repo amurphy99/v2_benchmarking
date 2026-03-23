@@ -1,7 +1,7 @@
 """
-Live user chat controller.
+Google Cloud Speech-to-Text (STT) utility class
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.speechProvider`
+`backend.chat_app.websocket.services.speech.stt.speechProvider`
 
 New chat-response flow:
 - Responses are async tasks that get queued up whenever we determine the user MIGHT be finished speaking
@@ -23,11 +23,11 @@ from time     import monotonic as now_ts
 from google.cloud import speech
 
 # From this project
-from ...services import logging_utils as lu
-from ...services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
-from .chatHelpers import ChatHandler
-from .bg_helpers  import threadsafe_fire_and_log as thread_FL
+from ...chatHelpers import ChatHandler
+from ...bg_helpers  import threadsafe_fire_and_log as thread_FL
 
 # Constants
 SAMPLE_RATE   = 16_000
