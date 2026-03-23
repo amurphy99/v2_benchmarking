@@ -118,7 +118,7 @@ class TextToSpeechProvider:
             data_wav = response.audio_content
             pcm, sr, ch, bps = TextToSpeechProvider.wav_to_pcm_bytes(data_wav)
 
-            logger.info(f"{TTS_MAIN} WAV->PCM: sr={sr}, ch={ch}, bps={bps}, pcm_bytes={len(pcm):,} {RESET}")
+            #logger.info(f"{TTS_MAIN} WAV->PCM: sr={sr}, ch={ch}, bps={bps}, pcm_bytes={len(pcm):,} {RESET}")
             return pcm            
 
         except Exception as e:

@@ -1,24 +1,25 @@
 """
 Text-to-Speech Audio Streaming
 --------------------------------------------------------------------------------
-`bbackend.chat_app.websocket.services.speech.tts_streaming`
+`backend.chat_app.websocket.services.speech.tts_streaming`
 
 """
 import logging, asyncio, base64, json
 logger = logging.getLogger(__name__)
 
-from math import ceil
 from asgiref.sync import sync_to_async
+from math         import ceil
+from time         import monotonic as now_ts
 
 # From this project
-from ....services import logging_utils as lu
+from ....services               import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
-
-from .tts_service import TextToSpeechProvider
+from    .tts_service            import TextToSpeechProvider
 
 # Config 
 # Chunk size (bytes) of TTS audio streamed back to frontend client. 
 CHUNK_SIZE = 8_192   # 8_192 | 4_800
+
 
 # ================================================================================
 # Stream a TTS audio response to the frontend in base64 chunks
@@ -28,6 +29,8 @@ async def synthesize_and_stream_tts(system_resp, send_callback):
     1) Synthesize speech bytes (run sync TTS off the event loop)
     2) Chunk + stream to the frontend over websocket
     """
+    t0 = now_ts()
+
     # Synthesize speech (sync network call -> run in thread)
     tts_provider = TextToSpeechProvider()
     audio_bytes  = await sync_to_async(tts_provider.synthesize_speech)(system_resp)
@@ -35,7 +38,9 @@ async def synthesize_and_stream_tts(system_resp, send_callback):
     # Stream audio chunks to client
     await stream_audio_chunks(audio_bytes, send_callback)
 
-    logger.info(f"{TTS_MAIN} Synthesized speech sent to frontend. {RESET}")
+    # Log upon completion
+    total_time = now_ts() - t0
+    logger.info(f"{TTS_MAIN} Synthesized speech sent to frontend ({lu.CYAN}{BOLD}{total_time:.4f}s{UNBOLD}{TTS_MAIN}). {RESET}")
 
 # --------------------------------------------------------------------------------
 # Split and send audio bytes in chunks to the frontend
