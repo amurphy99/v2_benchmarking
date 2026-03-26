@@ -8,7 +8,7 @@ Two seeding modes are controlled by the constants below:
   - REMAKE_ANALYZED_DATA : wipe and recreate the fixed-transcript chats (source="webapp", visible to admins)
 
 """
-import asyncio, json as json_lib
+import os, asyncio, json as json_lib
 from datetime  import timedelta, time
 from pathlib   import Path
 from random    import random
@@ -33,11 +33,15 @@ from ._seed_demo_data import (
 # --------------------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------------------
+# If we are local or deployed (based on the .env file)
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "local")
+LOCAL_MODE      = (APP_ENVIRONMENT == "local")
+
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA   = True
+REMAKE_SAMPLE_DATA   = not APP_ENVIRONMENT
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = True
+REMAKE_ANALYZED_DATA = not APP_ENVIRONMENT
 
 
 # ================================================================================

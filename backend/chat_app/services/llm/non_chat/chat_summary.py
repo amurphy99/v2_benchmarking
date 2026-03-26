@@ -25,9 +25,8 @@ class ChatSummaryTopics(BaseModel):
 
     # Get a ~1 paragraph summary
     summary: str = Field(..., description = (
-        "One short warm, person-centered paragraph summary of the chat "
-        "(4-6 sentences). Use plain text. No bullet points. Make the "
-        "summary from the perspective of the assistant."
+        "One short plain-language paragraph summary of the completed chat (4-6 sentences). " 
+        "Use plain text. No bullet points. Use only information in the transcript; do not invent details."
     ),)
 
     # Get a short list of comma separated main topics for this chat
@@ -52,12 +51,14 @@ SUMMARY_TOPICS_SYSTEM = (
     "Use only information in the transcript; do not invent details.\n\n"
 
     "GOAL:\n"
-    "- Create a brief, human-readable, person-centered summary of the chat. \n"
-    "- Capture what the user talked about in a way that feels warm, grounded, and useful.\n\n"
+    "- Create a brief, human-readable summary of the completed chat. \n"
+    "- Capture what the user talked about in grounded, useful way.\n\n"
 
     "STYLE RULES:\n"
-    "- The summary should feel warm, respectful, and human.\n"
-    "- The summary should be from the assistant's perspective.\n"
+    "- The summary should feel respectful, clear, and human.\n"
+    "- Write it as a completed recap, not as an ongoing conversation.\n"
+    "- Do not use first-person assistant language.\n"
+    "- Do not imply the system is still listening, helping, or responding.\n"
     "- Do not sound clinical, detached, diagnostic, or like an internal case note.\n"
     "- Focus primarily on the USER, their interests, experiences, feelings, or meaningful details.\n"
     "- Prefer concrete specifics over vague recap language.\n"

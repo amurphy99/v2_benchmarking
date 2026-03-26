@@ -59,11 +59,11 @@ class ChatRiskAssessment(BaseModel):
 
     # Reasoning behind the risk level assessment
     reason: str = Field(..., description=(
-        "Plain text, 3-5 sentences explaining why the quotes justify risk_level. "
-        "Reference context, intensity/repetition, and tense where relevant. "
-        "If there was apparently concerning language that did NOT count because it referred to media, "
-        "fiction, hypotheticals, quoted speech, or another person, say so clearly. "
-        "Do not invent details not present in the transcript."
+        "Plain text, 2-4 short sentences explaining why the quotes justify risk_level. "
+        "Keep the wording simple and direct. Reference context, intensity/repetition, "
+        "and tense only when they clearly matter. If concerning language did NOT count "
+        "because it referred to media, fiction, hypotheticals, quoted speech, or another "
+        "person, say so briefly. Do not invent details not present in the transcript."
     ),)
 
 # Default response (used in failure/error cases)
@@ -96,7 +96,8 @@ RISK_ASSESSMENT_SYSTEM = (
     "- Do not raise risk for statements about other people unless the user clearly connects them to their own suffering.\n"
     "- Consider intensity + frequency + repetition across the transcript.\n"
     "- Consider tense/intent: future-oriented language is generally more concerning than past-only language.\n"
-    "- This output supports human review, so be careful and grounded.\n\n"
+    "- This output supports human review, so be careful and grounded.\n"
+    "- Keep the final reason brief, plain-language, and to the point.\n\n"
 )
 
 # Structure the prompt accordingly
