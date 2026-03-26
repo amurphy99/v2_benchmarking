@@ -20,12 +20,13 @@ export function Chat() {
     const navigate = useNavigate();
     const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [animation, setAnimation] = useState<string>();
-    const [animCount, setAnimCount] = useState<number>(0);
+    const [emotion,    setEmotion   ] = useState<string>("Neutral");
+    const [emoCount,   setEmoCount  ] = useState<number>(0);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
     
+    // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
     const onUserUtterance   = (text: string) => { 
         pushMessage("user",      text); 
         setBotMessage( 
@@ -36,28 +37,17 @@ export function Chat() {
             </div>
         );
     };
-    const onSystemUtterance = (text: string) => { 
-        pushMessage("assistant", text); 
-        setBotMessage(<>{text}</>)
-    };
+
+    // System utterance received
+    const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
+
     // Happy, Sad, Surprised, Scared, Angry, Neutral
-    const onEmotion = (emotion: string) => {
-        const map: Record<string, string> = {
-            Happy: "DANCE",
-            Sad: "SHAKE NO",
-            Surprised: "EMBARRASSED",
-            Scared: "SHAKE NO",
-            Angry: "EMBARRASSED",
-            Neutral: "HEAD TILT",
-        };
-        const value = map[emotion] || "NOD YES";
-        setAnimation(value);
-        setAnimCount((t) => t + 1);
-    }
+    const onEmotion = (emotion: string) => { setEmotion(emotion); setEmoCount((t) => t + 1); }
 
     // selecting the type of chat
     type ChatMode = "default" | "memory_activity";
     const [chatMode, setChatMode] = useState<ChatMode>("default");
+
 
     type DebugTurn = {
         ts: number;
@@ -68,57 +58,42 @@ export function Chat() {
 
     const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
 
-    // Live-chat hook
-    // const { start, stop, save } = useLiveChat({ onUserUtterance, onSystemUtterance, onScores: () => {}, onEmotion});
 
-    const { start, stop, save } = useLiveChat({
+
+    // Live-chat hook
+    const { start, stop, save, chatEnding } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
         onEmotion,
         wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
-        onDebugTurn: (t) =>
-            setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),
-        onRagParseError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
-        onChatError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
+
+        onDebugTurn     : (t) => { setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]);                                 },
+        onRagParseError : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
+        onChatError     : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
+
+        // Chat ended 
         onChatClosed: () => {
             setRecording(false);
             setShowModal(false);
-            navigate("/goal");
+            navigate("/chat/end"); // navigate("/goal")
         },
+        onChatPaused: () => { setRecording(false); },
     });
     
     // Separate recording flag that we control ourselves
     const [recording, setRecording ] = useState(false);
-    const startChat = () => {
-		start();
-		setRecording(true);
-	};
-	const pauseChat = () => {
-		stop();
-		setRecording(false);
-	};
+    const startChat = () => { start(); setRecording(true ); };
+	const pauseChat = () => { stop (); setRecording(false); };
 
     // Modal control
     const [showModal, setShowModal] = useState(false);
     const endChatModal = () => {
 		setShowModal(true);
-		if (!recording) {
-			pauseChat();
-		}
+		if (!recording) { pauseChat(); }
 	};
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
+    if (isLoading) { return <div>Loading...</div>; }
 
     const model = settings.modelChoice;
 
@@ -139,7 +114,7 @@ export function Chat() {
                 <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={animation} animCount={animCount} model={model} zoom="body" /> 
+                        <Avatar emotion={emotion} emoCount={emoCount} model={"qt"} zoom="body" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -147,7 +122,7 @@ export function Chat() {
                 </div>
                 :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={animation} animCount={animCount} model={model} zoom="head"/>
+                    <Avatar emotion={emotion} emoCount={emoCount} model={model} zoom="head"/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
@@ -155,13 +130,17 @@ export function Chat() {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-           <div
-                className={`flex flex-row ${
-                    chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
-                } mx-[20vw] gap-[4em] justify-around`}
-            >
-                <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
-                <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+           <div className={`flex flex-row ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} mx-[20vw] gap-[4em] justify-around`} >
+                {chatEnding
+                    ? <div className="flex flex-col gap-2 items-center text-gray-500">
+                          <BsStopCircle size={"8vh"} color={"gray"} />
+                          Ending chat...
+                      </div>
+                    : <>
+                          <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
+                          <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+                      </>
+                }
 
                 <select
                 value={chatMode}

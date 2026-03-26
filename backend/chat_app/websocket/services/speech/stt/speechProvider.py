@@ -1,7 +1,13 @@
 """
-Live user chat controller.
+Google Cloud Speech-to-Text (STT) utility class
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.speechProvider`
+`backend.chat_app.websocket.services.speech.stt.speechProvider`
+
+New chat-response flow:
+- Responses are async tasks that get queued up whenever we determine the user MIGHT be finished speaking
+- Because preparing a response can take ~1.5 seconds, we do so a bit greedily... (just using google's cues)
+- If they start speaking again before our response is ready however, then we cancel the response task
+- Then we go back to our "listening" state again
 
 TODO: Really need to test it out without KEEP_ALIVE_SEC
 
@@ -17,11 +23,11 @@ from time     import monotonic as now_ts
 from google.cloud import speech
 
 # From this project
-from ...services import logging_utils as lu
-from ...services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
-from .chatHelpers import ChatHandler
-from .bg_helpers  import threadsafe_fire_and_log as thread_fl
+from ...chatHelpers import ChatHandler
+from ...bg_helpers  import threadsafe_fire_and_log as thread_FL
 
 # Constants
 SAMPLE_RATE   = 16_000
@@ -36,7 +42,7 @@ SILENCE        = b"\x00" * CHUNK_SIZE
 # Streaming STT via audio bytes received from the ChatConsumer client
 # ================================================================================
 class SpeechToTextProvider:
-    def __init__(self, *, consumer, loop, on_timestamps_callback=None):
+    def __init__(self, *, consumer, loop):
         self._client              = speech.SpeechClient()
         self._streaming_config    = None
         self._audio_buffer        = Queue()
@@ -50,7 +56,6 @@ class SpeechToTextProvider:
         # From ChatConsumer
         self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
         self._loop         = loop                    # Loop from the consumer
-        self._ts_callback  = on_timestamps_callback  # The function to call when word-level timestamps are received
     
 
     # --------------------------------------------------------------------------------
@@ -102,14 +107,14 @@ class SpeechToTextProvider:
             sample_rate_hertz            = SAMPLE_RATE,
             language_code                = LANGUAGE_CODE,
             enable_automatic_punctuation = True,
-            enable_spoken_punctuation    = True,
-            model                        = "latest_long",
-            use_enhanced                 = True,
-            enable_word_time_offsets     = bool(self._ts_callback),
+            enable_spoken_punctuation    = True,            # TODO: Maybe should be false? ("how are you question mark" -> "how are you?")
+            model                        = "latest_long",   # Model selection
+            use_enhanced                 = True,            # IDK it's supposed to be better
+            enable_word_time_offsets     = True,            # Word-level timestamps
         )
         self._streaming_config = speech.StreamingRecognitionConfig(
-            config          = config, 
-            interim_results = False,
+            config          = config,
+            interim_results = True,
         )
 
         # Track the thread
@@ -158,44 +163,68 @@ class SpeechToTextProvider:
     # ================================================================================
     def _listen_responses(self, responses):
         """
-        If the received response is final, it calls the transcription callback defined 
-        in the constructor, as well as the word timestamps callback from the constructor.
+        Routes interim results to cancel any pending response task, and final results to
+        `ChatHandler.stage_and_schedule` along with word-level timestamps.
         """
         for response in responses:
             for result in response.results:
-                # Ignore interim results
-                if not result.is_final: continue
 
-                # Make sure this isn't a duplicate transcript
+                # --------------------------------------------------------------------------------
+                # Interim Result: the user is still speaking
+                # --------------------------------------------------------------------------------
+                # Non-empty interim means the user is still speaking -> cancel any pending response
+                if not result.is_final:
+                    # Check if empty; skip if so
+                    transcript = result.alternatives[0].transcript.strip()
+                    if not transcript: continue
+
+                    # If there is a result; cancel any pending response task
+                    consumer = self._consumer()
+                    if consumer:
+                        task = getattr(consumer, "_pending_response_task", None)
+                        if task and not task.done():
+                            self._loop.call_soon_threadsafe(task.cancel)
+                            logger.info(f"{STT_MAIN} Interim result: cancelling pending response. {RESET}")
+                    
+                    # Never actually process interim results as a transcription
+                    continue  
+
+                # --------------------------------------------------------------------------------
+                # Final Result: validate and extract words
+                # --------------------------------------------------------------------------------
+                # 1) Make sure this isn't a duplicate transcript
                 transcript = result.alternatives[0].transcript.strip()
                 valid, transcript = self._check_transcript(transcript)
                 if not valid: continue
-                
-                # Log the resulting transcription
-                logger.info(f"{STT_MAIN} Received final transcription: \"{transcript}\" {RESET}")
-                
-                # Prepare references to the ChatConsumer's methods
-                consumer = self._consumer()
-                if consumer is None: return  # consumer gone
 
-                # Send the transcript results to the ChatConsumer
-                data = {"type": "user_utt", "data": transcript}
-
-                t_sched = now_ts()
-                fut = thread_fl(
-                    self._loop, consumer.handle_stt_output(data), 
-                    name="stt::handle_stt_output"
+                # 2) Format the word-level timestamps how we want them
+                words = (
+                    SpeechToTextProvider._get_word_timestamps(datetime.now(), result.alternatives[0].words)
+                    if result.alternatives[0].words else []
                 )
-                def _done(f): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-t_sched:.3f}s{UNBOLD}.{RESET}")
+
+                # 3) Prepare references to the ChatConsumer's methods
+                consumer = self._consumer()
+                if consumer is None: return  # consumer gone; abandon the task
+
+                # Log the resulting transcription
+                logger.info(f"{STT_MAIN} Final transcription: \"{transcript}\" ({BOLD}{len(words)} words{UNBOLD}) {RESET}")
+
+                # 4) Send the transcript results to the ChatConsumer
+                data    = {"type": "user_utt", "data": transcript, "time": now_ts()}
+                t_sched = now_ts()
+                fut = thread_FL(
+                    self._loop, ChatHandler.stage_and_schedule(data, consumer, words),
+                    name="stt::stage_and_schedule"
+                )
+                def _done(_, _ts=t_sched): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
                 fut.add_done_callback(_done)
-                
-                # TODO: We don't currently handle STT results with word-level timestamps
-                if self._ts_callback: 
-                    word_timestamps = SpeechToTextProvider._get_word_timestamps(datetime.now(), result.alternatives[0].words)
-                    thread_fl(self._loop, self._ts_callback(word_timestamps), name="stt:timestamps")
-          
-    
-    # TODO: Doesn't work for transcript highlighting
+
+
+    # ================================================================================
+    # Format STT results with timestamps
+    # ================================================================================
+    # TODO: Doesn't work for transcript highlighting yet
     # TODO: These timestamps need to be related to either the start of the ChatMessage, or real time
     @staticmethod
     def _get_word_timestamps(now, words):

@@ -16,17 +16,18 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
 # From this project
-from ...services                   import logging_utils as lu 
-from ...services.db_services       import ChatService
-from  ..services.bg_helpers        import fire_and_log
-from  ..services.chatHelpers       import ChatHandler
-from  ..services.speechProvider    import SpeechToTextProvider
+from ...services                           import logging_utils as lu 
+from ...services.db_services               import ChatService
+from ...services.llm.chat_utilities        import get_LLM_response
+from  ..services.bg_helpers                import fire_and_log
+from  ..services.chatHelpers               import ChatHandler
+from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
-from .handlers.ws_events    import handle_receive_json
+from .handlers.ws_events    import handle_receive_json, _toggle_stream
 
 # Delegation / passthroughs
 from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
@@ -38,17 +39,22 @@ from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 # ChatConsumer 
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
-    MAX_CONTEXT =  8  # How many recent messages to keep for the LLM
-    
+    # Helps us decide what behavior to use in other areas ("standard" | "activity")
+    # TODO: Could probably just use this as an argument in close_session for the DB save
+    CHAT_TYPE = "standard"
+
+    # How many recent messages to keep for the LLM
+    MAX_CONTEXT = 30  
+
     # ================================================================================
     # Connect
     # ================================================================================
     async def connect(self):
-        # Miscellaneous setup
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0
-        self.overlapped_speech_events = []  # List of timestamps (ToDo: Add this to the DB somehow)
-        self.last_response            = None
+        # Initialize all per-session state attributes (also called on disconnect to reset them)
+        self._init_response_state()
+
+        # Define the response generation method to be used in the chat
+        self.response_method = get_LLM_response
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -62,7 +68,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.source = self.scope.get("source", "unknown")
         
         # Configuration based on the source platform for the chat
-        self.use_backend_STT   = (self.source == "webapp")
+        self.use_backend_STT   = (self.source == "webapp") # Send the user text to the frontend so it can see it too
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
         self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
@@ -99,14 +105,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await join_chat_consumer_groups(self)
 
         # Create new audio buffer & speech provider instances
-        self.audio_buffer = bytearray()
-    
-        # TODO: Define a function for ts_callback to perform when we receive word-level timestamps
-        self.stt_provider = SpeechToTextProvider(
-            consumer               = self,
-            loop                   = asyncio.get_running_loop(),
-            on_timestamps_callback = None, 
-        )
+        self.audio_buffer     = bytearray()
+        self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
+        self.streaming_active = True
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -126,29 +127,62 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Shut down the STT provider
         if getattr(self, "stt_provider", None): self.stt_provider.stop()
 
+        # Notify listeners that the user has disconnected
+        try: await self._broadcast_stream_status("ended")
+        except Exception: pass
+
+        # Cancel any pending response task (LLM -> TTS tasks)
+        pending = getattr(self, "_pending_response_task", None)
+        if pending and not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
         # Snapshot IDs (don't pass model instances into background tasks)
         user_id    = getattr(self.user,    "id",    None)
         session_id = getattr(self.session, "id",    None)
         username   = getattr(self.user, "username", None)
 
+        # Flush any staged utterances to DB before post-chat analysis runs
+        # (awaited so the message exists before close_session queries for it)
+        staged = getattr(self, "_staged_utterances", [])
+        if staged:
+            try: await db_s2a(ChatService.add_message)(session_id, "user", (" ".join(staged)))
+            except Exception: pass
+            self._staged_utterances.clear()
+            self._staged_words     .clear()
+
         # Close the ChatSession in the DB
         if user_id and session_id:
-            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source), 
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source),
                          name=f"disconnect::close-session-{session_id}")
 
         # Cancel background tasks (only connection-based ones; not the close_session task)
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
         await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
 
-        # Reset some properties for the next connection
-        self.session                  = None
-        self.context_buffer           = []
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0
-        self.overlapped_speech_events = []
+        # Reset all per-session attributes for the next connection
+        self.session        = None
+        self.context_buffer = []
+        self._init_response_state()
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
+
+    # ================================================================================
+    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
+    # ================================================================================
+    # Overall communication handler; all incoming messages come through here first
+    async def receive_json(self, data, **kwargs):
+        await handle_receive_json(self, data)
+ 
+    # Add messages to the database & update the local context (role must be "user" or "assistant")
+    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
+
+    # Handle on-utterance biomarkers
+    async def on_utterance_biomarkers(self): return await _on_utterance_biomarkers(self)
+
+    # Handle "streamed" audio data from the frontend client
+    async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)
 
 
     # ================================================================================
@@ -171,37 +205,48 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _broadcast_monitor(self, payload):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.monitor", "payload": payload})
 
-    # ================================================================================
-    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
-    # ================================================================================
-    async def receive_json(self, data, **kwargs):
-        await handle_receive_json(self, data)
- 
-    # Add messages to the database & update the local context (role must be "user" or "assistant")
-    # TODO: Working on replacing _add_message_CB
-    async def _add_message_CB(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
-    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
-
-    # Handle on-utterance biomarkers
-    async def _utt_bio(self): await _on_utterance_biomarkers(self)
-    async def on_utterance_biomarkers(self): await _on_utterance_biomarkers(self)
-
-    # Handle "streamed" audio data from the frontend client
-    async def _handle_audio_data(self, data): await _handle_audio_data(self, data)
-    async def  handle_audio_data(self, data): await _handle_audio_data(self, data)
+    # Broadcasts stream status changes ("active" | "paused" | "ended") to listeners
+    async def _broadcast_stream_status(self, status: str):
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.stream_status", "data": {"status": status}})
 
 
     # ================================================================================
     # Additional Helpers
     # ================================================================================
-
     # Reply to the user immediately. Can pass a message, otherwise will query the LLM.
     async def reply_now(self, use_response=None):
+        await ChatHandler.flush_staged_utterances(self)
         return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
 
-    # called by the SpeechToTextProvider when a final transcript is ready
-    # making a class level method allows me to override in the ActivityChatConsumer 
-    # for the RAG pipeline without having to change the SpeechToTextProvider code
-    async def handle_stt_output(self, data):
-        await ChatHandler.handle_transcription(data, self, relay_user_utt=True)
+    # Pause/Resume -- Toggle the STT stream (wrapper for '_toggle_stream' in ws_events.py)
+    async def toggle_stream(self, data_or_cmd):
+        """
+        Accepts either a raw command string ("start" | "stop") or a full data dictionary (JSON).
+        """
+        data = data_or_cmd if isinstance(data_or_cmd, dict) else {"data": data_or_cmd}
+        await _toggle_stream(self, data)
+
+    # Session State Attributes
+    def _init_response_state(self):
+        """
+        Initialize (or reset) all per-session state attributes. 
+        Called in connect() and disconnect().
+        """
+        # Conveniently access the LLMs last response (for 'repeat_last_response()')
+        self.last_response            = None
+
+        # Old turn-taking/overlapped speech functionality
+        self.overlapped_speech_count  = 0.0
+        self.audio_windows_count      = 0.0 
+        self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
+
+        # Response task state
+        self._staged_utterances       = []     # Raw STT transcripts waiting to be committed
+        self._staged_words            = []     # Parallel list of word-timestamp lists (per utterance)
+        self._pending_response_task   = None   # Current 'asyncio.Task' for '_execute_response'
+
+        # Chat status tracking
+        self.streaming_active         = False  # True while STT stream is active (paused state)
+        self._tts_streaming           = False  # True while audio chunks are actively being sent to the frontend
+        self._pending_action          = None   # Tracks pending user-initiated action ("end_chat" | None)
 

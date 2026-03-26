@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { useQueryClient      } from "@tanstack/react-query";
+import { useState, useEffect, useRef     } from "react";
+import { useQueryClient                  } from "@tanstack/react-query";
 import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
-import { useAudioPlayer } from "./live-chat/useAudioPlayer";
+import { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
-// --------------------------------------------------------------------
+// ================================================================================
 // Hook that handles everything involved with the chat
-// --------------------------------------------------------------------
+// ================================================================================
 // Could expose useState flags for: connected, recording, userSpeaking, systemSpeaking.
-// ToDo: Some of these logging utilities are outdated
+// TODO: Some of these logging utilities are outdated
 export default function useLiveChat({
     onUserUtterance,
     onSystemUtterance = (_: string) => {},
@@ -18,41 +18,36 @@ export default function useLiveChat({
     onRagParseError,
     onChatError,
     onChatClosed,
+    onChatPaused, // Backend sent message telling us that the chat is paused
 } : {
     onUserUtterance   : (text: string) => void;
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
     onEmotion         : (emotion: string) => void;
     wsPath           ?: string;
-    onDebugTurn      ?: (turn: {
-                            role: "user" | "assistant";
-                            text: string;
-                            state?: string;
-                        }) => void;
+    onDebugTurn      ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
     onRagParseError  ?: () => void;
     onChatError      ?: () => void;
     onChatClosed     ?: () => void; 
+    onChatPaused     ?: () => void;
 }) {
     // Misc. setup
     const qc = useQueryClient();
+
+    // Handle LLM responses from the backend
     const onLLMres = (response: any) => {
+        // Parse incoming data
 		const payload = response.data;
+        const text    = typeof payload === "string" ? payload : payload?.text ?? "";
 
-        const text = typeof payload === "string" ? payload : payload?.text ?? "";
-
+        // System utterance behavior
         onSystemUtterance(text);
 
+        // Maybe there is extra data
         const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
+        onDebugTurn?.({ role: "assistant", text, state, });
 
-        onDebugTurn?.({
-            role: "assistant",
-            text,
-            state,
-        });
-
-        if (response.emotion) {
-            onEmotion(response.emotion)
-        }
+        if (response.emotion) { onEmotion(response.emotion) }
 
         // if (state === "close_chat") {
         //     setTimeout(() => {
@@ -62,57 +57,67 @@ export default function useLiveChat({
         //     }, 500);
         // }
 	};
-    const [recording, setRecording] = useState(false);
 
+    // Chat status trackers
+    const [recording,   setRecording  ] = useState(false);  // When we need to pause/unpause
+    const [chatEnding,  setChatEnding ] = useState(false);  // True after backend sends "chat_ended"
+
+    // Instantiate the audio player for backend-sent TTS
     const { startPlayer, sendAudio, stopPlayer, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16, bufferAhead: 0.2})
 
-    // wrap the user utterances
-    const onUserUttWrapped = (text: string) => {
-        onUserUtterance(text);
-        onDebugTurn?.({ role: "user", text });
+    // Wrap user utterances
+    const onUserUttWrapped = (text: string) => { onUserUtterance(text); onDebugTurn?.({ role: "user", text }); };
+
+    // --------------------------------------------------------------------------------
+    // Backend chat status updates (pause/resume/end)
+    // --------------------------------------------------------------------------------
+    // Ref so onStreamStatus can call stopAud without depending on declaration order
+    // (useAudioStreamer is defined after useChatSocket which needs onStreamStatus)
+    const stopAudRef = useRef<() => void>(() => {});
+
+    // Backend-initiated stream status change ("paused" | "active")
+    // Stop audio without sending 'toggle_stream' back to backend (would make it loop)
+    const onStreamStatus = (status: string) => {
+        if (status === "paused") { stopAudRef.current(); onChatPaused?.(); } // stopPlayer();
+        // TODO: Depends on how we want this behavior to work. Should we stop talking on pause always?
+        // 
     };
 
+    // Backend signals the chat has ended => wait to do end-of-chat navigation until "goodbye" audio finishes
+    const handleChatEnded = () => { setChatEnding(true); };
+
+    // Navigate once chatEnding=true AND the goodbye audio has finished playing
+    useEffect(() => { if (chatEnding && !systemSpeaking) { onChatClosed?.(); } }, [chatEnding, systemSpeaking]);
+
+    // --------------------------------------------------------------------------------
+    // Chat Socket
+    // --------------------------------------------------------------------------------
 	const { send } = useChatSocket({
 		recording,
         wsPath,
-		onLLMResponse: onLLMres,
+		onLLMResponse   : onLLMres,
 		onScores,
-		onUserUtt: onUserUttWrapped,
-		onAudio: sendAudio,
+		onUserUtt       : onUserUttWrapped,
+		onAudio         : sendAudio,
+        onStreamStatus,
+        onChatClosed    : handleChatEnded,
         onError: (msg) => {
-            if (msg?.type === "rag_parse_error") {
-                onRagParseError?.();
-                return;
-            }
-            if (msg?.type === "chat_error") {
-                onChatError?.();
-                return;
-            }
+            if (msg?.type === "rag_parse_error") { onRagParseError?.(); return; }
+            if (msg?.type ===      "chat_error") { onChatError    ?.(); return; }
         },
 	});
-	const { start: startAud, stop: stopAud } = useAudioStreamer({
-		chunkMs: 64,
-		sendToServer: send,
-	});
+	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
+    stopAudRef.current = stopAud;  // keep ref in sync each render
 
-    // Start, Stop, & Save
-    const start = () => {
-		setRecording(true);
-		startAud();
-        startPlayer();
-        send({ type: "toggle_stream", data: "start" });
-	};
-	const stop = () => {
-		stopAud();
-        stopPlayer();
-        send({ type: "toggle_stream", data: "stop" });
-	};
-    const  save = () => {
-        setRecording(false); 
-        send({ type: "end_chat", data: Date.now() }); 
-        qc.invalidateQueries({ queryKey: ["chatSessions"] });
+    // --------------------------------------------------------------------------------
+    // Start, Stop, & Save 
+    // --------------------------------------------------------------------------------
+    const start = () => { setRecording(true); startAud(); startPlayer(); send({ type: "toggle_stream", data: "start"    }); };
+	const stop  = () => {                      stopAud();  stopPlayer(); send({ type: "toggle_stream", data: "stop"     }); };
+    const  save = () => { setRecording(false);                           send({ type: "end_chat",      data: Date.now() }); 
+        qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Save invalidates chatSessions queries to force a DB refresh
     };
 
-    // Exposes start, stop & save
-    return { start, stop, save }; 
+    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing)
+    return { start, stop, save, chatEnding };
 }

@@ -1,17 +1,97 @@
-# Dementia Speech System
+# CogniBot -- An Interactive Conversational Companion for Speech Analysis
 
-This project aims to create a progressive web app to run a speech system oriented for dementia patients. 
-* <b>Sandbox:</b> cognibot.sandbox.org
-* <b>Deployment:</b> cognibot.org
+Our speech system, "CogniBot", hosts an AI/LLM-based conversational companion for older adults living with dementia, providing engaging interactions while passively analyzing speech and language patterns. Using machine learning and speech analytics, a range of cognitive biomarkers are extracted from conversations and shared with users, caregivers, and clinicians through a web-based monitoring interface. This feedback, alongside detailed conversation history, can help support memory, communication, and care planning. The system is accessible through both a progressive web app and two different physical robotic companions. All user interactions, conversation histories, and biomarker data are synchronized for a seamless experience regardless of which platform is used.
+
+Find CogniBot on our web interface: [CogniBot.org](https://www.cognibot.org).
+
+<details closed> <summary>More details about alternate/development versions of CogniBot</summary>
+
+* [Current deployed version](https://www.cognibot.org) (only official updates)
+* [Sandbox #1](https://sandbox.cognibot.org) 
+* [Sandbox #2](https://sandbox2.cognibot.org) (current most recent testing version)
+* [Sandbox #3](https://sandbox3.cognibot.org)
+
+</details>
+
+<br>
 
 ## How it works
-The app uses 4 different docker containers:
-1) Database (postgres)
-2) Backend  (websocket server, biomarker logic)
-3) Frontend (vite, react) 
 
-Everything is wrapped in docker-compose.yaml and the frontend and backend APIs are the only components accessable outside of the VM as they get served by Nginx. The database and LLM are only accessible from inside the docker network.
+The app uses 4 Docker containers:
 
+|           | Container  | Technology             | Responsibilities                                    |
+|-----------|------------|------------------------|-----------------------------------------------------|
+| Database  | `db`       | PostgreSQL + Vector DB | Relational data storage and RAG vector search       |
+| Backend   | `backend`  | Django + Channels      | WebSockets, LLM integration, and biomarker analysis |
+| Frontend  | `frontend` | Vite + React           | Progressive Web App (PWA) user interface            |
+| Web Proxy | `nginx`    | Nginx + Certbot        | Traffic routing and SSL certificate management      |
+
+
+The containers are orchestrated via `docker-compose.yaml` and the frontend and backend APIs are the only components accessible outside of the VM as they get served by Nginx. The database and LLM are only accessible from inside the docker network.
+
+
+
+
+<br>
+
+# Project Architecture
+```diff
+
+SSH:/home/user/
+ ├── v2_benchmarking/
+ │   ├── docker-compose.yaml          # Orchestrates all 4 containers
++│   ├── .env                         # Created programmatically during startup script
+ │   │
+ │   ├── backend/
+ │   │   ├── Dockerfile-backend
++│   │   ├── google-stt-key.json      # Downloaded from GCS during deployment
++│   │   ├── .env                     # Created programmatically during startup script
+ │   │   ├── backend/                 # Django app
+ │   │   ├── chat_app/                # Core Python backend logic
+ │   │   │   ├── websocket/
+ │   │   │   │   ├── routing.py       # Routes to different chat modes
+ │   │   │   │   ├── biomarkers/      # Cognitive biomarker extraction
+ │   │   │   │   ├── consumers/       # WebSocket consumer classes
+ │   │   │   │   │   ├── consumers.py # Main chat consumer class
+ │   │   │   │   │   └── handlers/    # Channels utilities for consumers
+ │   │   │   │   │
+ │   │   │   │   └── services/        # Chat, audio, RAG utilities
+ │   │   │   │       └── speech/      # Speech-to-text (STT) & text-to-speech (TTS)
+ │   │   │   │
+ │   │   │   └── services/llm/        # LLM provider integrations
+ │   │   │       ├── non_chat/        # Post-chat analysis via structured generation
+ │   │   │       ├── dummy_LLM.py     # Dummy class for offline testing
+ │   │   │       └── llama_api.py     # Correspondence with our separately hosted LLM
+ │   │   │
+ │   │   └── rag_vectorstore/         # Vector DB Django app
+ │   │       ├── models.py            # VectorStore models
+ │   │       ├── services/
+ │   │       │   └── vdb_services.py  # Vector DB services
+ │   │       └── models/
+ │   │           └── MiniLM-L6-v2/    # Downloaded programmatically during deployment
+ │   │
+ │   │
+ │   ├── frontend/
+ │   │   ├── Dockerfile-frontend      # Builds and serves Vite app
++│   │   ├── .env                     # Created programmatically during startup script
+ │   │   ├── src/
+ │   │   └── public/
+ │   │
+ │   └── nginx/
+ │       ├── Dockerfile               # Sets up certbot and nginx
+ │       └── default.conf             # Frontend & Backend API are served
+ │
+ │
+ ├── deployment-files/                # Untracked files downloaded from GCS bucket
+ │   └── models/      
++│       ├── new_LSA.csv
++│       └── stanford-parser-4.2.0-models.jar
+ │
+!└── deploy.sh                        # Script to set everything up
+
+```
+
+<br>
 
 
 ## How to Run
@@ -28,9 +108,8 @@ Everything is wrapped in docker-compose.yaml and the frontend and backend APIs a
 2. Open Docker Desktop
 3. `cd` into the `backend` directory
 4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines. Also, Uncomment the database related services, since this branch uses external database connection during deployment.
-5. `docker compose -f docker-compose.backend.yaml up --build`
-6. If this was the first time you created the volume for the vector database. Then also run-
-`docker exec -it db_vector psql -U postgres -d dementia_chat_vector_db -c "CREATE EXTENSION IF NOT EXISTS vector;"` (only required once).
+5. Run: `docker compose -f docker-compose.backend.yaml up --build`
+6. If this was the first time you created the volume for the vector database. Then also run: `docker exec -it db_vector psql -U postgres -d dementia_chat_vector_db -c "CREATE EXTENSION IF NOT EXISTS vector;"` (only required once).
 
 
 The web app can be accessed through localhost:5173 in your browser.
@@ -56,85 +135,5 @@ Useful commands:
 
 <hr>
 </details>
-
-
-<br>
-
-# Project Architecture
-```diff
-
-SSH:/home/user/
- ├── v2_benchmarking/
- │   ├── backend/
- │   │   ├── Dockerfile-backend
- │   │   ├── backend/             # Django app
- │   │   ├── chat_app/            # Python backend logic
- │   │   │   ├── websocket/biomarkers/biomarker_models/
-+│   │   │   │   ├── stanford-parser-full-2020-11-17/stanford-parser-4.2.0-models.jar
-+│   │   │   │   ├── new_LSA.csv
- │   │   │   │   └── ...
- │   │   │   ├── websocket/services/
- │   │   │   │   ├── audioHelpers.py
- │   │   │   │   ├── bg_helpers.py
- │   │   │   │   ├── chatHelpers.py # main module for default chat functionalities
-+│   │   │   │   ├── parsingHelpers.py # parsers required by the ragChatHelpers.py
-+│   │   │   │   ├── ragChatHelpers.py # new module for RAG-based chat activity
- │   │   │   │   ├── speechProvider.py
- │   │   │   │   └── ...
- │   │   │   ├── websocket/  
- │   │   │   │   ├── consumers/    # Consumer classes handling WS clients
- │   │   │   │   │   └── ...
- │   │   │   │   └── routing.py    # Routing for different chat modes
- │   │   │   │
- │   │   │   ├── services/ 
- │   │   │   │   ├── emotionHelpers.py   # Emotion analysis
- │   │   │   │   ├── topicHelpers.py        
- │   │   │   │   └── llm/                # LLM providers
-+│   │   │   │       ├── langchain_wrapper.py # LC wrapper class for LlamaAPI Chat
- │   │   │   │       ├── llama_api.py
- │   │   │   │       └── dummy_LLM.py
- │   │   │   └── ... 
- │   │   │ 
-+│   │   ├── google-stt-key.json  # Downloaded from GCS during deployment
-+│   │   ├── .env                 # Created programmatically during startup script
- │   │   ├── requirements-web.txt
-+│   │   └── rag_vectorstore/     # Vector database app
-+│   │       ├── models.py        # VectorStore models
-+│   │       ├── services/
-+│   │       │   └── vdb_services.py      # Vector DB services
-+│   │       └── models/
-+│   │           └── MiniLM-L6-v2/        # downloaded programmatically during deployment
- │   │
- │   ├── frontend/
- │   │   ├── Dockerfile-frontend  # Builds and serves Vite app
- │   │   ├── src/
- │   │   ├── public/
-+│   │   └── .env                 # Created programmatically during startup script
- │   │
- │   ├── nginx/
- │   │   ├── Dockerfile           # Sets up certbot and nginx
- │   │   └── default.conf         # Frontend & Backend API are served
- │   │
-+│   ├── .env                     # Created programmatically during startup script
- │   ├── docker-compose.yaml      # Starts up all of the containers
- │   └── ...
- │
- │
- │
- ├── deployment-files/            # Untracked files downloaded from GCS bucket
- │   ├── models/      
-+│   │   ├── new_LSA.csv
-+│   │   ├── stanford-parser-4.2.0-models.jar
--│   │   └── Phi-3_finetuned.gguf # No longer need to download this when we do the setup...
- │   │
- │   ├── logs/                    # For backend log output
- │   └── ... 
- │
-!└── deploy_app.sh                # Script to set everything up
-
-```
-
-
-<br><hr>
 
 

@@ -26,13 +26,19 @@ class ActivityChatConsumer(ChatConsumer):
     Same session handling + persistence + biomarkers as ChatConsumer (through inheritance),
     but swaps response generation to the scenario-based RAG pipeline.
     """
-
+    # Helps us decide what behavior to use in other areas ("standard" | "activity")
+    CHAT_TYPE     = "activity"
     ACTIVITY_NAME = "memory_activity"
+
+    
 
     async def connect(self):
         await super().connect()
 
         self.rag_state = {"current_scenario": START_SCENARIO}
+
+        # Define the response generation method to be used in the chat
+        self.response_method = lambda x: rag_response_fn(x, **self._rag_kwargs())
 
     def _rag_kwargs(self):
         return {
@@ -41,32 +47,14 @@ class ActivityChatConsumer(ChatConsumer):
             "rag_state"     : self.rag_state,
         }
 
+    # ================================================================================
+    # Text Transcriptions — use new ChatHandler path instead of legacy handle_transcription0
+    # ================================================================================
     async def receive_json(self, data, **kwargs):
         if data["type"] == "transcription":
-            await ChatHandler.handle_transcription(
-                data,
-                self,
-                response_fn=rag_response_fn,
-                response_fn_kwargs=self._rag_kwargs(),
-            )
+            await ChatHandler.handle_transcription(data, self)
+            # reply_now is called inside handle_transcription -> respond_to_user,
+            # but respond_to_user doesn't call reply_now directly yet — see note below
             return
 
         return await super().receive_json(data, **kwargs)
-
-    async def reply_now(self, use_response=None):
-        return await ChatHandler.respond_to_user(
-            self.context_buffer,
-            self,
-            use_response=use_response,
-            response_fn=None if use_response is not None else rag_response_fn,
-            response_fn_kwargs=None if use_response is not None else self._rag_kwargs(),
-        )
-
-    async def handle_stt_output(self, data):
-        await ChatHandler.handle_transcription(
-            data,
-            self,
-            relay_user_utt=True,
-            response_fn=rag_response_fn,
-            response_fn_kwargs=self._rag_kwargs(),
-        )

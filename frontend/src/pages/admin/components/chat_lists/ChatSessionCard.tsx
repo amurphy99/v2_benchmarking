@@ -6,7 +6,7 @@ import { dateFormatLong, formatElapsedTime } from "@/utils/styling/numFormatting
 
 // Components
 import { InfoPill                  } from "../admin_header/StatusComponents";
-import { sentimentBadge, riskBadge } from "../analysis/analysisBadges";
+import { sentimentBadge, emotionBadge, riskBadge, topicsBadges } from "../analysis/analysisBadges";
 import { deriveSessionAnalysis     } from "../analysis/deriveSessionAnalysis";
 
 // ================================================================================
@@ -39,21 +39,25 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
                     <div className="text-sm   text-black/60 truncate">{s_date}</div>
                 </div>
 
-                {/* Sentiment & Risk (only for inactive chats) */}
+                {/* Risk / Sentiment / Emotion (only for inactive chats) */}
                 {!isActive && analysis && (
                 <div className="flex gap-2 flex-wrap justify-end">
-                    <InfoPill label="Risk"      value={     riskBadge(analysis.risk_rating)} />
-                    <InfoPill label="Sentiment" value={sentimentBadge(analysis.sentiment  )} />
+                    <InfoPill label="Risk"      value={     riskBadge(analysis.risk_rating )} />
+                    <InfoPill label="Sentiment" value={sentimentBadge(analysis.sentiment   )} />
+                    <InfoPill label="Emotion"   value={  emotionBadge(analysis.emotion     )} />
                 </div>
                 )}
             </div>
 
-            {/* Date & Summary (only show summary for inactive chats) */}
+            {/* Subtitle / Summary / Topics (only for inactive chats) */}
             <div className="flex flex-col mt-[0.25rem]">
                 <div className="text-sm text-black/60 truncate">{subtitle}</div>
-                {!isActive && analysis && (
-                    <div className="text-sm text-black/80 line-clamp-2">{analysis.summary}</div>
-                )}
+                {!isActive && analysis && (<>
+                    <div className="text-sm text-black/80 line-clamp-2 mt-0.5">{analysis.summary}</div>
+                    {session.topics && session.topics.length > 0 && (
+                        <div className="mt-1.5">{topicsBadges(session.topics.slice(0, 4))}</div>
+                    )}
+                </>)}
             </div>
 
             {/* Messages & Duration */}

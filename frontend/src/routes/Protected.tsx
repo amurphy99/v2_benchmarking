@@ -42,3 +42,10 @@ export function IsPatient() {
     const isPatient = role == "patient";
     return isPatient ? <Outlet /> : <Navigate to="/profile" replace />;
 }
+
+export function IsStaff() {
+    const { account, loading } = useAuth();
+    
+    if (loading) return <Spinner />
+    return account.user.is_staff ? <Outlet /> : <Navigate to="/profile" replace />;
+}

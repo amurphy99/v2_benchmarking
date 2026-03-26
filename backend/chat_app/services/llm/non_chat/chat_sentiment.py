@@ -15,18 +15,22 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
 ChatSentiment = Literal["very_negative", "negative", "neutral", "positive", "very_positive"]
-ChatEmotion   = Literal["neutral", "happy", "sad", "scared", "surprised", "angry"]
+ChatEmotion   = Literal["neutral", "happy", "sad", "anxious", "surprised", "angry", "frustrated", "confused"]
 
 # --------------------------------------------------------------------------------
 # Define the Pydantic response Model
 # --------------------------------------------------------------------------------
 class ChatSentimentRisk(BaseModel):
     # "Thought" field for reasoning
-    thought: str = Field(..., description="Analyze the messages of this chat and focus on things the user said that may reflect their overall mood.")
+    thought: str = Field(..., description = (
+        "Brief internal note (1-3 sentences) about the user's overall emotional "
+        "tone across the chat, including whether it felt steady, mixed, or shifted "
+        "over time. Ground this strictly in the user's messages in the transcript."
+    ),)
 
     # Get sentiment & emotion labels
-    sentiment_label: ChatSentiment = Field(..., description="Overall label for whatever sentiment was most prominent during this chat.")
-    emotion_label  : ChatEmotion   = Field(..., description="Overall label for whatever emotion was most prominent from the user during this chat.")
+    sentiment_label : ChatSentiment = Field(..., description="Overall label for whatever sentiment was most prominent during this chat.")
+    emotion_label   : ChatEmotion   = Field(..., description="Primary emotion that best describes the user's overall emotional tone.")
 
 # Default response
 DEFAULT_SENTIMENT = ChatSentimentRisk(thought="FAILED", sentiment_label="neutral", emotion_label="neutral")
@@ -35,8 +39,15 @@ DEFAULT_SENTIMENT = ChatSentimentRisk(thought="FAILED", sentiment_label="neutral
 # Build System Prompt
 # --------------------------------------------------------------------------------
 SENTIMENT_SYSTEM = (
-    "You rate overall chat sentiment and emotion. "
-    "Return JSON that matches the provided schema exactly."
+    "You rate overall chat sentiment and emotional tone.\n"
+    "Return ONLY a single JSON object matching the provided schema exactly (no markdown, no extra keys).\n"
+
+    "RULES:\n"
+    "- Use only information in the transcript; do not invent details.\n"
+    "- Focus primarily on the USER, not the assistant.\n"
+    "- Do not over-weigh isolated words without context.\n"
+    "- Do not treat fictional, quoted, media-related, or hypothetical content as direct evidence of the user's real emotional state unless the user clearly connects it to themself.\n"
+    "- Be modest when the transcript is sparse or emotionally unclear.\n\n"
 )
 
 # Structure the prompt accordingly
@@ -45,10 +56,6 @@ def build_sentiment_messages(transcript):
         {"role": "system", "content": SENTIMENT_SYSTEM},
         {"role": "user",   "content": (
                 "Rate the overall sentiment and emotion of the chat.\n\n"
-
-                "Rules:\n"
-                "- Base everything strictly on the transcript.\n\n"
-
                 f"CHAT TRANSCRIPT:\n{transcript}"
             )
         },

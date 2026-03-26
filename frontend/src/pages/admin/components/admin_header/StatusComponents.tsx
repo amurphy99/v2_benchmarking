@@ -20,12 +20,13 @@ export function connBadge(state: ConnectionState) {
     }
 }
 
-export const ConnectionPill = memo(function ConnPill({ wsState }: { wsState: ConnectionState }) {
+export const ConnectionPill = memo(function ConnPill({ wsState, label }: { wsState: ConnectionState; label?: string }) {
     const badge = useMemo(() => connBadge(wsState), [wsState]);
     return (
         <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${badge.pill}`}>
-        <span className={`h-2 w-2 rounded-full ${badge.dot}`} />
-        <span className="font-medium">{badge.text}</span>
+            {label && <span className="opacity-60 font-normal">{label}</span>}
+            <span className={`h-2 w-2 rounded-full ${badge.dot}`} />
+            <span className="font-medium">{badge.text}</span>
         </div>
     );
 });
@@ -46,26 +47,70 @@ export const LivePills = memo(function LivePills({
     startTsUnix,
     lastEventAt,
     latencyMs,
+    streamStatus = "active",
 }: {
-    startTsUnix : number | null | undefined;
-    lastEventAt : Date   | null | undefined;
-    latencyMs   : number | null | undefined;
+    startTsUnix  : number | null | undefined;
+    lastEventAt  : Date   | null | undefined;
+    latencyMs    : number | null | undefined;
+    streamStatus?: StreamStatus;
 }) {
     const [, forceTick] = useState(0);
+    const [frozenAt, setFrozenAt] = useState<number | null>(null);
+
+    // Always tick every second so "last event" stays live even when paused
     useEffect(() => {
         const id = window.setInterval(() => forceTick((x) => x + 1), 1_000);
         return () => window.clearInterval(id);
     }, []);
 
+    // Freeze/unfreeze the duration counter based on stream status.
+    // Capture the current time once; don't override if already frozen
+    // (e.g. going from "paused" to "ended"; keep the time from when it was paused).
+    useEffect(() => {
+        if (streamStatus === "active") { setFrozenAt(null); } 
+        else                           { setFrozenAt((prev) => prev ?? Math.floor(Date.now() / 1_000)); }
+    }, [streamStatus]);
+
+    const durationValue = frozenAt != null && startTsUnix != null
+        ? formatElapsedTime(Math.max(0, frozenAt - startTsUnix))
+        : formatDurationFromStart(startTsUnix);
+
+    const lastEventLabel = streamStatus === "ended" ? "Chat ended" : "Last event";
+
     return (
         <>
-            <InfoPill label="Duration"   value={formatDurationFromStart(startTsUnix)} />
-            <InfoPill label="Last event" value={formatAgo(lastEventAt)} />
-            <InfoPill label="Latency"    value={latencyMs != null ? `${latencyMs} ms` : "—"} />
+            <InfoPill label="Duration"       value={durationValue} />
+            <InfoPill label={lastEventLabel} value={formatAgo(lastEventAt)} />
+            <InfoPill label="Latency"        value={latencyMs != null ? `${latencyMs} ms` : "—"} />
         </>
     );
 });
 
+
+// --------------------------------------------------------------------------------
+// Stream Status Indicator (user's chat state: active | paused | ended)
+// --------------------------------------------------------------------------------
+export type StreamStatus = "active" | "paused" | "ended";
+
+function streamBadge(status: StreamStatus) {
+    switch (status) {
+        case "active" : return { text: "Active",  dot: "bg-green-500",  pill: "bg-green-50  text-green-700  border-green-200"  };
+        case "paused" : return { text: "Paused",  dot: "bg-yellow-400", pill: "bg-yellow-50 text-yellow-700 border-yellow-200" };
+        case "ended"  :
+        default:        return { text: "Ended",   dot: "bg-red-500",    pill: "bg-red-50    text-red-700    border-red-200"    };
+    }
+}
+
+export const StreamStatusPill = memo(function StreamStatusPill({ status, label }: { status: StreamStatus; label?: string }) {
+    const badge = useMemo(() => streamBadge(status), [status]);
+    return (
+        <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${badge.pill}`}>
+            {label && <span className="opacity-60 font-normal">{label}</span>}
+            <span className={`h-2 w-2 rounded-full ${badge.dot}`} />
+            <span className="font-medium">{badge.text}</span>
+        </div>
+    );
+});
 
 // --------------------------------------------------------------------------------
 // Re-use AdminHeader props
@@ -81,6 +126,7 @@ export type SessionHeaderProps = {
     latencyMs    ? : number | null;
     startTsUnix  ? : number | null;     // seconds since epoch
     messageCount ? : number | null;
+    streamStatus ? : StreamStatus;
 
     // Inactive chat page fields
     inactive_chat  : boolean;

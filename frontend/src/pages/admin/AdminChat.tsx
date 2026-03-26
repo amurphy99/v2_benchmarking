@@ -6,6 +6,7 @@ import useChatListener from "@/hooks/chat-listener/useChatListener";
 
 // Command types
 import type { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
+import type { StreamStatus } from "./components/admin_header/StatusComponents";
 
 // Data received from the backend
 import { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
@@ -49,6 +50,7 @@ export function AdminChat() {
 
         // For admin commands
         onCommandAck      : (ack)  => { ackHandlerRef.current(ack); },
+        onStreamStatus    : (st)   => { setStreamStatus(st?.status ?? "active"); },
         onControlState    : (st)   => {
             setControlState((s) => ({
             listeningPaused : st?.listeningPaused ?? s.listeningPaused,
@@ -64,6 +66,11 @@ export function AdminChat() {
     const [isUserRole, setIsUserRole] = useState<boolean>(true);
     function addSampleMessage       () {pushMessageObj(makeSampleMessage(isUserRole)); setIsUserRole((prev) => !prev);}
     function addSampleBiomarkerScore() {  pushScoreObj(makeSampleBiomarkerEvent()); }
+
+    // --------------------------------------------------------------------------------
+    // Stream status (reflects user's chat state: active | paused | ended)
+    // --------------------------------------------------------------------------------
+    const [streamStatus, setStreamStatus] = useState<StreamStatus>("active");
 
     // --------------------------------------------------------------------------------
     // Control state (commands confirmed by backend)
@@ -95,7 +102,8 @@ export function AdminChat() {
                 lastEventAt   = {lastEventAt} // Date   | null
                 latencyMs     = {latencyMs}   // number | null
                 startTsUnix   = {sessionInfo?.startTs      ?? null}
-                messageCount  = {sessionInfo?.messageCount ?? session.messages.length}
+                messageCount  = {session.messages.length}
+                streamStatus  = {streamStatus}
                 inactive_chat = {false}
             />
 

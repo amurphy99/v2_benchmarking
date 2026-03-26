@@ -1,3 +1,13 @@
+"""
+Postgres Database Schema
+--------------------------------------------------------------------------------
+`backend.chat_app.models`
+
+TODO: Add a field to the ChatMessage model for the "source." This field should 
+      represent how the message was created (LLM, repeated message, admin user,
+      opening greeting, etc.).
+
+"""
 from django.db        import models
 from django.db.models import UniqueConstraint, Q, Avg, Min
 from django.conf      import settings
@@ -112,16 +122,15 @@ class ChatSession(models.Model):
     # Post-chat analysis filled out when chats are completed
     # --------------------------------------------------------------------------------
     # Summary & Topics (stage 1 of post-chat analysis)
-    # TODO: Should change topics to be a list of strings field
     summary   = models.TextField(**init_args)
-    topics    = models.CharField(**init_args, max_length=255, default="['N/A']")
-    
+    topics    = ArrayField(models.CharField(max_length=100), **init_args)
+
     # Sentiment & Emotion (stage 2 of post-chat analysis)
     sentiment = models.CharField(**init_args, max_length=255, default="N/A")
     emotion   = models.CharField(**init_args, max_length=255, default="N/A")
 
     # Risk Alerts (stage 3 of post-chat analysis)
-    risk_level  = models.CharField(**init_args, max_length=32, choices=RISK_LEVEL_CHOICES)
+    risk_level  = models.SmallIntegerField(**init_args, choices=RISK_LEVEL_CHOICES)
     risk_quotes = ArrayField(models.CharField(max_length=255), **init_args)
     risk_reason = models.TextField(**init_args)
 
@@ -189,19 +198,48 @@ class ChatMessage(models.Model):
     def __str__(self): return f"{self.role}: {self.content}"
 
 # ================================================================================
+# ChatWord -- word-level STT timestamps associated with a ChatMessage
+# ================================================================================
+class ChatWord(models.Model):
+    message  = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name="words")
+    word     = models.CharField(max_length=64)
+    start_ts = models.DateTimeField()
+    end_ts   = models.DateTimeField()
+    index    = models.PositiveSmallIntegerField()  # 0-based position within the utterance
+
+    class Meta:
+        ordering = ["message", "index"]
+        indexes  = [models.Index(fields=["message", "index"])]
+
+    def __str__(self): return f"{self.index}: {self.word} ({self.start_ts} - {self.end_ts})"
+
+# ================================================================================
 # ChatBiomarkerScore -- an array of these is assigned to each ChatSession
 # ================================================================================
 class ChatBiomarkerScore(models.Model):
+    """
+    TODO: Some biomarkers may be linked to messages/utterances directly while others are
+    linked to timestamps (e.g., 5 seconds of audio)
+    """
     BIOMARKER_CHOICES = [
-        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"), 
+        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"),
         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
         ("perplexity", "Perplexity")
     ]
-    
-    session    = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="biomarker_scores")
+
+    session    = models.ForeignKey(ChatSession,  on_delete=models.CASCADE,  related_name="biomarker_scores")
+
+    # Nullable foreign to the specific utterance this score was calculated from
+    message    = models.ForeignKey(ChatMessage,  on_delete=models.SET_NULL, related_name="biomarker_scores", **init_args)
+
+    # Score information
     score_type = models.CharField (max_length=32, choices=BIOMARKER_CHOICES)
     score      = models.FloatField()
     ts         = models.DateTimeField(auto_now_add=True)
+    
+    # Time range of the audio/text window this score was derived from
+    start_ts   = models.DateTimeField(**init_args)
+    end_ts     = models.DateTimeField(**init_args)
 
     class Meta:
         ordering = ["ts", "score_type", "id"]
