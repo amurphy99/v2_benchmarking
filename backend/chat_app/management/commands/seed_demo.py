@@ -100,10 +100,11 @@ class Command(BaseCommand):
         # Grant is_staff to an existing user account
         # This is just a temporary solution for testing the admin interface.
         User = get_user_model()
-        adnan = User.objects.filter(username="AdnanSadi2").first()
-        if adnan and not adnan.is_staff:
-            adnan.is_staff = True
-            adnan.save(update_fields=["is_staff"])
+        add_sup = User.objects.filter(username="AdnanSadi2").first()
+        if add_sup and (not add_sup.is_staff or not add_sup.is_superuser):
+            add_sup.is_staff = True
+            add_sup.is_superuser = True
+            add_sup.save(update_fields=["is_staff", "is_superuser"])
 
     # ================================================================================
     # User Setup
