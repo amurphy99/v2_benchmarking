@@ -112,8 +112,12 @@ try:
     check_for_model_files(pronunciation_model_path, prosody_model_path)
 
     # Load the saved LLM model OR use a testing object that just returns sample data
-    if USE_LLM:  from .services.llm.llama_api import LlamaAPI as LLMClass
-    else:        from .services.llm.dummy_LLM import DummyLLM as LLMClass
+    # TODO: Swapped this to the IU endpoint for now...
+    from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
+
+    # TODO: Make something here that actually changes based on an .env variable
+    #if USE_LLM:  from .services.llm.llama_api import LlamaAPI as LLMClass
+    #else:        from .services.llm.dummy_LLM import DummyLLM as LLMClass
        
     # Setup the LLM
     llm = LLMClass()
