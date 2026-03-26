@@ -45,7 +45,7 @@ export default function ChatSessionCard({ session, sessions } : { session: ChatS
 
             {/* Topics, Sentiment, & Composite Score  -- border-y border-gray-300 */}
             <div className="flex flex-col my-[0.25rem] py-[0.5rem] gap-[0.5rem] items-start">
-                <span className="text-left"> <b>Topics covered:</b> {session.topics} </span>
+                <span className="text-left"> <b>Topics covered:</b> {session.topics?.join(", ")} </span>
                 <span> <b>Sentiment:</b> {session.sentiment} </span>
                 <span className="fst-italic"> <b>ToDo:</b> Composite score </span>
             </div>

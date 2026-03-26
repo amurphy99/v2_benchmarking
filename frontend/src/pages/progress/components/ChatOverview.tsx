@@ -58,7 +58,7 @@ export default function ChatOverview ({ chatSession } : { chatSession: ChatSessi
                 {/* This Chat Topics */}
                 <p className={conclStyle}>
                     <GiChatBubble size={40} color="orange" />
-                    We covered these topics in this conversation: {chatSession.topics}
+                    We covered these topics in this conversation: {chatSession.topics?.join(", ")}
                 </p>
 
             </div>

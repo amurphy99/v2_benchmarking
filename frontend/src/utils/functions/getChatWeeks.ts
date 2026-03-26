@@ -160,7 +160,7 @@ export function getTopics(sessions: ChatSession[]): string[] {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        var sessionTopics = session.topics ?? [];
         for (var j = 0; j < sessionTopics.length; j++) {
             var topic = sessionTopics[j].trim();
             if (topic && !topics.includes(topic)) {
@@ -175,7 +175,7 @@ export function getMainTopic(sessions: ChatSession[]) {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        var sessionTopics = session.topics ?? [];
         for (var j = 0; j < sessionTopics.length; j++) {
             var topic = sessionTopics[j].trim();
             if (topic && !topics.includes(topic)) {
