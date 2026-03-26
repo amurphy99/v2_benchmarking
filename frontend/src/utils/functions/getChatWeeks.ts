@@ -171,22 +171,28 @@ export function getTopics(sessions: ChatSession[]): string[] {
     return sortUniqueByFrequency(topics);
 }
 
+// Get the most common topic
 export function getMainTopic(sessions: ChatSession[]) {
-    var topics: string[] = [];
-    for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics ?? [];
-        for (var j = 0; j < sessionTopics.length; j++) {
-            var topic = sessionTopics[j].trim();
-            if (topic && !topics.includes(topic)) {
-                topics.push(topic);
-            }
+    const topics: string[] = [];
+
+    for (const session of sessions) {
+        const sessionTopics = session.topics ?? [];
+
+        // Keep duplicate topics for the count
+        for (let topic of sessionTopics) {
+            topic = topic.trim();
+            if (topic) topics.push(topic); 
         }
     }
-    const mostFrequent = Array.from(new Set(topics)).reduce((prev, curr) =>
-        topics.filter(el => el === curr).length > topics.filter(el => el === prev).length ? curr : prev
+
+    // Guard for topics is an empty array
+    if (topics.length === 0) return "N/A";
+
+    return topics.reduce((prev, curr) =>
+        topics.filter(el => el === curr).length > topics.filter(el => el === prev).length 
+            ? curr 
+            : prev
     );
-    return mostFrequent;
 }
 
 // --------------------------------------------------------------------
