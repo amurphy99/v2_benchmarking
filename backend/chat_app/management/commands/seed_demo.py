@@ -96,6 +96,14 @@ class Command(BaseCommand):
         if REMAKE_ANALYZED_DATA:
             ChatSession.objects.filter(profile=profile_2, source="webapp").delete()
             self.seed_analyzed_chats(profile_2, plwd_2)
+        
+        # Grant is_staff to an existing user account
+        # This is just a temporary solution for testing the admin interface.
+        User = get_user_model()
+        adnan = User.objects.filter(username="AdnanSadi2").first()
+        if adnan and not adnan.is_staff:
+            adnan.is_staff = True
+            adnan.save(update_fields=["is_staff"])
 
     # ================================================================================
     # User Setup

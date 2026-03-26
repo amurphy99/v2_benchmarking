@@ -3,19 +3,13 @@ Consumer for chats with built-in "activities"
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.chat_activities`
 
-
 """
 
-from django.apps import apps
-
-from datetime import datetime, timezone
-
-import json, asyncio, logging
+import logging
 logger = logging.getLogger(__name__)
 
 # From this project
 from  .consumers                   import ChatConsumer
-from ..services.chatHelpers        import ChatHandler
 from ..services.ragChatHelpersMultiAgent import rag_response_fn, START_SCENARIO
 
 # ================================================================================ 
@@ -23,23 +17,30 @@ from ..services.ragChatHelpersMultiAgent import rag_response_fn, START_SCENARIO
 # ================================================================================ 
 class ActivityChatConsumer(ChatConsumer):
     """
-    Same session handling + persistence + biomarkers as ChatConsumer (through inheritance),
-    but swaps response generation to the scenario-based RAG pipeline.
+    Extends ChatConsumer with a scenario-based RAG response pipeline.
+
+    The RAG function is injected by setting `self.response_method` in connect().
+    All utterance paths (text, STT, admin reply) automatically use it via
+    `ChatHandler._execute_response` → `consumer.response_method`.
     """
-    # Helps us decide what behavior to use in other areas ("standard" | "activity")
     CHAT_TYPE     = "activity"
     ACTIVITY_NAME = "memory_activity"
 
-    
 
+    # set up RAG state and swap in the response method
     async def connect(self):
         await super().connect()
 
         self.rag_state = {"current_scenario": START_SCENARIO}
 
-        # Define the response generation method to be used in the chat
-        self.response_method = lambda x: rag_response_fn(x, **self._rag_kwargs())
+        # The lambda is evaluated at call-time so rag_state mutations are captured.
+        self.response_method = lambda context: rag_response_fn(
+            context,
+            user_text=context[-1][1],  # Get the text of the latest user message from the context
+            **self._rag_kwargs()
+            )
 
+    # RAG kwargs helper
     def _rag_kwargs(self):
         return {
             "user"          : self.user,
@@ -47,14 +48,3 @@ class ActivityChatConsumer(ChatConsumer):
             "rag_state"     : self.rag_state,
         }
 
-    # ================================================================================
-    # Text Transcriptions — use new ChatHandler path instead of legacy handle_transcription0
-    # ================================================================================
-    async def receive_json(self, data, **kwargs):
-        if data["type"] == "transcription":
-            await ChatHandler.handle_transcription(data, self)
-            # reply_now is called inside handle_transcription -> respond_to_user,
-            # but respond_to_user doesn't call reply_now directly yet — see note below
-            return
-
-        return await super().receive_json(data, **kwargs)
