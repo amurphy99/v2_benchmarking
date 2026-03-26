@@ -16,7 +16,7 @@ from chat_app.services import logging_utils as lu
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
 from rag_vectorstore.services.vdb_services import get_embeddings_model
 
-from .chatHelpers import RagParseError 
+from .utils.jsonParsingUtils import RagParseError
 from .utils.jsonParsingUtils import _log_json_fail, _truncate, parse_structured_llm_response, LlmResponse
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
