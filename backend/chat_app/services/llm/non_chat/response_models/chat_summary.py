@@ -1,7 +1,9 @@
 """
-Use structured generation to retrieve a list of topics & summary from a chat.
+Generate a chat summary & get the topics
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.non_chat.chat_summary`
+`backend.chat_app.services.llm.non_chat.response_models.chat_summary`
+
+Use structured generation to retrieve a list of topics & summary from a chat. 
 
 """
 import logging
@@ -9,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel, Field
 
-from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # --------------------------------------------------------------------------------
 # Define the Pydantic response Model
@@ -26,7 +28,8 @@ class ChatSummaryTopics(BaseModel):
     # Get a ~1 paragraph summary
     summary: str = Field(..., description = (
         "One short plain-language paragraph summary of the completed chat (4-6 sentences). " 
-        "Use plain text. No bullet points. Use only information in the transcript; do not invent details."
+        "Use plain text. No bullet points. Use only information in the transcript; do not invent details. "
+        "DO NOT use first-person assistant language. DO NOT imply the system is still listening, helping, or responding."
     ),)
 
     # Get a short list of comma separated main topics for this chat
@@ -57,12 +60,8 @@ SUMMARY_TOPICS_SYSTEM = (
     "STYLE RULES:\n"
     "- The summary should feel respectful, clear, and human.\n"
     "- Write it as a completed recap, not as an ongoing conversation.\n"
-    "- Do not use first-person assistant language.\n"
-    "- Do not imply the system is still listening, helping, or responding.\n"
-    "- Do not sound clinical, detached, diagnostic, or like an internal case note.\n"
-    "- Focus primarily on the USER, their interests, experiences, feelings, or meaningful details.\n"
-    "- Prefer concrete specifics over vague recap language.\n"
-    "- If the transcript is sparse, stay modest rather than over-interpreting.\n\n"
+    "- DO NOT use first-person assistant language.\n"
+    "- DO NOT imply the system is still listening, helping, or responding.\n"
 )
 
 # Structure the prompt accordingly

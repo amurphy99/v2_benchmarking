@@ -34,7 +34,7 @@ from ._seed_demo_data import (
 # Config
 # --------------------------------------------------------------------------------
 # If we are local or deployed (based on the .env file)
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "local")
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
 LOCAL_MODE      = (APP_ENVIRONMENT == "local")
 
 # Set to True to wipe and recreate all existing random demo data on each run.

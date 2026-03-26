@@ -1,7 +1,7 @@
 """
 Dummy LLM class for local testing.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.dummy_LLM`
+`backend.chat_app.services.llm.live_chat.dummy_LLM`
 
 Simulates how we make requests to the externally hosted LLM models to get chat
 responses.

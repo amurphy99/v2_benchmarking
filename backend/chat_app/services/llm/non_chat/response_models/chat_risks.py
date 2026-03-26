@@ -1,7 +1,7 @@
 """
 Use structured generation to assess caregiver-relevant risk signals from a chat transcript.
 ----------------------------------------------------------------------------------------
-`backend.chat_app.services.llm.non_chat.chat_risk_assessment`
+`backend.chat_app.services.llm.non_chat.response_models.chat_risk_assessment`
 
 TODO: Pretty long system prompt, we'll see how it does...
 
@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from typing   import Literal
 
-from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
 RiskLevel = Literal[0, 1, 2] # [0, 1, 2, 3, 4] 

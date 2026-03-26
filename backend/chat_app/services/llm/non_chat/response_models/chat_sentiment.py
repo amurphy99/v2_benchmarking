@@ -1,7 +1,7 @@
 """
 Use structure generation to retrieve overall sentiment & risk factors.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.non_chat.chat_sentiment`
+`backend.chat_app.services.llm.non_chat.response_models.chat_sentiment`
 
 """
 import logging
@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from typing   import Literal
 
-from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from .....services import logging_utils as lu
+from .....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
 ChatSentiment = Literal["very_negative", "negative", "neutral", "positive", "very_positive"]

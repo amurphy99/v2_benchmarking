@@ -116,8 +116,8 @@ try:
     from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
 
     # TODO: Make something here that actually changes based on an .env variable
-    #if USE_LLM:  from .services.llm.llama_api import LlamaAPI as LLMClass
-    #else:        from .services.llm.dummy_LLM import DummyLLM as LLMClass
+    #if USE_LLM:  from .services.llm.llama_api           import LlamaAPI as LLMClass
+    #else:        from .services.llm.live_chat.dummy_LLM import DummyLLM as LLMClass
        
     # Setup the LLM
     llm = LLMClass()
