@@ -67,7 +67,13 @@ class ChatRiskAssessment(BaseModel):
     ),)
 
 # Default response (used in failure/error cases)
-DEFAULT_RISK = ChatRiskAssessment(risk_level=0, quotes=[], reason="Risk assessment failed.")
+DEFAULT_RISK = ChatRiskAssessment(
+    thought       = "FAILED",
+    quote_context = "FAILED",
+    risk_level    = 0,
+    quotes        = [],
+    reason        = "Risk assessment failed.",
+)
 
 # --------------------------------------------------------------------------------
 # Build System Prompt

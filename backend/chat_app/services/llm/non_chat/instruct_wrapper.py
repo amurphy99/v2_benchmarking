@@ -15,14 +15,17 @@ import logging, os
 logger = logging.getLogger(__name__)
 
 # Imports for generation
-import asyncio
-import instructor
+import asyncio, instructor
 from openai   import OpenAI, AsyncOpenAI
 from pydantic import ValidationError
 
 # From this project
 from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+
+# Load constants from the new endpoint
+from ..endpoint import LLM_URL, API_KEY, TEMPERATURE
+
 
 # ================================================================================
 # InstructWrapper
@@ -38,7 +41,8 @@ class InstructWrapper:
     @staticmethod
     def init_async_client():
         return instructor.from_openai(
-            AsyncOpenAI(base_url=InstructWrapper.FULL_URL, api_key=InstructWrapper.API_KEY, timeout=60.0),
+            #AsyncOpenAI(base_url=InstructWrapper.FULL_URL, api_key=InstructWrapper.API_KEY, timeout=60.0),
+            AsyncOpenAI(base_url=LLM_URL, api_key=API_KEY, timeout=60.0),
             mode=instructor.Mode.JSON,
         )
 
@@ -46,7 +50,7 @@ class InstructWrapper:
     # Catch errors and retry if a call fails
     # --------------------------------------------------------------------------------
     @staticmethod
-    async def call_with_retries_async(client, *, model, response_model, messages, temperature=0.2, max_retries=4, backoff_sec=1.0, default=None, name="unknown"):
+    async def call_with_retries_async(client, *, model, response_model, messages, temperature=TEMPERATURE, max_retries=4, backoff_sec=1.0, default=None, name="unknown"):
         # Try to get a response the given number of times
         for attempt in range(max_retries + 1):
             try: return await client.chat.completions.create(model=model, response_model=response_model, messages=messages, temperature=temperature)

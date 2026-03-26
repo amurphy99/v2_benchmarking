@@ -41,7 +41,7 @@ class ChatSummaryTopics(BaseModel):
     )
 
 # Default response
-DEFAULT_TOPICS = ChatSummaryTopics(thought="FAILED", summary="Chat summary failed", topics=["N/A"])
+DEFAULT_TOPICS = ChatSummaryTopics(thought="FAILED", summary="Chat summary failed", topics=["N/A", "N/A"])
 
 # --------------------------------------------------------------------------------
 # Build System Prompt
