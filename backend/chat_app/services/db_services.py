@@ -213,11 +213,11 @@ class ChatService:
     @staticmethod
     def add_words_bulk(message_id: int, words: list):
         """
-        Bulk-insert ChatWord records for a committed user message.
-        words: [{"word": str, "start": datetime, "end": datetime}, ...]
+        Bulk-insert ChatWord records for a committed user message (confidence is optional).
+        words: [{"word": str, "start": datetime, "end": datetime, "confidence": float}, ...]
         """
         ChatWord.objects.bulk_create([
-            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
+            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i, confidence=w.get("confidence"))
             for i, w in enumerate(words)
         ])
 

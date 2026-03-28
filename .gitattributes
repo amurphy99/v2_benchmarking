@@ -15,3 +15,6 @@ frontend/package.json linguist-generated=true
 # Hide JSON
 backend/chat_app/management/commands/seed_demo_examples.json linguist-generated=True
 backend/chat_app/management/commands/seed_demo_examples.json -diff
+
+backend/chat_app/management/seed_data/transcript_data/examples.json linguist-generated=True
+backend/chat_app/management/seed_data/transcript_data/examples.json -diff

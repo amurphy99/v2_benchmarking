@@ -46,3 +46,8 @@ frontend/package-lock.json
 
 # VS Code
 .vscode/*
+
+# Sample data (will have to add this again for every test I add I guess?)
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/transcript_config.json
+

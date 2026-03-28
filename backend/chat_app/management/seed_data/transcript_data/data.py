@@ -1,7 +1,7 @@
 """
 Static data constants for the seed_demo management command.
 --------------------------------------------------------------------------------
-`backend.chat_app.management.commands._seed_demo_data`
+`backend.chat_app.management.seed_data.transcript_data.data`
 """
 
 USERNAMES = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
