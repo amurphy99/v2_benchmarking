@@ -31,7 +31,7 @@ from .transcript_data.data import BIOMARKERS
 # ================================================================================
 def seed_analyzed_chats(profile, user):
     # Load the real examples from JSON and pick an arbitrary time
-    examples = json_lib.loads((Path(__file__).parent / "examples.json").read_text())
+    examples = json_lib.loads((Path(__file__).parent / "transcript_data" / "examples.json").read_text())
     now_utc  = timezone.now()
 
     for example in examples:

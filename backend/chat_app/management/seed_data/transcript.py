@@ -38,7 +38,7 @@ from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
 # ================================================================================
 def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     # Load in the transcript and config
-    data_dir = Path(__file__).parent / "transcript_data" / test_dir
+    data_dir = Path(__file__).parent / "transcript_data" / "test_transcripts" / test_dir
     config   = json_lib.loads((data_dir / "transcript_config.json").read_text())
 
     # Speaker map for the speaker_id column in the transcript tells us who is the "user"
@@ -63,7 +63,7 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     # --------------------------------------------------------------------------------
     # Use a real string to get the time (e.g., "March 27, 2026 2:56 PM")
     if "chat_datetime" in config: 
-        date_str   = config.get("date_offset_days")                    # Get the datetime string from the config 
+        date_str   = config.get("chat_datetime")                       # Get the datetime string from the config 
         tz         = zoneinfo.ZoneInfo("America/Chicago")              # Always assuming these were from Chicago
         naive_dt   = datetime.strptime(date_str, "%B %d, %Y %I:%M %p") # Parse the string into a "naive" datetime object
         started_at = timezone.make_aware(naive_dt, tz)
@@ -75,7 +75,7 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
 
     # CSV timestamps are seconds-from-start; anchor them to our datetime
     all_rows = [r for rows in utterances.values() for r in rows]
-    duration = max(float(r["end_ts"]) for r in all_rows)
+    duration = max(float(r["end_time"]) for r in all_rows)
     ended_at = started_at + timedelta(seconds=duration)
 
     # --------------------------------------------------------------------------------
@@ -94,7 +94,7 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         # Parse the row for the necessary fields we need
         # Content tries the "full_text" column with punctuation first; otherwise just joins each word by a space
         role     = speaker_map.get(rows[0]["speaker_id"], "user")
-        content  = rows[0].get("full_text", " ".join(r["text"] for r in rows)) 
+        content  = rows[0].get("full_text", " ".join(r["word"] for r in rows)) 
         first_ts = started_at + timedelta(seconds=float(rows[ 0]["start_time"]))
         last_ts  = started_at + timedelta(seconds=float(rows[-1][  "end_time"]))
 
@@ -104,7 +104,7 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
 
         # Create the ChatWords objects based on the individual words
         ChatService.add_words_bulk(msg.id, [
-            {"word"       : r["text"],
+            {"word"       : r["word"],
              "start"      : started_at + timedelta(seconds=float(r["start_time"])),
              "end"        : started_at + timedelta(seconds=float(r[  "end_time"])),
              "confidence" : r.get("confidence", None), }
