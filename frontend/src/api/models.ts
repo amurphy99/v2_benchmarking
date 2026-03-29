@@ -103,13 +103,24 @@ export interface CreateAccessPayload {
 // =======================================================================
 // Messages
 export type ChatRole = "user" | "assistant";
+
+export interface ChatWord {
+  id         : number;
+  word       : string;
+  start_ts   : string;
+  end_ts     : string;
+  index      : number;
+  confidence?: number | null;
+}
+
 export interface ChatMessage {
   id        : number;
   role      : ChatRole;
   content   : string;
-  ts        : string; 
+  ts        : string;
   start_ts? : string | null;
   end_ts?   : string | null;
+  words?    : ChatWord[];
 }
 
 // Biomarkers (string fallback for unknown score types)
@@ -121,12 +132,15 @@ export type BiomarkerType =
   | "Prosody"
   | "Turntaking"
   | "Perplexity"
-  | string; 
+  | string;
 export interface ChatBiomarkerScore {
   id         : number;
   score_type : BiomarkerType;
   score      : number;
   ts         : string;
+  message?   : number | null;
+  start_ts?  : string | null;
+  end_ts?    : string | null;
 }
 
 export interface AlbumImage {

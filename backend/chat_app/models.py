@@ -109,8 +109,8 @@ class ChatSession(models.Model):
     # TODO: `start_ts`, `end_ts`, and `duration` should all be defined once upon chat 
     #       end, or as properties...
     is_active  = models.BooleanField (default=True)
-    end_ts     = models.DateTimeField(**init_args) # `start_ts` is a property defined elsewhere
-    audio_file = models.CharField    (**init_args, max_length=255)
+    end_ts     = models.DateTimeField(**init_args)                  # `start_ts` is a property defined elsewhere
+    audio_file = models.CharField    (**init_args, max_length=255)  # Should be a string path to the audio file in Django storage (?) 
 
     # These are filled out based on the user's current settings at the time the chat ends
     taskType    = models.CharField(**init_args, max_length=255, default="chat")

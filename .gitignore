@@ -27,6 +27,9 @@ start_ngrok.sh
 backend/staticfiles/
 backend/logs/
 backend/script/
+backend/media/
+
+
 # backend/websocket.log
 backend/chat_app/migrations/
 backend/chat_app/migrations/0001_initial.py
