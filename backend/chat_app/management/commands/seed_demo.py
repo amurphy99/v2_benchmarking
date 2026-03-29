@@ -27,21 +27,20 @@ from ..seed_data.analyzed   import seed_analyzed_chats
 from ..seed_data.transcript import seed_transcript_chat
 
 # --------------------------------------------------------------------------------
-# Config
+# Config (don't remake locally since I already have this stuff)
 # --------------------------------------------------------------------------------
 # If we are local or deployed (based on the .env file)
 APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
 LOCAL_MODE      = (APP_ENVIRONMENT == "local")
 
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA   = True  # not APP_ENVIRONMENT
+REMAKE_SAMPLE_DATA   = not LOCAL_MODE
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = True  # not APP_ENVIRONMENT
+REMAKE_ANALYZED_DATA = not LOCAL_MODE
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
-# Requires transcript.csv, audio.wav, and transcript_config.json in seed_data/transcript_data/.
-REMAKE_TRANSCRIPT_DATA = True
+REMAKE_TRANSCRIPT_DATA = not LOCAL_MODE
 
 
 # ================================================================================
