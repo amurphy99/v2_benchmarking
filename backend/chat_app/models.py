@@ -190,7 +190,7 @@ class ChatMessage(models.Model):
     # TODO: We don't realy have anything implemented yet that could get these here. 
     # TODO: Temporarily adding the auto thing for end_ts, but should be set with the actual timestamp
     start_ts  = models.DateTimeField(**init_args)
-    end_ts    = models.DateTimeField(auto_now_add=True) 
+    end_ts    = models.DateTimeField(**init_args) 
 
     class Meta:
         ordering = ["ts", "id"]

@@ -43,6 +43,7 @@ export function TranscriptPlayback() {
     // Audio seeking
     const onSeek = (sec: number) => {
         if (audioRef.current) audioRef.current.currentTime = sec;
+        console.log(`Set audio player to: ${sec}`);
     };
 
     // Style Helpers
