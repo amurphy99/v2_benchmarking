@@ -121,13 +121,17 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
                 session    = session,
                 score_type = "alteredgrammar",
                 score      = random.random(),
-                message    = msg
+                message    = msg,       # This doesn't work for the transcript highlighting right now.
+                start_ts   = first_ts,  # These timestamps do; so if I want to keep the message thing, 
+                end_ts     = last_ts,   # I should make a property that uses the message start/end ts
             )
+            # Add a time-based biomarker (last 5 seconds before utterance ends)
+            five_sec = max((last_ts - timedelta(seconds=5)), started_at)
             ChatService.add_biomarker(
                 session    = session,
                 score_type = "pronunciation",
                 score      = random.random(),
-                start_ts   = first_ts,
+                start_ts   = five_sec,
                 end_ts     = last_ts,
             )
 
