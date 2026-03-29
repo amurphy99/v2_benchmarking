@@ -81,3 +81,4 @@ sentence_transformers==5.2.2
 openai==2.16.0
 instructor==1.14.5
 pexels-api
+django-ranged-response
