@@ -56,7 +56,7 @@ export function TranscriptPlayback() {
             {/* -------------------------------------------------------------------------------- */}
             <div className="flex flex-row items-center mx-[1rem] mb-[1rem] mt-[1rem] gap-[1rem]">
 
-                {/* "Back" Button for Navigation */}
+                {/* Back Button for Navigation */}
                 <span className={backStyle} onClick={() => navigate(-1)}> ← </span>
 
                 {/* Session "Title" */}
