@@ -199,9 +199,17 @@ class ChatService:
     
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
     # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
+    # TODO: IDK what types to set for the timestamps
     @staticmethod
-    def add_biomarker(session, score_type, score):
-        return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
+    def add_biomarker(session: ChatSession, score_type: str, score: float, message: ChatMessage | None = None, start_ts = None, end_ts = None):
+        return ChatBiomarkerScore.objects.create(
+            session    = session,
+            score_type = score_type,
+            score      = score,
+            message    = message,
+            start_ts   = start_ts,
+            end_ts     = end_ts,
+        )
     
     # Biomarker scores (in bulk)
     @staticmethod

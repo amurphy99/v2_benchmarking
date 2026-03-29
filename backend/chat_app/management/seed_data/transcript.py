@@ -17,7 +17,7 @@ Transcripts that I have prepared so far:
 TODO: Maybe find a way to add premade biomarkers as well...
 
 """
-import csv, json as json_lib, shutil, zoneinfo, asyncio
+import csv, json as json_lib, shutil, zoneinfo, asyncio, random
 
 from datetime import timedelta, datetime
 from pathlib  import Path
@@ -101,6 +101,7 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         # Create the ChatMessage for this row (looping through utterances here)
         msg    = ChatMessage.objects.create(session=session, role=role, content=content, start_ts=first_ts, end_ts=last_ts)
         msg.ts = first_ts; msg.save(update_fields=["ts"])
+        messages.append(msg)  # Track the messages to use later in the post-chat analysis
 
         # Create the ChatWords objects based on the individual words
         ChatService.add_words_bulk(msg.id, [
@@ -111,8 +112,25 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
             for r in rows
         ])
 
-        # Track the messages to use later in the post-chat analysis
-        messages.append(msg)
+        # Add biomarker score values (only for user utterances)
+        # TODO: Replace these with actual biomarker calculations later
+        if role == "user":
+            # TODO: We should be able to either attach it to an utterance/message, 
+            #       OR give it a specific timestamp range...
+            ChatService.add_biomarker(
+                session    = session,
+                score_type = "alteredgrammar",
+                score      = random.random(),
+                message    = msg
+            )
+            ChatService.add_biomarker(
+                session    = session,
+                score_type = "pronunciation",
+                score      = random.random(),
+                start_ts   = first_ts,
+                end_ts     = last_ts,
+            )
+
 
     # --------------------------------------------------------------------------------
     # Fill out post-chat analysis fields
