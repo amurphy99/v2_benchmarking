@@ -7,22 +7,19 @@ If we have word-level timestamps (showWordLevel = true), then we can make the
 highlights have word-level detail. If not, we just use the full message text and
 starting/ending timestamps for the span. 
 
-TODO: Find a way to also map the capital letters back
-TODO: When done, move that method and getPunctSuffixes to a separate file in the utils directory
 TODO: Change the icons? There is that one nice user one w the circle built in
-
-TODO: Move the WordSegment stuff and the getPunctSuffixes stuff to a separate file
 
 */
 import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 
 // From this project
-import { ChatMessage, ChatWord, ChatBiomarkerScore } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX                } from "@/utils/styling/colors";
-import { formatElapsedMessage                      } from "@/utils/styling/numFormatting";
-import   WordSpan                                    from "./WordSpan";
-import   BiomarkerGroup                              from "./BiomarkerGroup";
+import { ChatMessage, ChatWord, ChatBiomarkerScore    } from "@/api";
+import { PATIENT_HEX, CAREGIVER_HEX                   } from "@/utils/styling/colors";
+import { formatElapsedMessage                         } from "@/utils/styling/numFormatting";
+import { getPunctSuffixes, getCapFlags, buildSegments } from "./../utils/utteranceFormatting";
+import   WordSpan                                       from "./WordSpan";
+import   BiomarkerGroup                                 from "./BiomarkerGroup";
 
 interface Props {
     msg                : ChatMessage;
@@ -31,40 +28,6 @@ interface Props {
     currentTime        : number;
     biomarkerWordScores: Map<number, ChatBiomarkerScore>; // word ID -> associated biomarker score object
     onSeek             : (sec: number) => void;
-}
-
-// --------------------------------------------------------------------------------
-// "Segment" => consecutive words sharing the same biomarker window (or none)
-// --------------------------------------------------------------------------------
-type WordSegment = { biomarker: ChatBiomarkerScore | null; words: ChatWord[] };
-
-// Build WordSegments for the given list of ChatWords
-function buildSegments(words: ChatWord[], scores: Map<number, ChatBiomarkerScore>): WordSegment[] {
-    const segments: WordSegment[] = [];
-    let current: WordSegment | null = null;
-    for (const word of words) {
-        // Use the map of word -> ChatBiomarkerScore object to group all words for each biomarker
-        const bm     = scores.get(word.id)    ?? null;
-        const bmId   = bm?.id                 ?? null;
-        const prevId = current?.biomarker?.id ?? null;
-
-        if (!current || bmId !== prevId) { current = { biomarker: bm, words: [word] }; segments.push(current); } 
-        else                             { current.words.push(word); }
-    }
-    return segments;
-}
-
-// --------------------------------------------------------------------------------
-// Try to map utterance punctuation to the individual words
-// --------------------------------------------------------------------------------
-function getPunctSuffixes(words: ChatWord[], content: string): (string | null)[] {
-    // Match a word token followed by any non-word, non-space characters (punctuation)
-    const regex  = /([A-Za-z0-9']+)([^A-Za-z0-9'\s]*)/g;
-    const tokens: string[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(content)) !== null) tokens.push(m[2]);
-    if (tokens.length !== words.length) return words.map(() => null);
-    return tokens.map(t => t || null);
 }
 
 // ================================================================================
@@ -87,28 +50,37 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     // No gap in the x axis ("gap-x-1") because I insert a space before the words
     const puncts = showWordLevel ? getPunctSuffixes(msg.words!, msg.content) : [];
 
-    // Build a flat index map so we can look up each word's punct by word.id
+    // Build a flat index map so we can look up each word's punctuation by word.id
     const punctByWordId = new Map<number, string | null>();
-    if (showWordLevel) {
-        msg.words!.forEach((w, i) => punctByWordId.set(w.id, puncts[i] ?? null));
-    }
+    if (showWordLevel) { msg.words!.forEach((w, i) => punctByWordId.set(w.id, puncts[i] ?? null)); }
+
+    // Capitalization flags derived from original content (first word, post-sentence, standalone "I")
+    const caps        = showWordLevel ? getCapFlags(msg.words!, msg.content) : [];
+    const capByWordId = new Map<number, boolean>();
+    if (showWordLevel) { msg.words!.forEach((w, i) => capByWordId.set(w.id, caps[i] ?? false)); }
 
     const wordContent = showWordLevel && (
         <div className="flex flex-wrap gap-y-1 fs-5">
             {buildSegments(msg.words!, biomarkerWordScores).map((seg, si) => {
 
                 // WordSpans
-                const spans = seg.words.map(word => (
-                    <WordSpan
-                        key           ={word.id}
-                        word          ={word}
-                        sessionStartMs={sessionStartMs}
-                        currentTime   ={currentTime}
-                        biomarkerScore={seg.biomarker?.score       ?? null}
-                        punct         ={punctByWordId.get(word.id) ?? null}
-                        onSeek        ={onSeek}
-                    />
-                ));
+                const spans = seg.words.map(word => {
+                    const cap = capByWordId.get(word.id) ?? false;
+                    const displayWord = cap
+                        ? { ...word, word: word.word.charAt(0).toUpperCase() + word.word.slice(1) }
+                        : word;
+                    return (
+                        <WordSpan
+                            key           ={word.id}
+                            word          ={displayWord}
+                            sessionStartMs={sessionStartMs}
+                            currentTime   ={currentTime}
+                            biomarkerScore={seg.biomarker?.score       ?? null}
+                            punct         ={punctByWordId.get(word.id) ?? null}
+                            onSeek        ={onSeek}
+                        />
+                    );
+                });
                 
                 // BiomarkerGroup (popup on hover)
                 if (seg.biomarker) {

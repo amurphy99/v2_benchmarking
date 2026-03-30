@@ -45,7 +45,7 @@ export default function BiomarkerSelector({ biomarkers, selectedBiomarker, onCha
     if (available.length === 0) return null;
 
     // Style helper
-    const selectStyle = "p-2 border border-solid border-gray-400 rounded-lg text-lg hover:cursor-pointer bg-white";
+    const selectStyle = "p-2 border border-solid border-gray-400 rounded-lg text-lg text-violet-600 font-bold hover:cursor-pointer bg-white";
 
     // Three reference highlights (not all the way to the actual 0.0 or 1.0 highlights because 0 would have nothing)
     const highlights = [

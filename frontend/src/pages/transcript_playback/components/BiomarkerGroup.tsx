@@ -9,11 +9,13 @@ Displays a popup on hover with:
   - score
   - time range
 
-TODO: Make it more robust, so the popup should show up on the left or follow the users cursor
-TODO: If the user clicks on it, the popup should stay until they click somewhere else to make it go away
+The tooltip follows the cursor (position: fixed at clientX/Y).
+Clicking a word locks the tooltip in place until the user clicks elsewhere.
+
+TODO: Change the time on the card to be total seconds, not MM:SS:xx
 
 */
-import { ReactNode, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useState } from "react";
 
 // From this project
 import { ChatBiomarkerScore                        } from "@/api";
@@ -31,24 +33,48 @@ interface Props {
 // --------------------------------------------------------------------------------
 export default function BiomarkerGroup({ biomarker, sessionStartMs, children }: Props) {
     const [visible, setVisible] = useState(false);
+    const [locked,  setLocked ] = useState(false);
+    const [pos,     setPos    ] = useState({ x: 0, y: 0 });
+
+    // When locked: add a one-time document click listener to dismiss
+    useEffect(() => {
+        if (!locked) return;
+        const dismiss = () => { setLocked(false); setVisible(false); };
+        document.addEventListener("click", dismiss);
+        return () => document.removeEventListener("click", dismiss);
+    }, [locked]);
 
     // Elapsed time from session start
-    const secStart = formatElapsedMessage(sessionStartMs, biomarker.start_ts)
-    const secEnd   = formatElapsedMessage(sessionStartMs, biomarker.  end_ts)
+    const secStart = formatElapsedMessage(sessionStartMs, biomarker.start_ts);
+    const secEnd   = formatElapsedMessage(sessionStartMs, biomarker.  end_ts);
 
     // Get "nice" biomarker name & description (handles unknown names)
     let name = biomarker.score_type; let desc = "";
     try { name = getBiomarkerName       (biomarker.score_type); } catch { /* unknown type */ }
     try { desc = getBiomarkerDescription(biomarker.score_type); } catch { /* unknown type */ }
 
+    // Tooltip follows cursor -> fixed positioning relative to viewport
+    const tooltipStyle: CSSProperties = {
+        position : "fixed",
+        left     : pos.x + 12,
+        top      : pos.y,
+        transform: "translateY(calc(-100% - 15px))",
+        zIndex   : 50,
+    };
+
     // Final UI Component
     return (
-        <span className ="relative" onMouseEnter={() => setVisible(true)} onMouseLeave={() => setVisible(false)}>
+        <span
+            onMouseEnter ={( ) => { setVisible(true); }}
+            onMouseLeave ={( ) => { if (!locked) setVisible(false); }}
+            onMouseMove  ={(e) => { setPos({ x: e.clientX, y: e.clientY }); }}
+            onClick      ={(e) => { e.stopPropagation(); setLocked(true); setVisible(true); }}
+        >
             {/* WordSpans */}
             {children}
 
             {visible && (
-                <span className="absolute bottom-full left-0 z-50 mb-1 pointer-events-none">
+                <span className="pointer-events-none" style={tooltipStyle}>
                     <span className="flex flex-col gap-[2px] bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 whitespace-nowrap">
 
                         {/* Name + Score */}
