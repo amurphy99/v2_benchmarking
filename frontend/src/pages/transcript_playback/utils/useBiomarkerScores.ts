@@ -3,6 +3,9 @@ Map word/message IDs to biomarker scores for transcript highlighting.
 --------------------------------------------------------------------------------
 `frontend/src/pages/transcript_playback/utils/useBiomarkerScores`
 
+TODO: I think we still need to do the new mapping change for the message-wide
+      version...
+
 */
 import { useMemo } from "react";
 import { ChatMessage, ChatBiomarkerScore } from "@/api";
@@ -20,7 +23,7 @@ export function useBiomarkerWordScores(
     sessionStartMs    : number                 // Time anchor for reference
 ) {
     return useMemo(() => {
-        if (!selectedBiomarker) return new Map<number, number>();
+        if (!selectedBiomarker) return new Map<number, ChatBiomarkerScore>();
 
         // Convert timestamps to seconds-from-start
         const _toSec = (ts: string) => (new Date(ts).getTime() - sessionStartMs) / 1_000;
@@ -28,8 +31,8 @@ export function useBiomarkerWordScores(
             b.score_type === selectedBiomarker && b.start_ts && b.end_ts
         );
 
-        // Word ID -> lowest score among all windows the word falls into
-        const scores = new Map<number, number>();
+        // Word ID -> most-severe (lowest score) ChatBiomarkerScore window the word falls into
+        const scores = new Map<number, ChatBiomarkerScore>();
         for (const msg of messages) {
             for (const word of (msg.words ?? [])) {
                 const wStart = _toSec(word.start_ts);
@@ -37,7 +40,7 @@ export function useBiomarkerWordScores(
                 for (const w of windows) {
                     if (wStart >= _toSec(w.start_ts!) && wEnd <= _toSec(w.end_ts!)) {
                         const prev = scores.get(word.id);
-                        if (prev === undefined || w.score < prev) scores.set(word.id, w.score);
+                        if (prev === undefined || w.score < prev.score) scores.set(word.id, w);
                     }
                 }
             }

@@ -1,3 +1,9 @@
+/* 
+Audio for conversations + transcript playback controls & biomarker highlighting.
+--------------------------------------------------------------------------------
+`frontend/src/pages/transcript_playback/TranscriptPlayback`
+
+*/
 import { useRef, useState         } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -9,15 +15,16 @@ import { dateFormatLong } from "@/utils/styling/numFormatting";
 // Components
 import AudioPlayer        from "./components/AudioPlayer";
 import BiomarkerSelector  from "./components/BiomarkerSelector";
+import BiomarkerStatsBar  from "./components/BiomarkerStatsBar";
 import PlaybackTranscript from "./components/PlaybackTranscript";
 
 
 // ================================================================================
 // TranscriptPlayback
 // ================================================================================
-// Plays back a recorded session's audio while highlighting the currently-spoken
-// word in the transcript. Word-level timestamps are stored as absolute datetimes
-// and converted to audio offsets at render time via `sessionStartMs`.
+// Plays a recorded session's audio while highlighting the currently-spoken word in 
+// the transcript. Word-level timestamps are stored as absolute datetimes and 
+// converted to audio offsets at render time via `sessionStartMs`.
 export function TranscriptPlayback() {
     // Pass the ChatSession as `state.chatSession` when navigating here
     const navigate = useNavigate();
@@ -77,11 +84,15 @@ export function TranscriptPlayback() {
                     onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
                 />
                 
-                {/* Biomarker Selection */}
+                {/* Biomarker Selection + Stats */}
                 <BiomarkerSelector
                     biomarkers       ={session.biomarkers  }
                     selectedBiomarker={   selectedBiomarker}
                     onChange         ={setSelectedBiomarker}
+                />
+                <BiomarkerStatsBar
+                    biomarkers       ={session.biomarkers}
+                    selectedBiomarker={selectedBiomarker}
                 />
 
                 {/* Transcript with Highlights & Seeking */}

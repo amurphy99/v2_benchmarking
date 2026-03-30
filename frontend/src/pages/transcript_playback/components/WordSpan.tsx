@@ -11,9 +11,6 @@ To make the biomarker highlights look seemless across words, I add the space
 between words here in the text, set the gap between them to 0 in the file that
 contains the list of these objects, and don't use rounded corners. 
 
-TODO: Add something for when you hover over this (like a popup with more info)
-      Maybe the exact score and the exact time range or something like that
-
 TODO: Might need to change the "active" highlight style
 
 */
