@@ -82,6 +82,10 @@ async def handle_audio_data(consumer: ChatConsumer, data):
     # Forward audio to the speech to text provider
     consumer.stt_provider.send_audio(data)
 
+    # Add raw audio bytes to the session recording buffer
+    # (separate from audio_buffer, which gets consumed by the sliding biomarker window)
+    consumer._rec_user.extend(base64.b64decode(data["data"]))
+
     # Generate audio-based biomarkers
     consumer.audio_buffer.extend(base64.b64decode(data["data"]))
     await on_audio_biomarkers(consumer, sample_rate=data.get("sampleRate", 16_000))

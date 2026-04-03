@@ -184,7 +184,7 @@ class ChatHandler:
 
                 # Update the consumer state & start streaming TTS
                 consumer._tts_streaming = True
-                try: await synthesize_and_stream_tts(system_resp, consumer.send)
+                try: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
 
                 # Send "cancel_audio" to frontend if interrupted mid TTS stream
                 # TODO: I don't know if we want this to work (idea is frontend cancels speaking)
@@ -232,8 +232,8 @@ class ChatHandler:
         # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
         fire_and_log(consumer.on_utterance_biomarkers(), name="respond_to_user::bio_callback")
 
-        # Synthesize speech with TTS if specified -- TODO: Pass the consumer again?
-        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send)
+        # Synthesize speech with TTS if specified (pass the consumer to store the audio bytes)
+        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
 
         return system_resp
 

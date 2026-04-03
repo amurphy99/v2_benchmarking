@@ -23,6 +23,9 @@ from  ..services.bg_helpers                import fire_and_log
 from  ..services.chatHelpers               import ChatHandler
 from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
+# Proper import paths...
+from chat_app.websocket.services.speech.audio_recorder import save_stereo_wav
+
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
@@ -109,6 +112,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
         self.streaming_active = True
 
+        # Session recording buffers (NOT in _init_response_state - must survive until disconnect saves them)
+        self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
+        self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
+        self._session_start_ts = time.monotonic()  # Reference point for TTS position in recording
+
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
         
@@ -151,9 +159,25 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             self._staged_utterances.clear()
             self._staged_words     .clear()
 
+        # --------------------------------------------------------------------------------
+        # Save session audio recording (stereo WAV: left = user mic, right = TTS)
+        # --------------------------------------------------------------------------------
+        audio_path = None
+        if session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
+            try:
+                audio_path = await asyncio.to_thread(
+                    save_stereo_wav, session_id,
+                    bytes(getattr(self, "_rec_user", b"")),
+                    bytes(getattr(self, "_rec_tts",  b"")),
+                )
+            except Exception:
+                logger.exception(f"{lu.CC_MAIN} {lu.RED}Warning:{lu.CC_R} Failed to save session recording.{lu.RESET}")
+
+        # --------------------------------------------------------------------------------
         # Close the ChatSession in the DB
+        # --------------------------------------------------------------------------------
         if user_id and session_id:
-            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source),
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source, audio_path=audio_path),
                          name=f"disconnect::close-session-{session_id}")
 
         # Cancel background tasks (only connection-based ones; not the close_session task)
@@ -167,6 +191,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
+
 
     # ================================================================================
     # Handle Incoming Data (processing "callbacks" used to maintain the chat)
