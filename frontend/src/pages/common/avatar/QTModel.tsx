@@ -7,203 +7,188 @@ import { useGLTF, useAnimations } from "@react-three/drei";
 import { LoopOnce, LoopPingPong, Mesh, Material, AnimationClip, Object3D } from "three";
 
 export default function QTModel({ emotion = "Neutral", emoCount, zoom = "body", ...props } : {emotion?: string, emoCount?: number, zoom?: string }) {
-	const { nodes, materials, animations } = useGLTF("/models/QT_combined.glb") as unknown as { 
+    const { nodes, materials, animations } = useGLTF("/models/QT_Model.glb") as unknown as { 
         nodes: Record<string, Mesh>, 
         materials: Record<string, Material>, 
         animations: AnimationClip[] 
-    }; //animations:
-	const group = useRef<Object3D>(null);
-	const { actions, mixer } = useAnimations(animations, group);
-
-    const animMap: Record<string, string> = {
-        Listening: "metarigAction.002",
-        Nod: "metarigAction.003",
-        Thinking: "metarigAction.004",
-        HeadTilt: "metarigAction.005",
-        DuckHead: "metarigAction.006",
-        Shrug: "metarigAction.008",
-        FoldArms: "metarigAction.009",
-        Idle: "metarigAction.011",
-        Embarrassed: "metarigAction.012",
-        Thoughtful: "metarigAction.014",
-        ShakeHead: "metarigAction.020",
-        CoverMouth: "metarigAction.022",
-    }
+    };
+    const group = useRef<Object3D>(null);
+    const { actions, mixer } = useAnimations(animations, group);
 
     const emotionMap: Record<string, string> = {
-        Happy: "Nod",
-        Sad: "ShakeHead",
-        Surprised: "CoverMouth",
-        Scared: "Embarrassed",
-        Angry: "DuckHead",
-        Neutral: "Idle",
-        Listening: "Listening",
+        Happy: "Celebration",
+        Sad: "Sad",
+        Surprised: "Confused",
+        Scared: "Excited",
+        Angry: "Angry",
+        Neutral: "Hello",
+        "Curious Head Tilt": "Curious Head Tilt",
+        Dancing: "Dancing",
+        "Error Confusion": "Error Confusion",
+        "Listening Mode": "Listening Mode",
+        "Nodding Yes": "Nodding Yes",
+        "Rolling Forward  Backward": "Rolling Forward  Backward",
+        "Shaking No": "Shaking No",
         Thinking: "Thinking",
-        HeadTilt: "HeadTilt",
-        Shrug: "Shrug",
-        FoldArms: "FoldArms",
-        Thoughtful: "Thoughtful",
+        "Tired  Sleeping": "Tired  Sleeping",
     };
 
     const zoomMap: Record<string, any> = {
-        head: {scale: 14, position: [-90, -20, 0]},
-        body: {scale: 4.5, position: [-29, -4, 0]},
+        head: {scale: 12, position: [0, -17, 0]},
+        body: {scale: 4, position: [0, -3, 0]},
     }
     const {scale, position} = zoomMap[zoom] || zoomMap['body'];
 
-	useEffect(() => {
-		if (!actions || !emotion) return;
+    useEffect(() => {
+        if (!actions || !emotion) return;
 
-        const animation = animMap[emotionMap[emotion]] || animMap["Idle"];
-        console.log(animation)
+        const animation = emotionMap[emotion] || "Hello";
         Object.values(actions).forEach((a) => a?.stop());
 
         const action = mixer.clipAction(animations.find((a) => a.name === animation) as AnimationClip);
 
-		if (!action) return;
+        if (!action) return;
 
+        action.reset();
+        action.setLoop(LoopOnce, 1);
+        action.clampWhenFinished = true;
+        action.play();
 
-		action.reset();
-		action.setLoop(LoopOnce, 1);
-		action.clampWhenFinished = true;
-		action.play();
+        const handleFinish = () => {
+            console.log("Animation finished:", animation);
+        };
 
-		const handleFinish = () => {
-			console.log("Animation finished:", animation);
-		};
+        mixer.addEventListener("finished", handleFinish);
+        return () => mixer.removeEventListener("finished", handleFinish);
+    }, [emotion, emoCount, actions]);
 
-		mixer.addEventListener("finished", handleFinish);
-		return () => mixer.removeEventListener("finished", handleFinish);
-	}, [emotion, emoCount, actions]);
-
-	return (
-		<group scale={scale} position={position} ref={group} {...props} dispose={null}>
+    return (
+        <group scale={scale} position={position} ref={group} {...props} dispose={null}>
             <group name="Scene">
-            <group name="Collection" position={[4.94, 0, 0]} />
-            <group name="metarig006" position={[6.432, 0.003, -0.001]}>
-                <group name="Cube049">
+                <group name="metarig" position={[0, 0.003, -0.001]}>
+                <group name="Cube001">
                     <skinnedMesh
-                    name="Cube049_1"
-                    geometry={nodes.Cube049_1.geometry}
-                    material={materials['Material.048']}
-                    skeleton={nodes.Cube049_1.skeleton}
-                    morphTargetDictionary={nodes.Cube049_1.morphTargetDictionary}
-                    morphTargetInfluences={nodes.Cube049_1.morphTargetInfluences}
+                    name="Cube002"
+                    geometry={nodes.Cube002.geometry}
+                    material={materials.Material}
+                    skeleton={nodes.Cube002.skeleton}
+                    morphTargetDictionary={nodes.Cube002.morphTargetDictionary}
+                    morphTargetInfluences={nodes.Cube002.morphTargetInfluences}
                     />
                     <skinnedMesh
-                    name="Cube049_2"
-                    geometry={nodes.Cube049_2.geometry}
-                    material={materials['Material.049']}
-                    skeleton={nodes.Cube049_2.skeleton}
-                    morphTargetDictionary={nodes.Cube049_2.morphTargetDictionary}
-                    morphTargetInfluences={nodes.Cube049_2.morphTargetInfluences}
-                    />
-                </group>
-                <skinnedMesh
-                    name="Cube050"
-                    geometry={nodes.Cube050.geometry}
-                    material={materials['Material.050']}
-                    skeleton={nodes.Cube050.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube051"
-                    geometry={nodes.Cube051.geometry}
-                    material={materials['Blue.036']}
-                    skeleton={nodes.Cube051.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube052"
-                    geometry={nodes.Cube052.geometry}
-                    material={materials['Blue.036']}
-                    skeleton={nodes.Cube052.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube053"
-                    geometry={nodes.Cube053.geometry}
-                    material={materials['Material.052']}
-                    skeleton={nodes.Cube053.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube054"
-                    geometry={nodes.Cube054.geometry}
-                    material={materials['Material.053']}
-                    skeleton={nodes.Cube054.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube055"
-                    geometry={nodes.Cube055.geometry}
-                    material={materials['Material.054']}
-                    skeleton={nodes.Cube055.skeleton}
-                />
-                <skinnedMesh
-                    name="Cube056"
-                    geometry={nodes.Cube056.geometry}
-                    material={materials['Material.055']}
-                    skeleton={nodes.Cube056.skeleton}
-                />
-                <group name="Cylinder019">
-                    <skinnedMesh
-                    name="Cylinder019_1"
-                    geometry={nodes.Cylinder019_1.geometry}
-                    material={materials['Blue.036']}
-                    skeleton={nodes.Cylinder019_1.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder019_2"
-                    geometry={nodes.Cylinder019_2.geometry}
-                    material={materials['Blue.037']}
-                    skeleton={nodes.Cylinder019_2.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder019_3"
-                    geometry={nodes.Cylinder019_3.geometry}
-                    material={materials['Blue.038']}
-                    skeleton={nodes.Cylinder019_3.skeleton}
-                    />
-                </group>
-                <group name="Cylinder020">
-                    <skinnedMesh
-                    name="Cylinder020_1"
-                    geometry={nodes.Cylinder020_1.geometry}
-                    material={materials['Material.051']}
-                    skeleton={nodes.Cylinder020_1.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder020_2"
-                    geometry={nodes.Cylinder020_2.geometry}
-                    material={materials['Blue.036']}
-                    skeleton={nodes.Cylinder020_2.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder020_3"
-                    geometry={nodes.Cylinder020_3.geometry}
-                    material={materials['Blue.039']}
-                    skeleton={nodes.Cylinder020_3.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder020_4"
-                    geometry={nodes.Cylinder020_4.geometry}
-                    material={materials['Blue.040']}
-                    skeleton={nodes.Cylinder020_4.skeleton}
-                    />
-                    <skinnedMesh
-                    name="Cylinder020_5"
-                    geometry={nodes.Cylinder020_5.geometry}
-                    material={materials['Blue.041']}
-                    skeleton={nodes.Cylinder020_5.skeleton}
+                    name="Cube002_1"
+                    geometry={nodes.Cube002_1.geometry}
+                    material={materials['Material.003']}
+                    skeleton={nodes.Cube002_1.skeleton}
+                    morphTargetDictionary={nodes.Cube002_1.morphTargetDictionary}
+                    morphTargetInfluences={nodes.Cube002_1.morphTargetInfluences}
                     />
                 </group>
                 <skinnedMesh
-                    name="Cylinder021"
-                    geometry={nodes.Cylinder021.geometry}
-                    material={materials['Blue.036']}
-                    skeleton={nodes.Cylinder021.skeleton}
+                    name="Cube004"
+                    geometry={nodes.Cube004.geometry}
+                    material={materials['Material.001']}
+                    skeleton={nodes.Cube004.skeleton}
                 />
+                <skinnedMesh
+                    name="Cube005"
+                    geometry={nodes.Cube005.geometry}
+                    material={materials.Blue}
+                    skeleton={nodes.Cube005.skeleton}
+                />
+                <skinnedMesh
+                    name="Cube008"
+                    geometry={nodes.Cube008.geometry}
+                    material={materials.Blue}
+                    skeleton={nodes.Cube008.skeleton}
+                />
+                <skinnedMesh
+                    name="Cube017"
+                    geometry={nodes.Cube017.geometry}
+                    material={materials['Material.004']}
+                    skeleton={nodes.Cube017.skeleton}
+                />
+                <skinnedMesh
+                    name="Cube021"
+                    geometry={nodes.Cube021.geometry}
+                    material={materials['Material.005']}
+                    skeleton={nodes.Cube021.skeleton}
+                />
+                <skinnedMesh
+                    name="Cube023"
+                    geometry={nodes.Cube023.geometry}
+                    material={materials['Material.006']}
+                    skeleton={nodes.Cube023.skeleton}
+                />
+                <skinnedMesh
+                    name="Cube024"
+                    geometry={nodes.Cube024.geometry}
+                    material={materials['Material.007']}
+                    skeleton={nodes.Cube024.skeleton}
+                />
+                <skinnedMesh
+                    name="Cylinder001"
+                    geometry={nodes.Cylinder001.geometry}
+                    material={materials.Blue}
+                    skeleton={nodes.Cylinder001.skeleton}
+                />
+                <group name="Cylinder003">
+                    <skinnedMesh
+                    name="Cylinder007"
+                    geometry={nodes.Cylinder007.geometry}
+                    material={materials['Material.002']}
+                    skeleton={nodes.Cylinder007.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder007_1"
+                    geometry={nodes.Cylinder007_1.geometry}
+                    material={materials.Blue}
+                    skeleton={nodes.Cylinder007_1.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder007_2"
+                    geometry={nodes.Cylinder007_2.geometry}
+                    material={materials['Blue.001']}
+                    skeleton={nodes.Cylinder007_2.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder007_3"
+                    geometry={nodes.Cylinder007_3.geometry}
+                    material={materials['Blue.002']}
+                    skeleton={nodes.Cylinder007_3.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder007_4"
+                    geometry={nodes.Cylinder007_4.geometry}
+                    material={materials['Blue.003']}
+                    skeleton={nodes.Cylinder007_4.skeleton}
+                    />
+                </group>
+                <group name="Cylinder004">
+                    <skinnedMesh
+                    name="Cylinder006"
+                    geometry={nodes.Cylinder006.geometry}
+                    material={materials.Blue}
+                    skeleton={nodes.Cylinder006.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder006_1"
+                    geometry={nodes.Cylinder006_1.geometry}
+                    material={materials['Blue.004']}
+                    skeleton={nodes.Cylinder006_1.skeleton}
+                    />
+                    <skinnedMesh
+                    name="Cylinder006_2"
+                    geometry={nodes.Cylinder006_2.geometry}
+                    material={materials['Blue.005']}
+                    skeleton={nodes.Cylinder006_2.skeleton}
+                    />
+                </group>
                 <primitive object={nodes.spine001} />
                 </group>
             </group>
         </group>
-	);
+    );
 }
 
-useGLTF.preload("/models/QT_combined.glb");
+useGLTF.preload("/models/QT_Model.glb");

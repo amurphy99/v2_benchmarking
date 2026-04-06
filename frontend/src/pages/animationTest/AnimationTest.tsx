@@ -8,18 +8,21 @@ export function AnimationTest() {
     const [emotion, setEmotion] = useState<string>("Neutral");
 
     const mapAnim: Record<string, string> = {
-        Happy: "Nod",
-        Sad: "ShakeHead",
-        Surprised: "CoverMouth",
-        Scared: "Embarrassed",
-        Angry: "DuckHead",
-        Neutral: "Idle",
-        Listening: "Listening",
+        Happy: "Celebration",
+        Sad: "Sad",
+        Surprised: "Confused",
+        Scared: "Excited",
+        Angry: "Angry",
+        Neutral: "Listening Mode",
+        "Curious Head Tilt": "Curious Head Tilt",
+        Dancing: "Dancing",
+        "Error Confusion": "Error Confusion",
+        Hello: "Hello",
+        "Nodding Yes": "Nodding Yes",
+        "Rolling Forward  Backward": "Rolling Forward  Backward",
+        "Shaking No": "Shaking No",
         Thinking: "Thinking",
-        HeadTilt: "HeadTilt",
-        Shrug: "Shrug",
-        FoldArms: "FoldArms",
-        Thoughtful: "Thoughtful",
+        "Tired  Sleeping": "Tired  Sleeping",
     };
 
     const mapMsg: Record<string, string> = {
