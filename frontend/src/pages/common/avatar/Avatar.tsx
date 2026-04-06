@@ -12,7 +12,7 @@ export default function Avatar( { emotion, emoCount, model, zoom } : { emotion?:
                 <directionalLight              position={[0, 10, 10]} intensity={5} />
                 { (model == "Buddy" || model == "buddy") ?
                     <BuddyModel emotion={emotion} emoCount={emoCount} zoom={zoom} /> : 
-                    <QTModel emotion={emotion} emoCount={emoCount} zoom={zoom} /> 
+                    <QTModel emotion={emotion} emoCount={emoCount} zoom={zoom} />
                 }
             </Canvas>
         </div>
