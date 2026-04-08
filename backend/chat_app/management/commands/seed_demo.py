@@ -67,7 +67,7 @@ class Command(BaseCommand):
 
         Access      .objects.get_or_create(account=care_account, profile=profile)
         UserSettings.objects.get_or_create(profile=profile)
-        Goal        .objects.get_or_create(profile=profile, target=5, start_date=two_days_ago)
+        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": two_days_ago})
 
         if REMAKE_SAMPLE_DATA:
             self.seed_chats    (profile, days_back=10)
@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
         Access      .objects.get_or_create(account=care_account_2, profile=profile_2)
         UserSettings.objects.get_or_create(profile=profile_2)
-        Goal        .objects.get_or_create(profile=profile_2, target=5, start_date=two_days_ago)
+        Goal        .objects.get_or_create(profile=profile_2, defaults={"target": 5, "start_date": two_days_ago})
 
         if REMAKE_SAMPLE_DATA:
             self.seed_chats         (profile_2, days_back=10)
