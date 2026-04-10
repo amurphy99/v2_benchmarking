@@ -1,5 +1,12 @@
 import { randInt } from "three/src/math/MathUtils.js";
 
+export const buddyAnimations: Record<string, string> = {
+    DANCE: "DANCE",
+    "SHAKE NO": "SHAKE NO",
+    EMBARRASSED: "EMBARRASSED",
+    "HEAD TILT": "HEAD TILT",
+};
+
 export const buddyEmotionMap: Record<string, string> = {
     Happy: "DANCE",
     Sad: "SHAKE NO",
@@ -13,6 +20,26 @@ export const buddyZoomMap: Record<string, any> = {
     head: {scale: 345, position: [0, -23.5, 0]},
     body: {scale: 100, position: [0, -4, 0]},
 }
+
+export const qtAnimations: Record<string, string> = {
+    Angry: "Angry",
+    Celebration: "Celebration",
+    Confused: "Confused",
+    "Curious Head Tilt": "Curious Head Tilt",
+    Dancing: "Dancing",
+    "Error Confusion": "Error Confusion",
+    Excited: "Excited",
+    Happy: "Happy",
+    Hello: "Hello",
+    "Listening Mode": "Listening Mode",
+    "Nodding Yes": "Nodding Yes",
+    "Rolling Forward  Backward": "Rolling Forward  Backward",
+    Sad: "Sad",
+    "Shaking No": "Shaking No",
+    Surprised: "Surprised",
+    Thinking: "Thinking",
+    "Tired  Sleeping": "Tired  Sleeping",
+};
 
 export const qtEmotionMap: Record<string, string[]> = {
     Happy: ["Celebration", "Dancing", "Rolling Forward  Backward", "Happy"],
