@@ -52,14 +52,11 @@ export const AvatarComponent = forwardRef(({ model, zoom, ...props } : { model: 
         playAnimation, playEmotion
     }));
 
-  return (
-    <>
-        {model.toLowerCase() == "qt" ?
-            <QTModel nodes={nodes} materials={materials} scale={zoomInfo.scale} position={zoomInfo.position} group={group} /> :
-            <BuddyModel nodes={nodes} materials={materials} scale={zoomInfo.scale} position={zoomInfo.position} group={group} />
-        }
-    </>
-  );
+    if (model.toLowerCase() == "qt") {
+        return <QTModel nodes={nodes} materials={materials} scale={zoomInfo.scale} position={zoomInfo.position} group={group} />
+    } else {
+        return <BuddyModel nodes={nodes} materials={materials} scale={zoomInfo.scale} position={zoomInfo.position} group={group} />
+    }
 });
 
 export const Avatar = forwardRef(({ model, zoom, ...props } : { model: string, zoom: string }, ref) => {{
