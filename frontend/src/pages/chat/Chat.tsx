@@ -1,4 +1,4 @@
-import { useState    } from "react";
+import { useRef, useState    } from "react";
 import { useNavigate } from "react-router-dom";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
@@ -6,9 +6,9 @@ import useLiveChat   from "@/hooks/useLiveChat";
 import SaveChatModal from "@/components/modals/SaveChatModal";
 
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
-import Avatar from "../common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
+import { Avatar } from "../common/avatar/Avatar";
 
 
 // ====================================================================
@@ -20,8 +20,7 @@ export function Chat() {
     const navigate = useNavigate();
     const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [emotion, setEmotion] = useState<string>("Neutral");
-    const [emoCount, setEmoCount] = useState<number>(0);
+    const avatarRef = useRef<any>(null);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
@@ -42,8 +41,9 @@ export function Chat() {
     };
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
-        setEmotion(emotion);
-        setEmoCount((t) => t + 1);
+        if (avatarRef.current) {
+            avatarRef.current.playEmotion(emotion);
+        }
     }
 
     // selecting the type of chat
@@ -129,7 +129,7 @@ export function Chat() {
                 <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar emotion={emotion} emoCount={emoCount} model={"qt"} zoom="body" /> 
+                        <Avatar model={"qt"} zoom="body" ref={avatarRef} /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -137,7 +137,7 @@ export function Chat() {
                 </div>
                 :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar emotion={emotion} emoCount={emoCount} model={model} zoom="head"/>
+                    <Avatar model={model} zoom="head" ref={avatarRef}/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
