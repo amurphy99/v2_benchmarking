@@ -1,6 +1,7 @@
 
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
 
+const EMOTIONS = ["Happy", "Sad", "Angry", "Surprised", "Scared", "Neutral"];
 // ================================================================================
 // Avatar (or Robot) action controls
 // ================================================================================
@@ -30,29 +31,17 @@ export default function AvatarActionsGroup({
 
             {/* Buttons */}
             <div className="mt-2 grid grid-cols-2 gap-2">
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Spin */}
-                {/* -------------------------------------------------------------------------------- */}
-                <button
-                    className = {btnClass(pending.robot_emotion || !connected, "secondary")}
-                    disabled  = {pending.robot_emotion || !connected}
-                    onClick   = {() => onEmotion("Happy")}
-                > 
-                {pending.robot_emotion ? "Sending..." : "Show Happy"}
-                </button>
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Show 'Excited' */}
-                {/* -------------------------------------------------------------------------------- */}
-                <button
-                    className = {btnClass(pending.robot_animation || !connected, "secondary")}
-                    disabled  = {pending.robot_animation || !connected}
-                    onClick   = {() => onAnimation("Idle")}
-                >
-                {pending.robot_animation ? "Sending..." : "Send Idle Animation"}
-                </button>
-
+                {EMOTIONS.map((emotion, idx) => {
+                    return (
+                        <button
+                            className = {btnClass(pending.robot_emotion || !connected, "secondary")}
+                            disabled  = {pending.robot_emotion || !connected}
+                            onClick   = {() => onEmotion(emotion)}
+                        >
+                            {pending.robot_emotion ? "Sending..." : "Show " + emotion}
+                        </button>
+                    )
+                })}
             </div>
         </div>
     );
