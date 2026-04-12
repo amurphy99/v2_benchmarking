@@ -9,16 +9,16 @@ export default function AvatarActionsGroup({
     connected, // Connection with the backend
     pending,   // Actions that can be pending (waiting for backend acks)
     // Methods to call for each action in this control group
-    onSpin,    // Tell the robot to spin (could work on Buddy) 
-    onExcited, // Tell the robot to make the "excited" facial expression
+    onEmotion,    // Tell the robot to display an emotion (could work on Buddy) 
+    onAnimation, // Tell the robot to play an animation
 }: {
     connected : boolean;
     pending   : {
-        robot_spin    : boolean;
-        robot_excited : boolean;
+        robot_emotion    : boolean;
+        robot_animation  : boolean;
     };
-    onSpin    : () => void;
-    onExcited : () => void;
+    onEmotion   : (emotion: string) => void;
+    onAnimation : (animation: string) => void;
 }) {
     // ================================================================================
     // UI Component Group
@@ -35,22 +35,22 @@ export default function AvatarActionsGroup({
                 {/* Spin */}
                 {/* -------------------------------------------------------------------------------- */}
                 <button
-                    className = {btnClass(pending.robot_spin || !connected, "secondary")}
-                    disabled  = {pending.robot_spin || !connected}
-                    onClick   = {onSpin}
+                    className = {btnClass(pending.robot_emotion || !connected, "secondary")}
+                    disabled  = {pending.robot_emotion || !connected}
+                    onClick   = {() => onEmotion("Happy")}
                 > 
-                {pending.robot_spin ? "Sending..." : "Show angry"}
+                {pending.robot_emotion ? "Sending..." : "Show Happy"}
                 </button>
 
                 {/* -------------------------------------------------------------------------------- */}
                 {/* Show 'Excited' */}
                 {/* -------------------------------------------------------------------------------- */}
                 <button
-                    className = {btnClass(pending.robot_excited || !connected, "secondary")}
-                    disabled  = {pending.robot_excited || !connected}
-                    onClick   = {onExcited}
+                    className = {btnClass(pending.robot_animation || !connected, "secondary")}
+                    disabled  = {pending.robot_animation || !connected}
+                    onClick   = {() => onAnimation("Idle")}
                 >
-                {pending.robot_excited ? "Sending..." : "Show excited"}
+                {pending.robot_animation ? "Sending..." : "Send Idle Animation"}
                 </button>
 
             </div>

@@ -13,6 +13,7 @@ export default function useLiveChat({
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
     onEmotion         = (         ) => {},
+    onExpression      = (         ) => {},
     wsPath = "/ws/chat/",
     onDebugTurn,
     onRagParseError,
@@ -23,6 +24,7 @@ export default function useLiveChat({
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
     onEmotion         : (emotion: string) => void;
+    onExpression      : (data: any) => void;
     wsPath           ?: string;
     onDebugTurn      ?: (turn: {
                             role: "user" | "assistant";
@@ -50,8 +52,8 @@ export default function useLiveChat({
             state,
         });
 
-        if (response.emotion) {
-            onEmotion(response.emotion)
+        if (response.data.emotion) {
+            onEmotion(response.data.emotion)
         }
 
         // if (state === "close_chat") {
@@ -89,6 +91,7 @@ export default function useLiveChat({
                 return;
             }
         },
+        onExpression: onExpression,
 	});
 	const { start: startAud, stop: stopAud } = useAudioStreamer({
 		chunkMs: 64,

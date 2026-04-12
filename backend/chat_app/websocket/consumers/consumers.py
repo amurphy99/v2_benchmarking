@@ -24,7 +24,7 @@ from  ..services.speechProvider    import SpeechToTextProvider
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
-from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_actions_command
+from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_send_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 

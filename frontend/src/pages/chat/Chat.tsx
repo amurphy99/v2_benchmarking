@@ -46,6 +46,16 @@ export function Chat() {
         }
     }
 
+    const onExpression = (data: any) => {
+        if (avatarRef.current) {
+            if (data.type == "emotion") {
+                avatarRef.current.playEmotion(data.value);
+            } else if (data.type == "animation") {
+                avatarRef.current.playAnimation(data.value);
+            }
+        }
+    }
+
     // selecting the type of chat
     type ChatMode = "default" | "memory_activity";
     const [chatMode, setChatMode] = useState<ChatMode>("default");
@@ -66,6 +76,7 @@ export function Chat() {
         onSystemUtterance,
         onScores: () => {},
         onEmotion,
+        onExpression,
         wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
         onDebugTurn: (t) =>
             setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),

@@ -14,6 +14,7 @@ export default function useChatSocket({
     onUserUtt     = (text) => {},
     onAudio       = (data) => {},
     onError       = (_) => {},
+    onExpression  = (data) => {}
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -39,11 +40,12 @@ export default function useChatSocket({
 
         if (type === "llm_response") { onLLMResponse(response);}
         else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); onScores ({ type, data }); } 
-        else if (type ===     "audio_scores") { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
-        else if (type ===  "periodic_scores") { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
+        else if (type === "audio_scores"    ) { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
+        else if (type === "periodic_scores" ) { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
         else if (type === "user_utt"        ) { console.log("User utterance received"     ); onUserUtt(        data  ); } 
         else if (type === "audio_chunk"     ) {                                              onAudio  (        data  ); } 
         else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
+        else if (type === "expression"      ) { console.log("Received expression:", data  ); onExpression(data);}
 
         else if (type === "rag_parse_error" || type === "chat_error") { console.log("Json Parsing Error Occured"); onError(response); }
 
