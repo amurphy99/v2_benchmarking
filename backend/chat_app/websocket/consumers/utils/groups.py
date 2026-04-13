@@ -103,10 +103,9 @@ async def format_actions_command(consumer, payload):
     value = payload.get("value", {"action": "HAPPY"})
 
     # Temporary mapping values for spin to be "angry"
-    expression = value.get("action", "HAPPY").lower()
-    if   expression == "excited": data = {"expression": "EXCITED", "duration_ms": 3000}
-    elif expression == "spin"   : data = {"expression": "ANGRY",   "duration_ms": 2000}
-    else:                         data = {"expression": "HAPPY",   "duration_ms": 2000}
+    expression: str = value.get("action", "HAPPY").lower()
+    if expression == "spin": data = {"expression": "EXCITED",          "duration_ms": 3000}
+    else:                    data = {"expression": expression.upper(), "duration_ms": 3000}
 
     # Build & send the payload to the frontend client
     relay_payload = {

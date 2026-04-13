@@ -38,6 +38,12 @@ from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biom
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 
 
+# --------------------------------------------------------------------------------
+# TODO: TEMPORARILY PLACING HERE
+# --------------------------------------------------------------------------------
+from ...services.llm.live_chat.cognibot_api import CognibotResponse
+from   .utils.groups                        import format_actions_command
+
 # ================================================================================
 # ChatConsumer 
 # ================================================================================
@@ -49,6 +55,21 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # How many recent messages to keep for the LLM
     MAX_CONTEXT = 30  
 
+    # --------------------------------------------------------------------------------
+    # TODO: TEMPORARILY PLACING HERE
+    # --------------------------------------------------------------------------------
+    # Send emotion command to the client & return the string response
+    async def response_method(self, context_buffer) -> str:
+        # Get structured response
+        response: CognibotResponse = await get_LLM_response(context_buffer)
+
+        # Send emotion command to client
+        payload = {"value": {"action": response.response_mood.upper()}}
+        await format_actions_command(self, payload)
+        
+        # Return just the string message value
+        return response.message
+
     # ================================================================================
     # Connect
     # ================================================================================
@@ -57,7 +78,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._init_response_state()
 
         # Define the response generation method to be used in the chat
-        self.response_method = get_LLM_response
+        self.response_method = self.response_method
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -113,6 +134,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.streaming_active = True
 
         # Session recording buffers (NOT in _init_response_state - must survive until disconnect saves them)
+        self.save_audio        = False             # Should we save the audio bytes on chat end?
         self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
         self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
         self._session_start_ts = time.monotonic()  # Reference point for TTS position in recording
@@ -163,7 +185,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Save session audio recording (stereo WAV: left = user mic, right = TTS)
         # --------------------------------------------------------------------------------
         audio_path = None
-        if session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
+        if self.save_audio and session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
             try:
                 audio_path = await asyncio.to_thread(
                     save_stereo_wav, session_id,

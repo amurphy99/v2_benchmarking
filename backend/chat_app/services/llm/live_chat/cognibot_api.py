@@ -30,7 +30,7 @@ from ..endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE
 # Emotions and/or gestures available to the robots
 # --------------------------------------------------------------------------------
 # TODO: Add these to the response model
-ConversationState = Literal["happy", "sad", "surprised", "thinking"]
+ResponseMood = Literal["Neutral", "Grumpy", "Happy", "Love", "Sad", "Scared", "Sick", "Surprised", "Thinking", "Tired"]
 
 
 # ================================================================================
@@ -38,16 +38,24 @@ ConversationState = Literal["happy", "sad", "surprised", "thinking"]
 # ================================================================================
 class CognibotResponse(BaseModel):
     # Thought field to help the LLM do some internal reasoning before responding
-    thought : str = Field(..., description="Brief internal reasoning about how the conversation is going and how to continue.")
+    thought : str = Field(
+        ..., description =
+        "Brief internal reasoning about how the conversation is going and how to continue. "
+        "Consider the mood of the user's messages so far, and how we can be empathetic to them."
+    )
 
     # Final response to send to the user
     message : str = Field(..., description="Your spoken response to the user.")
+
+    # Emotion
+    response_mood: ResponseMood = Field(..., description="Mood animation to show to the user along with your response.")
 
 
 # Default response (returned after all retries are exhausted)
 DEFAULT_RESPONSE = CognibotResponse(
     thought = "FAILED",
     message = "I'm sorry, I'm having trouble thinking right now. Can you tell me more?",
+    response_mood = "neutral",
 )
 
 # --------------------------------------------------------------------------------
@@ -63,7 +71,6 @@ Your job:
 - Have friendly, everyday conversations.
 - Ask about the person's day, routines, and feelings.
 - Help them feel heard, supported, and less alone.
-- Use simple words and short replies.
 
 Go with the flow, if the user doesn't remember something, don't press them; switch to a different topic.
 If the user changes the topic suddenly, you can try gently guiding them back to what you were talking about, but don't force it.
@@ -71,23 +78,13 @@ Talk about whatever they want to talk about.
 
 GUIDELINES:
 - Be warm, patient, and genuinely curious about the user.
-- Use plain, everyday language (around 5th-6th grade reading level). Do NOT use emojis or emoticons.
-- Keep responses concise and conversational (1-3 sentences max).
+- Use plain, everyday language (around 5th-6th grade reading level). NEVER use emojis or emoticons.
+- Keep responses brief, concise, and conversational (1-3 sentences max).
 - Acknowledge what the user said in their last message, either by following up on it or by repeating it back to them for clarification.
 - If it seems like the user has said something that doesn't make sense given the context, repeat it as a question and ask for clarification.
 - ALWAYS end your response with a question.
 - Do not give medical advice or make clinical assessments.
-
-When you answer:
-- Be brief.
-- Stay on topic with what the user just said.
-- NEVER add emojis or emoticons.
-- Always end with one short question that keeps the conversation going.
-
-OUTPUT FORMAT:
-Return ONLY a single JSON object matching the provided schema (no markdown, no extra keys).
-- `thought`: brief internal note on how the conversation is going and your intended approach.
-- `message`: your spoken reply to the user.
+- Return ONLY a single JSON object matching the provided schema (no markdown, no extra keys).
 
 """.strip()
 
@@ -138,7 +135,7 @@ class CognibotAPI:
                 )
                 t1 = time.time()
                 log_response(response, t0, t1)
-                return response.message
+                return response #.message
 
             # --------------------------------------------------------------------------------
             # Catch errors and retry if a call fails
@@ -150,7 +147,7 @@ class CognibotAPI:
                     f"(attempt {attempt+1}/{self.max_retries+1}): {repr(e)}{RESET}"
                 )
                 if attempt < self.max_retries:
-                    await asyncio.sleep(5.0)
+                    await asyncio.sleep(3.0)
 
         return DEFAULT_RESPONSE
 
@@ -161,7 +158,8 @@ class CognibotAPI:
 def log_response(response: CognibotResponse, t0: float, t1: float):
     log_string = (
         f"{LLM_MAIN}[LLM] Live-chat {BOLD}response{UNBOLD} generated in ({BOLD}{(t1-t0):.2f}s{UNBOLD}):{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Thought: {UNBOLD}{response.thought}{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Message: {UNBOLD}{response.message}{RESET}"
+        f"    {LLM_MAIN}{BOLD}Thought: {UNBOLD}{response.thought      }{RESET}\n"
+        f"    {LLM_MAIN}{BOLD}Message: {UNBOLD}{response.message      }{RESET}"
+        f"    {LLM_MAIN}{BOLD}Mood:    {UNBOLD}{response.response_mood}{RESET}"
     )
     logger.info(log_string)
