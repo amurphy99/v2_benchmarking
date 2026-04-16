@@ -87,6 +87,11 @@ class Command(BaseCommand):
         UserSettings.objects.get_or_create(profile=profile_2)
         Goal        .objects.get_or_create(profile=profile_2, defaults={"target": 5, "start_date": two_days_ago})
 
+        # Close any sessions left active by a previous crash/restart
+        closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
+        if closed:
+            self.stdout.write(self.style.WARNING(f"[seed_demo] Closed {closed} stale active session(s) on startup."))
+            
         if REMAKE_SAMPLE_DATA:
             self.seed_chats         (profile_2, days_back=10)
             self.seed_reminders     (profile_2, num_reminders=5)
