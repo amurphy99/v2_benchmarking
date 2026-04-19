@@ -176,7 +176,7 @@ class ChatHandler:
 
             # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
             # We wait until after the LLM is done to avoid causing any more delays
-            fire_and_log(consumer.on_utterance_biomarkers(), name="_execute_response::bio_callback")
+            # fire_and_log(consumer.on_utterance_biomarkers(), name="_execute_response::bio_callback")
 
             # --------------------------------------------------------------------------------
             # 3) Text-to-speech call that guards for cancelations
@@ -231,7 +231,7 @@ class ChatHandler:
         await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts)
 
         # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn (could also use the context buffer here)
-        fire_and_log(consumer.on_utterance_biomarkers(), name="respond_to_user::bio_callback")
+        # fire_and_log(consumer.on_utterance_biomarkers(), name="respond_to_user::bio_callback")
 
         # Synthesize speech with TTS if specified -- TODO: Pass the consumer again?
         if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send)
