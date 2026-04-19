@@ -28,12 +28,25 @@ logger = logging.getLogger(__name__)
 START_SCENARIO = "start_conversation"
 _available_scenarios_logged = False
 
+class Agent2Memory(BaseModel):
+    key_entities: list[str] = Field(
+        default_factory=list,
+        description="List of short sentences describing important named entities: people, places, events, organizations, etc."
+    )
+    important_facts: list[str] = Field(
+        default_factory=list,
+        description="List of short sentences describing key facts or context worth remembering for the long-term."
+    )
+
 class Agent2Output(BaseModel):
     agent1_instructions: str = Field(
-        description="Natural language instructions that guide your assistant on how to respond next turn. Keep it specific and actionable."
+        description="Natural language instructions that guide your assistant on how to respond next turn."
     )
     next_state: str = Field(
         description="The next state name. Must be either the current state or one of the available states."
+    )
+    updated_memory: Agent2Memory = Field(
+        description="Your working memory. Carry over what's still relevant, add new important things if they feel important, and remove what's not relevant. Try to keep it concise."
     )
 
 def _get_rag_lock(rag_state: dict) -> asyncio.Lock:
@@ -91,18 +104,37 @@ def build_agent1_system_prompt(*, agent2_instructions: str) -> str:
     Current Conversation: History:
     """.strip()
 
+
+def build_agent2_memory(current_memory: Agent2Memory | None = None) -> str:
+    if current_memory and (current_memory.key_entities or current_memory.important_facts):
+        entities = ", ".join(current_memory.key_entities) or "none"
+        facts = "\n".join(f"  - {f}" for f in current_memory.important_facts) or "  none"
+        return f"""
+        YOUR WORKING MEMORY (accumulated from previous turns):
+        Key entities: {entities}
+        Important facts:
+        {facts}
+
+        Carry this forward in your output. Keep what's still relevant, add new things, drop what's no longer needed.
+        """
+    else:
+        return ""
+
 def build_agent2_system_prompt(
     *,
     available_scenarios_text: str,
     current_scenario: str,
     instructions_text: str,
+    current_memory: Agent2Memory | None = None,
 ) -> str:
+    memory_section = build_agent2_memory(current_memory=current_memory)
+
     return f"""
     You are a conversation specialist supervising another assistant.
 
     The conversation is structured into states. Each state has goals and transition conditions.
 
-    Here is a ordered list of AVAILABLE_STATES:
+    Here is an ordered list of AVAILABLE_STATES:
     {available_scenarios_text}
 
     CURRENT_STATE:
@@ -111,8 +143,8 @@ def build_agent2_system_prompt(
     INSTRUCTIONS FOR CURRENT_STATE:
     ----------------
     {instructions_text}
-
-    Based on the conversation history, your tasks:
+    
+    Based on the conversation history and your working memory from previous turns, your tasks:
 
     1. **Assess Progress**: How well have the current state's objectives been met?
     2. **Plan Next Response**: What should the assistant focus on in their immediate response?
@@ -122,8 +154,7 @@ def build_agent2_system_prompt(
     - Be specific about what to address or ask
     - Include any key information to convey
     - Specify the tone or approach needed
-    - Give clear guidance to the agent, rather than directly telling it what to say. 
-    - For example, instead of "Say 'Hello, how are you?'", say "Greet the user and ask about their feelings."
+    - **Only give your assistant clear guidance on how to respond in the current context.** For example, instead of telling the assistant to say "Hello, how can I help you today?", you might instruct them to "Greet the user warmly and ask how you can assist them with their current needs."
 
     State Transition Rules:
     - Only advance states when current objectives are complete
@@ -135,7 +166,9 @@ def build_agent2_system_prompt(
     Required fields:
     - "agent1_instructions": Specific guidance for the assistant's response
     - "next_state": Current state name or next appropriate state
+    - "updated_memory": Your working memory with "key_entities" (list of strings) and "important_facts" (list of strings)
 
+    {memory_section}
     Conversation History:
     """.strip()
 
@@ -187,10 +220,12 @@ async def _predict_and_update_next_scenario(
     lock = _get_rag_lock(rag_state)
     async with lock:
         try:
+            current_memory: Agent2Memory | None = rag_state.get("agent2_memory")  # None on first turn
             scenario_system_prompt = build_agent2_system_prompt(
                 available_scenarios_text=available_scenarios_text,
                 current_scenario=current,
                 instructions_text=instructions_text,
+                current_memory=current_memory
             )
 
             logger.info(f"{lu.YELLOW}[RAG-PHI3][{trace_id}] Agent-2 predicting next_state...{lu.RESET}")
@@ -213,6 +248,7 @@ async def _predict_and_update_next_scenario(
             rag_state["agent2_instructions"] = resp.agent1_instructions
             rag_state["current_scenario"] = resp.next_state
             rag_state["_last_predicted_next_scenario"] = resp.next_state
+            rag_state["agent2_memory"]                 = resp.updated_memory
 
 
         except Exception as e:
