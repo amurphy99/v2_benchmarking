@@ -41,6 +41,7 @@ def resolve_instruction_owner(user):
     try:
         account = Account.objects.select_related("user").get(user=user)
     except Account.DoesNotExist:
+        logger.warning("No account found for user_id=%s", getattr(user, "id", None))
         return None
 
     # If the logged-in user is not a patient, just use them directly
@@ -69,6 +70,7 @@ def resolve_instruction_owner(user):
         return caregiver_access.account.user
 
     # No caregiver linked yet
+    logger.warning("No caregiver linked for patient account_id=%s user_id=%s", account.id, getattr(user, "id", None))
     return None
 
 
