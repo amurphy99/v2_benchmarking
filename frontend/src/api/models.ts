@@ -150,9 +150,10 @@ export interface ChatSession {
   duration  : number;          // in seconds
   audio_file: string | null;
 
-  topics    : string;        // stored as an unparsed list string
+  topics    : string[] | null;
   image     : AlbumImage;
   sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
+  emotion   : string | null;
   notes     : string | null;
   summary   : string | null;
 

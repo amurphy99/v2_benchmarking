@@ -1,12 +1,12 @@
 import { getAccess } from "@/context/AuthProvider";
 import { useRef, useEffect, useState, useCallback } from "react";
 
-// ====================================================================
+// ================================================================================
 // Handle the WebSocket Connection to the Backend
-// ====================================================================
+// ================================================================================
 // ws://localhost:8000/ws/chat/?token=<ACCESS>&source=webapp
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
-export default function useChatSocket({ 
+export default function useChatSocket({
     recording,
     wsPath        = "/ws/chat/", 
     onLLMResponse = (unknown)   => {}, 
@@ -20,25 +20,26 @@ export default function useChatSocket({
     const [connected, setConnected] = useState(false);
 
     // Backend WebSocket URL 
-    // ToDo: Need to add the token stuff to this (I think?)
-    /*
-    const protocol = window.location.protocol === "https:"    ? "wss:"  : "ws:";
-    const hostName = window.location.hostname === "localhost" ? ":8000" : ""   ;
-    const wsUrl    = `${protocol}//${window.location.host}${hostName}/ws/chat/`;
-    */
     const wsUrlBase =
         location.hostname === "localhost"
             ? `ws://localhost:8000${wsPath}`
             : `wss://${location.host}${wsPath}`;
     const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
 
+    // --------------------------------------------------------------------------------
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
+    // --------------------------------------------------------------------------------
     const onMessage = useCallback((event: MessageEvent) => {
         const response = JSON.parse(event.data);
         const type = response.type;
         const data = response.data;
 
-        if (type === "llm_response") { onLLMResponse(response);}
+        // Basic LLM response received through the WebSocket
+        if      (type === "llm_response"    ) { onLLMResponse(response); }
+        else if (type === "user_utt"        ) { console.log("User utterance received"     ); onUserUtt(        data  ); } 
+        else if (type === "audio_chunk"     ) {                                              onAudio  (        data  ); } 
+        
+        // Old biomarker-score-specific message types
         else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); onScores ({ type, data }); } 
         else if (type === "audio_scores"    ) { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
         else if (type === "periodic_scores" ) { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
@@ -47,11 +48,19 @@ export default function useChatSocket({
         else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
         else if (type === "expression"      ) { console.log("Received expression:", data  ); onExpression(data);}
 
+        // Backend chat controls (chats can be paused or ended through the backend)
+        else if (type === "stream_status"   ) { console.log("Backend paused chat"); onStreamStatus(data); }
+        else if (type === "chat_ended"      ) { console.log("Backend ended chat" ); onChatClosed  ();     }
+
+        // Miscellaneous 
+        else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
         else if (type === "rag_parse_error" || type === "chat_error") { console.log("Json Parsing Error Occured"); onError(response); }
 
-    }, [onLLMResponse, onScores, onUserUtt, onAudio, onError]);
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onError, onStreamStatus, onChatClosed]);
 
+    // --------------------------------------------------------------------------------
     // Open and close the websocket connection on change of the "recording" flag
+    // --------------------------------------------------------------------------------
     const wsRef = useRef<WebSocket | null>(null); 
     useEffect(() => {
         if (!recording) {wsRef.current?.close(); return;}

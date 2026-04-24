@@ -23,9 +23,11 @@ from .chat_summary     import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summa
 from .chat_sentiment   import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
 from .chat_risks       import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
 
+# Load constants from the new endpoint
+from ..endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE
+
 # Config
-DEFAULT_MODEL = "qwen2.5-3b"
-TEMPERATURE   = 0.5
+DEFAULT_MODEL = "qwen2.5-3b" # TODO: Old cloud version used this...
 
 # Default Response (empty transcript or local mode)
 DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutral", "emotion_label": "neutral"}
@@ -34,9 +36,9 @@ DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutr
 # ================================================================================
 # Make all LLM queries for the post-chat analysis
 # ================================================================================
-async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
+async def post_chat_analysis(chat_messages, model=MODEL_NAME):
     # Check if we are in local or deployed mode
-    if not USE_LLM: 
+    if False: #not USE_LLM: 
         logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted in local mode. {RESET}")
         return DEF_ANALYSIS
 

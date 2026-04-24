@@ -16,7 +16,7 @@ from chat_app.services import logging_utils as lu
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
 from rag_vectorstore.services.vdb_services import get_embeddings_model
 
-from .chatHelpers import RagParseError 
+from .utils.jsonParsingUtils import RagParseError
 from .utils.jsonParsingUtils import _log_json_fail, _truncate, parse_structured_llm_response, LlmResponse
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -41,6 +41,7 @@ def resolve_instruction_owner(user):
     try:
         account = Account.objects.select_related("user").get(user=user)
     except Account.DoesNotExist:
+        logger.warning("No account found for user_id=%s", getattr(user, "id", None))
         return None
 
     # If the logged-in user is not a patient, just use them directly
@@ -69,6 +70,7 @@ def resolve_instruction_owner(user):
         return caregiver_access.account.user
 
     # No caregiver linked yet
+    logger.warning("No caregiver linked for patient account_id=%s user_id=%s", account.id, getattr(user, "id", None))
     return None
 
 
@@ -311,8 +313,8 @@ async def invoke_chain_get_raw_text(messages: list) -> str:
 
 async def rag_response_fn(
     context_buffer,
-    user_text: str,
     *,
+    user_text: str,
     user,
     activity_name: str,
     rag_state: dict,

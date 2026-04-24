@@ -170,6 +170,10 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     async def ws_command_acks(self, event):
         await self.send_json(event.get("payload", {}))
 
+    # Receives stream status changes ("active" | "paused" | "ended") from the primary consumer
+    async def ws_stream_status(self, event):
+        await self.send_json({"type": "stream_status", "data": event.get("data", {})})
+
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
     # ================================================================================

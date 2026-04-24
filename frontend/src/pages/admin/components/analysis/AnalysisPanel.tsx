@@ -5,7 +5,7 @@ import { InfoPill } from "../admin_header/StatusComponents";
 import { sentimentBadge, emotionBadge, riskBadge, topicsBadges } from "./analysisBadges";
 import { cardClass } from "../common/commonStyle";
 
-import { formatTopics, parseNotes, deriveSessionAnalysis } from "./deriveSessionAnalysis";
+import { deriveSessionAnalysis } from "./deriveSessionAnalysis";
 import type { SessionLike } from "./deriveSessionAnalysis";
 
 // Misc. Helpers
@@ -16,18 +16,12 @@ import { useElementHeight } from "@/hooks/style/useElementHeight";
 // ================================================================================
 export const AnalysisPanel = memo(function SessionAnalysisPanel({
     session,
-    notesSeparator = "\n<|ANALYSIS|>\n",
-    className      = "",
+    className = "",
 }: {
-    session          : SessionLike;
-    notesSeparator ? : string;
-    className      ? : string;
+    session    : SessionLike;
+    className? : string;
 }) {
-    // Prepare text from the given session data
-    const topicsText = useMemo(() => formatTopics(session.topics), [session.topics]);
-
-    // Analysis fields (summary + risk) with notes fallback handled inside the helper
-    const analysis = useMemo(() => deriveSessionAnalysis(session, notesSeparator), [session, notesSeparator]);
+    const analysis = useMemo(() => deriveSessionAnalysis(session), [session]);
     const { summary, risk_rating, risk_quotes, risk_reasoning } = analysis;
 
     // Sync the heights of both sides
@@ -56,7 +50,7 @@ export const AnalysisPanel = memo(function SessionAnalysisPanel({
         {/* Top "analysis" Pills */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="flex flex-wrap items-center gap-2">
-            <InfoPill label="Topics"    >{topicsBadges  (topicsText       )}</InfoPill>
+            <InfoPill label="Topics"    >{topicsBadges  (session.topics   )}</InfoPill>
             <InfoPill label="Sentiment" >{sentimentBadge(session.sentiment)}</InfoPill>
             <InfoPill label="Emotion"   >{emotionBadge  (session.emotion  )}</InfoPill>
             <InfoPill label="Risk"      >{riskBadge     (risk_rating      )}</InfoPill>

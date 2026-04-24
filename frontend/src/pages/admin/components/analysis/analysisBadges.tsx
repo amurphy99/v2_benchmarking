@@ -20,13 +20,15 @@ export function emotionBadge(emotion?: string | null) {
     const base = "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium";
 
     switch (e) {
-        case   "neutral": return <span className={`${base} bg-gray-50    text-gray-700   border-gray-200`  }>Neutral  </span>;
-        case     "happy": return <span className={`${base} bg-green-100  text-green-700  border-green-200` }>Happy    </span>;
-        case       "sad": return <span className={`${base} bg-blue-100   text-blue-700   border-blue-200`  }>Sad      </span>;
-        case    "scared": return <span className={`${base} bg-yellow-100 text-yellow-800 border-yellow-200`}>Scared   </span>;
-        case "surprised": return <span className={`${base} bg-purple-100 text-purple-700 border-purple-200`}>Surprised</span>;
-        case     "angry": return <span className={`${base} bg-red-100    text-red-700    border-red-200`   }>Angry    </span>;
-        default:          return <span className={`${base} bg-gray-50    text-gray-700   border-gray-200`  }>{emotion || "—"}</span>;
+        case    "neutral": return <span className={`${base} bg-gray-50    text-gray-700   border-gray-200`  }>Neutral    </span>;
+        case      "happy": return <span className={`${base} bg-green-100  text-green-700  border-green-200` }>Happy      </span>;
+        case        "sad": return <span className={`${base} bg-blue-100   text-blue-700   border-blue-200`  }>Sad        </span>;
+        case     "scared": return <span className={`${base} bg-yellow-100 text-yellow-800 border-yellow-200`}>Scared     </span>;
+        case  "surprised": return <span className={`${base} bg-purple-100 text-purple-700 border-purple-200`}>Surprised  </span>;
+        case      "angry": return <span className={`${base} bg-red-100    text-red-700    border-red-200`   }>Angry      </span>;
+        case "frustrated": return <span className={`${base} bg-orange-100 text-orange-700 border-orange-200`}>Frustrated </span>;
+        case   "confused": return <span className={`${base} bg-indigo-100 text-indigo-700 border-indigo-200`}>Confused   </span>;
+        default:           return <span className={`${base} bg-gray-50    text-gray-700   border-gray-200`  }>{emotion || "—"}</span>;
     }
 }
 
@@ -54,16 +56,15 @@ export function topicBadge(topic?: string | null) {
     return         <span className={`${base} bg-gray-50 text-gray-700 border-gray-200`}>{t}</span>;
 }
 
-export function topicsBadges(topicsText?: string | null) {
-    const topics = (topicsText ?? "")
-        .split (",")
-        .map   ((s) => s.trim())
-        .filter((s) => s.length > 0);
+export function topicsBadges(topics?: string[] | string | null) {
+    const list: string[] = Array.isArray(topics)
+        ? topics.map((s) => s.trim()).filter(Boolean)
+        : (topics ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
-    if (topics.length === 0) return topicBadge(null);
+    if (list.length === 0) return topicBadge(null);
     return (
         <div className="flex flex-wrap gap-1">
-            {topics.map((t, i) => (
+            {list.map((t, i) => (
                 <span key={`${t}-${i}`}>{topicBadge(t)}</span>
             ))}
         </div>

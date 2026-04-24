@@ -3,7 +3,7 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-Later on may need to specifically add start/end timestamps to chats/messages...
+TODO: Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
 import logging, time
@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
+from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -53,8 +53,8 @@ class ChatService:
     # ===============================================================================
     # Close Session
     # ================================================================================
-    @staticmethod 
-    async def close_session(user_id, session_id, *, username="unknown", source="webapp", notes=None, sentiment=None, topics=None):
+    @staticmethod
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp"):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -73,27 +73,16 @@ class ChatService:
         # Run a post-chat analysis to fill out the rest of the fields
         analysis = await post_chat_analysis(messages) # summary, topics, sentiment, emotion
 
-        # Create the "notes" field  
-        # TODO: We need this for now until we update the DB fields for the new results.
-        risk_rating  = analysis.get('risk_rating', 0)
-        risk_quotes  = "\n".join(q.strip() for q in analysis.get("risk_quotes", ["No quotes given."]) if q and q.strip())
-        risk_reason  = analysis.get('risk_reason', 'No reason given.')
-        chat_emotion = analysis.get('emotion', 'No emotion.')
-        summary        = (
-            f"{analysis.get('summary', 'No summary available.')} \n"
-            f"Emotion: {analysis.get('emotion', 'No emotion.')} \n"
-            f"Sentiment: {analysis.get('sentiment', 'No sentiment')}"
-        )
-        # Frontend expects fields to be separated by: 
-        sep = "\n<|ANALYSIS|>\n"
-        notes = sep.join([summary, str(risk_rating), risk_quotes, risk_reason, chat_emotion])
-
-        # Use the results to save the rest of the fields
+        # Save analysis results to the proper database fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
-            user, session, messages, 
-            notes     = notes, 
-            sentiment =           analysis.get("sentiment", "Neutral"   ).capitalize(), 
-            topics    = ", ".join(analysis.get("topics",    ["N/A"]     ))
+            user, session, messages,
+            summary     = analysis.get("summary",     None),
+            sentiment   = analysis.get("sentiment",   None),
+            emotion     = analysis.get("emotion",     None),
+            topics      = analysis.get("topics",      None),
+            risk_level  = analysis.get("risk_rating", None),
+            risk_reason = analysis.get("risk_reason", None),
+            risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
         )
 
         # Done
@@ -136,9 +125,12 @@ class ChatService:
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, notes=None, sentiment=None, topics=None):
-        # Set the topics TODO: if it works, these will come from analysis
-        topics, sentiment = ChatService.set_analysis_fields(session, messages, notes=notes, sentiment=sentiment, topics=topics)
+    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
+        topics, sentiment = ChatService.set_analysis_fields(
+            session, messages,
+            summary=summary, sentiment=sentiment, emotion=emotion, topics=topics,
+            risk_level=risk_level, risk_quotes=risk_quotes, risk_reason=risk_reason,
+        )
         
         # Get an AlbumImage for the session
         album_image = get_image_for_topics(topics)
@@ -158,25 +150,26 @@ class ChatService:
     # --------------------------------------------------------------------------------
     # Set post-chat analysis fields for the session (summary, topics, sentiment)
     # --------------------------------------------------------------------------------
-    # TODO: Check whatever the default values are (that get returned on LLM error) and
-    #       call the original methods when given those.
-    @staticmethod 
+    @staticmethod
     @transaction.atomic
-    def set_analysis_fields(session, messages, notes=None, sentiment=None, topics=None):
-        # Get ONLY message content ONLY for the user
-        user_texts = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
+    def set_analysis_fields(session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
+        # Get user message text for fallback topic/sentiment calculations
+        user_texts   = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
         message_text = " ".join(user_texts)
 
-        if topics    is None: topics    = get_topics                 (message_text)
-        if sentiment is None: sentiment = classify_emotion_with_vader(message_text)
+        if not topics  : topics  = get_topics                 (message_text)
+        if not emotion : emotion = classify_emotion_with_vader(message_text)
 
-        # Set sentiment and notes
-        if sentiment is not None: session.sentiment = sentiment
-        if notes     is not None: session.notes     = notes
-        if topics    is not None: session.topics    = topics
+        # Write each field only if a value was provided
+        if summary     is not None: session.summary     = summary
+        if sentiment   is not None: session.sentiment   = sentiment
+        if emotion     is not None: session.emotion     = emotion
+        if topics      is not None: session.topics      = topics
+        if risk_level  is not None: session.risk_level  = risk_level
+        if risk_quotes is not None: session.risk_quotes = risk_quotes
+        if risk_reason is not None: session.risk_reason = risk_reason
 
-        # Done; save and return topics
-        session.save(update_fields=["topics", "sentiment", "notes"])
+        session.save(update_fields=["summary", "sentiment", "emotion", "topics", "risk_level", "risk_quotes", "risk_reason"])
         return topics, sentiment
 
 
@@ -215,6 +208,18 @@ class ChatService:
     def add_biomarkers_bulk(session_id, scores: dict):
         session = ChatSession.objects.get(id=session_id)
         ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+
+    # Word-level STT timestamps for a confirmed user message
+    @staticmethod
+    def add_words_bulk(message_id: int, words: list):
+        """
+        Bulk-insert ChatWord records for a committed user message.
+        words: [{"word": str, "start": datetime, "end": datetime}, ...]
+        """
+        ChatWord.objects.bulk_create([
+            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
+            for i, w in enumerate(words)
+        ])
 
 
 

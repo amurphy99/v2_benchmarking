@@ -25,6 +25,7 @@ export function Chat() {
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
     
+    // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
     const onUserUtterance   = (text: string) => { 
         pushMessage("user",      text); 
         setBotMessage( 
@@ -35,10 +36,10 @@ export function Chat() {
             </div>
         );
     };
-    const onSystemUtterance = (text: string) => { 
-        pushMessage("assistant", text); 
-        setBotMessage(<>{text}</>)
-    };
+
+    // System utterance received
+    const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
+
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
         if (avatarRef.current) {
@@ -60,6 +61,7 @@ export function Chat() {
     type ChatMode = "default" | "memory_activity";
     const [chatMode, setChatMode] = useState<ChatMode>("default");
 
+
     type DebugTurn = {
         ts: number;
         role: "user" | "assistant";
@@ -69,57 +71,43 @@ export function Chat() {
 
     const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
 
-    // Live-chat hook
 
-    const { start, stop, save } = useLiveChat({
+
+    // Live-chat hook
+    const { start, stop, save, chatEnding } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
         onEmotion,
         onExpression,
         wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
-        onDebugTurn: (t) =>
-            setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),
-        onRagParseError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
-        onChatError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
+
+        onDebugTurn     : (t) => { setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]);                                 },
+        onRagParseError : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
+        onChatError     : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
+
+        // Chat ended 
         onChatClosed: () => {
             setRecording(false);
             setShowModal(false);
-            navigate("/goal");
+            navigate("/chat/end"); // navigate("/goal")
         },
+        onChatPaused: () => { setRecording(false); },
     });
     
     // Separate recording flag that we control ourselves
     const [recording, setRecording ] = useState(false);
-    const startChat = () => {
-		start();
-		setRecording(true);
-	};
-	const pauseChat = () => {
-		stop();
-		setRecording(false);
-	};
+    const startChat = () => { start(); setRecording(true ); };
+	const pauseChat = () => { stop (); setRecording(false); };
 
     // Modal control
     const [showModal, setShowModal] = useState(false);
     const endChatModal = () => {
 		setShowModal(true);
-		if (!recording) {
-			pauseChat();
-		}
+		if (!recording) { pauseChat(); }
 	};
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
+    if (isLoading) { return <div>Loading...</div>; }
 
     const model = settings.modelChoice;
 
@@ -156,13 +144,17 @@ export function Chat() {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-           <div
-                className={`flex flex-row ${
-                    chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
-                } mx-[20vw] gap-[4em] justify-around`}
-            >
-                <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
-                <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+           <div className={`flex flex-row ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} mx-[20vw] gap-[4em] justify-around`} >
+                {chatEnding
+                    ? <div className="flex flex-col gap-2 items-center text-gray-500">
+                          <BsStopCircle size={"8vh"} color={"gray"} />
+                          Ending chat...
+                      </div>
+                    : <>
+                          <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
+                          <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+                      </>
+                }
 
                 <select
                 value={chatMode}
