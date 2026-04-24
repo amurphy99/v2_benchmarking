@@ -11,7 +11,12 @@ export const defaultImage = {
 export function matchImage(sessions: ChatSession[], topic: string) {
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        // If no topics, skip this session
+        if (!session.topics) continue;
+        // Handle case where topics is either an array or a string
+        var sessionTopics: string[] = Array.isArray(session.topics)
+            ? session.topics
+            : (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
         if (sessionTopics[0].trim() === topic) {
             if (session.image) {
                 return session.image;

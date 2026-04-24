@@ -14,7 +14,9 @@ export default function useChatSocket({
     onUserUtt     = (text) => {},
     onAudio       = (data) => {},
     onError       = (_) => {},
-    onExpression  = (data) => {}
+    onExpression  = (data) => {},
+    onStreamStatus = (_: any) => {},
+    onChatClosed   = () => {},
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
