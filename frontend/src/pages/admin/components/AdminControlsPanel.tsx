@@ -95,11 +95,11 @@ export function AdminControlsPanel({
             <AvatarActionsGroup
                 connected = {connected}
                 pending   = {{
-                    robot_spin    : pending.robot_spin,
-                    robot_excited : pending.robot_excited,
+                    robot_emotion    : pending.robot_emotion,
+                    robot_animation  : pending.robot_animation,
                 }}
-                onSpin    = {actions.robotSpin   }
-                onExcited = {actions.robotExcited}
+                onEmotion    = {actions.robotEmotion   }
+                onAnimation  = {actions.robotAnimation}
             />
 
         </div>

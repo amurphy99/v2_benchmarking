@@ -1,7 +1,7 @@
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
-import Avatar from "../common/avatar/Avatar";
 import { useNavigate } from "react-router-dom";
 import { getLatestSession } from "@/api";
+import { Avatar } from "../common/avatar/Avatar";
 
 export function ChatEnd() {
     const { data: settings, isLoading } = useUserSettings();
@@ -24,7 +24,7 @@ export function ChatEnd() {
                 <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar animation={undefined} animCount={0} model={model} zoom="body" /> 
+                        <Avatar model={model} zoom="body" /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         Thank you for chatting with me! I hope you have a great day. 
@@ -35,7 +35,7 @@ export function ChatEnd() {
                 </div>
                 :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar animation={undefined} animCount={0} model={model} zoom="head"/>
+                    <Avatar model={model} zoom="head"/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         Thank you for chatting with me! I hope you have a great day. 
                         <br /><br />
