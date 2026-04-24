@@ -8,14 +8,13 @@ import { useRef, useEffect, useState, useCallback } from "react";
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
 export default function useChatSocket({
     recording,
-    wsPath          = "/ws/chat/",
-    onLLMResponse   = (unknown        ) => {},
-    onScores        = (WSMessage      ) => {},
-    onUserUtt       = (text           ) => {},
-    onAudio         = (data           ) => {},
-    onError         = (_              ) => {},
-    onStreamStatus  = (_status: string) => {},
-    onChatClosed    = (               ) => {},
+    wsPath        = "/ws/chat/", 
+    onLLMResponse = (unknown)   => {}, 
+    onScores      = (WSMessage) => {},
+    onUserUtt     = (text) => {},
+    onAudio       = (data) => {},
+    onError       = (_) => {},
+    onExpression  = (data) => {}
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -42,8 +41,12 @@ export default function useChatSocket({
         
         // Old biomarker-score-specific message types
         else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); onScores ({ type, data }); } 
-        else if (type ===     "audio_scores") { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
-        else if (type ===  "periodic_scores") { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
+        else if (type === "audio_scores"    ) { console.log("On-Audio scores received"    ); onScores ({ type, data }); } 
+        else if (type === "periodic_scores" ) { console.log("Periodic scores received"    ); onScores ({ type, data }); } 
+        else if (type === "user_utt"        ) { console.log("User utterance received"     ); onUserUtt(        data  ); } 
+        else if (type === "audio_chunk"     ) {                                              onAudio  (        data  ); } 
+        else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
+        else if (type === "expression"      ) { console.log("Received expression:", data  ); onExpression(data);}
 
         // Backend chat controls (chats can be paused or ended through the backend)
         else if (type === "stream_status"   ) { console.log("Backend paused chat"); onStreamStatus(data); }

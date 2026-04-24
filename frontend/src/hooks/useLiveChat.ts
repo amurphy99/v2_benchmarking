@@ -13,6 +13,7 @@ export default function useLiveChat({
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
     onEmotion         = (         ) => {},
+    onExpression      = (         ) => {},
     wsPath = "/ws/chat/",
     onDebugTurn,
     onRagParseError,
@@ -24,6 +25,7 @@ export default function useLiveChat({
     onSystemUtterance : (text: string) => void;
     onScores          : (            ) => void;
     onEmotion         : (emotion: string) => void;
+    onExpression      : (data: any) => void;
     wsPath           ?: string;
     onDebugTurn      ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
     onRagParseError  ?: () => void;
@@ -47,7 +49,15 @@ export default function useLiveChat({
         const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
         onDebugTurn?.({ role: "assistant", text, state, });
 
-        if (response.emotion) { onEmotion(response.emotion) }
+        onDebugTurn?.({
+            role: "assistant",
+            text,
+            state,
+        });
+
+        if (response.data.emotion) {
+            onEmotion(response.data.emotion)
+        }
 
         // if (state === "close_chat") {
         //     setTimeout(() => {
@@ -105,6 +115,7 @@ export default function useLiveChat({
             if (msg?.type === "rag_parse_error") { onRagParseError?.(); return; }
             if (msg?.type ===      "chat_error") { onChatError    ?.(); return; }
         },
+        onExpression: onExpression,
 	});
 	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
     stopAudRef.current = stopAud;  // keep ref in sync each render

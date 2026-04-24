@@ -33,8 +33,8 @@ export function useCommandAcks({
         respond_now     : false,
 
         // Avatar or Robot controls
-        robot_spin      : false,
-        robot_excited   : false,
+        robot_emotion      : false,
+        robot_animation    : false,
 
         // Manual Response Controls
         pause_and_listen   : false,
@@ -75,7 +75,7 @@ export function useCommandAcks({
     // Send commands to the backend
     // --------------------------------------------------------------------------------
     const sendCommand = useCallback(
-        (key: PendingKey, name: string, value?: any, timeoutMs: number = defaultTimeoutMs) => {
+        (key: PendingKey, name: string, data?: any, timeoutMs: number = defaultTimeoutMs) => {
             if (!connected) return;
 
             // Lockout the caller's (key's) button immediately 
@@ -92,7 +92,7 @@ export function useCommandAcks({
             pendingByIdRef.current.set(id, { key, timeout });
 
             // Send the command through the WebSocket 
-            send({type: "command", data: {id, name, ...(value !== undefined ? { value } : {}),},});
+            send({type: "command", data: {id, name, ...(data !== undefined ? { data } : {}),},});
         },
         [connected, send]
     );
@@ -106,9 +106,9 @@ export function useCommandAcks({
         toggleResponses: () => {sendCommand("pause_responses", "pause_responses", !controlState.responsesPaused);},
         respondNow     : () => {sendCommand("respond_now",     "respond_now")},
         
-        // Control avatar or robot actions
-        robotSpin    : () => {sendCommand("robot_spin",    "robot_action", { action: "spin"    })},
-        robotExcited : () => {sendCommand("robot_excited", "robot_action", { action: "excited" })},
+        // Control avatar or robot emotions or animations
+        robotEmotion    : (emotion: string)     => {sendCommand("robot_emotion",    "robot_action", { emotion: emotion  })},
+        robotAnimation  : (animation: string)   => {sendCommand("robot_animation",  "robot_action", { action: animation })},
 
         // Manual Response Controls
         // The third field in the old ones is ("value": "True"). It would be for more of a toggle I think.
