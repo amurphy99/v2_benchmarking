@@ -28,7 +28,9 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                             session.image = defaultImage
                         }
                         const date = new Date(session.date);
-                        const topics = session.topics.replace(/[\[\]"']/g, "").split(",")
+                        const topics: string[] = !session.topics ? [] :
+                            Array.isArray(session.topics) ? session.topics :
+                            (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
                         return (
                             <div key={idx} className={`${smallShadow} flex flex-col p-2 rounded-lg album-img hover:cursor-pointer hover:scale-110`}
                             onClick={() => {toDaySummary(session)}}>

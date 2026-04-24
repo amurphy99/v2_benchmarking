@@ -160,7 +160,9 @@ export function getTopics(sessions: ChatSession[]): string[] {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        if (!session.topics) continue;
+        var sessionTopics: string[] = Array.isArray(session.topics) ? session.topics
+            : (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
         for (var j = 0; j < sessionTopics.length; j++) {
             var topic = sessionTopics[j].trim();
             if (topic && !topics.includes(topic)) {
@@ -175,7 +177,9 @@ export function getMainTopic(sessions: ChatSession[]) {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
-        var sessionTopics = session.topics.replace(/[\[\]"']/g, "").split(",");
+        if (!session.topics) continue;
+        var sessionTopics: string[] = Array.isArray(session.topics) ? session.topics
+            : (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
         for (var j = 0; j < sessionTopics.length; j++) {
             var topic = sessionTopics[j].trim();
             if (topic && !topics.includes(topic)) {
@@ -183,6 +187,8 @@ export function getMainTopic(sessions: ChatSession[]) {
             }
         }
     }
+    // If no topics, return empty string
+    if (topics.length === 0) return "";
     const mostFrequent = Array.from(new Set(topics)).reduce((prev, curr) =>
         topics.filter(el => el === curr).length > topics.filter(el => el === prev).length ? curr : prev
     );

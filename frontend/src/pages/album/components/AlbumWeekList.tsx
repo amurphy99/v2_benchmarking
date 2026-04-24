@@ -14,7 +14,9 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
 
     const SessionCard = ( {session} : {session: ChatSession } ) => {
         const date = new Date(session.date);
-        const topics = session.topics.replace(/[\[\]"']/g, "").split(",")
+        const topics: string[] = !session.topics ? [] :
+            Array.isArray(session.topics) ? session.topics :
+            (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
         return (
             <div className="flex flex-row gap-2 rounded-md bg-white shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] 
             hover:cursor-pointer hover:shadow-[0px_0px_4px_4px_rgba(0,0,0,0.15)]"
