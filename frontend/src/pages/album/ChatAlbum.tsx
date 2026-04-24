@@ -64,12 +64,12 @@ export function ChatAlbum() {
     } else {
         return (
             <div className="px-[2rem] pb-[15vh]">
-                <div className="flex flex-row gap-2 pb-[2rem] justify-evenly">
+                {/* <div className="flex flex-row gap-2 pb-[2rem] justify-evenly">
                     <h1 className="w-1/3 text-6xl text-center my-auto">Welcome to our chat history!</h1>
                     <div className="w-1/2 min-h-[35vh] max-h-[60vh]">
                         <Avatar model={settings.modelChoice} zoom="body" />
                     </div>
-                </div>
+                </div> */}
 
                 <div className="flex flex-col gap-2">
                     {weeks.map( (week, idx ) => {
