@@ -70,8 +70,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Configuration based on the source platform for the chat
         self.use_backend_STT   = (self.source == "webapp") # Send the user text to the frontend so it can see it too
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
-        self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
+        self.reply_on_user_utt = (self.source != "qtrobot")   # Robot uses the staged utterances, won't reply immediately
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
