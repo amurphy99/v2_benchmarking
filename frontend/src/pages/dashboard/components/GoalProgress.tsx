@@ -5,9 +5,9 @@ import { Spinner } from "react-bootstrap";
 
 // Patient Goal Progress Bar
 export default function GoalProgressBar () {
-    const { data: goal, isLoading } = useGoal();
-    if (isLoading) {
-        return <Spinner />
+    const goal = {
+        current: 3,
+        target: 5
     }
     const current = goal.current;
     const target  = goal.target
