@@ -216,8 +216,9 @@ class ChatService:
         Bulk-insert ChatWord records for a committed user message.
         words: [{"word": str, "start": datetime, "end": datetime}, ...]
         """
+        message = ChatMessage.objects.get(id=message_id)
         ChatWord.objects.bulk_create([
-            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
+            ChatWord(message=message, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
             for i, w in enumerate(words)
         ])
 

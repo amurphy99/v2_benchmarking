@@ -34,10 +34,10 @@ from ._seed_demo_data import (
 # Config
 # --------------------------------------------------------------------------------
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA   = False
+REMAKE_SAMPLE_DATA   = True
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = False
+REMAKE_ANALYZED_DATA = True
 
 
 # ================================================================================
