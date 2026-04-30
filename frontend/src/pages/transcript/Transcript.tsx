@@ -19,7 +19,7 @@ export function Transcript() {
     const toDaySummary = () => {navigate("/day", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}})}
 
     function BiomarkerSummary({biomarker} : {biomarker: string}) {
-        const summaryStyle = "flex flex-col gap-2 p-[1rem] rounded-lg"
+        const summaryStyle = "flex flex-col gap-2 rounded-lg"
         if (biomarker == "") {
             return (
                 <div className={`${summaryStyle} h-[12rem] bg-gray-200 items-center border-1 border-gray-400`}>
@@ -30,7 +30,7 @@ export function Transcript() {
             )
         }
         return (
-            <div className={`${summaryStyle} h-[12rem]`}>
+            <div className={`${summaryStyle} min-h-[12rem]`}>
                 <h2 className={`${role}-text mb-0`}>{getBiomarkerDescription(biomarker)}</h2>
                 <h5 className={`text-gray-400 font-normal text-lg mb-0`}>({getBiomarkerName(biomarker)})</h5>
                 <p>{getBiomarkerDefinition(biomarker)}</p>

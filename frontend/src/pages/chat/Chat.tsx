@@ -128,7 +128,7 @@ export function Chat() {
                 <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar model={"qt"} zoom="body" ref={avatarRef} /> 
+                        <Avatar model={model} zoom="body" ref={avatarRef} /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 

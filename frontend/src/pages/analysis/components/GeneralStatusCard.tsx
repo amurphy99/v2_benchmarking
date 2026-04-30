@@ -15,7 +15,7 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
     return (
         <div className={`${blockStyle} flex flex-col`}>
             <h2 className={`${role}-text`}>General Cognitive Status</h2>
-            <div className="flex flex-row w-full">
+            <div className="flex flex-row w-full mb-2">
                 <div className="w-1/2">
                     <p className="text-lg italic text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
                     <div className="flex mt-4 grid grid-cols-2 justify-center items-center gap-2 text-lg w-full">

@@ -36,7 +36,6 @@ const speechAnalysis: Record<BiomarkerType, Analysis> = {
 
 export function getDailyAnalysis(session: ChatSession): string[] {
     var analysis: string[] = [];
-    console.log(session.average_scores)
     for (const [biomarker, score] of Object.entries(session.average_scores)) {
         if (score < 0.35) {
             analysis.push(speechAnalysis[biomarker].Flagged);
@@ -50,7 +49,6 @@ export function getDailyAnalysis(session: ChatSession): string[] {
 export function getWeeklyAnalysis(week: ChatWeek): string[] {
     var analysis: string[] = [];
     const average_scores = averageScore(week.sessions);
-    console.log(average_scores)
     for (const [biomarker, score] of Object.entries(average_scores)) {
         if (score < 0.35) {
             analysis.push(speechAnalysis[biomarker].Flagged);
