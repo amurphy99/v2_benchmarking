@@ -8,7 +8,6 @@ import { groupSessionsByWeek } from "@/utils/functions/getChatWeeks";
 import { useLocation } from "react-router-dom";
 import AlbumWeekDesktop from "./components/AlbumWeekDesktop";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
-import { Avatar } from "../common/avatar/Avatar";
 
 
 export function ChatAlbum() {

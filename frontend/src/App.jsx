@@ -59,8 +59,6 @@ export default function App() {
 
                 {/* Caregiver */}
                 <Route element={ <IsCaregiver /> } >
-                    <Route path="/dashboard"   element={<Dashboard   />} />
-                    <Route path="/chatdetails" element={<ChatDetails />} />
                     <Route path="/alert"       element={<Alert       />} />
                     <Route path="/practice"    element={<Practice    />} />
                     <Route path="/settings"    element={<Settings    />} />
@@ -69,9 +67,7 @@ export default function App() {
 
                 {/* Shared */}
                 <Route path="/profile"  element={<Profile         />} />
-                <Route path="/history"  element={<History         />} />
                 <Route path="/schedule" element={<Schedule        />} />
-                <Route path="/progress" element={<ProgressSummary />} />
                 <Route path="/goal"     element={<Goal            />} />
                 <Route path="/album"    element={<ChatAlbum       />} />
                 <Route path="/week"     element={<WeekSummary     />} />
@@ -79,6 +75,12 @@ export default function App() {
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/analysis/flagged" element={<AnalysisFlagged />} />
                 <Route path="/transcript" element={<Transcript    />} />
+
+                {/* v2 Testing and old routes */}
+                <Route path="/v2"           element={<ProgressSummary />} />
+                <Route path="/history"      element={<History         />} />
+                <Route path="/dashboard"    element={<Dashboard   />} />
+                <Route path="/chatdetails"  element={<ChatDetails />} />
 
                 {/* Admin */}
                 <Route element={ <IsStaff /> } >
