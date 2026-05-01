@@ -35,6 +35,7 @@ from .handlers.ws_events    import handle_receive_json, _toggle_stream
 # Delegation / passthroughs
 from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
 from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
+from .handlers.cc_callbacks import on_audio_biomarkers     as _on_audio_biomarkers
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 
 
@@ -129,7 +130,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await join_chat_consumer_groups(self)
 
         # Create new audio buffer & speech provider instances
-        self.audio_buffer     = bytearray()
+        self.audio_buffer     = bytearray() # TODO: This was for the audio biomarkers, might get audio for that differently now...
         self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
         self.streaming_active = True
 
@@ -228,6 +229,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Handle on-utterance biomarkers
     async def on_utterance_biomarkers(self): return await _on_utterance_biomarkers(self)
 
+    # Handle on-audio biomarkers (fires per committed user utterance)
+    async def on_audio_biomarkers(self): return await _on_audio_biomarkers(self)
+
     # Handle "streamed" audio data from the frontend client
     async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)
 
@@ -282,9 +286,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Conveniently access the LLMs last response (for 'repeat_last_response()')
         self.last_response            = None
 
-        # Old turn-taking/overlapped speech functionality
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0 
+        # Turn-taking / overlapped speech (reset per user utterance by on_audio_biomarkers)
+        self.overlapped_speech_count  = 0.0    # TODO: Need to track down everywhere this is tracked, probably can delete...
         self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
 
         # Response task state
