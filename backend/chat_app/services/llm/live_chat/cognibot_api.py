@@ -19,7 +19,7 @@ from typing   import Literal
 
 # From this project
 from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG
+from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN, BRIGHT_MAGENTA
 from ....config                 import PROMPT, DEVICE_CONTEXT
 
 # Shared endpoint config
@@ -166,8 +166,8 @@ class CognibotAPI:
 def log_response(response: CognibotResponse, t0: float, t1: float):
     log_string = (
         f"{LLM_MAIN}[LLM] Live-chat {BOLD}response{UNBOLD} generated in ({BOLD}{(t1-t0):.2f}s{UNBOLD}):{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Thought: {UNBOLD}{response.thought      }{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Message: {UNBOLD}{response.message      }{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Mood:    {UNBOLD}{response.response_mood}{RESET}"
+        f"    {BRIGHT_MAGENTA}{BOLD}Thought: {UNBOLD}{response.thought      }{RESET}\n"
+        f"    {BRIGHT_MAGENTA}{BOLD}Message: {UNBOLD}{response.message      }{RESET}\n"
+        f"    {BRIGHT_MAGENTA}{BOLD}Mood:    {UNBOLD}{response.response_mood}{RESET}"
     )
     logger.info(log_string)
