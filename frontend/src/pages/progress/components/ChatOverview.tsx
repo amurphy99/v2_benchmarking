@@ -3,8 +3,8 @@ import { useAuth      } from "@/context/AuthProvider";
 import { ChatSession  } from "@/api";
 import { h3           } from "@/utils/styling/sharedStyles";
 import   getExercises   from "@/utils/functions/getExercises";
-import   Avatar         from "@/pages/common/avatar/Avatar";
 import   GoalProgress   from "@/components/graphics/GoalProgress";
+import { Avatar } from "@/pages/common/avatar/Avatar";
 
 
 // ====================================================================
@@ -35,7 +35,7 @@ export default function ChatOverview ({ chatSession } : { chatSession: ChatSessi
         {/* Conclusions */}
         {/* -------------------------------------------------------------------- */}
         <div className="flex flex-row gap-4 my-[1rem]">
-            <div className="w-1/3"> <Avatar/> </div>
+            <div className="w-1/3"> <Avatar model="qt" zoom="body" /> </div>
             
             <div className="w-2/3">
 

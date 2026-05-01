@@ -22,7 +22,7 @@ import logging, time
 logger = logging.getLogger(__name__)
 
 
-from ....services.logging_utils import CC_MAIN, CC_H, CC_R
+from ....services.logging_utils import CC_MAIN, CC_H, CC_R, RESET
 
 
 # --------------------------------------------------------------------------------
@@ -87,34 +87,39 @@ def format_biomarker_broadcast(event):
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
 # TODO: This isn't just formatting, I'm also just sending it from this function, need to clean up documentation
-async def format_actions_command(consumer, payload):
+async def format_send_actions_command(consumer, payload):
     """
     Commands can look like:
-        {'id': '..', 'name': 'robot_action', 'value': {'action': 'excited'}}
+        {'id': '..', 'name': 'robot_action', 'data': {'emotion': 'Happy'}}
     or
-        {'id': '..', 'name': 'robot_action', 'value': {'action': 'spin'}}
+        {'id': '..', 'name': 'robot_action', 'data': {'animation': 'Idle'}}
 
     TODO: Fields should be "data" instead of "value" ??
     TODO: This whole thing needs to be clenaed up...
     TODO: After sending to the frontend client, send an "ack" to the listener that issued the command, using the ID from the payload
 
+    TODO: Should we use the "source" attribute of the consumer here? 
+    
     """
-    #data = event["payload"].get("value", {"expression": "HAPPY", "duration_ms": 3000})
-    value = payload.get("value", {"action": "HAPPY"})
+    value = payload.get("data", {"action": "HAPPY"})
 
-    # Temporary mapping values for spin to be "angry"
-    expression: str = value.get("action", "HAPPY").lower()
-    if expression == "spin": data = {"expression": "EXCITED",          "duration_ms": 3000}
-    else:                    data = {"expression": expression.upper(), "duration_ms": 3000}
+    # Flexible; we can take an "emotion", "animation", or "expression" since different robots take different options
+    emotion    : str = value.get("emotion")
+    animation  : str = value.get("animation")
+    expression : str = value.get("action", "HAPPY").lower()
 
+    if   emotion    : data = {"type": "emotion",   "value": emotion}
+    elif animation  : data = {"type": "animation", "value" : animation}
+    else            : 
+        logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
+        data = {}
+        
+        
     # Build & send the payload to the frontend client
     relay_payload = {
         "type": "expression",
-        "data": {
-            "expression"  : data.get("expression", "HAPPY").upper(),
-            "duration_ms" : data.get("duration_ms", 3000),
-        }
+        "data": data
     }
 
-    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now...")
+    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now... {RESET}")
     await consumer.send_json(relay_payload)

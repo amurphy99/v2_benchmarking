@@ -15,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
 USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
-INSTRUCTOR_MODEL_NAME = "qwen2.5-3b"  # model name for the Instructor client
+INSTRUCTOR_MODEL_NAME = "llama-4-scout"  # model name for the Instructor client
 
 # LLM Parameters
 MAX_LENGTH = 128 # 256
@@ -120,7 +120,7 @@ try:
     #else:        from .services.llm.live_chat.dummy_LLM import DummyLLM as LLMClass
        
     # Setup the LLM
-    llm = LLMClass()
+    llm = LLMClass(base_url="10.128.0.20", api_key="SAMPLE_TOKEN")
 
     RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
 

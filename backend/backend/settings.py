@@ -154,9 +154,9 @@ DATABASES = {
         'NAME'     : config('POSTGRES_DB'),
         'USER'     : config('POSTGRES_USER'),
         'PASSWORD' : config('POSTGRES_PASSWORD'),
-        # kept the defaults, so old deployments should still work
-        'HOST'     : "db", 
+        'HOST'     : "db",
         'PORT'     : "5432",
+        # kept the defaults, so old deployments should still work
         #'HOST'     : config('POSTGRES_HOST', default='db'), 
         #'PORT'     : config('POSTGRES_PORT', default='5432'),
     },
@@ -165,8 +165,10 @@ DATABASES = {
         'NAME'     : config('VECTOR_DB_NAME'),
         'USER'     : config('VECTOR_DB_USER'),
         'PASSWORD' : config('VECTOR_DB_PASSWORD'),
-        'HOST'     : config('VECTOR_DB_HOST', default='db_vector'),
-        'PORT'     : config('VECTOR_DB_PORT', default='5432'),
+        'HOST'     : "db_vector",
+        'PORT'     : "5432",
+        #'HOST'     : config('VECTOR_DB_HOST', default='db_vector'),
+        #'PORT'     : config('VECTOR_DB_PORT', default='5432'),
     }
 }
 

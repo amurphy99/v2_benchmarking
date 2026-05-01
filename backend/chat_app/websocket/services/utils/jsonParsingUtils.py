@@ -1,12 +1,14 @@
 import json
 import re
-from ..chatHelpers import RagParseError 
 import logging
 from pydantic import BaseModel, Field
 
 from langchain_core.output_parsers import PydanticOutputParser
 
 logger = logging.getLogger(__name__)
+
+class RagParseError(Exception):
+    """Raised when the RAG LLM output cannot be parsed into the expected JSON schema."""
 
 class LlmResponse(BaseModel):
     assistant_response: str = Field(..., description="the assistant's response to the user query")

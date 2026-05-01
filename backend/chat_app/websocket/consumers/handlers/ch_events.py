@@ -16,7 +16,7 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 
 from ..utils.logging   import ChatConsumerLogging as log
-from ..utils.groups    import format_actions_command
+from ..utils.groups    import format_send_actions_command
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
@@ -82,7 +82,7 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     # --------------------------------------------------------------------------------
     # TODO: This might need to get acks from the avatar itself, and forward those..?
     elif command == "robot_action":
-        await format_actions_command(consumer, payload)
+        await format_send_actions_command(consumer, payload)
         await send_command_ack(consumer, {"id": id, "ok": True, "state": {}}, command)
 
     # --------------------------------------------------------------------------------

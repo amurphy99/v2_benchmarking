@@ -1,6 +1,7 @@
 
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
 
+const EMOTIONS = ["Happy", "Sad", "Angry", "Surprised", "Scared", "Neutral"];
 // ================================================================================
 // Avatar (or Robot) action controls
 // ================================================================================
@@ -9,16 +10,16 @@ export default function AvatarActionsGroup({
     connected, // Connection with the backend
     pending,   // Actions that can be pending (waiting for backend acks)
     // Methods to call for each action in this control group
-    onSpin,    // Tell the robot to spin (could work on Buddy) 
-    onExcited, // Tell the robot to make the "excited" facial expression
+    onEmotion,    // Tell the robot to display an emotion (could work on Buddy) 
+    onAnimation, // Tell the robot to play an animation
 }: {
     connected : boolean;
     pending   : {
-        robot_spin    : boolean;
-        robot_excited : boolean;
+        robot_emotion    : boolean;
+        robot_animation  : boolean;
     };
-    onSpin    : () => void;
-    onExcited : () => void;
+    onEmotion   : (emotion: string) => void;
+    onAnimation : (animation: string) => void;
 }) {
     // ================================================================================
     // UI Component Group
@@ -30,29 +31,17 @@ export default function AvatarActionsGroup({
 
             {/* Buttons */}
             <div className="mt-2 grid grid-cols-2 gap-2">
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Spin */}
-                {/* -------------------------------------------------------------------------------- */}
-                <button
-                    className = {btnClass(pending.robot_spin || !connected, "secondary")}
-                    disabled  = {pending.robot_spin || !connected}
-                    onClick   = {onSpin}
-                > 
-                {pending.robot_spin ? "Sending..." : "Show angry"}
-                </button>
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Show 'Excited' */}
-                {/* -------------------------------------------------------------------------------- */}
-                <button
-                    className = {btnClass(pending.robot_excited || !connected, "secondary")}
-                    disabled  = {pending.robot_excited || !connected}
-                    onClick   = {onExcited}
-                >
-                {pending.robot_excited ? "Sending..." : "Show excited"}
-                </button>
-
+                {EMOTIONS.map((emotion, idx) => {
+                    return (
+                        <button
+                            className = {btnClass(pending.robot_emotion || !connected, "secondary")}
+                            disabled  = {pending.robot_emotion || !connected}
+                            onClick   = {() => onEmotion(emotion)}
+                        >
+                            {pending.robot_emotion ? "Sending..." : "Show " + emotion}
+                        </button>
+                    )
+                })}
             </div>
         </div>
     );

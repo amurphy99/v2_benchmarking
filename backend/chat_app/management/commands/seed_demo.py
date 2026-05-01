@@ -73,7 +73,7 @@ class Command(BaseCommand):
 
         Access      .objects.get_or_create(account=care_account, profile=profile)
         UserSettings.objects.get_or_create(profile=profile)
-        Goal        .objects.get_or_create(profile=profile, target=5, start_date=two_days_ago)
+        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": two_days_ago})
 
         if REMAKE_SAMPLE_DATA:
             seed_chats    (profile, days_back=10)
@@ -91,8 +91,13 @@ class Command(BaseCommand):
 
         Access      .objects.get_or_create(account=care_account_2, profile=profile_2)
         UserSettings.objects.get_or_create(profile=profile_2)
-        Goal        .objects.get_or_create(profile=profile_2, target=5, start_date=two_days_ago)
+        Goal        .objects.get_or_create(profile=profile_2, defaults={"target": 5, "start_date": two_days_ago})
 
+        # Close any sessions left active by a previous crash/restart
+        closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
+        if closed:
+            self.stdout.write(self.style.WARNING(f"[seed_demo] Closed {closed} stale active session(s) on startup."))
+            
         if REMAKE_SAMPLE_DATA:
             seed_chats           (profile_2, days_back    =10)
             seed_reminders       (profile_2, num_reminders= 5)
@@ -106,6 +111,15 @@ class Command(BaseCommand):
         if REMAKE_TRANSCRIPT_DATA:
             ChatSession.objects.filter(profile=profile_2, source="transcript").delete()
             seed_transcript_chat(profile_2, plwd_2)
+
+        # Grant is_staff to an existing user account
+        # This is just a temporary solution for testing the admin interface.
+        User = get_user_model()
+        add_sup = User.objects.filter(username="AdnanSadi2").first()
+        if add_sup and (not add_sup.is_staff or not add_sup.is_superuser):
+            add_sup.is_staff = True
+            add_sup.is_superuser = True
+            add_sup.save(update_fields=["is_staff", "is_superuser"])
 
 
     # ================================================================================

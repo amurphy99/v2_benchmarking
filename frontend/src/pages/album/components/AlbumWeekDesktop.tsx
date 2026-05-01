@@ -4,9 +4,11 @@ import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { defaultImage } from "@/utils/functions/matchImage";
 import { dateFormatOptionsMonth, dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { smallShadow } from "@/utils/styling/sharedStyles";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
+    const [show, setShow] = useState<boolean>(true);
     const role = useAuth().account.role;
     const navigate = useNavigate();
 
@@ -17,16 +19,18 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
     return (
         <div className="flex flex-col gap-[1rem]">
             <h2 className="items-start hover:cursor-pointer underline z-1" 
-            onClick={() => {toWeeklySummary(week)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
+            onClick={() => {() => setShow(!show)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()} </h2>
             <div>
-                <div className="carousel-container w-[95%]">
+                <div className={`carousel-container w-[95%] ${show ? "" : "hidden"}`}>
                     { sessions.map( (session, idx) => {
                         if (!session.image) {
                             session.image = defaultImage
                         }
                         const date = new Date(session.date);
-                        const topics = session.topics ?? []
+                        const topics: string[] = !session.topics ? [] :
+                            Array.isArray(session.topics) ? session.topics :
+                            (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
                         return (
                             <div key={idx} className={`${smallShadow} flex flex-col p-2 rounded-lg album-img hover:cursor-pointer hover:scale-110`}
                             onClick={() => {toDaySummary(session)}}>

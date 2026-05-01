@@ -4,6 +4,7 @@
 # Single definition of shared infrastructure
 volumes:
   db_data:
+  vector_db_data:
   letsencrypt:
   webroot:
 
@@ -19,6 +20,10 @@ services:
   # --------------------------------------------------------------------------------
   db:
     extends: { file: ./backend/docker-compose.backend.yaml, service: db }
+    networks: [appnet]
+  
+  db_vector:
+    extends: { file: ./backend/docker-compose.backend.yaml, service: db_vector }
     networks: [appnet]
 
   # --------------------------------------------------------------------------------

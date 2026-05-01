@@ -18,7 +18,9 @@ export function DaySummary() {
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date);
 
-    const topics = state?.chatSession.topics ?? [];
+    const topics: string[] = !state.chatSession.topics ? [] : 
+    Array.isArray(state.chatSession.topics) ? state.chatSession.topics :
+    (state.chatSession.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
 
     if (window.isMobile) {
     return (

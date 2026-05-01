@@ -88,6 +88,7 @@ class CreateAccessSerializer(serializers.Serializer):
         
         # Update permissions if access already existed and permissions differ
         if not created and access.permissions != validated['permissions']:
+            access.profile = profile # Update the profile if it has changed
             access.permissions = validated['permissions']
             access.save()
         
