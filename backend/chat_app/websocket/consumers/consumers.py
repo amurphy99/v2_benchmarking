@@ -226,11 +226,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Add messages to the database & update the local context (role must be "user" or "assistant")
     async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
 
-    # Handle on-utterance biomarkers
-    async def on_utterance_biomarkers(self): return await _on_utterance_biomarkers(self)
+    # Handle on-utterance biomarkers (fires per committed user utterance)
+    async def on_utterance_biomarkers(self, message, recent_text, words):
+        return await _on_utterance_biomarkers(self, message, recent_text, words)
 
     # Handle on-audio biomarkers (fires per committed user utterance)
-    async def on_audio_biomarkers(self): return await _on_audio_biomarkers(self)
+    async def on_audio_biomarkers(self, message, words):
+        return await _on_audio_biomarkers(self, message, words)
 
     # Handle "streamed" audio data from the frontend client
     async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)

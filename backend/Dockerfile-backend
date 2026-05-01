@@ -46,6 +46,12 @@ RUN pip install --upgrade pip setuptools wheel && \
     -r requirements-web.txt
 
 # --------------------------------------------------------------------
+# Download NLTK data files used by text-based biomarkers
+# --------------------------------------------------------------------
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data \
+    punkt_tab averaged_perceptron_tagger_eng
+
+# --------------------------------------------------------------------
 # Copy the remaining project files
 # --------------------------------------------------------------------
 COPY . .

@@ -221,7 +221,7 @@ class ChatService:
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
     
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
-    # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
+    # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
     # TODO: IDK what types to set for the timestamps
     @staticmethod
     def add_biomarker(session: ChatSession, score_type: str, score: float, message: ChatMessage | None = None, start_ts = None, end_ts = None):
@@ -235,10 +235,22 @@ class ChatService:
         )
     
     # Biomarker scores (in bulk)
+    # Each span is a dict: {"score_type", "score", "start_ts", "end_ts"}
+    # `message_id` may be None (e.g. audio-window scores not bound to an utterance)
     @staticmethod
-    def add_biomarkers_bulk(session_id, scores: dict):
+    def add_biomarker_spans_bulk(session_id, message_id, spans: list):
+        if not spans: return
         session = ChatSession.objects.get(id=session_id)
-        ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+        ChatBiomarkerScore.objects.bulk_create([
+            ChatBiomarkerScore(
+                session    = session,
+                message_id = message_id,
+                score_type = s["score_type"],
+                score      = s["score"],
+                start_ts   = s.get("start_ts"),
+                end_ts     = s.get("end_ts"),
+            ) for s in spans
+        ])
 
     # Word-level STT timestamps for a confirmed user message
     @staticmethod

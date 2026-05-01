@@ -77,40 +77,64 @@ async def handle_audio_data(consumer: ChatConsumer, data):
 
 
 # --------------------------------------------------------------------------------
+# Serialize ScoreSpans for the WebSocket broadcast (datetimes -> ISO strings)
+# --------------------------------------------------------------------------------
+def _serialize_spans(spans):
+    return [{
+        "score_type" : s["score_type"],
+        "score"      : s["score"     ],
+        "start_ts"   : s["start_ts"  ].isoformat() if s.get("start_ts") else None,
+        "end_ts"     : s[  "end_ts"  ].isoformat() if s.get(  "end_ts") else None,
+    } for s in spans]
+
+
+# --------------------------------------------------------------------------------
 # [TEXT-BASED] Handle on-utterance biomarkers (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
-async def on_utterance_biomarkers(consumer: ChatConsumer):
+async def on_utterance_biomarkers(consumer: ChatConsumer, message, recent_text, words):
     """
-    Because this uses the entire `context_buffer`, it MUST only be called AFTER
-    `add_message_CB` has already updated the buffer.
+    Fires once per committed user utterance. Skipped when there are no STT word
+    timestamps (admin-injected utterances), since text-based scores must be
+    mappable back to specific words.
     """
+    if not words: return
+
     # Snapshot ID so we aren't depending on an instance from the consumer
     session_id = getattr(consumer, "session_id", None)
 
-    # Get text-based biomarkers
-    text_biomarkers = await extract_text_biomarkers(consumer.context_buffer)
+    # Run the text biomarker pipeline -> returns a list of biomarker ScoreSpan dicts
+    spans = await extract_text_biomarkers(recent_text, words, consumer.context_buffer)
+    if not spans: return
 
-    # Save biomarkers scores to the DB & broadcast them to any listeners
-    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(session_id, text_biomarkers), name="on_utt_bio::add_biomarkers_bulk")
-    await consumer._broadcast_monitor({"type": "biomarker_scores", "data": text_biomarkers})
+    # Save biomarkers spans to the DB (linked to this message) & broadcast the list to any monitors
+    fire_and_log(db_s2a(ChatService.add_biomarker_spans_bulk)(session_id, message.id, spans),
+                 name="on_utt_bio::add_biomarker_spans_bulk",)
+    await consumer._broadcast_monitor({"type": "biomarker_scores", "data": _serialize_spans(spans)})
+
 
 # --------------------------------------------------------------------------------
 # [AUDIO-BASED] Handle on-audio biomarkers (saves to DB & broadcasts)
 # --------------------------------------------------------------------------------
-async def on_audio_biomarkers(consumer: ChatConsumer):
+async def on_audio_biomarkers(consumer: ChatConsumer, message, words):
     """
-    Fires once per committed user utterance. The real implementation will scope
-    audio to the most recent user-speaking window; the stub ignores audio entirely.
+    Fires once per committed user utterance. Spans are scoped to the utterance
+    audio (first word start -> last word end). Real implementation will run
+    OpenSMILE features through pretrained models; the stub returns random scores.
     """
+    if not words: return
+
     # Snapshot ID so we aren't depending on an instance from the consumer
     session_id = getattr(consumer, "session_id", None)
 
-    # Get audio-based biomarkers (stub: random values, ignores audio)
-    audio_biomarkers = await extract_audio_biomarkers(consumer.overlapped_speech_count)
+    # Run the audio biomarker pipeline -> returns a list of biomarker ScoreSpan dicts
+    spans = await extract_audio_biomarkers(consumer.overlapped_speech_count, words)
+    if not spans: return
 
     # Reset the per-utterance overlap counter
     consumer.overlapped_speech_count = 0.0
+   
+    # Save biomarkers spans to the DB (linked to this message) & broadcast the list to any monitors
+    fire_and_log(db_s2a(ChatService.add_biomarker_spans_bulk)(session_id, message.id, spans),
+                 name="on_audio_bio::add_biomarker_spans_bulk",)
+    await consumer._broadcast_monitor({"type": "biomarker_scores", "data": _serialize_spans(spans)})
 
-    # Save biomarkers scores to the DB & broadcast them to any listeners
-    fire_and_log(db_s2a(ChatService.add_biomarkers_bulk)(session_id, audio_biomarkers), name="on_audio_bio::add_biomarkers_bulk")
-    await consumer._broadcast_monitor({"type": "biomarker_scores", "data": audio_biomarkers})
