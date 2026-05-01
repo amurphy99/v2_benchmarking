@@ -5,63 +5,67 @@ import { h3           } from "@/utils/styling/sharedStyles";
 import   getExercises   from "@/utils/functions/getExercises";
 import   GoalProgress   from "@/components/graphics/GoalProgress";
 import { Avatar } from "@/pages/common/avatar/Avatar";
+import { Spinner } from "react-bootstrap";
+import { useProfile } from "@/hooks/queries/useProfile";
+import { useGoal } from "@/hooks/queries/useGoal";
 
 
 // ====================================================================
 // Chat Overview (Conclusions & Suggestions from ChatDetails page)
 // ====================================================================
-export default function ChatOverview ({ chatSession } : { chatSession: ChatSession }) {
-    const { profile } = useAuth();
+export default function ChatOverview() {
+    const { account } = useAuth();
+    const { data: profile, isLoading } = useProfile();
 
     // User info
-    const first     = profile.plwd.first_name;
+    const role      = account.role;
+    const first     = profile.account.user.first_name;
     const current   = profile.goal.current;
-    const remaining = profile.goal.remaining;
+    const target    = profile.goal.target;
 
     // Style
-    const outerStyle = "w-full h-full border-1 rounded-lg border-gray-200 p-[1rem] self-stretch";
+    const outerStyle = "w-full h-full p-[2rem] self-stretch pb-[10vh]";
     const conclStyle = "flex flex-row items-center gap-4 text-xl";
     const cStyle = "text-green-700 text-2xl";
     const rStyle = "text-fuchsia-900 text-2xl";
+
+    if (isLoading) {
+        return <Spinner />
+    }
 
     // Return UI component
     return (
     <div className={outerStyle}>
 
         {/* Panel Header */}
-        <p className={h3}> Conclusions and Suggestions </p>
+         <h1 className="text-3xl md:text-4xl place-self-center whitespace-nowrap"><b> Progress Overview </b></h1>
 
         {/* -------------------------------------------------------------------- */}
         {/* Conclusions */}
         {/* -------------------------------------------------------------------- */}
-        <div className="flex flex-row gap-4 my-[1rem]">
-            <div className="w-1/3"> <Avatar model="qt" zoom="body" /> </div>
-            
-            <div className="w-2/3">
+        <div className="grid grid-cols-3 w-full gap-[2rem]">
+            <div className="aspect-square col-span-1"> <Avatar model="qt" zoom="body" /> </div>
+        
+            <div className="w-full h-full items-center place-content-center col-span-2">
 
                 {/* Evaluation & Progress Bar */}
-                <p className="font-bold text-2xl"> {first} is doing fantastic! </p>
-                <GoalProgress/>
+                <p className="font-bold text-2xl"> {role == "caregiver" ? first + " is" : "You are"} doing fantastic! </p>
+                <GoalProgress current={current} target={target} />
 
                 {/* Current Goal Chats */}
                 <p className={conclStyle}>
                     <GiAlarmClock size={40} color="green" /> 
-                    This was chat number <b className={cStyle}>{current}</b> with me.
+                    {role == "caregiver" ? first + " has" : "You have"} chatted with me <b className={cStyle}>{current}</b> times this week.
                 </p>
 
                 {/* Remaining Goal Chats */}
                 <p className={conclStyle}>
                     <GiRobotAntennas size={40} color="purple" />
-                    {first} can complete another <b className={rStyle}>{remaining}</b> to reach a new goal!
-                </p>
-
-                {/* This Chat Topics */}
-                <p className={conclStyle}>
-                    <GiChatBubble size={40} color="orange" />
-                    We covered these topics in this conversation: {chatSession.topics?.join(", ")}
+                    {role == "caregiver" ? first : "You "} can complete another <b className={rStyle}>{target-current}</b> chats to reach a new goal!
                 </p>
 
             </div>
+            
         </div>
 
         {/* -------------------------------------------------------------------- */}
@@ -69,7 +73,7 @@ export default function ChatOverview ({ chatSession } : { chatSession: ChatSessi
         {/* -------------------------------------------------------------------- */}
         <div> 
             <p className="font-bold text-2xl">Daily suggestions:</p>
-            <ul> 
+            <ul className="list-disc"> 
                 {getExercises().map((exercise, i) => { 
                     return <li className="text-xl" key={i}> {exercise} </li>; 
                 })}

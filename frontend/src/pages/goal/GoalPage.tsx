@@ -15,6 +15,7 @@ export function Goal() {
     if (isLoading || isLoadingProfile) { 
         return <p>Loading goal...</p>; 
     }
+    
     const week = getCurrentWeek(sessions, 1);
     const model = profile.settings.modelChoice;
 

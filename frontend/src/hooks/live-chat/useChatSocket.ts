@@ -10,12 +10,12 @@ export default function useChatSocket({
     recording,
     wsPath        = "/ws/chat/", 
     onLLMResponse = (unknown)   => {}, 
-    onScores      = (WSMessage) => {},
-    onUserUtt     = (text) => {},
+    onScores      = (WSMessage: any) => {},
+    onUserUtt     = (text: string) => {},
     onAudio       = (data) => {},
     onError       = (_) => {},
     onExpression  = (data) => {},
-    onStreamStatus = (_: any) => {},
+    onStreamStatus = (status: string) => {},
     onChatClosed   = () => {},
 }) {
     // WebSocket setup    
