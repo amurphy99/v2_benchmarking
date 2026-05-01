@@ -42,7 +42,7 @@ from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 # TODO: TEMPORARILY PLACING HERE
 # --------------------------------------------------------------------------------
 from ...services.llm.live_chat.cognibot_api import CognibotResponse
-from   .utils.groups                        import format_actions_command
+from   .utils.groups                        import format_send_actions_command
 
 # ================================================================================
 # ChatConsumer 
@@ -64,8 +64,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         response: CognibotResponse = await get_LLM_response(context_buffer)
 
         # Send emotion command to client
-        payload = {"value": {"action": response.response_mood.upper()}}
-        await format_actions_command(self, payload)
+        payload = {"data": {"action": response.response_mood.upper()}}
+        await format_send_actions_command(self, payload)
         
         # Return just the string message value
         return response.message

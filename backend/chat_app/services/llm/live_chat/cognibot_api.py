@@ -19,7 +19,7 @@ from typing   import Literal
 
 # From this project
 from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG
 from ....config                 import PROMPT, DEVICE_CONTEXT
 
 # Shared endpoint config
@@ -98,7 +98,15 @@ class CognibotAPI:
       - IU_URL   (e.g. "http://10.128.0.5:8080/v1")
       - IU_KEY   (gateway token)
     """
-    def __init__(self, model=MODEL_NAME, temperature=TEMPERATURE, max_retries=4):
+    def __init__(
+        self, 
+        model       : str   = MODEL_NAME,   # Specific LLM variant to use
+        temperature : float = TEMPERATURE,  # "Creativity" of LLM responses (low = more deterministic; high = more random)
+        max_retries : int   = 4,            # Number of retries to do if response not valid 
+        
+        # Added for compatibility with other methods; we just get these from the environment
+        base_url="10.128.0.20", api_key="SAMPLE_TOKEN",
+    ):
         self.model       = model
         self.temperature = temperature
         self.max_retries = max_retries
@@ -159,7 +167,7 @@ def log_response(response: CognibotResponse, t0: float, t1: float):
     log_string = (
         f"{LLM_MAIN}[LLM] Live-chat {BOLD}response{UNBOLD} generated in ({BOLD}{(t1-t0):.2f}s{UNBOLD}):{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Thought: {UNBOLD}{response.thought      }{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Message: {UNBOLD}{response.message      }{RESET}"
+        f"    {LLM_MAIN}{BOLD}Message: {UNBOLD}{response.message      }{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Mood:    {UNBOLD}{response.response_mood}{RESET}"
     )
     logger.info(log_string)
