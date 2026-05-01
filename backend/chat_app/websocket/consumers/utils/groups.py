@@ -96,7 +96,6 @@ def format_biomarker_broadcast(event):
 # ================================================================================
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
-# TODO: The formatting needs to be fixed so it is universal, this is way too chaotic
 async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     """
     Commands can look like:
@@ -104,14 +103,13 @@ async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     or
         {'id': '..', 'name': 'robot_action', 'data': {'animation': 'Idle'}}
 
-    TODO: Fields should be "data" instead of "value" ??
-    TODO: This whole thing needs to be clenaed up...
+    TODO: This whole thing needs to be cleaned up...
     TODO: After sending to the frontend client, send an "ack" to the listener that issued the command, using the ID from the payload
     
     Two ways of getting an action command here: (1) we get it from structured generation
     of the LLM, or (2) we get it from the admin page using a command button. In both
-    cases, we need ot make sure the command we have selected matches the current chat's
-    "interface", so the web UI or the physical robot. Each one takes different options
+    cases, we need to make sure the command we have selected matches the current chat's
+    "interface", so the web UI or the physical robots. Each one takes different options
     for behaviors. 
 
     """
