@@ -55,7 +55,7 @@ class CognibotResponse(BaseModel):
 DEFAULT_RESPONSE = CognibotResponse(
     thought = "FAILED",
     message = "I'm sorry, I'm having trouble thinking right now. Can you tell me more?",
-    response_mood = "neutral",
+    response_mood = "Neutral",
 )
 
 # --------------------------------------------------------------------------------

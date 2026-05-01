@@ -48,8 +48,7 @@ def accumulate_tts(consumer, tts_pcm: bytes, *, in_rate: int = TTS_IN_RATE, out_
     Resamples from `in_rate` -> `out_rate`, then silence-pads the right-channel
     buffer so that this response lands at the correct elapsed-time position.
     """
-    if not tts_pcm:
-        return
+    if not tts_pcm: return
 
     # Resample (linear interpolation via audioop)
     # TODO: audioop is deprecated in Python 3.11 and removed in 3.13.
