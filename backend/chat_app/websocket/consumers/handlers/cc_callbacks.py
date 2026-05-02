@@ -1,11 +1,16 @@
 """
-Define a set of "callbacks" for the consumer to help manage the chat.
+Define a set of "callbacks" for the ChatConsumer (cc) to help manage the chat.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.handlers.cc_callbacks`
+
+Handles incoming chat messages (text data) as well as incoming audio data from
+an active chat. Saves things to the database, passes information to any other
+consumers that are listening in, and generates biomarker scores.
 
 These methods get implemented by the consumers via simple passthroughs.
 """
 from __future__ import annotations
+from datetime   import datetime, timedelta
 
 import logging, base64
 logger = logging.getLogger(__name__)
@@ -18,14 +23,19 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R, ROBO_MSG, USER_MSG
 
 # Handling messages
-from ....services.db_services       import ChatService
-from  ...services.chatHelpers       import ChatHandler
-from  ...services.bg_helpers        import fire_and_log
-from  ...services.audioHelpers      import extract_audio_biomarkers, extract_text_biomarkers
+from ....services.db_services            import ChatService
+from  ...services.chatHelpers            import ChatHandler
+from  ...services.bg_helpers             import fire_and_log
+from  ...biomarkers.biomarker_extraction import extract_audio_biomarkers, extract_text_biomarkers
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
 if TYPE_CHECKING: from ..consumers import ChatConsumer
+
+# How much rolling audio to keep in `consumer._audio_chunks` -- needs to cover any
+# realistic utterance plus the 15s pre-roll and 1s post-roll used by the audio
+# biomarker slicing. TODO: Should this be from a config file?
+AUDIO_CHUNKS_RETAIN_SEC = 90
 
 
 # --------------------------------------------------------------------------------
@@ -65,20 +75,34 @@ async def handle_chat_messages(consumer: ChatConsumer, role, text, ts):
 # --------------------------------------------------------------------------------
 async def handle_audio_data(consumer: ChatConsumer, data):
     """
-    Forward streamed audio data from the client to backend STT and append to the
-    session recording buffer. Audio biomarkers no longer fire from here -- they
-    fire once per committed user utterance via on_audio_biomarkers().
+    Forward streamed audio data to backend STT, append to the full-session
+    recording buffer, and append a timestamped copy to the rolling chunk deque
+    used by the audio biomarker pipeline. Audio biomarkers fire once per
+    committed user utterance via on_audio_biomarkers().
     """
-    # Forward audio to the speech to text provider
+    # (1) Forward audio to the speech to text provider
     consumer.stt_provider.send_audio(data)
 
-    # Add raw audio bytes to the session recording buffer
-    consumer._rec_user.extend(base64.b64decode(data["data"]))
+    # Decode audio bytes once (reused for both buffers)
+    pcm_bytes = base64.b64decode(data["data"])
+
+    # (2) Full-session recording (saved as WAV on disconnect)
+    consumer._rec_user.extend(pcm_bytes)
+
+    # (3) Rolling timestamped buffer for audio biomarker slicing
+    received_at = datetime.now()
+    consumer._audio_chunks.append((received_at, pcm_bytes))
+
+    # Prune anything older than the retain window
+    cutoff = received_at - timedelta(seconds=AUDIO_CHUNKS_RETAIN_SEC)
+    while (consumer._audio_chunks) and (consumer._audio_chunks[0][0] < cutoff):
+        consumer._audio_chunks.popleft()
 
 
-# --------------------------------------------------------------------------------
+# ================================================================================
+# Biomarker-related Actions
+# ================================================================================
 # Serialize ScoreSpans for the WebSocket broadcast (datetimes -> ISO strings)
-# --------------------------------------------------------------------------------
 def _serialize_spans(spans):
     return [{
         "score_type" : s["score_type"],
@@ -117,22 +141,27 @@ async def on_utterance_biomarkers(consumer: ChatConsumer, message, recent_text, 
 # --------------------------------------------------------------------------------
 async def on_audio_biomarkers(consumer: ChatConsumer, message, words):
     """
-    Fires once per committed user utterance. Spans are scoped to the utterance
-    audio (first word start -> last word end). Real implementation will run
-    OpenSMILE features through pretrained models; the stub returns random scores.
+    Fires once per committed user utterance. The pipeline (in
+    biomarker_extraction) slices ~15s pre-roll + utterance + 1s post-roll out of
+    consumer._audio_chunks, runs OpenSMILE, and windows the features inside the
+    utterance bounds before scoring. Skipped if `words` is empty.
     """
     if not words: return
 
     # Snapshot ID so we aren't depending on an instance from the consumer
     session_id = getattr(consumer, "session_id", None)
 
+    # Snapshot the rolling chunk deque so the pipeline thread doesn't race with handle_audio_data
+    audio_chunks_snapshot = list(consumer._audio_chunks)
+
     # Run the audio biomarker pipeline -> returns a list of biomarker ScoreSpan dicts
-    spans = await extract_audio_biomarkers(consumer.overlapped_speech_count, words)
+    spans = await extract_audio_biomarkers(audio_chunks_snapshot, consumer.overlapped_speech_count, words)
+
+    # Reset the per-utterance overlap counter regardless of whether spans were produced
+    consumer.overlapped_speech_count = 0.0
+
     if not spans: return
 
-    # Reset the per-utterance overlap counter
-    consumer.overlapped_speech_count = 0.0
-   
     # Save biomarkers spans to the DB (linked to this message) & broadcast the list to any monitors
     fire_and_log(db_s2a(ChatService.add_biomarker_spans_bulk)(session_id, message.id, spans),
                  name="on_audio_bio::add_biomarker_spans_bulk",)

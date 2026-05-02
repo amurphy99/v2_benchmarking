@@ -7,7 +7,7 @@ TODO: Change the config stuff later as the other platforms (robots) get updated 
       the stuff like `use_backend_STT`, etc.).
 
 """
-import asyncio, logging, time
+import asyncio, collections, logging, time
 logger = logging.getLogger(__name__)
 
 # Django
@@ -129,12 +129,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Define group ("room") names & join them
         await join_chat_consumer_groups(self)
 
-        # Create new audio buffer & speech provider instances
-        self.audio_buffer     = bytearray() # TODO: This was for the audio biomarkers, might get audio for that differently now...
+        # Create speech provider instance
         self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
         self.streaming_active = True
 
-        # Session recording buffers (NOT in _init_response_state - must survive until disconnect saves them)
+        # Rolling timestamped audio chunk buffer for audio biomarkers
+        # Contains: (datetime_received, raw_pcm_bytes). Pruned to last AUDIO_CHUNKS_RETAIN_SEC seconds in handle_audio_data
+        self._audio_chunks = collections.deque()
+
+        # Session recording buffers (NOT in _init_response_state -- must survive until disconnect saves them)
         self.save_audio        = False             # Should we save the audio bytes on chat end?
         self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
         self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
