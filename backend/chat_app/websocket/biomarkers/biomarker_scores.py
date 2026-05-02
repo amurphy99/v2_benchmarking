@@ -24,11 +24,11 @@ TODO: Not 100% sure how to handle anomia. At this point, with Google's STT, we
       "umm", but I don't know if I like/fully trust that biomarker personally...
 
 """
-from .preprocessing.text_preprocessing import preprocess
-from .core.altered_grammar             import generate_altered_grammar
-from .core.prosody                     import generate_prosody
-from .core.pronunciation               import generate_pronunciation
-from .core.turntaking                  import generate_turntaking
+from .preprocessing.text_preprocessing     import preprocess
+from .core.altered_grammar.altered_grammar import generate_altered_grammar
+from .core.prosody        .prosody         import generate_prosody
+from .core.pronunciation  .pronunciation   import generate_pronunciation
+from .core.turntaking     .turntaking      import generate_turntaking
 
 
 # ================================================================================

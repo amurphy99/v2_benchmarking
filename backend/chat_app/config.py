@@ -82,22 +82,6 @@ logger = logging.getLogger(__name__)
 
 
 # ================================================================================
-# Testing Utilities
-# ================================================================================
-# Check for model files individually
-def check_for_model_files(pronunciation_model_path, prosody_model_path):
-    # TODO: Add the new model file paths to here once I have them ready
-    missing_files = []
-    #if not os.path.exists(pronunciation_model_path): missing_files.append(f"pronunciation_model_path: {pronunciation_model_path}")
-    #if not os.path.exists(      prosody_model_path): missing_files.append(f"prosody_model_path: {            prosody_model_path}")
-
-    if len(missing_files) > 0:
-        missing_str = f"Missing required file(s): {'; '.join(missing_files)}"
-        logger.error           (missing_str)
-        raise FileNotFoundError(missing_str)
-    
-
-# ================================================================================
 # LLM & Other Models' Settings
 # ================================================================================
 # For checking the model files are there
