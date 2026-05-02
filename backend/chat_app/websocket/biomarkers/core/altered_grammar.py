@@ -1,7 +1,7 @@
 """
 Altered Grammar biomarker.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.biomarkers.altered_grammar`
+`backend.chat_app.websocket.biomarkers.core.altered_grammar`
 
 Placeholder version: utterance-wide score = unique POS tags / total tokens.
 

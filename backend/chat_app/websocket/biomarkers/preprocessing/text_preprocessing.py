@@ -1,7 +1,7 @@
 """
 Shared text preprocessing for text-based biomarkers.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.biomarkers.text_preprocessing`
+`backend.chat_app.websocket.biomarkers.preprocessing.text_preprocessing`
 
 Returns the cleaned text, NLTK tokens, and POS tags. Each text biomarker
 receives all three so we only tokenize and POS-tag once per utterance.
