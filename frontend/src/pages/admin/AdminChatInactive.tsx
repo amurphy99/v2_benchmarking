@@ -45,7 +45,8 @@ export function AdminChatInactive() {
             {/* TEMPORARY -- should find a different place for this... or at least move this to the header */}
             {/*           -- so multiple pages could link to this, from here or from the main user-facing web app */}
             {/* Transcript Playback link (only for sessions with audio) */}
-            {session.audio_file && (
+            {/* session.audio_file && ( */}
+            {true && (
                 <div className="mx-[1rem] mt-[1rem]">
                     <button
                         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
