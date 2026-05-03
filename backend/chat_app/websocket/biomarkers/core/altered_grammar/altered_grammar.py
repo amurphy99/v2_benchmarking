@@ -9,6 +9,12 @@ LightGBM models.
 LGBMEnsemble falls back to random.random() if there are no model files in the
 `biomarkers/models/altered_grammar/` directory.
 
+TODO: Do the same file split for the sentence-level features and the
+      transcript-level features in the offline version of the code.
+
+TODO: If I do it well enough, I may be able to just copy and paste the entire
+      file into the offline version...
+
 """
 from pathlib import Path
 
@@ -25,10 +31,15 @@ _ENSEMBLE   = LGBMEnsemble(_MODELS_DIR)
 # Wrapper function around final feature pre-processing & model inference
 # --------------------------------------------------------------------------------
 def generate_altered_grammar(cleaned, tokens, pos_tags, words) -> list[dict]:
-    if not tokens or not words: return []
+    """
+    Skips generating a score for this utterance if no sentence passes the guard
+    for having >= 2 tokens (e.g. one-word "Yeah." responses).
+    """
+    if (not tokens) or (not words): return []
 
     # Finish feature preparation
     features = extract_altered_grammar_features(cleaned, tokens, pos_tags, words)
+    if not features: return []
 
     # Generate the biomarker score
     score = _ENSEMBLE.predict(features)
