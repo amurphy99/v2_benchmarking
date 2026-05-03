@@ -93,9 +93,6 @@ try:
     pronunciation_model_path = current_path + f"{rf_model_path}/pronunciation_rf_v4.pkl"
     prosody_model_path       = current_path + f"{rf_model_path}/prosody_rf_v1.pkl"
 
-    # Make sure the saved models exist
-    check_for_model_files(pronunciation_model_path, prosody_model_path)
-
     # Load the saved LLM model OR use a testing object that just returns sample data
     # TODO: Swapped this to the IU endpoint for now...
     from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
