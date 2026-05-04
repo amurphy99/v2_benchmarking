@@ -28,8 +28,8 @@ export default function PerformanceTrack() {
             {/* Text Section */}
             <div className="d-flex flex-col mt-[1rem] gap-[0.5rem] fs-6">
                 <GoalProgressBar />
-                <span><p>Good days:</p> <b>April 20</b> <b>April 21</b></span>
-                <span><p>Bad days:</p> <b>April 18</b> <b>April 22</b></span>
+                <span className="flex flex-row gap-2"><p>Good days: </p> <b>April 20</b> <b>April 21</b></span>
+                <span className="flex flex-row gap-2"><p>Bad days: </p> <b>April 18</b> <b>April 22</b></span>
             </div>
         </div>
 

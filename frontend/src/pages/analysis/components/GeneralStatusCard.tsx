@@ -8,8 +8,8 @@ import { getCognitiveScore } from "@/utils/functions/getCognitiveScore";
 export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWeek: ChatWeek, prevWeek: ChatWeek} ) {
     const role = useAuth().account.role;
 
-    const curScore = getCognitiveScore(currentWeek);
-    const prevScore = prevWeek.start ? getCognitiveScore(prevWeek) : 0;
+    const curScore = getCognitiveScore(currentWeek.sessions);
+    const prevScore = prevWeek.start ? getCognitiveScore(prevWeek.sessions) : 0;
     const scoreDiff = prevScore ? curScore - prevScore : 0;
     
     return (

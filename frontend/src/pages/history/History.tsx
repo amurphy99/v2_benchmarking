@@ -47,10 +47,10 @@ export function History() {
         </div>
 
 
-        <div className="mt-[1rem]">
+        {/* <div className="mt-[1rem]">
             <span className="fst-italic"> (other option for style) </span>
             <ChatHistory/>
-        </div>
+        </div> */}
 
     </div>
     );
