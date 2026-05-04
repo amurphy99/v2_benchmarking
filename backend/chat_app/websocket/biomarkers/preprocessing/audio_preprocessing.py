@@ -102,7 +102,7 @@ def window_features_within_utterance(
     window_sec     : float = WINDOW_SECONDS,  # (5.0s) openSMILE feature window duration for ML summary statistics
     step_sec       : float =   STEP_SECONDS,  # (0.5s) Step size between feature windows
     buffer_sec     : float = BUFFER_SECONDS,  # (0.5s) Include additional audio before & after the utterance 
-) -> list[dict]:  # Returns a list of: {"features": pd.DataFrame, "start_dt": datetime, "end_dt": datetime}
+) -> list[dict[pd.DataFrame, datetime, datetime]]:  # Returns a list of: {"features": pd.DataFrame, "start_dt": datetime, "end_dt": datetime}
     """
     Chunk `smile_df` into windows that fall within: 
         [utt_start_dt-buffer_sec, utt_end_dt+buffer_sec]
@@ -145,7 +145,7 @@ def window_features_within_utterance(
     # Set the features & timestamps for the subsequent biomarker calculations
     # --------------------------------------------------------------------------------
     # Anchor strictly to the start of the audio file to avoid buffer offset math
-    def _make(start_idx, end_idx):
+    def _make(start_idx: int, end_idx: int) -> dict[pd.DataFrame, datetime, datetime]:
         # Calculate absolute seconds from the very beginning of the audio file
         absolute_offset_s = start_idx / FRAMES_PER_SECOND
         window_start = audio_start_dt + timedelta(seconds=absolute_offset_s)

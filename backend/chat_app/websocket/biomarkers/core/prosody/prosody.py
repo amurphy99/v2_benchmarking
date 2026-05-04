@@ -10,7 +10,10 @@ LGBMEnsemble falls back to random.random() if there are no model files in the
 `biomarkers/models/prosody/` directory.
 
 """
-from pathlib import Path
+import pandas as pd
+
+from pathlib  import Path
+from datetime import datetime
 
 # From this project
 from .features              import extract_prosody_features
@@ -24,11 +27,11 @@ _ENSEMBLE   = LGBMEnsemble(_MODELS_DIR)
 # --------------------------------------------------------------------------------
 # Wrapper function around final feature pre-processing & model inference
 # --------------------------------------------------------------------------------
-def generate_prosody(windows) -> list[dict]:
+def generate_prosody(windows: list[dict[pd.DataFrame, datetime, datetime]]) -> list[dict]:
     if not windows: return []
 
     # Finish feature preparation
-    feature_rows = [extract_prosody_features(w) for w in windows]
+    feature_rows = [extract_prosody_features(window) for window in windows]
 
     # Generate the biomarker scores
     scores = _ENSEMBLE.predict_batch(feature_rows)
@@ -36,6 +39,7 @@ def generate_prosody(windows) -> list[dict]:
     return [{
         "score_type" : "prosody",
         "score"      : float(score),
-        "start_ts"   : w["start_dt"],
-        "end_ts"     : w["end_dt"  ],
-    } for w, score in zip(windows, scores)]
+        "start_ts"   : window["start_dt"],
+        "end_ts"     : window[  "end_dt"],
+    } for window, score in zip(windows, scores)]
+
