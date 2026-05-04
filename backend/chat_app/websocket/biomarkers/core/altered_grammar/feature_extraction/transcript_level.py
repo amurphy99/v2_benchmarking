@@ -37,7 +37,7 @@ def count_immediate_reps_window(tokens, max_distance=3):
 # --------------------------------------------------------------------------------
 # POS Pattern Variety & Density
 # --------------------------------------------------------------------------------
-def pos_patterns(pos_sequences):
+def pos_patterns(pos_sequences) -> dict[str, float]:
     """
     `pos_sequences` is a list of per-sentence tag-only sequences. Returns
     (variety, density) where density = unique-bigram-or-trigram-count / total.
@@ -66,13 +66,14 @@ def pos_patterns(pos_sequences):
     # Density
     pos_pattern_density = (pos_pattern_variety / denom_patterns if denom_patterns > 0 else 0.0)
 
-    return pos_pattern_variety, pos_pattern_density
+    # Return as a dictionary
+    return {"pos_pattern_variety": pos_pattern_variety, "pos_pattern_density": pos_pattern_density}
 
 
 # ================================================================================
 # POS Ratio Features
 # ================================================================================
-def get_density_features(pos_counts, total_words):
+def get_density_features(pos_counts, total_words: int) -> dict[str, float]:
     """
     Builds 4 ratio features by indexing into `pos_counts` (output of
     pos_category_counts). The indices below MUST stay in sync with that function.
@@ -112,4 +113,10 @@ def get_density_features(pos_counts, total_words):
     noun_verb_ratio = (noun_count / verb_count) if (verb_count > 0) else 0.0
     adj_noun_ratio  = ( adj_count / noun_count) if (noun_count > 0) else 0.0
 
-    return [propositional_density, content_density, noun_verb_ratio, adj_noun_ratio]
+    # Return as a dictionary
+    return {
+        "propositional_density" : propositional_density, 
+        "content_density"       : content_density, 
+        "noun_verb_ratio"       : noun_verb_ratio, 
+        "adj_noun_ratio"        : adj_noun_ratio,
+    }

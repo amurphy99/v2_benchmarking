@@ -38,11 +38,11 @@ def generate_altered_grammar(cleaned, tokens, pos_tags, words) -> list[dict]:
     if (not tokens) or (not words): return []
 
     # Finish feature preparation
-    features = extract_altered_grammar_features(cleaned, tokens, pos_tags, words)
-    if not features: return []
+    _, features_array = extract_altered_grammar_features(cleaned, tokens, pos_tags, words)
+    if not features_array: return []
 
     # Generate the biomarker score
-    score = _ENSEMBLE.predict(features)
+    score = _ENSEMBLE.predict(features_array)
 
     return [{
         "score_type" : "alteredgrammar",

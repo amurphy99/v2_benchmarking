@@ -1,54 +1,18 @@
 """
 POS category count helper.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.biomarkers.core.altered_grammar.feature_helpers`
+`backend.chat_app.websocket.biomarkers.core.altered_grammar.feature_extraction.feature_helpers`
 
 Includes tag-set and word-list constants that get used to generate the different
 forms of POS category counts. 
 
 Results of this main function are used further down the line to generate other
 features, like in `get_density_features()`.
-
 """
+import numpy as np
 
-# --------------------------------------------------------------------------------
-# Penn Treebank POS Tag Sets
-# --------------------------------------------------------------------------------
-FUNCTION_WORD_TAGS = {
-    "CC", "DT", "EX", "IN", "LS", "MD", "PDT", "POS", "PRP", "PRP$",
-    "RP", "TO", "UH", "WDT", "WP", "WP$", "WRB",
-}
-
-VERB_TAGS = {"VB", "VBD", "VBG", "VBN", "VBP", "VBZ"}
-NOUN_TAGS = {"NN", "NNS", "NNP", "NNPS", "PRP"}
-ADJ_TAGS  = {"JJ", "JJR", "JJS"}
-ADV_TAGS  = {"RB", "RBR", "RBS"}
-
-PRONOUN_TAGS    = {"PRP", "PRP$", "WP", "WP$"}
-DETERMINER_TAGS = {"DT", "PDT", "WDT"}
-PREP_TAGS       = {"IN", "TO"}                 # IN covers most preps; TO covers infinitival "to"
-MODAL_TAGS      = {"MD"}                       # Modal verbs
-VBG_TAGS        = {"VBG"}                      # Present participle
-VBZ_TAGS        = {"VBZ"}                      # 3rd person singular present
-
-
-# --------------------------------------------------------------------------------
-# Generic Word Lists
-# --------------------------------------------------------------------------------
-# Rough list of subordinating conjunctions
-SUBORDINATING_WORDS = {
-    "because", "although", "though", "since", "when", "while", "if",
-    "unless", "before", "after", "until", "whereas", "that", "whether",
-}
-
-PERSONAL_PRONOUNS = {
-    "i", "me", "my", "mine", "myself",
-    "we", "us", "our", "ours", "ourselves",
-    "you", "your", "yours", "yourself", "yourselves",
-    "he", "him", "his", "himself",
-    "she", "her", "hers", "herself",
-    "they", "them", "their", "theirs", "themselves",
-}
+# This includes all of the Penn Treebank POS tag sets, word lists, & feature names)
+from .feature_config import *
 
 
 # ================================================================================
@@ -104,7 +68,6 @@ def pos_category_counts(pos_tags):
 
     # Return in the proper order (must be same order as expected)
     return [
-
         # Indices 0-8 (9): primary POS counts
         noun_count, verb_count, adj_count, adv_count,
         coord_markers, subord_markers, reduced_verbs, function_words,
@@ -114,3 +77,20 @@ def pos_category_counts(pos_tags):
         pronoun_count, personal_pronoun_count, determiner_count, preposition_count,
         verb_present_participle_count, verb_modal_count, verb_third_person_sing_count,
     ]
+
+
+# ================================================================================
+# Top-level entry point 
+# ================================================================================
+def get_pos_ratios_dict(overall_pos_counts: np.ndarray, total_words: int) -> dict[str, float]:
+    """
+    Takes ordered numpy array of COUNTS for subsequent and returns dictionary of
+    RATIOS for the final feature set. 
+    """
+    # Get ratio array from the given counts
+    pos_ratios_array = overall_pos_counts / total_words
+
+    # Turn into a dictionary with the correct feature labels
+    pos_ratios_dict = dict(zip(POS_CATEGORY_RATIO_NAMES, pos_ratios_array))
+
+    return pos_ratios_dict

@@ -1,5 +1,5 @@
 """
-Syllable-based features for the Altered Grammar biomarker.
+Syllable-based features (via NLTK) for the Altered Grammar biomarker.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.core.altered_grammar.feature_extraction.syllable_features`
 
@@ -13,8 +13,7 @@ present (handled by the Dockerfile's `nltk.downloader` line for `cmudict`).
 from nltk.corpus   import cmudict
 from nltk.tokenize import SyllableTokenizer
 
-
-# Module-level resources (heavy to construct repeatedly)
+# CMU Dictionary & Syllable Tokenizer (module-level resources; heavy to construct repeatedly)
 CMU_D = cmudict.dict()
 SSP   = SyllableTokenizer()
 
@@ -47,19 +46,18 @@ def _get_syllable_count(word: str) -> int:
     # Strategy 2: Fallback Tokenizer (approximation)
     return len(SSP.tokenize(word_lower))
 
-# Wrapper to get syllable counts for a group of words
+# Wrapper to get syllable counts for a group of words (a single utterance)
 def get_syllable_counts(words: list[str]) -> list[int]:
     return [_get_syllable_count(w) for w in words]
 
 
 # --------------------------------------------------------------------------------
-# Readability features
+# Readability Features (Flesch-Kincaid)
 # --------------------------------------------------------------------------------
 def misc_syllable_features(num_sentences: int, words: list[str], syllables: list[int]) -> dict:
     """
-    Returns 4 readability metrics in a dict. Key `"fleash_kincaid_reading_ease"`
-    intentionally preserves the offline code's typo so trained models keep
-    consuming the same column name.
+    Returns 4 readability metrics in a dictionary, including two standard 
+    Flesch-Kincaid metrics.
     """
     # Average features
     avg_sentence_length = len(words    ) / max(1, num_sentences)

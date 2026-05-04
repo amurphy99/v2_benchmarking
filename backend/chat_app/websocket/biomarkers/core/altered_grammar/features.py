@@ -3,118 +3,117 @@ Feature extraction for the Altered Grammar biomarker.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.core.altered_grammar.features`
 
-TODO: I mean this was supposed to be changed so it wasn't in this weird
-      convoluted style where we have to sweat about preserving the order of the
-      column names and stuff...
+Between the offline and deployed versions, these files are exactly the same:
+  * feature_config.py
+  * feature_helpers.py
+  * transcript_level.py
+  * lexical_richness.py
+  * syllable_features.py
+  * .<PATH>.text_preprocessing.py (different locations)
 
-TODO: Whatever changes I end up doing to clean this up, as long as I reflect
-      those changes in the offline version, (so features are in the same order)
-      it is fine.
+TODO: Future idea was to use the POS counts to guard for something being a full
+      sentence or not (i.e., "does it have a noun, verb, and direct object?" or
+      something stupid like that...).
 
-TODO: Probably try the dictionary name thing I have in here commented out where
-      I try to add them to a dictionary one by one, then I can iterate through a
-      final constant list of keys to get the final feature array rather than
-      just doing it in the general order. So we would have the constant like:
-      `GRAMMAR_FEATURES = ["noun_ratio", "verb_count", ...]` and then once we
-      have the final dictionary, with all of the features we go like:
-      `features_35 = [float(feature_dict[x]) for x in GRAMMAR_FEATURES]`
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> NOTE <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+We are NOT yet splitting on sentences inside of here. We do have this loop where
+we loop through sentences, but that is from old code where we would generate 
+one row of features from an entire transcript.
 
-TODO: Also make sure to check out the flipped division thing for the type-token
-      ratio and MATTR. 
+Here we assume that whatever we are given is the entire text we have to use, and
+we treat it as one whole utterance/sentence for analysis. 
 
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> TODO <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-So biggest "todo" is probably to copy this over to the offline code, fix things
-like the flipped ratios and add the dictionary-keys-as-I-go idea before finally
-using the constant feature names list to put everything in the desired order.
-
-Once that is all in both versions we can train the models and be good to go. I
-will test it here though really quick first. 
+TODO: In the FUTURE, it may make sense to change this behavior, especially for
+transcript highlighting so that we can point to specific sentences. 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
-Reuses the `pos_tags` produced by the shared `preprocessing.text_preprocessing.preprocess`
-step. Sentences are recovered by splitting `pos_tags` on the standalone
-`. ? !` tokens that NLTK's word_tokenize emits.
 
 """
 import numpy as np
 from typing import List, Tuple
 
 # From this project
-from .feature_extraction.feature_helpers   import pos_category_counts
-from .feature_extraction.lexical_richness  import get_brunets_index, get_honore_statistic, get_mattr
-from .feature_extraction.syllable_features import get_syllable_counts, misc_syllable_features
+from .feature_extraction.feature_helpers   import pos_category_counts, get_pos_ratios_dict
 from .feature_extraction.transcript_level  import count_immediate_reps_window, pos_patterns, get_density_features
+from .feature_extraction.lexical_richness  import get_lexical_richness_feats
+from .feature_extraction.syllable_features import get_syllable_counts, misc_syllable_features
+from .feature_extraction.feature_config    import GRAMMAR_FEATURES
 
 # Tokens that mark the end of a sentence (NLTK word_tokenize emits these standalone)
 _SENTENCE_ENDERS = {".", "?", "!"}
 
 # Per-sentence guard: skip sentences with fewer than this many tokens (e.g. lone "Yeah")
-_MIN_SENT_TOKENS = 2
+_MIN_SENT_TOKENS = 4
 
-
-# ================================================================================
+# --------------------------------------------------------------------------------
 # Sentence-splitting on pre-computed pos_tags
-# ================================================================================
+# --------------------------------------------------------------------------------
 def _split_into_sentences(pos_tags) -> List[List[Tuple[str, str]]]:
     """
     Drop standalone commas, then split into sub-lists at each sentence-ending
-    punctuation token. Sentence-ending punctuation itself is dropped (matches
-    how the offline code's per-sentence `pos_tags` arrived already trimmed of
-    trailing punctuation).
+    punctuation token. Sentence-ending punctuation itself is dropped.
     """
     sentences = []
     current   = []
     for w, t in pos_tags:
-        if w == ",":              continue
+        if w == ",": continue
         if w in _SENTENCE_ENDERS:
             if current: sentences.append(current)
             current = []
-        else:                     current.append((w, t))
+        else: current.append((w, t))
     if current: sentences.append(current)
     return sentences
 
+# Split the POS tags list of tuples into a list of tokens
+def _sentence_tokens_tags(sentence_pos: List[Tuple[str, str]]) -> tuple[list[str], list[str]]:
+    # Filter for alphanumeric characters (keeps "word123" and "100" but drops "." and ",")
+    filtered = [(w, t) for w, t in sentence_pos if any(ch.isalnum() for ch in w)]
+    if not filtered: return [], []
 
-def _sentence_word_tokens(sentence_pos: List[Tuple[str, str]]) -> List[str]:
-    """
-    Lowercased + alphabetic-ish word tokens for one sentence, with the same
-    contraction rewrites the offline code applied (`n't` -> `not`, etc.).
-    """
-    out = []
-    for w, _ in sentence_pos:
-        if not any(ch.isalpha() for ch in w): continue
-        wl = (w.lower()
-                .replace("n't", "not")
-                .replace("'re", "are")
-                .replace("'ve", "have"))
-        out.append(wl)
-    return out
+    # Unzip the POS tag tuples into two separate lists
+    word_tokens, pos_tags = zip(*filtered)
+    return list(word_tokens), list(pos_tags)
+
+# --------------------------------------------------------------------------------
+# What qualifies given text as a "full" sentence? Or at least an attempt at one
+# --------------------------------------------------------------------------------
+# TODO: Change to use POS tags as inputs + add some rules like needs a subject and 
+#       action or something
+def _full_utterance(text: str, min_words: int = 2) -> bool:
+    # For now just use minimum number of words
+    if len(text.split(" ")) >= min_words: return True
+    else:                                 return False
 
 
 # ================================================================================
-# Public entry point
+# Content-Based Altered Grammar Features 
 # ================================================================================
-def extract_altered_grammar_features(cleaned, tokens, pos_tags, words) -> List[float]:
+def extract_altered_grammar_features(cleaned, tokens, pos_tags, words) -> tuple[dict[str, float], list[float]]:
     """
-    Fixed-order 35-feature vector for the LightGBM ensemble. Returns [] when
+    Public entry point.
+    Returns fixed-order 35-feature vector for the LightGBM ensemble. Returns [] when
     the utterance has no sentence passing the >=2-token guard (caller writes
     no DB row in that case).
 
+    NOTE: Everything gets divided by `num_words` to normalize things based on
+          sentence length (i.e. count features become ratios). It might be 
+          faster to do it all as a numpy array, but this is easier to make
+          sure we don't have any mistakes in the code.
+
     `cleaned` and `tokens` are unused at present (kept for parallelism with
-    other text biomarkers). `words` is also unused here -- timestamps come
-    from the caller in `altered_grammar.py`.
-
-    TODO: Future idea was to use the POS counts to guard for something being a full
-          sentence or not (i.e., "does it have a noun, verb, and direct object?" or
-          something stupid like that...).
+    other text biomarkers). `words` (database objects for each word with their
+    corresponding start & end timestamps) is also unused here for now. Adding
+    timestamps to biomarkers is handled by the caller in `altered_grammar.py`.
     """
-    if not pos_tags: return []
+    if not pos_tags: return {}, []
     
-    sentences_pos = [s for s in _split_into_sentences(pos_tags) if len(s) >= _MIN_SENT_TOKENS]
-    if not sentences_pos: return []
+    # Guard for minimum sentence lengths 
+    # TODO: Add the advanced stuff using POS rather than just length for qualifying a sentence as valid
+    #sentences_pos = [s for s in _split_into_sentences(pos_tags) if len(s) >= _MIN_SENT_TOKENS]
+    sentences_pos = [pos_tags] # TODO: SEE TOP OF FILE FOR NOTE ABOUT THIS
+    if not sentences_pos: return {}, []
 
-    # TODO: I could add them to the dictionary as I get them? Wouold need ot make sure the order is right...
-    feature_dict = {}
+    # Add features to the output dictionary as we get them
+    gram_feats = {}
 
     # --------------------------------------------------------------------------------
     # Per-sentence accumulation
@@ -130,14 +129,12 @@ def extract_altered_grammar_features(cleaned, tokens, pos_tags, words) -> List[f
 
     # Sentence-level operations
     for sent_pos in sentences_pos:
-        # Guard for sentence length
-        word_tokens = _sentence_word_tokens(sent_pos)
-        if not word_tokens: continue
+        # Final sentence-level preprocessing
+        word_tokens, tags_only = _sentence_tokens_tags(sent_pos)
+        if len(word_tokens) < _MIN_SENT_TOKENS: continue
 
-        # Start with POS counts 
-        # TODO: We start with this becuase the guard may use this in the future...
+        # POS category counts
         sent_pos_counts = pos_category_counts(sent_pos)
-        tags_only       = [t for (_, t) in sent_pos]
         syllables       = get_syllable_counts(word_tokens)
 
         # Update global, transcript-wide trackers
@@ -148,102 +145,52 @@ def extract_altered_grammar_features(cleaned, tokens, pos_tags, words) -> List[f
         all_syllables  .extend(syllables  )
 
     # --------------------------------------------------------------------------------
-    # Transcript-wide features
+    # Global Feature Extraction
     # --------------------------------------------------------------------------------
-    # TODO: This dictionary idea could work, but the features need to already be in
-    #       ratios if I want to do that...
-    #transcript_feature_dict = {"text_char_length": text_char_length}
+    # NOTE: We use the total number of words to normalize features (counts => ratios)
+    num_words = len(all_word_tokens)  
+    if num_words == 0: return {}, [] # no usable content
 
-    # Global lexical stats
-    num_words        = len(all_word_tokens)
+    # (+16) POS-count-based ratio features & SYN/P ratio features
+    gram_feats.update(get_pos_ratios_dict(overall_pos_counts=overall_pos_counts, total_words=num_words))
+    
+    # (+1) Average word length
+    gram_feats["avg_word_length"] = text_char_length / num_words
+
+    # (+1) Unique words (save the original value here for use in other features)
     num_unique_words = len(set(all_word_tokens))
-    if num_words == 0: return []  # no usable content -- caller skips
-    #transcript_feature_dict.update(
-    #    {"num_words": num_words, "num_unique_words": num_unique_words})
+    gram_feats["unique_words"] = num_unique_words / num_words
 
-    # Word repetitions (probably the slowest feature yet?)
+    # (+4) Lexical richness features
+    gram_feats.update(get_lexical_richness_feats(
+        num_unique_words=num_unique_words, num_words=num_words, all_word_tokens=all_word_tokens
+    ))
+
+    # (+4) Syllable & readability features
+    gram_feats.update(misc_syllable_features(len(sentences_pos), all_word_tokens, all_syllables))
+
+    # (+3) Word repetitions (probably the slowest feature yet?)
     # TODO: If these are effective, make a more efficient method for calculating them
-    immediate_reps = count_immediate_reps_window(all_word_tokens, max_distance=1)
-    nearby_reps_k3 = count_immediate_reps_window(all_word_tokens, max_distance=3)
-    nearby_reps_k5 = count_immediate_reps_window(all_word_tokens, max_distance=5)
-    #transcript_feature_dict.update(
-    #    {"immediate_reps": immediate_reps, "nearby_reps_k3": nearby_reps_k3, "nearby_reps_k5": nearby_reps_k5})
-
-    # POS pattern variety + density
-    pos_pattern_variety, pos_pattern_density = pos_patterns(pos_sequences)
+    gram_feats.update({
+        "immediate_reps": count_immediate_reps_window(all_word_tokens, max_distance=1), 
+        "nearby_reps_k3": count_immediate_reps_window(all_word_tokens, max_distance=3), 
+        "nearby_reps_k5": count_immediate_reps_window(all_word_tokens, max_distance=5),
+    })
     
-    # Global lexical features (7)
-    transcript_features = np.array([
-        text_char_length, num_unique_words,
-        immediate_reps, nearby_reps_k3, nearby_reps_k5,
-        pos_pattern_variety, pos_pattern_density,
-    ])
-
-    # --------------------------------------------------------------------------------
-    # Ratios / Diversity
-    # --------------------------------------------------------------------------------
-    # Update the feature array for the next step & convert features to ratios based on the word count
-    feature_array = np.concatenate([overall_pos_counts, transcript_features])  # 16 + 7 = 23
-    ratio_array   = feature_array / num_words                                  # 23 ratios
-
-    # More specific ratio features that don't just use the number of words
-    density_features = get_density_features(overall_pos_counts, total_words=num_words)  # 4 features
-    brunets_index    = get_brunets_index(num_words, num_unique_words)                   # 1 feature
-
-    # Concatenate all final features (23 + 4 + 1 = 28)
-    base_28 = np.concatenate([ratio_array, density_features, [brunets_index]])
-    feature_dict = dict(zip(_FEATURE_NAMES_28, base_28))
-
-    # --------------------------------------------------------------------------------
-    # Syllable / readability (4) + lexical richness extras (3) -- appended in order
-    # --------------------------------------------------------------------------------
-    # Syllable-based features (4)
-    syllable_based = misc_syllable_features(len(sentences_pos), all_word_tokens, all_syllables)
-
-    # Other (3)
-    other_features = {
-        "type_token_ratio"  : num_words / num_unique_words, # offline-code formulation (inverted vs. textbook TTR)
-        "mattr"             : get_mattr(all_word_tokens),
-        "honores_statistic" : get_honore_statistic(all_word_tokens),
-    }
-
-    # Add new features
-    feature_dict.update(syllable_based) # (4)
-    feature_dict.update(other_features) # (3)
-
-    # Remake "features"
-    features_35 = [float(v) for v in feature_dict.values()]
-
-    # Final 35-element vector, in dict-insertion order
-    return features_35
-
-
-
-# --------------------------------------------------------------------------------
-# Names for the FIRST 28 features 
-# --------------------------------------------------------------------------------
-# NOTE: It isn't in the names right now, but these are all ratio based.
-# Used to build feature_dict in the right order before the syllable + lexical-richness extras get appended).
-_FEATURE_NAMES_28 = [
-    # (9) POS-count-based features
-    "noun_count", "verb_count", "adj_count", "adv_count",
-    "coord_markers", "subord_markers", "reduced_verbs", "function_words",
-    "num_predicates_approx",
-
-    # (7) SYN/P ratio features
-    "pronoun_count", "personal_pronoun_count", "determiner_count", "preposition_count",
-    "verb_present_participle_count", "verb_modal_count", "verb_third_person_sing_count",
+    # (+2) POS pattern variety + density
+    gram_feats.update(pos_patterns(pos_sequences))
     
-    # (7) Transcript-wide features 
-    "average_word_length", "num_unique_words", 
-    "immediate_reps", "nearby_reps_k3", "nearby_reps_k5",
-    "pos_pattern_variety", "pos_pattern_density",
+    # (+4) More specific ratio features that don't just use the number of words
+    gram_feats.update(get_density_features(pos_counts=overall_pos_counts, total_words=num_words))
 
-    # (4) Density features
-    "propositional_density", "content_density",
-    "noun_verb_ratio", "adj_noun_ratio",
+    # --------------------------------------------------------------------------------
+    # Return the full set of features
+    # --------------------------------------------------------------------------------
+    # Derive final feature array from the list of (TODO: Not returning an array)
+    feature_array = [float(gram_feats[feature_name]) for feature_name in GRAMMAR_FEATURES]
 
-    # (1) Misc.
-    "brunets_index",
-]
+    # Remove certain keys from the data
+    del gram_feats["avg_sentence_length"]
 
+    # Final feature dictionary
+    return gram_feats, feature_array

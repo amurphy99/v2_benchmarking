@@ -3,11 +3,8 @@ Existing domain metrics for lexical richness and linguistic diversity.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.core.altered_grammar.feature_extraction.lexical_richness`
 
-TODO: Apparently the MATTR final division/ratio thing is backwards compared to
-      what it should be? I need to fix that in both versions when I copy this 
-      over to the offline code and re-train the models.
-
-TODO: Maybe add links to papers and stuff here? 
+This paper has some info about the relevance of some of these values:
+https://pmc.ncbi.nlm.nih.gov/articles/PMC5961820/#sec1
 
 """
 import math
@@ -62,17 +59,27 @@ def get_mattr(all_word_tokens: list[str], window_size: int = 20) -> float:
     so on to the end of the text. The mean of all these TTRs is a measure of the 
     lexical diversity of the entire text and is not affected by text length or 
     by any statistical assumptions.
-
-    NOTE: ratio is calculated as `window_size / unique` to match the offline
-    code's exact formulation that the trained models used.
     """
     type_token_ratios = []
     for i in range(0, len(all_word_tokens)-window_size):
         window_words     = all_word_tokens[i:i+window_size]
         num_unique_words = len(set(window_words))
 
-        type_token_ratio = window_size / num_unique_words
+        type_token_ratio = num_unique_words / window_size
         type_token_ratios.append(type_token_ratio)
 
     if len(type_token_ratios) == 0: return len(all_word_tokens  ) / len(set(all_word_tokens))
     else:                           return sum(type_token_ratios) / len(type_token_ratios   )
+
+
+# ================================================================================
+# Top-level entry point (returns 4 features as a dictionary)
+# ================================================================================
+def get_lexical_richness_feats(num_unique_words: int, num_words: int, all_word_tokens) -> dict[str, float]:
+    # (+4) Lexical richness features
+    return {
+        "type_token_ratio"  : num_unique_words / num_words, # (old version had this backwards, now fixed)
+        "mattr"             : get_mattr           (all_word_tokens),
+        "honores_statistic" : get_honore_statistic(all_word_tokens),
+        "brunets_index"     : get_brunets_index(num_words, num_unique_words), 
+    }
