@@ -90,7 +90,7 @@ class LGBMEnsemble:
 
         # Success
         elif models:
-            logger.info(f"{BRIGHT_YELLOW}[{BOLD}LightGBM{UNBOLD}] LightGBM models loaded for {BOLD}{self._folder.name}{UNBOLD}.{RESET}")
+            logger.info(f"{BRIGHT_YELLOW}[{BOLD}LightGBM{UNBOLD}] Loaded {BOLD}{len(models)}{UNBOLD} LightGBM models for {BOLD}{self._folder.name}{UNBOLD}.{RESET}")
 
         # Assign the saved models
         self._models = models

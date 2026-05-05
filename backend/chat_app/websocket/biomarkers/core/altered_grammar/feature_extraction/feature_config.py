@@ -73,7 +73,7 @@ GRAMMAR_FEATURES = [
     "unique_words",
 
     # (4) Lexical richness features
-    "type_token_ratio",
+    #"type_token_ratio",
     "mattr",
     "honores_statistic",
     "brunets_index",
@@ -90,14 +90,14 @@ GRAMMAR_FEATURES = [
     "nearby_reps_k5",
 
     # (2) POS pattern variety + density
-    "pos_pattern_variety",
+    #"pos_pattern_variety",
     "pos_pattern_density",
 
     # (4) Specific ratio features
     "propositional_density",
     "content_density",
     "noun_verb_ratio",
-    "adj_noun_ratio",
+    #"adj_noun_ratio",
 ]
 
 
