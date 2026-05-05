@@ -128,11 +128,11 @@ async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     data = {}
     if   emotion    : data = {"type":      "emotion",   "value": emotion  }
     elif animation  : data = {"type":      "animation", "value": animation}
-    elif expression : data = {"expression": expression.upper(),  "duration_ms": 3_000}
+    elif expression : data = {"emotion": expression.capitalize(), "duration_ms": 3_000}
     else            : logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
         
     # Build & send the payload to the frontend client
-    relay_payload = {"type": "expression", "data": data}
+    relay_payload = {"name": "robot_action", "data": data}
     logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now... {RESET}")
     await consumer.send_json(relay_payload)
 
