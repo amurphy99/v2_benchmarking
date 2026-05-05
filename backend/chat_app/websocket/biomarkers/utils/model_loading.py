@@ -98,14 +98,14 @@ class LGBMEnsemble:
     # Prediction
     # ================================================================================
     def predict_batch(self, feature_rows) -> list[float]:
-        # Make sure the models are loaded
-        models = self._check_loaded()
-        if not models: return [random.random() for _ in rows]
-
         # Make sure we actually have input data
         rows = list(feature_rows)
         if not rows: return []
         arr = np.asarray(rows, dtype=np.float64)  # (N, F)
+
+        # Make sure the models are loaded
+        models = self._check_loaded()
+        if not models: return [random.random() for _ in rows]
 
         # --------------------------------------------------------------------------------
         # Ranker Models
