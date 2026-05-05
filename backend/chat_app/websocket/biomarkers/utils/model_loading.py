@@ -33,6 +33,9 @@ import lightgbm as lgb
 from pathlib import Path
 from typing  import Iterable, Optional
 
+# From this project
+from ....services.logging_utils import RESET, BOLD, UNBOLD, BRIGHT_YELLOW
+
 
 # ================================================================================
 # LightGBM Ensemble Loader/Predictor
@@ -77,13 +80,17 @@ class LGBMEnsemble:
                 except Exception as e: logger.error(f"Failed to load LightGBM model {path}: {e}")
 
         # Load y_ref for quantile mapping
-        y_ref_path = self._folder / "y_ref.npy"
-        if y_ref_path.exists(): self._y_ref = np.load(y_ref_path)
+        #y_ref_path = self._folder / "y_ref.npy"
+        #if y_ref_path.exists(): self._y_ref = np.load(y_ref_path)
 
         # Log a warning if the models files are missing
         if (not models) and (not self._warned_missing):
-            logger.warning(f"No LightGBM models found in {self._folder} -- falling back to returning random scores.")
+            logger.warning(f"{BRIGHT_YELLOW}[{BOLD}LightGBM{UNBOLD}] No LightGBM models found for {BOLD}{self._folder.name}{UNBOLD} -- falling back to returning random scores.{RESET}")
             self._warned_missing = True
+
+        # Success
+        elif models:
+            logger.info(f"{BRIGHT_YELLOW}[{BOLD}LightGBM{UNBOLD}] LightGBM models loaded for {BOLD}{self._folder.name}{UNBOLD}.{RESET}")
 
         # Assign the saved models
         self._models = models

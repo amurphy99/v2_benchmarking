@@ -87,7 +87,7 @@ def _window_sample_ML(smile_df: pd.DataFrame) -> pd.Series:
 # Feature Extraction (public facing endpoint)
 # ================================================================================
 def extract_prosody_features(window: dict[pd.DataFrame, datetime, datetime]) -> list[float]:
-    smile_df = window["features"]
-    if smile_df: return _window_sample_ML(smile_df) # Summarize into ML features
-    else:        return [0.0] * len(LLD_PROSODY)    # Return array of zeros otherwise
+    smile_df = window["features"][LLD_PROSODY]
+    if (smile_df is not None) and (len(smile_df) > 0): return _window_sample_ML(smile_df) # Summarize into ML features
+    else:                                              return [0.0] * len(LLD_PROSODY)    # Return array of zeros otherwise
 

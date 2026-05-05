@@ -54,3 +54,14 @@ frontend/package-lock.json
 backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/*
 !backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/transcript_config.json
 
+# --------------------------------------------------------------------------------
+# Machine learning models
+# --------------------------------------------------------------------------------
+# Altered Grammar
+backend/chat_app/websocket/biomarkers/models/altered_grammar/*
+!backend/chat_app/websocket/biomarkers/models/altered_grammar/.gitkeep
+
+# Prosody
+backend/chat_app/websocket/biomarkers/models/prosody/*
+!backend/chat_app/websocket/biomarkers/models/prosody/.gitkeep
+
