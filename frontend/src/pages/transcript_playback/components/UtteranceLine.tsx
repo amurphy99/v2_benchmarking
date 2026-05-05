@@ -14,12 +14,12 @@ import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 
 // From this project
-import { ChatMessage, ChatWord, ChatBiomarkerScore    } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX                   } from "@/utils/styling/colors";
-import { formatElapsedMessage                         } from "@/utils/styling/numFormatting";
-import { getPunctSuffixes, getCapFlags, buildSegments } from "./../utils/utteranceFormatting";
-import   WordSpan                                       from "./WordSpan";
-import   BiomarkerGroup                                 from "./BiomarkerGroup";
+import { ChatMessage, ChatWord, ChatBiomarkerScore                        } from "@/api";
+import { PATIENT_HEX, CAREGIVER_HEX                                       } from "@/utils/styling/colors";
+import { formatElapsedMessageRange                                        } from "@/utils/styling/numFormatting";
+import { getMessageTimespan, getPunctSuffixes, getCapFlags, buildSegments } from "./../utils/utteranceFormatting";
+import   WordSpan                                                           from "./WordSpan";
+import   BiomarkerGroup                                                     from "./BiomarkerGroup";
 
 interface Props {
     msg                : ChatMessage;
@@ -40,9 +40,9 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     // Show word-level detail for user messages that have word timestamps
     const showWordLevel = isUser && ((msg.words?.length ?? 0) > 0);
 
-    // Elapsed time from session start (shown next to speaker name)
-    const elapsedStart = formatElapsedMessage(sessionStartMs, msg.start_ts)
-    const elapsedEnd   = formatElapsedMessage(sessionStartMs, msg.  end_ts)
+    // Per-message wall-clock span (words -> msg.start_ts/end_ts -> msg.ts)
+    const span         = getMessageTimespan(msg);
+    const elapsedRange = formatElapsedMessageRange(sessionStartMs, span.start, span.end);
 
     // --------------------------------------------------------------------------------
     // Word-Level Content (with biomarker grouping)
@@ -102,8 +102,8 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     const messageAsWord: ChatWord = {
         id       : msg.id + 10_000, // Can't think of a good way to come up with a new ID/make sure it doesn't overlap
         word     : msg.content,
-        start_ts : msg.start_ts,
-        end_ts   : msg.  end_ts,
+        start_ts : span.start,
+        end_ts   : span.end,
         index    : 0,
     };
 
@@ -140,7 +140,7 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
             <div className="flex flex-col w-full">
                 <div className="h-9 flex items-center gap-[0.75rem] fs-5">
                     <span className="fw-bold">{name}</span>
-                    <span className="text-gray-400 text-sm">{elapsedStart} - {elapsedEnd}</span>
+                    <span className="text-gray-400 text-sm">{elapsedRange}</span>
                 </div>
                 {showWordLevel ? wordContent : fallbackContent}
             </div>

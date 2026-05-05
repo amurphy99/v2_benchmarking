@@ -153,3 +153,16 @@ export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: strin
   return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
 }
 
+// "M:SS.xx - M:SS.xx (D.DDs)" -- falls back to "?" if any input is missing
+export function formatElapsedMessageRange(
+    chatStartMs: number | null,
+    startTsIso : string | null | undefined,
+    endTsIso   : string | null | undefined,
+): string {
+  if (!chatStartMs || !startTsIso || !endTsIso) return "?";
+  const startStr = formatElapsedMessage(chatStartMs, startTsIso);
+  const endStr   = formatElapsedMessage(chatStartMs, endTsIso  );
+  const durSec   = Math.max(0, (parseTs(endTsIso) - parseTs(startTsIso)) / 1_000);
+  return `${startStr} - ${endStr} (${durSec.toFixed(2)}s)`;
+}
+

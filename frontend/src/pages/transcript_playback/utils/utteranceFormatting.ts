@@ -4,7 +4,21 @@ Different formatting operations to run on full utterances of the chat.
 `frontend/src/pages/transcript_playback/utils/utteranceFormatting`
 
 */
-import { ChatWord, ChatBiomarkerScore } from "@/api";
+import { ChatMessage, ChatWord, ChatBiomarkerScore } from "@/api";
+
+
+// --------------------------------------------------------------------------------
+// Per-message wall-clock start/end (prefers word timestamps -> msg.start_ts/end_ts -> msg.ts)
+// --------------------------------------------------------------------------------
+export function getMessageTimespan(msg: ChatMessage): { start: string; end: string } {
+    if (msg.words && msg.words.length > 0) {
+        return { start: msg.words[0].start_ts, end: msg.words[msg.words.length - 1].end_ts };
+    }
+    return {
+        start: msg.start_ts ?? msg.ts,
+        end  : msg.  end_ts ?? msg.ts,
+    };
+}
 
 
 // --------------------------------------------------------------------------------

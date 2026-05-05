@@ -62,7 +62,7 @@ export default function WordSpan({ word, sessionStartMs, currentTime, biomarkerS
             onClick   = {() => {onSeek(start); console.log(`${start.toFixed(2)}s - ${end.toFixed(2)}s`)}}
             title     = {`${start.toFixed(2)}s - ${end.toFixed(2)}s`}
         >
-            {(word.index > 0) ? " " : ""}{word.word}{punct}
+            {(word.index > 0) ? " " : ""}{word.word.replace(/[^A-Za-z0-9']+$/, "")}{punct}
         </span>
     );
 }
