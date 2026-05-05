@@ -118,7 +118,7 @@ async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     chat_source = consumer.source
 
     # Get the command data
-    value = payload.get("data", {"action": "HAPPY"})
+    value = payload.get("data", {})
 
     # Flexible; we can take an "emotion", "animation", or "expression" since different robots take different options
     emotion    : str = value.get("emotion")
@@ -128,7 +128,7 @@ async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     data = {}
     if   emotion    : data = {"type":      "emotion",   "value": emotion  }
     elif animation  : data = {"type":      "animation", "value": animation}
-    elif expression : data = {"expression": "EXCITED",  "duration_ms": 3_000}
+    elif expression : data = {"expression": expression.upper(),  "duration_ms": 3_000}
     else            : logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
         
     # Build & send the payload to the frontend client
