@@ -122,7 +122,13 @@ class LGBMEnsemble:
             preds = []
             for model, sorted_train in zip(models, self._train_preds):
                 raw = model.predict(arr)
-                percentiles = np.searchsorted(sorted_train, raw) / len(sorted_train)
+
+                # Search sorted finds the first index a value could be inserted at 
+                # ("right" means it goes to the right of any ties; though these should be rare with float predictions)
+                indices = np.searchsorted(sorted_train, raw, side="right") 
+
+                # Dividing by the total number of training predictions converts that index to a percentile rank
+                percentiles = indices / len(sorted_train)
                 preds.append(percentiles)
 
             # Take the average only once the predictions are in percentile form
@@ -130,8 +136,7 @@ class LGBMEnsemble:
 
             # TODO: I actually don't think I want this...
             # Map to MoCA scale through training target quantiles
-            if (self._y_ref is not None):
-                avg = np.quantile(self._y_ref, avg)
+            #if (self._y_ref is not None): avg = np.quantile(self._y_ref, avg)
         
         # --------------------------------------------------------------------------------
         # Regression Models (or no reference data saved)
