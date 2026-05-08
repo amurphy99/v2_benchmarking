@@ -35,9 +35,9 @@ class ChatSummaryTopics(BaseModel):
     # Get a short list of comma separated main topics for this chat
     topics: list[str] = Field(...,
         min_length  = 2,
-        max_length  = 6,
+        max_length  = 4,
         description = (
-            "2-6 short topic labels, 1-4 words each (no sentences). "
+            "2-4 short topic labels, 1-3 words each (no sentences). "
             "Use concrete, human-meaningful topics rather than vague abstractions."
         ),
     )
