@@ -68,12 +68,18 @@ export function useBiomarkerMessageScores(
         );
 
         // Map Message ID -> Lowest Score
+        // Prefer the message's word-level start/end (when available) over msg.ts,
+        // because msg.ts can be the DB insertion time instead of the speech window
+        // that biomarker scores actually align to.
         const scores = new Map<number, number>();
         for (const msg of messages) {
+            const wordStart = msg.words?.length ? _toSec(msg.words[0                   ].start_ts) : null;
+            const wordEnd   = msg.words?.length ? _toSec(msg.words[msg.words.length - 1].  end_ts) : null;
+
             // Fallback to 1s duration if no end_ts
-            const mStart = _toSec(msg.ts);
-            const mEnd   = msg.words?.length 
-                ? _toSec(msg.words[msg.words.length - 1].end_ts) : mStart + 1; 
+            const mStart = wordStart ?? _toSec((msg as any).start_ts ?? msg.ts);
+            const fallbackEnd = _toSec((msg as any).end_ts ?? msg.ts);
+            const mEnd   = wordEnd ?? (fallbackEnd > mStart ? fallbackEnd : mStart + 1);
 
             for (const w of windows) {
                 const wStart = _toSec(w.start_ts!);
@@ -83,7 +89,7 @@ export function useBiomarkerMessageScores(
                 const isOverlapping = mStart < wEnd && mEnd > wStart;
                 if (isOverlapping) {
                     const prev = scores.get(msg.id);
-                    if (prev === undefined || w.score < prev) {scores.set(msg.id, w.score); }
+                    if (prev === undefined || w.score < prev) { scores.set(msg.id, w.score); }
                 }
             }
         }

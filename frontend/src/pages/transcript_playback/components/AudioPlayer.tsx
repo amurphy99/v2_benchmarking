@@ -1,5 +1,4 @@
-/*
-Audio player for a recorded conversation.
+/* Audio player for a recorded conversation.
 --------------------------------------------------------------------------------
 `frontend/src/pages/transcript_playback/components/AudioPlayer`
 
@@ -13,8 +12,7 @@ as we add actual audio recording/saving for conversations we also need to figure
 out how to do that properly...
 
 */
-import { RefObject  } from "react";
-import { blockStyle } from "@/utils/styling/sharedStyles";
+import { RefObject } from "react";
 
 interface Props {
     audioRef     : RefObject<HTMLAudioElement>;
@@ -28,21 +26,19 @@ interface Props {
 export default function AudioPlayer({ audioRef, src, onTimeUpdate }: Props) {
     if (!src) {
         return (
-            <div className={`${blockStyle} flex items-center justify-center text-gray-400`}>
+            <div className="rounded-lg border border-admin-border bg-admin-muted px-3 py-2 text-sm text-admin-subtext text-center">
                 No audio file available for this session.
             </div>
         );
     }
 
     return (
-        <div className={blockStyle}>
-            <audio
-                ref          = {audioRef}
-                src          = {src}
-                controls
-                onTimeUpdate = {onTimeUpdate}
-                className    = "w-full"
-            />
-        </div>
+        <audio
+            ref          = {audioRef}
+            src          = {src}
+            controls
+            onTimeUpdate = {onTimeUpdate}
+            className    = "w-full max-w-md"
+        />
     );
 }

@@ -55,8 +55,8 @@ export function AdminControlsPanel({
     // ================================================================================
     // UI Components
     // ================================================================================
-    return (       
-        <div className="px-[1rem] grid grid-cols-2 gap-[1rem]">
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* Manually Control How the Robot Responds */}
             <ResponseControlGroup 

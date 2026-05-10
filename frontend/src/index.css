@@ -1,8 +1,37 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@import "tailwindcss"; 
+/* --------------------------------------------------------------------------------
+   Tailwind v4 theme tokens
+
+   Tailwind v4 reads theme variables from CSS, not from tailwind.config.js.
+   Each `--color-{name}: <hex>;` here registers utilities like `bg-{name}`,
+   `text-{name}`, `border-{name}`, `outline-{name}`, etc. for the admin
+   "workspace" theme and the biomarker severity / status scales.
+-------------------------------------------------------------------------------- */
+@theme {
+  /* Admin workspace theme (warm stone neutrals + bronze accent) */
+  --color-admin-surface     : #f5f1e9;
+  --color-admin-panel       : #ffffff;
+  --color-admin-muted       : #efeae0;
+  --color-admin-border      : #e0d9cb;
+  --color-admin-borderStrong: #cbc2b0;
+  --color-admin-text        : #1c1917;
+  --color-admin-subtext     : #57534e;
+  --color-admin-accent      : #b45309;
+  --color-admin-accent2     : #92400e;
+  --color-admin-accentSoft  : #fef3c7;
+
+  /* Biomarker severity (red-yellow-green) */
+  --color-severity-severe   : #dc2626;
+  --color-severity-moderate : #d97706;
+  --color-severity-mild     : #65a30d;
+
+  /* Status indicators */
+  --color-status-live       : #16a34a;
+  --color-status-paused     : #ca8a04;
+  --color-status-offline    : #71717a;
+  --color-status-error      : #dc2626;
+}
 
 * {
     transition: 0.2s;

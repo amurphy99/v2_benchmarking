@@ -1,26 +1,21 @@
-/*
-Wraps consecutive words belonging to the same ChatBiomarkerScore window.
+/* Wraps consecutive words belonging to the same ChatBiomarkerScore window.
 --------------------------------------------------------------------------------
 `frontend/src/pages/transcript_playback/components/BiomarkerGroup`
 
-Displays a popup on hover with: 
-  - biomarker name
-  - description
-  - score
-  - time range
+Hover popup shows: name, score, description, time range, and an info button
+that opens the per-biomarker explainer modal. 
 
 The tooltip follows the cursor (position: fixed at clientX/Y).
 Clicking a word locks the tooltip in place until the user clicks elsewhere.
-
-TODO: Change the time on the card to be total seconds, not MM:SS:xx
-
 */
-import { CSSProperties, ReactNode, useEffect, useState } from "react";
+import { CSSProperties, ReactNode, useContext, useEffect, useState } from "react";
+import { LuInfo } from "react-icons/lu";
 
 // From this project
 import { ChatBiomarkerScore                        } from "@/api";
 import { getBiomarkerName, getBiomarkerDescription } from "@/utils/misc/descriptions";
 import { formatElapsedMessage                      } from "@/utils/styling/numFormatting";
+import { BiomarkerInfoContext                      } from "../biomarkers/BiomarkerInfoContext";
 
 interface Props {
     biomarker     : ChatBiomarkerScore;
@@ -35,13 +30,17 @@ export default function BiomarkerGroup({ biomarker, sessionStartMs, children }: 
     const [visible, setVisible] = useState(false);
     const [locked,  setLocked ] = useState(false);
     const [pos,     setPos    ] = useState({ x: 0, y: 0 });
+    const openInfo = useContext(BiomarkerInfoContext);
 
     // When locked: add a one-time document click listener to dismiss
     useEffect(() => {
         if (!locked) return;
         const dismiss = () => { setLocked(false); setVisible(false); };
-        document.addEventListener("click", dismiss);
-        return () => document.removeEventListener("click", dismiss);
+
+        // Use a small timeout so the initial click that sets locked=true finishes before we start listening for the dismiss click
+        const timer = setTimeout(() => { document.addEventListener("click", dismiss); }, 10);
+    
+        return () => { clearTimeout(timer); document.removeEventListener("click", dismiss); };
     }, [locked]);
 
     // Elapsed time from session start
@@ -66,28 +65,41 @@ export default function BiomarkerGroup({ biomarker, sessionStartMs, children }: 
     return (
         <span
             onMouseEnter ={( ) => { setVisible(true); }}
-            onMouseLeave ={( ) => { if (!locked) setVisible(false); }}
-            onMouseMove  ={(e) => { setPos({ x: e.clientX, y: e.clientY }); }}
+            onMouseLeave ={( ) => { if (!locked)   setVisible(false); }}
+            onMouseMove  ={(e) => { if (!locked) { setPos({ x: e.clientX, y: e.clientY }); } }} // ONLY track coordinates if the tooltip is not locked in place
             onClick      ={(e) => { e.stopPropagation(); setLocked(true); setVisible(true); }}
         >
             {/* WordSpans */}
             {children}
 
             {visible && (
-                <span className="pointer-events-none" style={tooltipStyle}>
-                    <span className="flex flex-col gap-[2px] bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 whitespace-nowrap">
+                <span style={tooltipStyle} className="pointer-events-none">
+                    <span className="flex flex-col gap-1 bg-white bg-admin-panel border border-admin-border rounded-lg shadow-xl px-3 py-2 whitespace-nowrap pointer-events-auto">
 
                         {/* Name + Score */}
-                        <span className="flex items-baseline justify-between gap-4">
-                            <span className="font-semibold text-gray-800">{name}</span>
-                            <span className="font-mono text-violet-600">{biomarker.score.toFixed(4)}</span>
+                        <span className="flex items-baseline justify-between gap-3">
+                            <span className="font-semibold text-admin-text">{name}</span>
+                            <span className="flex items-center gap-2">
+                                <span className="font-mono text-admin-accent">{biomarker.score.toFixed(4)}</span>
+                                {openInfo && (
+                                    <button
+                                        type     ="button"
+                                        onClick  ={(e) => { e.stopPropagation(); openInfo(biomarker.score_type); }}
+                                        className="p-0.5 rounded text-admin-subtext hover:text-admin-text hover:bg-admin-muted cursor-pointer"
+                                        aria-label="Score details"
+                                        title    ="More info"
+                                    >
+                                        <LuInfo size={14} />
+                                    </button>
+                                )}
+                            </span>
                         </span>
 
                         {/* Description */}
-                        {desc && <span className="text-gray-500">{desc}</span>}
+                        {desc && <span className="text-admin-subtext text-xs">{desc}</span>}
 
                         {/* Time Range */}
-                        <span className="text-gray-400 text-small">{secStart}s - {secEnd}s</span>
+                        <span className="text-admin-subtext text-[11px]">{secStart}s - {secEnd}s</span>
 
                     </span>
                 </span>

@@ -1,21 +1,22 @@
-/*
-Display row for ChatMessages w audio playback controls & biomarker highlights.
+/* Display row for ChatMessages w audio playback controls & biomarker highlights.
 --------------------------------------------------------------------------------
-`frontend/src/pages/transcript_playback/components/UtteranceLine`
+`frontend/src/pages/transcript_playback/components/UtteranceLine.tsx`
 
 If we have word-level timestamps (showWordLevel = true), then we can make the 
 highlights have word-level detail. If not, we just use the full message text and
 starting/ending timestamps for the span. 
 
-TODO: Change the icons? There is that one nice user one w the circle built in
+Biomarker segments are rendered inline (not as flex items) so a long sentence
+wraps word-by-word naturally instead of breaking on biomarker boundaries.
 
+TODO: I still think there could be some bugs here, but idk this is enough for
+      now. This whole setup was pretty tough to get working...
 */
 import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 
 // From this project
 import { ChatMessage, ChatWord, ChatBiomarkerScore                        } from "@/api";
-import { PATIENT_HEX, CAREGIVER_HEX                                       } from "@/utils/styling/colors";
 import { formatElapsedMessageRange                                        } from "@/utils/styling/numFormatting";
 import { getMessageTimespan, getPunctSuffixes, getCapFlags, buildSegments } from "./../utils/utteranceFormatting";
 import   WordSpan                                                           from "./WordSpan";
@@ -28,12 +29,13 @@ interface Props {
     currentTime        : number;
     biomarkerWordScores: Map<number, ChatBiomarkerScore>; // word ID -> associated biomarker score object
     onSeek             : (sec: number) => void;
+    isActiveLine      ?: boolean;
 }
 
 // ================================================================================
 // Message/Utterance Display Row
 // ================================================================================
-export default function UtteranceLine({ msg, userName, sessionStartMs, currentTime, biomarkerWordScores, onSeek }: Props) {
+export default function UtteranceLine({ msg, userName, sessionStartMs, currentTime, biomarkerWordScores, onSeek, isActiveLine }: Props) {
     const isUser = msg.role === "user";
     const name   = isUser ? userName : "Cognibot";
 
@@ -59,8 +61,9 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     const capByWordId = new Map<number, boolean>();
     if (showWordLevel) { msg.words!.forEach((w, i) => capByWordId.set(w.id, caps[i] ?? false)); }
 
+    // Inline flow (no flex) so word-wrap happens naturally and biomarker boundaries don't force line breaks.=
     const wordContent = showWordLevel && (
-        <div className="flex flex-wrap gap-y-1 fs-5">
+        <div className="leading-relaxed">
             {buildSegments(msg.words!, biomarkerWordScores).map((seg, si) => {
 
                 // WordSpans
@@ -98,10 +101,15 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     // --------------------------------------------------------------------------------
     // Message-Level Fallback
     // --------------------------------------------------------------------------------
+    // Check if the message ends with a punctuation mark (. ! ?)
+    const match = msg.content.match(/(.*)([.!?]+)$/);
+    const cleanWordText  = match ? match[1] : msg.content;
+    const extractedPunct = match ? match[2] : null;
+
     // Make a fake "ChatWord" instance where the "word" is the full message text (leave "confidence" out)
     const messageAsWord: ChatWord = {
         id       : msg.id + 10_000, // Can't think of a good way to come up with a new ID/make sure it doesn't overlap
-        word     : msg.content,
+        word     : cleanWordText,
         start_ts : span.start,
         end_ts   : span.end,
         index    : 0,
@@ -109,40 +117,58 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
 
     // HTML for the fallback
     const fallbackContent = !showWordLevel && (
-        <div className="flex flex-wrap gap-x-1 gap-y-1 fs-5">
+        <div className="leading-relaxed">
             <WordSpan
                 key           ={msg.id}
                 word          ={messageAsWord}
                 sessionStartMs={sessionStartMs}
                 currentTime   ={currentTime}
                 biomarkerScore={null}
-                punct         ={null}
+                punct         ={extractedPunct}
                 onSeek        ={onSeek}
             />
         </div>
     );
 
+    // Distinct styling for each speaker type (user vs. assistant)
+    const containerClass = isUser ? "border-l-2 border-admin-borderStrong pl-4" : "pl-12";
+    const textSize       = isUser ? "text-[1.0625rem]"                          : "text-base";
+    const nameClass      = isUser ? "font-semibold text-admin-text text-base"   : "font-medium text-admin-accent text-sm";
+    const tsClass        = isUser ? "text-xs text-admin-subtext"                : "text-xs text-admin-subtext italic";
+
+
     // --------------------------------------------------------------------------------
     // Final UI Component
     // --------------------------------------------------------------------------------
     return (
-        <div className="flex my-[1.0rem]">
+        <div className={`relative flex gap-3 items-start ${containerClass}`}>
+            {/* Active-line caret in the left margin */}
+            {isActiveLine && (
+                <span
+                    aria-hidden = "true"
+                    className   = "absolute -left-5 top-3 text-admin-accent text-lg leading-none transition-all duration-150"
+                >
+                    ▸
+                </span>
+            )}
 
             {/* Speaker icon */}
-            <div className="mr-[0.75rem] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-gray-200">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${isUser ? "bg-admin-muted" : "bg-admin-accentSoft"}`}>
                 {isUser
-                    ? <FaUser  size={25} color={  PATIENT_HEX} />
-                    : <BsRobot size={25} color={CAREGIVER_HEX} />
+                    ? <FaUser  size={26} className="text-admin-subtext" />
+                    : <BsRobot size={26} className="text-admin-accent2"  />
                 }
             </div>
 
             {/* Message content */}
-            <div className="flex flex-col w-full">
-                <div className="h-9 flex items-center gap-[0.75rem] fs-5">
-                    <span className="fw-bold">{name}</span>
-                    <span className="text-gray-400 text-sm">{elapsedRange}</span>
+            <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-baseline gap-3 mb-1">
+                    <span className={nameClass}>{name}</span>
+                    <span className={tsClass}>{elapsedRange}</span>
                 </div>
-                {showWordLevel ? wordContent : fallbackContent}
+                <div className={textSize}>
+                    {showWordLevel ? wordContent : fallbackContent}
+                </div>
             </div>
 
         </div>

@@ -1,13 +1,12 @@
-// ================================================================================
-// BiomarkerPanel
-// ================================================================================
-//   - Expects the `series` object from `useLocalBiomarkers()`
-//   - Assumes timestamps are ISO strings
-//
-// TODO: a LOT of this should be in component / helper files...
-//
-// ================================================================================
+/* Show the biomarkers for the chat as line graphs.
+--------------------------------------------------------------------------------
+`frontend/src/pages/admin/components/common/BiomarkerPanel.tsx`
 
+    - Expects the `series` object from `useLocalBiomarkers()`
+    - Assumes timestamps are ISO strings
+
+    TODO: a LOT of this should really probably be in component / helper files...
+*/
 import { useMemo, useState } from "react";
 import { BiomarkerScoreSet, LocalBiomarkerSeries } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
@@ -155,8 +154,8 @@ export function BiomarkerPanel({
     defaultSelected ? : BiomarkerKey;
     windowSeconds   ? : number | "all";
 }) {
-    // Sparkline X-axis mode
-    const [xAxisMode, setXAxisMode] = useState<XAxisMode>("time");
+    // Sparkline X-axis mode (can be "time" or "index"; using index by default)
+    const [xAxisMode, setXAxisMode] = useState<XAxisMode>("index");
 
     // Current selected biomarker for the large chart
     const [selected, setSelected] = useState<BiomarkerKey>(defaultSelected);
@@ -203,17 +202,17 @@ export function BiomarkerPanel({
     // Return Component
     // --------------------------------------------------------------------------------
     return (
-        <> 
+        <>
         {/* Header */}
-        <div className="flex justify-center py-[0.5rem] border-b border-black/10">
-            <p className="text-base font-semibold m-0">Biomarker Scores</p>
+        <div className="flex justify-center py-2 border-b border-admin-border">
+            <p className="text-sm font-semibold text-admin-text m-0">Biomarker Scores</p>
         </div>
-        
+
         {/* ================================================================================ */}
-        {/* "Now" Cards */}
+        {/* "Now" Cards -- two-row layout for breathing room in the narrow column */}
         {/* ================================================================================ */}
-        <div className="flex flex-col gap-[1rem] p-[0.5rem]">
-            <div className="grid grid-cols-3 gap-[0.5rem]">
+        <div className="flex flex-col gap-3 p-3">
+            <div className="flex flex-col gap-2">
                 {cards.map((c) => {
                     const isActive = c.key === selected;
 
@@ -222,60 +221,39 @@ export function BiomarkerPanel({
                             key={c.key}
                             onClick={() => setSelected(c.key)}
                             className={[
-                                "text-left rounded-xl border p-3 transition",
+                                "w-full text-left rounded-lg border px-3 py-2.5 transition cursor-pointer",
                                 isActive
-                                    ? "border-black/20 bg-black/5"
-                                    : "border-black/10 bg-white hover:bg-black/5",
+                                    ? "border-admin-accent bg-admin-accentSoft/50 shadow-sm"
+                                    : "border-admin-border bg-admin-panel hover:bg-admin-muted",
                             ].join(" ")}
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            {/* Top row: label + sparkline */}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-medium text-admin-text truncate">{c.label}</div>
+                                <svg width={86} height={32} className="block shrink-0">
+                                    <polyline
+                                        fill        = "none"
+                                        stroke      = "currentColor"
+                                        strokeWidth = "1.5"
+                                        className   = {isActive ? "text-admin-accent" : "text-admin-subtext"}
+                                        points      = {
+                                            c.small.length >= 2 ? polylinePoints(c.small, 86, 32, 3, xAxisMode) : ""
+                                        }
+                                    />
+                                </svg>
+                            </div>
 
-                                {/* -------------------------------------------------------------------------------- */}
-                                {/* Card Text (with deltas) */}
-                                {/* -------------------------------------------------------------------------------- */}
-                                <div className="min-w-0">
-                                    {/* Biomarker Title */}
-                                    <div className="text-xs text-black/60">{c.label}</div>
-
-                                    {/* Score Average */}
-                                    <div className="mt-1 text-lg font-semibold tabular-nums">
-                                        {formatAvg(c.avg)}
-                                    </div>
-
-                                    {/* Bottom Row => Latest + Delta */}
-                                    <div className="mt-1 flex items-center gap-3 text-xs text-black/60 tabular-nums">
-                                        <div className="flex items-center gap-1">
-                                            <span>Now</span>
-                                            <span className="font-medium text-black/80">
-                                                {formatVal(typeof c.latest === "number" ? c.latest : null)}
-                                            </span>
-                                        </div>
-
-                                        <div className="flex items-center gap-1">
-                                            <span>Δ</span>
-                                            <span className="font-medium text-black/80">
-                                                {formatDelta(c.delta)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* -------------------------------------------------------------------------------- */}
-                                {/* Sparkline */}
-                                {/* -------------------------------------------------------------------------------- */}
-                                <div className="shrink-0">
-                                    <svg width={120} height={40} className="block">
-                                        <polyline
-                                            fill        = "none"
-                                            stroke      = "currentColor"
-                                            strokeWidth = "1.5"
-                                            className   = "text-black/50"
-                                            points      = {
-                                                c.small.length >= 2 ? polylinePoints(c.small, 120, 40, 3, xAxisMode) : ""
-                                            }
-                                        />
-                                    </svg>
-                                </div>
+                            {/* Bottom row: big score + now + delta */}
+                            <div className="flex items-baseline gap-3 mt-1.5">
+                                <span className="text-2xl font-semibold text-admin-text tabular-nums leading-none">
+                                    {formatAvg(c.avg)}
+                                </span>
+                                <span className="text-xs text-admin-subtext tabular-nums">
+                                    now <span className="text-admin-text/85 font-medium">{formatVal(typeof c.latest === "number" ? c.latest : null)}</span>
+                                </span>
+                                <span className="text-xs text-admin-subtext tabular-nums">
+                                    Δ <span className="text-admin-text/85 font-medium">{formatDelta(c.delta)}</span>
+                                </span>
                             </div>
                         </button>
                     );
@@ -285,18 +263,16 @@ export function BiomarkerPanel({
             {/* ================================================================================ */}
             {/* Big Chart */}
             {/* ================================================================================ */}
-            <div className="rounded-xl border border-black/10 bg-white p-3">
-
-                {/* Header row */}
+            <div className="rounded-lg border border-admin-border bg-admin-panel p-3">
                 <div className="flex items-center justify-between gap-2">
-                    <div>
-                        <div className="text-sm font-semibold">{selectedLabel}</div>
-                        <div className="text-xs text-black/60">
-                            Window: {windowSeconds === "all" ? "All" : `${windowSeconds}s`} · Points: {bigSeries.length}
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-admin-text truncate">{selectedLabel}</div>
+                        <div className="text-[11px] text-admin-subtext">
+                            Window: {windowSeconds === "all" ? "All" : `${windowSeconds}s`} · {bigSeries.length} pts
                         </div>
                     </div>
 
-                    <div className="text-xs text-black/60 tabular-nums">
+                    <div className="text-[11px] text-admin-subtext tabular-nums shrink-0">
                         Latest:{" "}
                         {formatVal(
                             typeof latestPoint?.scores[selected] === "number"
@@ -305,28 +281,22 @@ export function BiomarkerPanel({
                     </div>
                 </div>
 
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Chart */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="mt-3 overflow-x-hidden">
-                    <svg width={BIG_CHART_W} height={BIG_CHART_H} className="block w-full h-auto pb-1">
+                <div className="mt-2 overflow-x-hidden">
+                    <svg viewBox={`0 0 ${BIG_CHART_W} ${BIG_CHART_H}`} className="block w-full h-auto" preserveAspectRatio="none">
+                        <line x1="10" y1={BIG_CHART_H - 10} x2={BIG_CHART_W - 10} y2={BIG_CHART_H - 10} className="stroke-admin-border" />
+                        <line x1="10" y1={BIG_CHART_H / 2}  x2={BIG_CHART_W - 10} y2={BIG_CHART_H / 2}  className="stroke-admin-border" />
+                        <line x1="10" y1="10"               x2={BIG_CHART_W - 10} y2="10"               className="stroke-admin-border" />
 
-                        {/* Baseline Grid */}
-                        <line x1="10" y1={BIG_CHART_H - 10} x2={BIG_CHART_W - 10} y2={BIG_CHART_H - 10} className="stroke-black/10" />
-                        <line x1="10" y1={BIG_CHART_H / 2}  x2={BIG_CHART_W - 10} y2={BIG_CHART_H / 2}  className="stroke-black/10" />
-                        <line x1="10" y1="10"               x2={BIG_CHART_W - 10} y2="10"               className="stroke-black/10" />
-
-                        {/* Biomarker Series */}
                         {bigSeries.length >= 2 ? (
                             <polyline
                                 fill        = "none"
                                 stroke      = "currentColor"
                                 strokeWidth = "2"
-                                className   = "text-black"
+                                className   = "text-admin-accent"
                                 points      = {bigPolyline}
                             />
                         ) : (
-                            <text x="12" y="30" className="fill-black/50 text-xs">
+                            <text x="12" y="30" className="fill-admin-subtext text-xs">
                                 Waiting for data...
                             </text>
                         )}
@@ -334,56 +304,38 @@ export function BiomarkerPanel({
                 </div>
             </div>
 
-            {/* ================================================================================ */}
-            {/* Footer Stats & X-Axis Toggle */}
-            {/* ================================================================================ */}
-            <div className="flex items-center justify-between gap-2 text-xs text-black/60">
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Left: Stats Pills */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="flex flex-wrap gap-2">
-                    <div className="rounded-full bg-black/5 px-3 py-1 border border-black/10">
-                        Total points: <span className="font-medium text-black">{series.points.length}</span>
-                    </div>
-
-                    <div className="rounded-full bg-black/5 px-3 py-1 border border-black/10">
-                        Last ts:{" "}
-                        <span className="font-medium text-black">
-                            {latestPoint ? new Date(parseTs(latestPoint.ts)).toLocaleTimeString() : "—"}
-                        </span>
-                    </div>
+            {/* Footer: stats + X-axis toggle */}
+            <div className="flex items-center justify-between gap-2 text-[11px] text-admin-subtext flex-wrap">
+                <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-admin-muted px-2.5 py-0.5 border border-admin-border">
+                        {series.points.length} points
+                    </span>
+                    <span className="rounded-full bg-admin-muted px-2.5 py-0.5 border border-admin-border">
+                        {latestPoint ? new Date(parseTs(latestPoint.ts)).toLocaleTimeString() : "—"}
+                    </span>
                 </div>
 
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Right: X-axis mode toggle */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-black/60">X-axis</span>
-                    <div className="flex rounded-full border border-black/10 bg-black/5 p-0.5">
-
-                        {/* Set to Time */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <span>X</span>
+                    <div className="flex rounded-full border border-admin-border bg-admin-muted p-0.5">
                         <button
                             type      = "button"
                             onClick   = {() => setXAxisMode("time")}
                             className = {[
-                                "px-2 py-1 rounded-full transition",
-                                xAxisMode === "time" ? "bg-white border border-black/10 text-black" : "text-black/60 hover:text-black",
+                                "px-2 py-0.5 rounded-full transition cursor-pointer",
+                                xAxisMode === "time" ? "bg-admin-panel border border-admin-border text-admin-text" : "text-admin-subtext hover:text-admin-text",
                             ].join(" ")}
-                        > Time </button>
-
-                        {/* Set to Index */}
+                        >Time</button>
                         <button
                             type      = "button"
                             onClick   = {() => setXAxisMode("index")}
                             className = {[
-                                "px-2 py-1 rounded-full transition",
-                                xAxisMode === "index" ? "bg-white border border-black/10 text-black" : "text-black/60 hover:text-black",
+                                "px-2 py-0.5 rounded-full transition cursor-pointer",
+                                xAxisMode === "index" ? "bg-admin-panel border border-admin-border text-admin-text" : "text-admin-subtext hover:text-admin-text",
                             ].join(" ")}
-                        > Index </button>
+                        >Idx</button>
                     </div>
                 </div>
-
             </div>
 
         </div>
