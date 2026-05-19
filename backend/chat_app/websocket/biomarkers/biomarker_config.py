@@ -23,7 +23,7 @@ FRAMES_OFFSET     =   5  # Because the windows look forward, can't use all of th
 # --------------------------------------------------------------------------------
 # Audio window sizes for summarizing openSMILE features as rows of ML input
 # --------------------------------------------------------------------------------
-WINDOW_SECONDS =  5.0  # Duration of audio for openSMILE summary features (mean, etc.)
+WINDOW_SECONDS =  3.0  # Duration of audio for openSMILE summary features (mean, etc.)
 STEP_SECONDS   =  0.5  # Step size between windows of openSMILE features
 BUFFER_SECONDS =  0.5  # Capture some time before and after the utterance
 

@@ -31,7 +31,7 @@ def generate_prosody(windows: list[dict[pd.DataFrame, datetime, datetime]]) -> l
     if not windows: return []
 
     # Finish feature preparation
-    feature_rows = [extract_prosody_features(window) for window in windows]
+    feature_rows: list[pd.Series] = [extract_prosody_features(window) for window in windows]
 
     # Generate the biomarker scores
     scores = _ENSEMBLE.predict_batch(feature_rows)
