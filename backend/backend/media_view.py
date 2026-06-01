@@ -24,6 +24,9 @@ from django.contrib.auth.models              import AnonymousUser
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from ranged_response                         import RangedFileResponse
 
+# From this project
+from chat_app.models import ChatSession
+
 _jwt_auth = JWTAuthentication()
 
 
@@ -64,6 +67,23 @@ def stream_media(request, path):
     file_path = os.path.join(settings.MEDIA_ROOT, safe_path)
     if not os.path.exists(file_path) or not os.path.isfile(file_path):
         raise Http404(f"Media file not found: {safe_path}")
+
+    # --------------------------------------------------------------------------------
+    # Access control for chat session recordings
+    # --------------------------------------------------------------------------------
+    # Audio recordings under `recordings/` are restricted to:
+    #   - admins (is_staff = True), or
+    #   - the user who owns the ChatSession that this audio_file belongs to.
+    # Other media (album images, etc.) keep the existing is_active check.
+    if safe_path.startswith("recordings/") and (not user.is_staff):
+        # Check if this user "owns" the related ChatSession object
+        owns = ChatSession.objects.filter(
+            audio_file                = safe_path,
+            profile__account__user_id = user.id,
+        ).exists()
+
+        if not owns:
+            return HttpResponse("Forbidden", status=403)
 
     # --------------------------------------------------------------------------------
     # Content-Type

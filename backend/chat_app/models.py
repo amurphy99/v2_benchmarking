@@ -224,13 +224,13 @@ class ChatWord(models.Model):
 # ================================================================================
 class ChatBiomarkerScore(models.Model):
     """
-    TODO: Some biomarkers may be linked to messages/utterances directly while others are
-    linked to timestamps (e.g., 5 seconds of audio)
+    Some biomarkers may be linked to messages/utterances directly while others are
+    linked to timestamps (e.g., 5 seconds of audio).
     """
     BIOMARKER_CHOICES = [
-        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"),
+        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "PragmaticImpairment"),
         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
-        ("perplexity", "Perplexity")
+        ("perplexity", "PerplexityDifference")
     ]
 
     session    = models.ForeignKey(ChatSession,  on_delete=models.CASCADE,  related_name="biomarker_scores")

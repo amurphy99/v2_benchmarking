@@ -117,7 +117,14 @@ STT_MAIN = f"{BRIGHT_BLUE}[STT]"
 TTS_MAIN = f"{       BLUE}[TTS]"
 
 # AudioRecorder (main tag + highlights)
-AUDIO_REC = f"{BLUE}[{BOLD+BRIGHT_BLUE}AudioRecorder{UNBOLD}]{BLUE}"
-AR_H      = f"{BOLD+BRIGHT_BLUE}"
-AR_R      = f"{RESET+BLUE}"
+AR_H = f"{  BOLD+BRIGHT_BLUE}"
+AR_R = f"{UNBOLD+       BLUE}"
+AUDIO_REC = f"{BLUE}[{AR_H}AudioRecorder{AR_R}]"
+
+# Seeding data
+SD_H = f"{  BOLD+BRIGHT_YELLOW}"
+SD_R = f"{UNBOLD+       YELLOW}"
+SEED_DATA = f"{YELLOW}[{SD_H}SeedData{SD_R}]"
+
+
 

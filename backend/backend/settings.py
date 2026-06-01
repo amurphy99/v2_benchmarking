@@ -207,3 +207,19 @@ DEFAULT_AUTO_FIELD  = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL  = '/'
 LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL           = '/'
+
+
+# --------------------------------------------------------------------------------
+# Get admin user information directly from the .env file (no longer tracked)
+# --------------------------------------------------------------------------------
+# Primary admin user
+ADMIN_USERNAME_0 = config("ADMIN_USERNAME_0", default="")
+ADMIN_PASSWORD_0 = config("ADMIN_PASSWORD_0", default="")
+
+# Protected demo data user
+DEMO_USERNAME_0 = config("DEMO_USERNAME_0", default="")
+DEMO_PASSWORD_0 = config("DEMO_PASSWORD_0", default="")
+
+# TODO: We can add other admin or demo users here if we want
+
+
