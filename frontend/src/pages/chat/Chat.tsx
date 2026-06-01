@@ -1,21 +1,21 @@
-import { useRef, useState    } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+import { useNavigate      } from "react-router-dom";
+import { Spinner          } from "react-bootstrap";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
-import useLiveChat   from "@/hooks/useLiveChat";
-import SaveChatModal from "@/components/modals/SaveChatModal";
-
+// From this project
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
-import { Spinner } from "react-bootstrap";
+import { Avatar          } from "../common/avatar/Avatar";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
-import { Avatar } from "../common/avatar/Avatar";
+import   SaveChatModal     from "@/components/modals/SaveChatModal";
+import   useLiveChat       from "@/hooks/useLiveChat";
 
 
-// ====================================================================
-// Chat
-// ====================================================================
-// ToDo: Move speech providers folder to utils, fix the index
-// ToDo: Might need to add the user/token stuff to the websocket
+// ================================================================================
+// Chat Page (UI that users see during a webapp chat)
+// ================================================================================
+// TODO: Move speech providers folder to utils, fix the index
+// TODO: Might need to add the user/token stuff to the websocket
 export function Chat() {
     const navigate = useNavigate();
     const { data: settings, isLoading } = useUserSettings();
@@ -25,6 +25,9 @@ export function Chat() {
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
     
+    // --------------------------------------------------------------------------------
+    // WebSocket Response Callbacks
+    // --------------------------------------------------------------------------------
     // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
     const onUserUtterance   = (text: string) => { 
         pushMessage("user",      text); 
@@ -42,26 +45,25 @@ export function Chat() {
 
     // Happy, Sad, Surprised, Scared, Angry, Neutral
     const onEmotion = (emotion: string) => {
-        if (avatarRef.current) {
-            avatarRef.current.playEmotion(emotion);
-        }
+        if (avatarRef.current) { avatarRef.current.playEmotion(emotion); }
     }
 
     const onExpression = (data: any) => {
         if (avatarRef.current) {
-            if (data.type == "emotion") {
-                avatarRef.current.playEmotion(data.value);
-            } else if (data.type == "animation") {
-                avatarRef.current.playAnimation(data.value);
-            }
+            if      (data.type == "emotion"  ) { avatarRef.current.playEmotion  (data.value); } 
+            else if (data.type == "animation") { avatarRef.current.playAnimation(data.value); }
         }
     }
 
-    // selecting the type of chat
+    // --------------------------------------------------------------------------------
+    // IDK, unlabeled stuff people add in
+    // --------------------------------------------------------------------------------
+    // Selecting the type of chat
     type ChatMode = "default" | "memory_activity";
     const [chatMode, setChatMode] = useState<ChatMode>("default");
 
 
+    // This should be deleted
     type DebugTurn = {
         ts: number;
         role: "user" | "assistant";
@@ -86,40 +88,35 @@ export function Chat() {
         onRagParseError : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
         onChatError     : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
 
-        // Chat ended 
+        // Chat ended
         onChatClosed: () => {
             setRecording(false);
             setShowModal(false);
             navigate("/chat/end"); // navigate("/goal")
         },
-        onChatPaused: () => { setRecording(false); },
+        onChatPaused      : (       ) => { setRecording     (false  ); },
+        onRecordingStatus : (enabled) => { setAdminRecording(enabled); },
     });
     
     // Separate recording flag that we control ourselves
-    const [recording, setRecording ] = useState(false);
+    const [recording,       setRecording      ] = useState(false);
+    const [adminRecording,  setAdminRecording ] = useState(false); // true when admin has enabled audio saving
     const startChat = () => { start(); setRecording(true ); };
 	const pauseChat = () => { stop (); setRecording(false); };
+	const saveChat  = () => { save (); setShowModal(false); navigate("/chat/end"); }; // use the stop speaking callback
 
     // Modal control
     const [showModal, setShowModal] = useState(false);
-    const endChatModal = () => {
-		setShowModal(true);
-		if (!recording) { pauseChat(); }
-	};
+    const endChatModal = () => {setShowModal(true); if (!recording) { pauseChat(); } };
 
-    if (isLoading) { return <div>Loading...</div>; }
-
+    // Is this the avatar? idk we need comments
     const model = settings.modelChoice;
 
-	const saveChat = () => {
-		save();
-		setShowModal(false);
-		navigate("/chat/end");
-	}; // use the stop speaking callback
-
-    // --------------------------------------------------------------------
+    // ================================================================================
     // Return UI elements
-    // --------------------------------------------------------------------
+    // ================================================================================
+    if (isLoading) { return <div>Loading...</div>; }
+
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
     <>
@@ -144,31 +141,51 @@ export function Chat() {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-           <div className={`flex flex-row ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} mx-[20vw] gap-[4em] justify-around`} >
-                {chatEnding
-                    ? <div className="flex flex-col gap-2 items-center text-gray-500">
-                          <BsStopCircle size={"8vh"} color={"gray"} />
-                          Ending chat...
-                      </div>
-                    : <>
-                          <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
-                          <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
-                      </>
-                }
+           <div className={`flex flex-col ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} items-center gap-3`}>
 
-                <select
-                value={chatMode}
-                onChange={(e) => {
-                    setChatMode(e.target.value as ChatMode);
-                    setDebugTurns([]);
-                }}
-                disabled={recording}
-                className="border max-h-1/2 rounded px-2 py-2"
-                >
-                <option value="default">default</option>
-                <option value="memory_activity">memory_activity</option>
-                </select>
-            </div>
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Recording Indicator (shown when admin has set audio to be saved on chat end) */}
+                {/* -------------------------------------------------------------------------------- */}
+                {adminRecording && (
+                    <div className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                        Recording
+                    </div>
+                )}
+
+
+                <div className="flex flex-row mx-[20vw] gap-[4em] justify-around w-full">
+
+                    {/* Again, I don't know what this is... */}
+                    {chatEnding
+                        ? <div className="flex flex-col gap-2 items-center text-gray-500">
+                            <BsStopCircle size={"8vh"} color={"gray"} />
+                            Ending chat...
+                        </div>
+                        : <>
+                            <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
+                            <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+                        </>
+                    }
+
+                    
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Select Chat Mode */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <select
+                        value     = {chatMode}
+                        onChange  = {(e) => {setChatMode(e.target.value as ChatMode); setDebugTurns([]); }}
+                        disabled  = {recording}
+                        className = "border max-h-1/2 rounded px-2 py-2"
+                    >
+                        <option value="default"         >default</option>
+                        <option value="memory_activity" >memory_activity</option>
+                    </select>
+
+
+
+                </div>  {/* end flex-row buttons */}
+            </div>  {/* end flex-col wrapper */}
 
             {/* Added only for debugging, will probably remove later */}
             {chatMode === "memory_activity" && (
@@ -200,7 +217,9 @@ export function Chat() {
 }
 
 
+// --------------------------------------------------------------------------------
 // Returns the Play or Pause buttons
+// --------------------------------------------------------------------------------
 function RecordButton({ recording, stopRecording, startRecording } : { recording: boolean, stopRecording: () => void, startRecording: () => void }) {
     const style = "flex flex-col gap-2 items-center";
 
@@ -211,6 +230,10 @@ function RecordButton({ recording, stopRecording, startRecording } : { recording
     return <button className={style} onClick={onClick}> {icon} {text} </button>;
 }
 
+
+// --------------------------------------------------------------------------------
+// idk the purpose of this, was unlabeled
+// --------------------------------------------------------------------------------
 const default_message = `Chat with me!`;
 export function getRecentMessage(messages: LocalChatMessage[], fallback = default_message): string {
     const latest = messages.reduce<LocalChatMessage | null>((acc, m) => {
@@ -219,3 +242,4 @@ export function getRecentMessage(messages: LocalChatMessage[], fallback = defaul
     }, null);
     return latest ? latest.content : fallback;
 }
+

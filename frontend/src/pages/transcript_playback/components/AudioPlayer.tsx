@@ -38,7 +38,7 @@ export default function AudioPlayer({ audioRef, src, onTimeUpdate }: Props) {
             src          = {src}
             controls
             onTimeUpdate = {onTimeUpdate}
-            className    = "w-full max-w-md"
+            className    = "w-full"
         />
     );
 }

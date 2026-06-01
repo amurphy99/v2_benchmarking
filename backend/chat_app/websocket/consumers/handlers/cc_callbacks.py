@@ -10,9 +10,9 @@ consumers that are listening in, and generates biomarker scores.
 These methods get implemented by the consumers via simple passthroughs.
 """
 from __future__ import annotations
-from datetime   import datetime, timedelta
+from datetime   import datetime, timedelta, timezone
 
-import logging, base64
+import logging, base64, time
 logger = logging.getLogger(__name__)
 
 # Django / Channels
@@ -79,12 +79,27 @@ async def handle_audio_data(consumer: ChatConsumer, data):
     recording buffer, and append a timestamped copy to the rolling chunk deque
     used by the audio biomarker pipeline. Audio biomarkers fire once per
     committed user utterance via on_audio_biomarkers().
+
+    Additionally, here we set up an anchor timestamp (where time = 0.0) for the
+    beginning of the audio stream/recording. The anchor is set on the first
+    chunk of audio we actually receive (not based on when the user hits buttons).
+    Anchor timestamp gets used by:
+      - accumulate_tts() to position TTS in the right channel of the recording
+      - close_session() to persist as ChatSession.audio_start_ts
+      - frontend TranscriptPlayback to setup proper audio file seeking offsets
     """
     # (1) Forward audio to the speech to text provider
     consumer.stt_provider.send_audio(data)
 
     # Decode audio bytes once (reused for both buffers)
     pcm_bytes = base64.b64decode(data["data"])
+
+    # Set the anchor timestamp (time = 0.0) on the first chunk 
+    # TODO: It should actually technically be this timestamp **minus the chunk size in seconds**
+    #       because we receive the first chunk X seconds into the recording...
+    if consumer._audio_start_mono is None:
+        consumer._audio_start_mono = time.monotonic()
+        consumer._audio_start_dt   = datetime.now(timezone.utc)
 
     # (2) Full-session recording (saved as WAV on disconnect)
     consumer._rec_user.extend(pcm_bytes)

@@ -141,7 +141,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.save_audio        = False             # Should we save the audio bytes on chat end?
         self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
         self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
-        self._session_start_ts = time.monotonic()  # Reference point for TTS position in recording
+        self._session_start_ts = time.monotonic()  # Legacy monotonic reference (kept for fallback)
+        self._audio_start_mono = None              # Monotonic time when user first clicked "Start Chat"
+        self._audio_start_dt   = None              # Wall-clock equivalent (saved to DB for frontend seeking)
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -203,8 +205,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Close the ChatSession in the DB
         # --------------------------------------------------------------------------------
         if user_id and session_id:
-            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source, audio_path=audio_path),
-                         name=f"disconnect::close-session-{session_id}")
+            fire_and_log(ChatService.close_session(
+                user_id, session_id,
+                username        = username,
+                source          = self.source,
+                audio_path      = audio_path,
+                audio_start_ts  = getattr(self, "_audio_start_dt", None),
+            ), name=f"disconnect::close-session-{session_id}")
 
         # Cancel background tasks (only connection-based ones; not the close_session task)
         for task in           getattr(self, "_bg_tasks", []): task.cancel()
@@ -246,9 +253,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # ================================================================================
     # Receives commands from listener consumers
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
-    async def ws_command  (self, event): await handle_ws_command        (self, event)
-    async def ws_broadcast(self, event): await forward_payload_to_client(self, event)
-    async def ws_monitor  (self, event): await forward_payload_to_client(self, event)
+    async def ws_command         (self, event): await handle_ws_command        (self, event)
+    async def ws_broadcast       (self, event): await forward_payload_to_client(self, event)
+    async def ws_monitor         (self, event): await forward_payload_to_client(self, event)
+    async def ws_recording_status(self, event): pass  # Primary consumer echoes its own broadcast; no action needed
 
     # --------------------------------------------------------------------------------
     # Broadcast Helpers
@@ -264,6 +272,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Broadcasts stream status changes ("active" | "paused" | "ended") to listeners
     async def _broadcast_stream_status(self, status: str):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.stream_status", "data": {"status": status}})
+
+    # Broadcasts recording toggle state (True = will save at end) to listeners
+    async def _broadcast_recording_state(self, enabled: bool):
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.recording_status", "data": {"enabled": enabled}})
 
 
     # ================================================================================

@@ -58,7 +58,7 @@ class ChatService:
     # Close Session
     # ================================================================================
     @staticmethod
-    async def close_session(user_id, session_id, *, username="unknown", source="webapp", audio_path=None):
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp", audio_path=None, audio_start_ts=None):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -89,14 +89,15 @@ class ChatService:
         # Save analysis results to the proper database fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
             user, session, messages,
-            summary     = analysis.get("summary",     None),
-            sentiment   = analysis.get("sentiment",   None),
-            emotion     = analysis.get("emotion",     None),
-            topics      = analysis.get("topics",      None),
-            risk_level  = analysis.get("risk_rating", None),
-            risk_reason = analysis.get("risk_reason", None),
-            risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
-            audio_path  = audio_path,
+            summary        = analysis.get("summary",     None),
+            sentiment      = analysis.get("sentiment",   None),
+            emotion        = analysis.get("emotion",     None),
+            topics         = analysis.get("topics",      None),
+            risk_level     = analysis.get("risk_rating", None),
+            risk_reason    = analysis.get("risk_reason", None),
+            risk_quotes    = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
+            audio_path     = audio_path,
+            audio_start_ts = audio_start_ts,
         )
 
         # Done
@@ -139,7 +140,7 @@ class ChatService:
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None, audio_path=None):
+    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None, audio_path=None, audio_start_ts=None):
         # Set the analysis fields 
         topics, sentiment = ChatService.set_analysis_fields(
             session, messages,
@@ -162,9 +163,14 @@ class ChatService:
             session.taskSubtype = settings.taskSubtype
 
         # Save the audio file path if provided
-        if audio_path: 
+        if audio_path:
             session.audio_file = audio_path
             update_fields.append("audio_file")
+
+        # Save the audio recording start time (used by frontend for accurate seeking)
+        if audio_start_ts:
+            session.audio_start_ts = audio_start_ts
+            update_fields.append("audio_start_ts")
 
         # Save & return the session
         session.save(update_fields=update_fields)

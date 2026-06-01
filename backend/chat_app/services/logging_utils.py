@@ -115,3 +115,9 @@ LLM_MAIN = f"{CYAN}"
 STT_TTS_MAIN = f"{BRIGHT_BLUE}"
 STT_MAIN = f"{BRIGHT_BLUE}[STT]"
 TTS_MAIN = f"{       BLUE}[TTS]"
+
+# AudioRecorder (main tag + highlights)
+AUDIO_REC = f"{BLUE}[{BOLD+BRIGHT_BLUE}AudioRecorder{UNBOLD}]{BLUE}"
+AR_H      = f"{BOLD+BRIGHT_BLUE}"
+AR_R      = f"{RESET+BLUE}"
+

@@ -159,10 +159,11 @@ export interface ChatSession {
   date      : string;
   is_active : boolean;
 
-  start_ts  : string;
-  end_ts    : string | null;
-  duration  : number;          // in seconds
-  audio_file: string | null;
+  start_ts       : string;
+  end_ts         : string | null;
+  duration       : number;         // in seconds
+  audio_file     : string | null;
+  audio_start_ts : string | null;  // wall-clock ISO when first byte of audio was received
 
   topics    : string[] | null;
   image     : AlbumImage;

@@ -31,16 +31,24 @@ async def synthesize_and_stream_tts(system_resp, send_callback, consumer=None):
     1) Synthesize speech bytes (run sync TTS off the event loop)
     2) Record TTS audio into the session recording buffer (if consumer provided)
     3) Chunk + stream to the frontend over websocket
+
+    NOTE: The synthesizer returns (pcm_bytes, sample_rate, num_channels, 
+    bits_per_sample) so the audio recorder can resample both channels with 
+    proper WAV parameters instead of guessing. This should help prevent the
+    static we hear in the playback (the user sends us audio in a different
+    format than TTS generates it in; we can't just combine them blindly).
     """
     t0 = now_ts()
 
-    # Synthesize speech (sync network call -> run in thread)
-    tts_provider = TextToSpeechProvider()
-    audio_bytes  = await sync_to_async(tts_provider.synthesize_speech)(system_resp)
+    # Synthesize speech 
+    # NOTE: This is a synchronous network call, so we run it in a thread
+    tts_provider             = TextToSpeechProvider()
+    audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(system_resp)
 
-    # Accumulate TTS audio into the session recording (right channel)
-    # Called before streaming so the start offset matches when audio begins playing
-    if (consumer is not None) and (audio_bytes): accumulate_tts(consumer, audio_bytes)
+    # Accumulate TTS audio into the session recording 
+    # NOTE: TTS uses the right channel; audio bytes from the user is the left channel
+    if (consumer is not None) and (audio_bytes):
+        accumulate_tts(consumer, audio_bytes, in_rate=sr, nchannels=ch)
 
     # Stream audio chunks to client
     await stream_audio_chunks(audio_bytes, send_callback)

@@ -8,15 +8,16 @@ import { useRef, useEffect, useState, useCallback } from "react";
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
 export default function useChatSocket({
     recording,
-    wsPath        = "/ws/chat/", 
-    onLLMResponse = (unknown)   => {}, 
-    onScores      = (WSMessage: any) => {},
-    onUserUtt     = (text: string) => {},
-    onAudio       = (data) => {},
-    onError       = (_) => {},
-    onExpression  = (data) => {},
-    onStreamStatus = (status: string) => {},
-    onChatClosed   = () => {},
+    wsPath            = "/ws/chat/", 
+    onLLMResponse     = (unknown            ) => {}, 
+    onScores          = (WSMessage : any    ) => {},
+    onUserUtt         = (text      : string ) => {},
+    onAudio           = (data               ) => {},
+    onError           = (_                  ) => {},
+    onExpression      = (data               ) => {},
+    onStreamStatus    = (status    : string ) => {},
+    onChatClosed      = (                   ) => {},
+    onRecordingStatus = (enabled   : boolean) => {},
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -51,8 +52,9 @@ export default function useChatSocket({
         else if (type === "expression"      ) { console.log("Received expression:", data  ); onExpression(data);}
 
         // Backend chat controls (chats can be paused or ended through the backend)
-        else if (type === "stream_status"   ) { console.log("Backend paused chat"); onStreamStatus(data); }
-        else if (type === "chat_ended"      ) { console.log("Backend ended chat" ); onChatClosed  ();     }
+        else if (type === "stream_status"   ) { console.log("Backend paused chat"     ); onStreamStatus   (data           ); }
+        else if (type === "chat_ended"      ) { console.log("Backend ended chat"      ); onChatClosed     (               ); }
+        else if (type === "recording_status") { console.log("Recording status updated"); onRecordingStatus(!!data?.enabled); }
 
         // Miscellaneous 
         else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 

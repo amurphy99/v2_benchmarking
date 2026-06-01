@@ -27,7 +27,7 @@ import { useChatSession } from "@/hooks/queries/useChatSessions";
 
 
 // ================================================================================
-// [INACTIVE] Admin view for completed chats
+// [FOR INACTIVE SESSIONS] Admin view for completed chats
 // ================================================================================
 export function AdminChatInactive() {
     // Load data for the given chat (ID received on page load)
@@ -42,12 +42,13 @@ export function AdminChatInactive() {
     }
 
     // "Transcript Playback" button takes us to the biomarker highlighting analysis page
+    // (pass only the session ID so the playback page always re-fetches fresh data)
     const playbackButton = (
         <AdminButton
             variant  = "primary"
             size     = "md"
             iconLeft = {<LuPlay size={18} />}
-            onClick  = {() => navigate("/transcript-playback", { state: { chatSession: session } })}
+            onClick  = {() => navigate("/transcript-playback", { state: { sessionId: session.id } })}
             className= "shadow-md text-base"
         >
             Transcript Playback

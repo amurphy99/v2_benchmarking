@@ -8,7 +8,7 @@ TODO: Can probably structure the command handling better...
 """
 from __future__ import annotations
 
-import logging, json, asyncio
+import logging, json as _json, asyncio
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -106,7 +106,7 @@ async def handle_ws_command(consumer: ChatConsumer, event):
         await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}}, command)
 
     # Admin has sent a custom message for the robot to say
-    elif command == "send_custom": 
+    elif command == "send_custom":
         custom_response = payload        .get("value",   {}) or {}
         custom_response = custom_response.get("message", {})
         if custom_response:
@@ -116,6 +116,27 @@ async def handle_ws_command(consumer: ChatConsumer, event):
         else:
             await send_command_ack(consumer, {"id": id, "ok": False, "state": {"manualMode": True}}, command)
 
+    # --------------------------------------------------------------------------------
+    # Toggle flag for saving audio from this session on or off
+    # --------------------------------------------------------------------------------
+    # NOTE: Audio is **always** collected in _rec_user / _rec_tts; this flag only 
+    # controls whether save_stereo_wav() is called at disconnect
+    elif command == "toggle_recording":
+        # Process the payload & set the recording status in the consumer
+        enabled             = bool((payload.get("data") or {}).get("enabled", False))
+        consumer.save_audio = enabled
+
+        # Ack response to the ChatListener frontend (field name matches ControlState.recordingEnabled on frontend)
+        await send_command_ack(consumer, {"id": id, "ok": True, "state": {"recordingEnabled": enabled}}, command)
+
+        # Broadcast the new state to all listener sessions
+        await consumer._broadcast_recording_state(enabled)
+
+        # Notify the user's own chat WebSocket so the recording indicator on their view updates
+        try:              await consumer.send(_json.dumps({"type": "recording_status", "data": {"enabled": enabled}}))
+        except Exception: pass
+
+        logger.info(f"{CC_MAIN} Recording toggled: {lu.GREEN if enabled else lu.RED}{enabled}{RESET}")
 
     # Unknown/unhandled command
     else: logger.info(f"{CC_MAIN} {lu.RED}WARNING{lu.GREEN} Unknown command: {command}, payload={payload}. {RESET}")

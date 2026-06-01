@@ -18,15 +18,23 @@ clicking on any word or utterance in the transcript will automatically move the
 playback time to that area of the transcript. This allows admin users to examine
 certain biomarker scores in much more precise detail.
 
+NOTE: Admin users navigate here from AdminChatInactive with: 
+  `state: { sessionId: number }`
+We pass the session ID rather than the session object so that we can re-fetch 
+the session here, which helps make sure `audio_file` is the newest value saved
+by the backend (there could be cases where it takes a second to save it but we
+already navigated to the post-chat analysis page).
+
 */
 import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate    } from "react-router-dom";
 import { LuArrowLeft, LuColumns2     } from "react-icons/lu";
 
 // From this project
-import { ChatSession    } from "@/api";
 import { API_URL        } from "@/utils/constants";
 import { dateFormatLong } from "@/utils/styling/numFormatting";
+import { useChatSession } from "@/hooks/queries/useChatSessions";
+import { getAccess      } from "@/context/AuthProvider";
 
 // Components
 import AudioPlayer        from "./components/AudioPlayer";
@@ -48,54 +56,95 @@ const SCORE_RAIL_KEY = "admin.playback.scoreRail";
 // the transcript. Word-level timestamps are stored as absolute datetimes and 
 // converted to audio offsets at render time via `sessionStartMs`.
 export function TranscriptPlayback() {
-    // Pass the ChatSession as `state.chatSession` when navigating here
+    // Pass the ChatSession's ID as `state.sessionId` when navigating here
     const navigate = useNavigate();
-    const { state } = useLocation() as { state?: { chatSession?: ChatSession } };
-    const session = state?.chatSession;
-    if (!session) { navigate("/history"); return null; }
 
-    // Page setup
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [currentTime,       setCurrentTime      ] = useState(0);
+    // Accept either a sessionId (new) or a full chatSession object (legacy fallback)
+    const { state } = useLocation() as { state?: { sessionId?: number; chatSession?: any } };
+    const sessionId = state?.sessionId ?? state?.chatSession?.id;
+
+    // Always fetch fresh from DB so audio_file is the most recent copy
+    const { data: session, isLoading } = useChatSession(sessionId ? String(sessionId) : "");
+
+    // If no ID was passed at all, send the user back to the last page
+    if (!sessionId) { navigate("/history"); return null; }
+
+    // --------------------------------------------------------------------------------
+    // Biomarker Selection (score info + modal with explanation)
+    // --------------------------------------------------------------------------------
+    // Current selected biomarker
     const [selectedBiomarker, setSelectedBiomarker] = useState("");
-    const [showScoreRail,     setShowScoreRail    ] = useState<boolean>(() => {
+    const [   modalBiomarker,    setModalBiomarker] = useState<string | null>(null);
+    const openInfo = (type: string) => setModalBiomarker(type);
+
+    // Score rail controls
+    const [showScoreRail, setShowScoreRail] = useState<boolean>(() => {
         try { return localStorage.getItem(SCORE_RAIL_KEY) === "true"; } catch { return false; }
     });
     useEffect(() => {
         try { localStorage.setItem(SCORE_RAIL_KEY, String(showScoreRail)); } catch { /* ignore */ }
     }, [showScoreRail]);
 
-    // Modal state for biomarker explainer
-    const [modalBiomarker, setModalBiomarker] = useState<string | null>(null);
-    const openInfo = (type: string) => setModalBiomarker(type);
+    // --------------------------------------------------------------------------------
+    // Audio Setup
+    // --------------------------------------------------------------------------------
+    // 1) Create the audio player
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [currentTime,       setCurrentTime      ] = useState(0);
 
-    // Derive the media URL from the API base (strip trailing /api)
-    const sessionStartMs = new Date(session.start_ts).getTime();
+    // 2) Derive audio URL from the fetched session
+    // Append the JWT access token as a query param so the backend can
+    // authenticate the request (the <audio> element cannot send headers).
     const MEDIA_BASE = API_URL.replace(/\/api\/?$/, "");
-    const audioUrl   = session.audio_file ? `${MEDIA_BASE}/media/${session.audio_file}` : undefined;
+    const audioUrl   = session.audio_file
+        ? `${MEDIA_BASE}/media/${session.audio_file}?token=${getAccess()}`
+        : undefined;
+    
+    // 3) Get the timestamps for seeking
+    // We set zero-time to the wall-clock time when the first chunk of audio was
+    // received from the user. So word.start_ts - audio_start_ts should give the
+    // correct byte offset into the audio file for seeking. For sessions recorded
+    // before this field existed, we just use the old 'start_ts' field.
+    const sessionStartMs        = new Date(session.audio_start_ts ?? session.start_ts).getTime();
+    const selectedBiomarkerInfo = selectedBiomarker ? getBiomarkerInfo(selectedBiomarker) : null;
+
+    // Utility function that seeks through the audio file to wherever the word we clicked on was
+    const onSeek = (sec: number) => {
+        if (audioRef.current) audioRef.current.currentTime = sec;
+    };
+
+    // --------------------------------------------------------------------------------
+    // Final Page Setup
+    // --------------------------------------------------------------------------------
+    // Loading & error states
+    if (isLoading || !session?.id) {
+        return (
+            <AdminPage>
+                <div className="flex items-center justify-center h-[40vh] text-admin-subtext">
+                    Loading session…
+                </div>
+            </AdminPage>
+        );
+    }
 
     // Patient name comes from the session's profile
     const patientName = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
-    const selectedBiomarkerInfo = selectedBiomarker ? getBiomarkerInfo(selectedBiomarker) : null;
 
-    // Audio seeking
-    const onSeek = (sec: number) => {
-        if (audioRef.current) audioRef.current.currentTime = sec;
-        console.log(`Set audio player to: ${sec}`);
-    };
 
-    // UI Component
+    // ================================================================================
+    // Return Page UI
+    // ================================================================================
     return (
         <BiomarkerInfoContext.Provider value={openInfo}>
             <AdminPage contained={false}>
-                
+
                 {/* ================================================================================ */}
                 {/* Header (sticky) */}
                 {/* ================================================================================ */}
                 <header className="sticky top-0 z-10 bg-admin-panel/95 backdrop-blur border-b border-admin-border">
 
                     {/* -------------------------------------------------------------------------------- */}
-                    {/* Row 1 => Back Button | Page Title | Selected Biomarker Badge | Audio Player */}
+                    {/* Row 1 => Back Button | Page Title | Selected Biomarker Badge */}
                     {/* -------------------------------------------------------------------------------- */}
                     <div className="flex items-center gap-4 px-4 md:px-6 py-3 flex-wrap">
 
@@ -113,19 +162,19 @@ export function TranscriptPlayback() {
                             <h1 className="text-xl md:text-2xl font-semibold text-admin-text">
                                 Speech Pattern Analysis
                             </h1>
-               
-                            <span className="text-base text-admin-subtext">
+
+                            {/* Selected Biomarker */}
+                            {selectedBiomarkerInfo && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-admin-accentSoft border border-admin-accent/30 px-3 py-1 text-base font-medium text-admin-accent2">
+                                    <span className="text-admin-accent">·</span>
+                                    {selectedBiomarkerInfo.name}
+                                </span>
+                            )}
+
+                            {/* Chat Date */}
+                            <span className="text-sm text-admin-subtext">
                                 {dateFormatLong.format(new Date(session.date))} — {patientName}
                             </span>
-                        </div>
-
-                        {/* Audio Player */}
-                        <div className="ml-auto">
-                            <AudioPlayer
-                                audioRef    ={audioRef}
-                                src         ={audioUrl}
-                                onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
-                            />
                         </div>
                     </div>
 
@@ -136,63 +185,81 @@ export function TranscriptPlayback() {
 
                         {/* Biomarker Selector */}
                         <BiomarkerSelector
-                            biomarkers       ={session.biomarkers}
-                            selectedBiomarker={selectedBiomarker}
-                            onChange         ={setSelectedBiomarker}
-                            onInfoClick      ={openInfo}
+                            biomarkers        = {session.biomarkers}
+                            selectedBiomarker = {selectedBiomarker}
+                            onChange          = {setSelectedBiomarker}
+                            onInfoClick       = {openInfo}
                         />
                         <div className="ml-auto flex items-center gap-3 flex-wrap">
 
-                            {/* Selected Biomarker */}
-                            {selectedBiomarkerInfo && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-admin-accentSoft border border-admin-accent/30 px-3 py-1 text-base font-medium text-admin-accent2">
-                                    <span className="text-admin-accent">·</span>
-                                    {selectedBiomarkerInfo.name}
-                                </span>
-                            )}
-
                             {/* Biomarker Stats */}
                             <BiomarkerStatsBar
-                                biomarkers       ={session.biomarkers}
-                                selectedBiomarker={selectedBiomarker}
+                                biomarkers        = {session.biomarkers}
+                                selectedBiomarker = {selectedBiomarker}
                             />
 
                             {/* Score Rail Toggle */}
                             <AdminButton
                                 variant ={showScoreRail ? "primary" : "outline"}
-                                size    = "sm"
-                                iconLeft={<LuColumns2 size={14} />}
-                                onClick = {() => setShowScoreRail(v => !v)}
+                                size     = "sm"
+                                iconLeft = {<LuColumns2 size={14} />}
+                                onClick  = {() => setShowScoreRail(v => !v)}
                             >
                                 Score rail
                             </AdminButton>
+
                         </div>
                     </div>
                 </header>
-                
+
                 {/* ================================================================================ */}
-                {/* Body */}
+                {/* Body => Audio Player | Transcript Display */}
                 {/* ================================================================================ */}
                 {/* Main Transcript Content */}
+                <div className="mx-auto max-w-[900px] px-4 md:px-6 pt-3">
+
+                    {/* Audio Player (or banner stating that there is no audio file) */}
+                    {audioUrl ? (
+                        <div className="mb-3 rounded-xl border border-admin-border bg-admin-panel shadow-sm px-4 py-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-admin-subtext mb-2">
+                                Session Audio
+                            </div>
+                            <AudioPlayer
+                                audioRef     = {audioRef}
+                                src          = {audioUrl}
+                                onTimeUpdate = {() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+                            />
+                        </div>
+                    ) : (
+                        <div className="mb-5 rounded-xl border border-admin-border bg-admin-muted px-5 py-4 flex items-center gap-3">
+                            <span className="text-admin-subtext text-sm">
+                                No audio available for this session. Audio recording must be enabled by an admin before the chat ends.
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Transcript */}
                 <PlaybackTranscript
-                    messages         ={session.messages}
-                    biomarkers       ={session.biomarkers}
-                    sessionStartMs   ={sessionStartMs}
-                    currentTime      ={currentTime}
-                    selectedBiomarker={selectedBiomarker}
-                    userName         ={patientName}
-                    onSeek           ={onSeek}
-                    showScoreRail    ={showScoreRail && !!selectedBiomarker}
+                    messages          = {session.messages}
+                    biomarkers        = {session.biomarkers}
+                    sessionStartMs    = {sessionStartMs}
+                    currentTime       = {currentTime}
+                    selectedBiomarker = {selectedBiomarker}
+                    userName          = {patientName}
+                    onSeek            = {onSeek}
+                    showScoreRail     = {showScoreRail && !!selectedBiomarker}
                 />
 
                 {/* Hidden Modal */}
                 <BiomarkerInfoModal
-                    isOpen       ={modalBiomarker !== null}
-                    biomarkerType={modalBiomarker}
-                    onClose      ={() => setModalBiomarker(null)}
+                    isOpen        = {modalBiomarker !== null}
+                    biomarkerType = {modalBiomarker}
+                    onClose       = {() => setModalBiomarker(null)}
                 />
 
             </AdminPage>
         </BiomarkerInfoContext.Provider>
     );
 }
+

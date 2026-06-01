@@ -81,10 +81,14 @@ export function AdminChat() {
         onStreamStatus    : (st)   => { setStreamStatus(st?.status ?? "active"); },
         onControlState    : (st)   => {
             setControlState((s) => ({
-            listeningPaused : st?.listeningPaused ?? s.listeningPaused,
-            responsesPaused : st?.responsesPaused ?? s.responsesPaused,
-            manualMode      : st?.manualMode      ?? s.manualMode,
+                listeningPaused  : st?.listeningPaused  ?? s.listeningPaused,
+                responsesPaused  : st?.responsesPaused  ?? s.responsesPaused,
+                manualMode       : st?.manualMode       ?? s.manualMode,
+                recordingEnabled : st?.recordingEnabled ?? s.recordingEnabled,
             }));
+        },
+        onRecordingStatus : (st)   => {
+            setControlState((s) => ({...s, recordingEnabled: st?.enabled ?? s.recordingEnabled}));
         },
     });
 
@@ -101,9 +105,10 @@ export function AdminChat() {
     // Control state (command success/failure confirmed by backend acks)
     // --------------------------------------------------------------------------------
     const [controlState, setControlState] = useState<ControlState>({
-        listeningPaused: false,
-        responsesPaused: false,
-        manualMode     : false,
+        listeningPaused  : false,
+        responsesPaused  : false,
+        manualMode       : false,
+        recordingEnabled : false,
     });
 
     // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)
