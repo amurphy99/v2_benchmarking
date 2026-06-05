@@ -8,19 +8,25 @@ file via Django media, and loads pre-computed biomarker scores from one CSV
 per biomarker type. Used for the TranscriptPlayback demo.
 
 Required files in `seed_data/transcript_data/test_transcripts/<test_dir>/`:
-  - transcript.csv         : speaker_id, word, start_time, end_time, confidence, uttID (utterance ID), full_text (full utterance with punctuation)
-  - audio.wav              : the corresponding audio recording
   - transcript_config.json : speaker_map, trans_filename, audio_filename, chat_datetime, date_offset_days (only used as a backup)
+  - audio.wav              : the corresponding audio recording
+  - transcript.csv         : speaker_id, word, start_time, end_time, confidence, uttID (utterance ID), full_text (full utterance with punctuation)
 
 Optional (one per biomarker type, auto-discovered):
   - biomarker_<type>.csv   : start_time, end_time, score
+
+NOTE: For `transcript.csv` only `speaker_id`, `word`, and `uttID` are strictly
+required. `start_time`, `end_time`, `confidence`, and `full_text` may be missing
+on individual rows -- missing word timestamps are interpolated, and `full_text` 
+falls back to the joined words.  
 
 """
 import csv, json as json_lib, shutil, zoneinfo, asyncio, logging
 logger = logging.getLogger(__name__)
 
-from datetime import timedelta, datetime
-from pathlib  import Path
+from collections import OrderedDict
+from datetime    import timedelta, datetime
+from pathlib     import Path
 
 from django.conf  import settings as django_settings
 from django.utils import timezone
@@ -29,6 +35,7 @@ from django.utils import timezone
 from chat_app.models               import ChatSession, ChatMessage, ChatBiomarkerScore
 from chat_app.services.db_services import ChatService
 from ...services.logging_utils     import RESET, SEED_DATA, SD_H, SD_R
+from .csv_processing               import to_float, fill_utterance_bounds, interpolate_word_times
 
 # For the post-chat analysis fields
 from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
@@ -86,6 +93,9 @@ def _process_biomarker_csvs(data_dir: Path, session: ChatSession, started_at: da
 # Seed a chat from a real transcript
 # ================================================================================
 def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
+    """
+    
+    """
     # Load in the transcript and config
     data_dir = Path(__file__).parent / "transcript_data" / "test_transcripts" / test_dir
     config   = json_lib.loads((data_dir / "transcript_config.json").read_text())
@@ -103,12 +113,38 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     audio_dest.mkdir(parents=True, exist_ok=True)
     shutil.copy2(audio_src, audio_dest / audio_src.name)
 
-    # Parse CSV -- group words by uttID (utterance ID)
+    # --------------------------------------------------------------------------------
+    # Parse CSV -- group words by uttID (utterance ID); also preserves CSV order
+    # --------------------------------------------------------------------------------
     trans_src  = data_dir / config["trans_filename"]
-    utterances = {}
+    utterances = OrderedDict()
     with open(trans_src, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             utterances.setdefault(row["uttID"], []).append(row)
+
+    # --------------------------------------------------------------------------------
+    # Handle missing word timestamps 
+    # --------------------------------------------------------------------------------
+    # Build per-utterance 'metadata' with raw bounds from any rows that have timestamps
+    utt_metas = []
+    for uid, rows in utterances.items():
+        starts = [to_float(r.get("start_time")) for r in rows]
+        ends   = [to_float(r.get(  "end_time")) for r in rows]
+        starts = [s for s in starts if s is not None]
+        ends   = [e for e in ends   if e is not None]
+        utt_metas.append({
+            "uid"   : uid,
+            "rows"  : rows,
+            "start" : min(starts) if starts else None,
+            "end"   : max(ends  ) if ends   else None,
+        })
+
+    # Fill any missing utterance bounds (forward/backward neighbors, then estimate)
+    fill_utterance_bounds(utt_metas)
+
+    # Interpolate any missing word-level timestamps within each utterance
+    for meta in utt_metas:
+        interpolate_word_times(meta["rows"], meta["start"], meta["end"])
 
     # --------------------------------------------------------------------------------
     # Session time reference (actual datetime value, or some arbitrary # of days)
@@ -125,9 +161,10 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         offset_days = config.get("date_offset_days", 5)
         started_at  = (timezone.now() - timedelta(days=offset_days)).replace(hour=10, minute=0, second=0, microsecond=0)
 
+    # Session duration = max utterance end (after filling missing timestamps)
+    duration = max(meta["end"] for meta in utt_metas)
+
     # CSV timestamps are seconds-from-start; anchor them to our datetime
-    all_rows = [r for rows in utterances.values() for r in rows]
-    duration = max(float(r["end_time"]) for r in all_rows)
     ended_at = started_at + timedelta(seconds=duration)
 
     # --------------------------------------------------------------------------------
@@ -147,17 +184,18 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     session.date = started_at
     session.save(update_fields=["date"])
 
-    # Create messages and words (utterances is a list of rows for each uttID)
+    # Create messages and words (utt_metas is in CSV order; each meta carries its rows)
     messages = []
-    for uid, rows in utterances.items():
-        rows.sort(key=lambda r: float(r["start_time"]))
+    for meta in utt_metas:
+        rows = meta["rows"]
+        rows.sort(key=lambda r: r["_start_sec"])
 
         # Parse the row for the necessary fields we need
-        # Content tries the "full_text" column with punctuation first; otherwise just joins each word by a space
+        # Try to get the "full_text" column with punctuation first; otherwise join each word by a space
         role     = speaker_map.get(rows[0]["speaker_id"], "user")
         content  = rows[0].get("full_text", " ".join(r["word"] for r in rows))
-        first_ts = started_at + timedelta(seconds=float(rows[ 0]["start_time"]))
-        last_ts  = started_at + timedelta(seconds=float(rows[-1][  "end_time"]))
+        first_ts = started_at + timedelta(seconds=meta["start"])
+        last_ts  = started_at + timedelta(seconds=meta["end"  ])
 
         # Create the ChatMessage for this row (looping through utterances here)
         msg    = ChatMessage.objects.create(session=session, role=role, content=content, start_ts=first_ts, end_ts=last_ts)
@@ -165,11 +203,13 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         messages.append(msg)  # Track the messages to use later in the post-chat analysis
 
         # Create the ChatWords objects based on the individual words
+        # (`_start_sec` & `_end_sec` get filled by '_interpolate_word_times' so every
+        # row now has non-None values, even if the original CSV cell was empty)
         ChatService.add_words_bulk(msg.id, [
             {"word"       : r["word"],
-             "start"      : started_at + timedelta(seconds=float(r["start_time"])),
-             "end"        : started_at + timedelta(seconds=float(r[  "end_time"])),
-             "confidence" : r.get("confidence", None), }
+             "start"      : started_at + timedelta(seconds=r["_start_sec"]),
+             "end"        : started_at + timedelta(seconds=r[  "_end_sec"]),
+             "confidence" : to_float(r.get("confidence")), }
             for r in rows
         ])
 

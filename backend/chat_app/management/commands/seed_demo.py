@@ -37,10 +37,10 @@ APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
 LOCAL_MODE      = (APP_ENVIRONMENT == "local")
 
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA = True # False # not LOCAL_MODE
+REMAKE_SAMPLE_DATA = False # False # not LOCAL_MODE
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = True # False # not LOCAL_MODE
+REMAKE_ANALYZED_DATA = False # False # not LOCAL_MODE
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
 REMAKE_TRANSCRIPT_DATA = True # False # not LOCAL_MODE
@@ -234,6 +234,7 @@ class Command(BaseCommand):
                 password   = admin_password, 
                 first_name = "Primary", 
                 last_name  = "Admin", 
+                is_staff   = True,
             )
 
             # Logging
@@ -279,7 +280,8 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------------------
         if REMAKE_TRANSCRIPT_DATA:
             ChatSession.objects.filter(profile=profile, source="transcript").delete()
-            seed_transcript_chat(profile, care_account)
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_01")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_02")
 
         # Return both users
         return primary_admin, workshop_user
