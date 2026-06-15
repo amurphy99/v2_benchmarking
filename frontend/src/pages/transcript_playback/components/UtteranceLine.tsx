@@ -30,20 +30,31 @@ interface Props {
     biomarkerWordScores: Map<number, ChatBiomarkerScore>; // word ID -> associated biomarker score object
     onSeek             : (sec: number) => void;
     isActiveLine      ?: boolean;
+    words             ?: ChatWord[]; // Subset of msg.words to render (for gap-split pieces); defaults to all words
 }
 
 // ================================================================================
 // Message/Utterance Display Row
 // ================================================================================
-export default function UtteranceLine({ msg, userName, sessionStartMs, currentTime, biomarkerWordScores, onSeek, isActiveLine }: Props) {
+export default function UtteranceLine({ msg, userName, sessionStartMs, currentTime, biomarkerWordScores, onSeek, isActiveLine, words }: Props) {
     const isUser = msg.role === "user";
     const name   = isUser ? userName : "Cognibot";
 
-    // Show word-level detail for user messages that have word timestamps
-    const showWordLevel = isUser && ((msg.words?.length ?? 0) > 0);
+    // Words to actually render this row (a gap-split slice, or all of them).
+    // Sometimes we split full text from a single 'ChatMessage' into to "messages" 
+    // in the transcript view if there was a gap long enough (e.g., longer than 
+    // 1.5 seconds between words).
+    const renderWords = words ?? msg.words ?? [];
 
-    // Per-message wall-clock span (words -> msg.start_ts/end_ts -> msg.ts)
-    const span         = getMessageTimespan(msg);
+    // Show word-level detail for user messages that have word timestamps
+    const showWordLevel = isUser && (renderWords.length > 0);
+
+    // Per-row wall-clock span. For word-level rows use the rendered slice's own
+    // bounds (so split pieces show their own time range); otherwise fall back to
+    // the message-level span (words -> msg.start_ts/end_ts -> msg.ts).
+    const span = showWordLevel
+        ? { start: renderWords[0].start_ts, end: renderWords[renderWords.length - 1].end_ts }
+        : getMessageTimespan(msg);
     const elapsedRange = formatElapsedMessageRange(sessionStartMs, span.start, span.end);
 
     // --------------------------------------------------------------------------------
@@ -61,10 +72,12 @@ export default function UtteranceLine({ msg, userName, sessionStartMs, currentTi
     const capByWordId = new Map<number, boolean>();
     if (showWordLevel) { msg.words!.forEach((w, i) => capByWordId.set(w.id, caps[i] ?? false)); }
 
-    // Inline flow (no flex) so word-wrap happens naturally and biomarker boundaries don't force line breaks.=
+    // Inline flow (no flex) so word-wrap happens naturally and biomarker boundaries don't force line breaks.
+    // NOTE: punct/cap maps above are keyed by word.id from the FULL message, so
+    // rendering only a gap-split slice (renderWords) still resolves correctly.
     const wordContent = showWordLevel && (
         <div className="leading-relaxed">
-            {buildSegments(msg.words!, biomarkerWordScores).map((seg, si) => {
+            {buildSegments(renderWords, biomarkerWordScores).map((seg, si) => {
 
                 // WordSpans
                 const spans = seg.words.map(word => {

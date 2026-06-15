@@ -22,6 +22,35 @@ export function getMessageTimespan(msg: ChatMessage): { start: string; end: stri
 
 
 // --------------------------------------------------------------------------------
+// Split a turn into visual pieces wherever there is a long silent gap
+// --------------------------------------------------------------------------------
+// Turns are grouped by `uttID` in the backend, so a long uninterrupted monologue
+// can arrive as one giant utterance. For display only, we split a word list into
+// contiguous slices wherever the silence between consecutive words
+// (word[i].start_ts - word[i-1].end_ts) exceeds `thresholdSec`. Word order is
+// preserved and a turn with no long gaps yields a single slice (unchanged).
+export const GAP_SPLIT_SECONDS = 1.5;
+
+export function splitWordsByGap(words: ChatWord[], thresholdSec: number = GAP_SPLIT_SECONDS): ChatWord[][] {
+    if (words.length === 0) return [];
+
+    const pieces : ChatWord[][] = [];
+    let   current: ChatWord[]   = [words[0]];
+
+    for (let i = 1; i < words.length; i++) {
+        const prevEnd   = new Date(words[i - 1].end_ts  ).getTime();
+        const currStart = new Date(words[i    ].start_ts).getTime();
+        const gapSec    = (currStart - prevEnd) / 1_000;
+
+        if (gapSec > thresholdSec) { pieces.push(current); current   = [words[i]]; }
+        else                       {                       current.push(words[i]); }
+    }
+    pieces.push(current);
+    return pieces;
+}
+
+
+// --------------------------------------------------------------------------------
 // "Segment" => consecutive words sharing the same biomarker window (or none)
 // --------------------------------------------------------------------------------
 export type WordSegment = { biomarker: ChatBiomarkerScore | null; words: ChatWord[] };
