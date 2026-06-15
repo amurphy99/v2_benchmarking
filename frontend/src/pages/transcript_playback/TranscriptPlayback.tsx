@@ -40,6 +40,7 @@ import { getAccess      } from "@/context/AuthProvider";
 import AudioPlayer        from "./components/AudioPlayer";
 import BiomarkerSelector  from "./components/BiomarkerSelector";
 import BiomarkerStatsBar  from "./components/BiomarkerStatsBar";
+import SeverityLegend     from "./components/SeverityLegend";
 import PlaybackTranscript from "./components/PlaybackTranscript";
 import { AdminPage            } from "@/pages/admin/components/ui/AdminPage";
 import { AdminButton          } from "@/pages/admin/components/ui/AdminButton";
@@ -144,7 +145,7 @@ export function TranscriptPlayback() {
                 <header className="sticky top-0 z-10 bg-admin-panel/95 backdrop-blur border-b border-admin-border">
 
                     {/* -------------------------------------------------------------------------------- */}
-                    {/* Row 1 => Back Button | Page Title | Selected Biomarker Badge */}
+                    {/* Row 1 => Back Button | Page Title + Date/Speaker | Biomarker Dropdown + Stats */}
                     {/* -------------------------------------------------------------------------------- */}
                     <div className="flex items-center gap-4 px-4 md:px-6 py-3 flex-wrap">
 
@@ -163,42 +164,52 @@ export function TranscriptPlayback() {
                                 Speech Pattern Analysis
                             </h1>
 
-                            {/* Selected Biomarker */}
-                            {selectedBiomarkerInfo && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-admin-accentSoft border border-admin-accent/30 px-3 py-1 text-base font-medium text-admin-accent2">
-                                    <span className="text-admin-accent">·</span>
-                                    {selectedBiomarkerInfo.name}
-                                </span>
-                            )}
-
                             {/* Chat Date */}
                             <span className="text-sm text-admin-subtext">
                                 {dateFormatLong.format(new Date(session.date))} — {patientName}
                             </span>
                         </div>
-                    </div>
 
-                    {/* -------------------------------------------------------------------------------- */}
-                    {/* Row 2 => Biomarker Selector | Biomarker Stats | Score Rail Toggle */}
-                    {/* -------------------------------------------------------------------------------- */}
-                    <div className="flex items-center gap-4 px-4 md:px-6 py-3 border-t border-admin-border flex-wrap">
-
-                        {/* Biomarker Selector */}
-                        <BiomarkerSelector
-                            biomarkers        = {session.biomarkers}
-                            selectedBiomarker = {selectedBiomarker}
-                            onChange          = {setSelectedBiomarker}
-                            onInfoClick       = {openInfo}
-                        />
+                        {/* Biomarker Selection + Score Stats (right side) */}
                         <div className="ml-auto flex items-center gap-3 flex-wrap">
-
-                            {/* Biomarker Stats */}
+                            <BiomarkerSelector
+                                biomarkers        = {session.biomarkers}
+                                selectedBiomarker = {selectedBiomarker}
+                                onChange          = {setSelectedBiomarker}
+                                onInfoClick       = {openInfo}
+                            />
                             <BiomarkerStatsBar
                                 biomarkers        = {session.biomarkers}
                                 selectedBiomarker = {selectedBiomarker}
                             />
+                        </div>
+                    </div>
 
-                            {/* Score Rail Toggle */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Row 2 => Audio Player | Score Rail Toggle */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <div className="grid grid-cols-4 items-center gap-4 px-4 md:px-6 py-3 border-t border-admin-border">
+
+                        {/* Left spacer to balance the grid and keep the center item perfectly centered */}
+                        <div className="hidden sm:block" />
+
+                        {/* Audio Player (or a short note when no audio was recorded) */}
+                        <div className="col-span-2 flex-1 min-w-0">
+                            {audioUrl ? (
+                                <AudioPlayer
+                                    audioRef     = {audioRef}
+                                    src          = {audioUrl}
+                                    onTimeUpdate = {() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+                                />
+                            ) : (
+                                <span className="text-sm text-admin-subtext">
+                                    No audio for this session — recording must be enabled by an admin before the chat ends.
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Score Rail Toggle */}
+                        <div className="justify-self-end shrink-0">
                             <AdminButton
                                 variant ={showScoreRail ? "primary" : "outline"}
                                 size     = "sm"
@@ -207,37 +218,25 @@ export function TranscriptPlayback() {
                             >
                                 Score rail
                             </AdminButton>
-
                         </div>
                     </div>
                 </header>
 
                 {/* ================================================================================ */}
-                {/* Body => Audio Player | Transcript Display */}
+                {/* Body => Active biomarker key (badge + severity legend) | Transcript Display */}
                 {/* ================================================================================ */}
-                {/* Main Transcript Content */}
-                <div className="mx-auto max-w-[900px] px-4 md:px-6 pt-3">
-
-                    {/* Audio Player (or banner stating that there is no audio file) */}
-                    {audioUrl ? (
-                        <div className="mb-3 rounded-xl border border-admin-border bg-admin-panel shadow-sm px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-admin-subtext mb-2">
-                                Session Audio
-                            </div>
-                            <AudioPlayer
-                                audioRef     = {audioRef}
-                                src          = {audioUrl}
-                                onTimeUpdate = {() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
-                            />
-                        </div>
-                    ) : (
-                        <div className="mb-5 rounded-xl border border-admin-border bg-admin-muted px-5 py-4 flex items-center gap-3">
-                            <span className="text-admin-subtext text-sm">
-                                No audio available for this session. Audio recording must be enabled by an admin before the chat ends.
+                {/* Active biomarker badge + severity color key (only while a biomarker is selected) */}
+                {selectedBiomarker && (
+                    <div className="mx-auto max-w-[900px] px-4 md:px-6 pt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+                        {selectedBiomarkerInfo && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-admin-accentSoft border border-admin-accent/30 px-3 py-1 text-base font-medium text-admin-accent2">
+                                <span className="text-admin-accent">·</span>
+                                {selectedBiomarkerInfo.name}
                             </span>
-                        </div>
-                    )}
-                </div>
+                        )}
+                        <SeverityLegend />
+                    </div>
+                )}
 
                 {/* Transcript */}
                 <PlaybackTranscript

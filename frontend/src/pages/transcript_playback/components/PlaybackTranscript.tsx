@@ -16,6 +16,7 @@ import   UtteranceLine                               from "./UtteranceLine";
 import   ScoreRailItem, { RailStats }                from "./ScoreRailItem";
 import { useBiomarkerWordScores                    } from "./../utils/useBiomarkerScores";
 import { splitWordsByGap                           } from "./../utils/utteranceFormatting";
+import { AutoScrollContext, useAutoScrollControl   } from "./../utils/useAutoScroll";
 
 // One rendered transcript row: a whole message, or one "gap-split" piece of a 
 // turn (where there was a pause longer than 1.5 seconds).
@@ -72,6 +73,10 @@ export default function PlaybackTranscript({
     const deferredBiomarker = useDeferredValue(selectedBiomarker);
     const computing         = deferredBiomarker !== selectedBiomarker;
 
+    // Shared "auto-scroll allowed" flag: WordSpan follows the audio, but pauses
+    // while the user manually scrolls and resumes 5s after they stop.
+    const autoScrollRef = useAutoScrollControl(5000);
+
     // Map of word ID -> most-severe biomarker score (re-calculated only when the biomarker selection or data changes).
     // The score rail derives its per-row stats from this same map (see railStatsForWords).
     const biomarkerWordScores = useBiomarkerWordScores(messages, biomarkers, deferredBiomarker, sessionStartMs);
@@ -109,9 +114,10 @@ export default function PlaybackTranscript({
 
     const containerClass = showScoreRail
         ? "mx-auto max-w-[1200px] px-4 md:px-6 py-6"
-        : "mx-auto max-w-[900px] px-4 md:px-6 py-6";
+        : "mx-auto max-w-[900px]  px-4 md:px-6 py-6";
 
     return (
+        <AutoScrollContext.Provider value={autoScrollRef}>
         <div className={containerClass}>
             <div className="relative rounded-xl border border-admin-border bg-admin-panel shadow-sm overflow-hidden">
 
@@ -148,8 +154,10 @@ export default function PlaybackTranscript({
                         {displayRows.map((row, idx) => {
                             const isLast = idx === displayRows.length - 1;
                             const rowBorder = isLast ? "" : "border-b border-admin-border/60";
+                            // Tint assistant turns light gray; user turns stay on the white panel
+                            const rowBg = row.msg.role === "user" ? "" : "bg-admin-muted2";
                             const utteranceCell = (
-                                <div className={`px-5 py-3 ${rowBorder}`}>
+                                <div className={`px-5 py-3 ${rowBorder} ${rowBg}`}>
                                     <UtteranceLine
                                         msg                ={row.msg}
                                         words              ={row.words ?? undefined}
@@ -171,7 +179,7 @@ export default function PlaybackTranscript({
                             return (
                                 <Fragment key={row.key}>
                                     {utteranceCell}
-                                    <div className={`px-4 py-3 flex items-center border-l border-admin-border ${rowBorder}`}>
+                                    <div className={`px-4 py-3 flex items-center border-l border-admin-border ${rowBorder} ${rowBg}`}>
                                         <ScoreRailItem stats={stats} />
                                     </div>
                                 </Fragment>
@@ -182,5 +190,6 @@ export default function PlaybackTranscript({
                 </div>
             </div>
         </div>
+        </AutoScrollContext.Provider>
     );
 }

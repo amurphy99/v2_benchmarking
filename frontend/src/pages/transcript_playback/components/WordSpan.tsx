@@ -15,9 +15,10 @@ contains the list of these objects, and don't use rounded corners.
 TODO: I need to try removing that little space
 
 */
-import { CSSProperties, useEffect, useRef } from "react";
-import { ChatWord                         } from "@/api";
-import { severityStyle                    } from "../biomarkers/severity";
+import { CSSProperties, useContext, useEffect, useRef } from "react";
+import { ChatWord                                     } from "@/api";
+import { severityStyle                                } from "../biomarkers/severity";
+import { AutoScrollContext                            } from "../utils/useAutoScroll";
 
 interface Props {
     word          : ChatWord;
@@ -32,16 +33,18 @@ interface Props {
 // Wraps individual words (click to seek to where the word is in the audio file)
 // ================================================================================
 export default function WordSpan({ word, sessionStartMs, currentTime, biomarkerScore, punct, onSeek }: Props) {
-    const ref      = useRef<HTMLSpanElement>(null);
+    const ref           = useRef<HTMLSpanElement>(null);
+    const autoScrollRef = useContext(AutoScrollContext); // shared "auto-scroll allowed" flag (paused while user scrolls)
 
     // Convert the absolute time to relative (seconds since start); check if playback is on this word
     const start    = (new Date(word.start_ts).getTime() - sessionStartMs) / 1_000;
     const end      = (new Date(word.  end_ts).getTime() - sessionStartMs) / 1_000;
     const isActive = currentTime >= start && currentTime < end;
 
-    // Scroll the active word into view whenever it first becomes active
+    // Scroll the active word into view whenever it first becomes active, UNLESS
+    // the user is manually scrolling (autoScrollRef.current === false).
     useEffect(() => {
-        if (isActive && ref.current) {
+        if (isActive && (autoScrollRef?.current ?? true) && ref.current) {
             ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
     }, [isActive]);

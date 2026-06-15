@@ -39,27 +39,25 @@ export default function ScoreRailItem({ stats }: Props) {
 
     // UI Component
     return (
-        <div className="flex items-center gap-2 h-7 w-[210px]">
+        <div className="flex flex-col gap-1 w-[210px]">
 
-            {/* Score Bar (colored by worst severity) */}
-            <div className="relative h-2 flex-1 rounded-full bg-admin-muted border border-admin-border overflow-hidden">
-                <div
-                    className="absolute left-0 top-0 h-full rounded-full transition-all"
-                    style    ={{ width: `${fillPct}%`, backgroundColor: barColor }}
-                />
+            {/* Line 1: severity bar + worst score */}
+            <div className="flex items-center gap-2">
+                <div className="relative h-2 flex-1 rounded-full bg-admin-muted border border-admin-border overflow-hidden">
+                    <div
+                        className="absolute left-0 top-0 h-full rounded-full transition-all"
+                        style    ={{ width: `${fillPct}%`, backgroundColor: barColor }}
+                    />
+                </div>
+                <span className="font-mono text-[13px] tabular-nums text-admin-text w-9 text-right" title="Worst score">
+                    {stats.worst.toFixed(3)}
+                </span>
             </div>
 
-            {/* Worst | Average | Span count */}
-            <div className="flex items-baseline gap-2 font-mono text-[13px] tabular-nums whitespace-nowrap">
-                <span className="text-admin-text w-9 text-right" title="Worst score">
-                    {stats.worst.toFixed(2)}
-                </span>
-                <span className="text-admin-subtext" title="Average score">
-                    avg={stats.avg.toFixed(2)}
-                </span>
-                <span className="text-admin-subtext" title="Flagged spans">
-                    #{stats.spanCount}
-                </span>
+            {/* Line 2: average + flagged-span count */}
+            <div className="flex items-baseline gap-3 font-mono text-[11px] tabular-nums text-admin-subtext whitespace-nowrap">
+                <span title="Utterance average score">avg {stats.avg.toFixed(3)}</span>
+                <span title="Number of flagged biomarker spans">{stats.spanCount} flagged</span>
             </div>
 
         </div>
