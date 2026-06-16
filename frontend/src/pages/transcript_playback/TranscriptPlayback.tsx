@@ -28,7 +28,7 @@ already navigated to the post-chat analysis page).
 */
 import { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate    } from "react-router-dom";
-import { LuArrowLeft, LuColumns2     } from "react-icons/lu";
+import { LuArrowLeft                 } from "react-icons/lu";
 
 // From this project
 import { API_URL        } from "@/utils/constants";
@@ -37,15 +37,12 @@ import { useChatSession } from "@/hooks/queries/useChatSessions";
 import { getAccess      } from "@/context/AuthProvider";
 
 // Components
-import AudioPlayer        from "./components/AudioPlayer";
-import BiomarkerSelector  from "./components/BiomarkerSelector";
-import BiomarkerStatsBar  from "./components/BiomarkerStatsBar";
-import SeverityLegend     from "./components/SeverityLegend";
-import PlaybackTranscript from "./components/PlaybackTranscript";
+import AudioPlayer         from "./components/AudioPlayer";
+import BiomarkerSelector   from "./components/BiomarkerSelector";
+import BiomarkerSidePanel  from "./components/BiomarkerSidePanel";
+import PlaybackTranscript  from "./components/PlaybackTranscript";
 import { AdminPage            } from "@/pages/admin/components/ui/AdminPage";
-import { AdminButton          } from "@/pages/admin/components/ui/AdminButton";
 import { BiomarkerInfoModal   } from "@/pages/admin/components/biomarkers/BiomarkerInfoModal";
-import { getBiomarkerInfo     } from "@/pages/admin/components/biomarkers/biomarkerInfo";
 import { BiomarkerInfoContext } from "./biomarkers/BiomarkerInfoContext";
 
 const SCORE_RAIL_KEY = "admin.playback.scoreRail";
@@ -106,8 +103,7 @@ export function TranscriptPlayback() {
     // received from the user. So word.start_ts - audio_start_ts should give the
     // correct byte offset into the audio file for seeking. For sessions recorded
     // before this field existed, we just use the old 'start_ts' field.
-    const sessionStartMs        = new Date(session.audio_start_ts ?? session.start_ts).getTime();
-    const selectedBiomarkerInfo = selectedBiomarker ? getBiomarkerInfo(selectedBiomarker) : null;
+    const sessionStartMs = new Date(session.audio_start_ts ?? session.start_ts).getTime();
 
     // Utility function that seeks through the audio file to wherever the word we clicked on was
     const onSeek = (sec: number) => {
@@ -140,13 +136,15 @@ export function TranscriptPlayback() {
             <AdminPage contained={false}>
 
                 {/* ================================================================================ */}
-                {/* Header (sticky) */}
+                {/* Header(s) */}
                 {/* ================================================================================ */}
-                <header className="sticky top-0 z-10 bg-admin-panel/95 backdrop-blur border-b border-admin-border">
 
-                    {/* -------------------------------------------------------------------------------- */}
-                    {/* Row 1 => Back Button | Page Title + Date/Speaker | Biomarker Dropdown + Stats */}
-                    {/* -------------------------------------------------------------------------------- */}
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Row 1  => Back | Title + Date/Speaker | Highlight dropdown* */}
+                {/* -------------------------------------------------------------------------------- */}
+                {/* NOT sticky -> scrolls away
+                    dropdown only shows here for the initial pick; once selected it stays in the side panel */}
+                <div className="bg-admin-panel border-b border-admin-border">
                     <div className="flex items-center gap-4 px-4 md:px-6 py-3 flex-wrap">
 
                         {/* Back Button */}
@@ -170,31 +168,31 @@ export function TranscriptPlayback() {
                             </span>
                         </div>
 
-                        {/* Biomarker Selection + Score Stats (right side) */}
-                        <div className="ml-auto flex items-center gap-3 flex-wrap">
-                            <BiomarkerSelector
-                                biomarkers        = {session.biomarkers}
-                                selectedBiomarker = {selectedBiomarker}
-                                onChange          = {setSelectedBiomarker}
-                                onInfoClick       = {openInfo}
-                            />
-                            <BiomarkerStatsBar
-                                biomarkers        = {session.biomarkers}
-                                selectedBiomarker = {selectedBiomarker}
-                            />
-                        </div>
+                        {/* Highlight dropdown -- initial pick only (moves into the side panel once selected) */}
+                        {!selectedBiomarker && (
+                            <div className="ml-auto">
+                                <BiomarkerSelector
+                                    biomarkers        = {session.biomarkers}
+                                    selectedBiomarker = {selectedBiomarker}
+                                    onChange          = {setSelectedBiomarker}
+                                    onInfoClick       = {openInfo}
+                                />
+                            </div>
+                        )}
                     </div>
+                </div>
 
-                    {/* -------------------------------------------------------------------------------- */}
-                    {/* Row 2 => Audio Player | Score Rail Toggle */}
-                    {/* -------------------------------------------------------------------------------- */}
-                    <div className="grid grid-cols-4 items-center gap-4 px-4 md:px-6 py-3 border-t border-admin-border">
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Row 2 (stays pinned) => Audio Player, centered */}
+                {/* -------------------------------------------------------------------------------- */}
+                <header className="sticky top-0 z-10 bg-admin-panel/95 backdrop-blur border-b border-admin-border">
+                    <div className="grid grid-cols-4 items-center gap-4 px-4 md:px-6 py-3">
 
-                        {/* Left spacer to balance the grid and keep the center item perfectly centered */}
+                        {/* Spacers keep the audio control centered (hidden on small screens) */}
                         <div className="hidden sm:block" />
 
                         {/* Audio Player (or a short note when no audio was recorded) */}
-                        <div className="col-span-2 flex-1 min-w-0">
+                        <div className="col-span-4 sm:col-span-2 min-w-0">
                             {audioUrl ? (
                                 <AudioPlayer
                                     audioRef     = {audioRef}
@@ -208,47 +206,76 @@ export function TranscriptPlayback() {
                             )}
                         </div>
 
-                        {/* Score Rail Toggle */}
-                        <div className="justify-self-end shrink-0">
-                            <AdminButton
-                                variant ={showScoreRail ? "primary" : "outline"}
-                                size     = "sm"
-                                iconLeft = {<LuColumns2 size={14} />}
-                                onClick  = {() => setShowScoreRail(v => !v)}
-                            >
-                                Score rail
-                            </AdminButton>
-                        </div>
+                        <div className="hidden sm:block" />
                     </div>
                 </header>
 
                 {/* ================================================================================ */}
-                {/* Body => Active biomarker key (badge + severity legend) | Transcript Display */}
+                {/* Body => Biomarker side panel (left) + Transcript */}
                 {/* ================================================================================ */}
-                {/* Active biomarker badge + severity color key (only while a biomarker is selected) */}
+
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Side Panel */}
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Narrow screens: the panel collapses to an inline bar at the top */}
                 {selectedBiomarker && (
-                    <div className="mx-auto max-w-[900px] px-4 md:px-6 pt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-                        {selectedBiomarkerInfo && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-admin-accentSoft border border-admin-accent/30 px-3 py-1 text-base font-medium text-admin-accent2">
-                                <span className="text-admin-accent">·</span>
-                                {selectedBiomarkerInfo.name}
-                            </span>
-                        )}
-                        <SeverityLegend />
+                    <div className="xl:hidden mx-auto max-w-[900px] px-4 md:px-6 pt-3">
+                        <BiomarkerSidePanel
+                            layout            = "inline"
+                            biomarkers        = {session.biomarkers}
+                            selectedBiomarker = {selectedBiomarker}
+                            onChange          = {setSelectedBiomarker}
+                            onInfoClick       = {openInfo}
+                            showScoreRail     = {showScoreRail}
+                            onToggleScoreRail = {() => setShowScoreRail(v => !v)}
+                        />
                     </div>
                 )}
 
-                {/* Transcript */}
-                <PlaybackTranscript
-                    messages          = {session.messages}
-                    biomarkers        = {session.biomarkers}
-                    sessionStartMs    = {sessionStartMs}
-                    currentTime       = {currentTime}
-                    selectedBiomarker = {selectedBiomarker}
-                    userName          = {patientName}
-                    onSeek            = {onSeek}
-                    showScoreRail     = {showScoreRail && !!selectedBiomarker}
-                />
+                {/* Wide screens (xl+): 
+                    The 3-column grid [1fr | transcript | 1fr] keeps the transcript centered on the 
+                    page (like the audio controls). The side panel goes into the LEFT column, 
+                    right-aligned so it hugs the transcript; the empty right 1fr balances it. Below 
+                    xl size it's normal block flow + the inline bar above.
+                */}
+                <div className="px-4 md:px-6 xl:grid xl:grid-cols-[1fr_auto_1fr] xl:gap-4 xl:px-0">
+
+                    {/* Left gutter: side panel, right-aligned to hug the transcript */}
+                    {selectedBiomarker && (
+                        <aside className="hidden xl:block xl:col-start-1 justify-self-end w-[360px] pt-6">
+                            <div className="sticky top-24">
+                                <BiomarkerSidePanel
+                                    layout            = "side"
+                                    biomarkers        = {session.biomarkers}
+                                    selectedBiomarker = {selectedBiomarker}
+                                    onChange          = {setSelectedBiomarker}
+                                    onInfoClick       = {openInfo}
+                                    showScoreRail     = {showScoreRail}
+                                    onToggleScoreRail = {() => setShowScoreRail(v => !v)}
+                                />
+                            </div>
+                        </aside>
+                    )}
+
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Transcript */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Middle column (col-start-2) -> stays centered whether or not the panel is shown.
+                        Capped to its own width; mx-auto centers it on small screens (no grid). */}
+                    <main className={`xl:col-start-2 w-full min-w-0 mx-auto ${showScoreRail && selectedBiomarker ? "max-w-[1200px]" : "max-w-[900px]"}`}>
+                        <PlaybackTranscript
+                            messages          = {session.messages}
+                            biomarkers        = {session.biomarkers}
+                            sessionStartMs    = {sessionStartMs}
+                            currentTime       = {currentTime}
+                            selectedBiomarker = {selectedBiomarker}
+                            userName          = {patientName}
+                            onSeek            = {onSeek}
+                            showScoreRail     = {showScoreRail && !!selectedBiomarker}
+                        />
+                    </main>
+
+                </div>
 
                 {/* Hidden Modal */}
                 <BiomarkerInfoModal

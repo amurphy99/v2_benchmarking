@@ -11,7 +11,7 @@ import { SEVERITY_HEX } from "../biomarkers/severity";
 // ================================================================================
 // SeverityLegend
 // ================================================================================
-export default function SeverityLegend() {
+export default function SeverityLegend({ vertical = false }: { vertical?: boolean }) {
     // Swatches matching the traffic-light scale (alpha mirrors the highlight fill)
     const swatches = [
         { color: SEVERITY_HEX.severe,   alpha: 0.75, label: "Severe"   },
@@ -20,7 +20,7 @@ export default function SeverityLegend() {
     ];
 
     return (
-        <div className="flex items-center gap-3">
+        <div className={vertical ? "flex flex-col items-start gap-1.5" : "flex items-center gap-3"}>
             <span className="text-xs uppercase tracking-wide text-admin-subtext">Severity</span>
             {swatches.map(({ color, alpha, label }) => (
                 <span key={label} className="flex items-center gap-1.5">

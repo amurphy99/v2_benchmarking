@@ -49,11 +49,11 @@ export default function BiomarkerSelector({ biomarkers, selectedBiomarker, onCha
 
     // Final UI Component
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
             <label className="text-sm font-medium text-admin-subtext whitespace-nowrap">Highlight:</label>
 
             {/* Biomarker Dropdown */}
-            <select value={selectedBiomarker} onChange={(e) => onChange(e.target.value)} className={selectStyle}>
+            <select value={selectedBiomarker} onChange={(e) => onChange(e.target.value)} className={`${selectStyle} min-w-0 flex-1`}>
                 <option value="">None</option>
                 {available.map(type => (
                     <option key={type} value={type}>
@@ -65,11 +65,11 @@ export default function BiomarkerSelector({ biomarkers, selectedBiomarker, onCha
             {/* Biomarker Info */}
             {selectedBiomarker && onInfoClick && (
                 <button
-                    type     ="button"
-                    onClick  ={() => onInfoClick(selectedBiomarker)}
-                    className="p-1 rounded text-admin-subtext hover:text-admin-text hover:bg-admin-muted cursor-pointer"
-                    aria-label="More info on this biomarker"
-                    title    ="Score details"
+                    type       = "button"
+                    onClick    = {() => onInfoClick(selectedBiomarker)}
+                    className  = "p-1 rounded text-admin-subtext hover:text-admin-text hover:bg-admin-muted cursor-pointer shrink-0"
+                    aria-label = "More info on this biomarker"
+                    title      = "Score details"
                 >
                     <LuInfo size={16} />
                 </button>
