@@ -13,33 +13,16 @@ import { Fragment, useDeferredValue, useMemo } from "react";
 import { ChatMessage, ChatBiomarkerScore, ChatWord } from "@/api";
 import { Spinner                                   } from "@/components/Spinner";
 import   UtteranceLine                               from "./UtteranceLine";
-import   ScoreRailItem, { RailStats }                from "./ScoreRailItem";
+import   ScoreRailItem               from "./ScoreRailItem";
 import { useBiomarkerWordScores                    } from "./../utils/useBiomarkerScores";
 import { splitWordsByGap                           } from "./../utils/utteranceFormatting";
 import { AutoScrollContext, useAutoScrollControl   } from "./../utils/useAutoScroll";
+import { RailStats, railStatsForWords } from "../biomarkers/useRailStats";
 
 // One rendered transcript row: a whole message, or one "gap-split" piece of a 
 // turn (where there was a pause longer than 1.5 seconds).
 // `words` is the slice to render (null => render the whole message / no words).
 type DisplayRow = { key: string; msg: ChatMessage; words: ChatWord[] | null };
-
-// Format a row's word-level biomarker scores into worst/avg/span-count for the info rail
-function railStatsForWords(
-    words      : ChatWord[] | null,
-    wordScores : Map<number, ChatBiomarkerScore>,
-): RailStats | null {
-    if (!words || words.length === 0) return null;
-
-    const found: ChatBiomarkerScore[] = [];
-    for (const w of words) { const s = wordScores.get(w.id); if (s) found.push(s); }
-    if (found.length === 0) return null;
-
-    // Statistics
-    const worst     = Math.min(...found.map(s => s.score));
-    const avg       = found.reduce((a, s) => a + s.score, 0) / found.length;
-    const spanCount = new Set(found.map(s => s.id)).size;
-    return { worst, avg, spanCount };
-}
 
 interface Props {
     messages         : ChatMessage[];

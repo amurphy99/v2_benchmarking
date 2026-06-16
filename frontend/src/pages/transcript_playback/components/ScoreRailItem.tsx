@@ -7,17 +7,9 @@ utterance, plus the worst score, the average score, and the count of flagged
 biomarker spans in that utterance.
 */
 import { severityStyle, SEVERITY_HEX } from "../biomarkers/severity";
+import { RailStats                   } from "../biomarkers/useRailStats";
 
-// Per-utterance rollup derived from the word-level biomarker scores
-export interface RailStats {
-    worst     : number;  // Lowest (most severe) score in the utterance
-    avg       : number;  // Mean score across flagged words
-    spanCount : number;  // Number of distinct biomarker windows touching the utterance
-}
-
-interface Props {
-    stats : RailStats | null | undefined;
-}
+interface Props { stats : RailStats | null | undefined; }
 
 // ================================================================================
 // ScoreRailItem
@@ -57,7 +49,7 @@ export default function ScoreRailItem({ stats }: Props) {
             {/* Line 2: average + flagged-span count */}
             <div className="flex items-baseline gap-3 font-mono text-[11px] tabular-nums text-admin-subtext whitespace-nowrap">
                 <span title="Utterance average score">avg {stats.avg.toFixed(3)}</span>
-                <span title="Number of flagged biomarker spans">{stats.spanCount} flagged</span>
+                <span title="Number of flagged biomarker spans">{stats.flaggedCount}/{stats.spanCount} flagged</span>
             </div>
 
         </div>

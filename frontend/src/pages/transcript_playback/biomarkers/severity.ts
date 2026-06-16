@@ -37,7 +37,7 @@ function alphaForScore(score: number, band: Band): number {
     switch (band) {
         case "severe"  : return lerp(score, 0.0,  0.4, 0.85, 0.55);
         case "moderate": return lerp(score, 0.4,  0.7, 0.55, 0.30);
-        case "mild"    : return lerp(score, 0.7,  0.9, 0.30, 0.10);
+        case "mild"    : return lerp(score, 0.7,  0.9, 0.10, 0.05);
         case "none":
         default        : return 0;
     }
