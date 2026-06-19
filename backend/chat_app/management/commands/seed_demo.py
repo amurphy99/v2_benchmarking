@@ -282,6 +282,7 @@ class Command(BaseCommand):
             ChatSession.objects.filter(profile=profile, source="transcript").delete()
             seed_transcript_chat(profile, primary_admin, test_dir = "test_01")
             seed_transcript_chat(profile, primary_admin, test_dir = "test_02")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_03")
 
         # Return both users
         return primary_admin, workshop_user

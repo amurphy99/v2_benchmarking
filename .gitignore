@@ -61,6 +61,10 @@ backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/*
 backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_02/*
 !backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_02/transcript_config.json
 
+# Sample chat #3 -- real data
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/transcript_config.json
+
 # --------------------------------------------------------------------------------
 # Machine learning models
 # --------------------------------------------------------------------------------
