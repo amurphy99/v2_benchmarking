@@ -174,16 +174,19 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
-        profile = self.get_profile()
-        
         # Filtering objects  
         active  = self.kwargs["active"]
         demo    = self.kwargs["demo"  ]
         
+        # Start with the base query (unfiltered by profile)
         objs = (ChatSession.objects
-                .filter(profile=profile)
-                .select_related  ("profile",  "image")
+                .select_related("profile", "image")
                 .prefetch_related("messages__words", "biomarker_scores"))
+
+        # Restrict to the user's own profile ONLY if they are not staff
+        if not self.request.user.is_staff:
+            profile = self.get_profile()
+            objs = objs.filter(profile=profile)
 
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)
