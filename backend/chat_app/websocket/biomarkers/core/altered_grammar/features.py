@@ -190,7 +190,7 @@ def extract_altered_grammar_features(cleaned, tokens, pos_tags, words) -> tuple[
     feature_array = [float(gram_feats[feature_name]) for feature_name in GRAMMAR_FEATURES]
 
     # Remove certain keys from the data
-    del gram_feats["avg_sentence_length"]
+    #del gram_feats["avg_sentence_length"]
 
     # Final feature dictionary
     return gram_feats, feature_array

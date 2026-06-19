@@ -32,3 +32,9 @@ BUFFER_SECONDS =  0.5  # Capture some time before and after the utterance
 FRAMES_WINDOW = int((WINDOW_SECONDS * FRAMES_PER_SECOND) - FRAMES_OFFSET)
 FRAMES_STEP   = int((  STEP_SECONDS * FRAMES_PER_SECOND))
 
+
+# --------------------------------------------------------------------------------
+# Misc. text-based biomarker configuration
+# --------------------------------------------------------------------------------
+AG_MIN_UTT_WORDS = 6
+

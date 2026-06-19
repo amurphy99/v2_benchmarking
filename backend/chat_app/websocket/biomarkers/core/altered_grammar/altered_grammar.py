@@ -21,10 +21,12 @@ from pathlib import Path
 # From this project
 from .features              import extract_altered_grammar_features
 from ...utils.model_loading import LGBMEnsemble
+from ...utils.load_features import load_best_features
 
 # Module-level cache: loaded lazily on the first predict() call, then reused.
-_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "altered_grammar"
-_ENSEMBLE   = LGBMEnsemble(_MODELS_DIR)
+ALTERED_GRAMMAR_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "altered_grammar"
+ALTERED_GRAMMAR_ENSEMBLE   = LGBMEnsemble      (ALTERED_GRAMMAR_MODELS_DIR)
+ALTERED_GRAMMAR_FEATURES   = load_best_features(ALTERED_GRAMMAR_MODELS_DIR)
 
 
 # --------------------------------------------------------------------------------
@@ -38,11 +40,14 @@ def generate_altered_grammar(cleaned, tokens, pos_tags, words) -> list[dict]:
     if (not tokens) or (not words): return []
 
     # Finish feature preparation
-    _, features_array = extract_altered_grammar_features(cleaned, tokens, pos_tags, words)
-    if not features_array: return []
+    gram_feats, _ = extract_altered_grammar_features(cleaned, tokens, pos_tags, words)
+    if not gram_feats: return []
+
+    # Use the list of best features from training to trim the features down
+    X_features = [float(gram_feats[feature_name]) for feature_name in ALTERED_GRAMMAR_FEATURES]
 
     # Generate the biomarker score
-    score = _ENSEMBLE.predict(features_array)
+    score = ALTERED_GRAMMAR_ENSEMBLE.predict(X_features)
 
     return [{
         "score_type" : "alteredgrammar",

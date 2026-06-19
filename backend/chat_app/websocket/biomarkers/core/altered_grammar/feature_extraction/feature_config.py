@@ -3,6 +3,18 @@ Hardcoded configuration for Altered Grammar feature names & ordering.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.core.altered_grammar.feature_extraction.feature_config`
 
+NOTE: To clear things up, the current setup for this is that "GRAMMAR_FEATURES"
+      is NOT actually used in the offline/training version of this code. That
+      code takes the dictionary output of `extract_altered_grammar_features`
+      and uses it to create DataFrames for training/testing. I am changing how
+      the code works in this version to match that and to make it easier to 
+      use a given list of "best features". This is directly related to the 
+      "to do" I have written below.
+      
+TODO: It isn't efficient to generate a bunch of features that we don't actually
+      use. However, I can't really think of a nicer way to do this at the
+      moment and I don't really have the time to do it so whatever...
+
 """
 
 # --------------------------------------------------------------------------------
@@ -90,14 +102,14 @@ GRAMMAR_FEATURES = [
     "nearby_reps_k5",
 
     # (2) POS pattern variety + density
-    #"pos_pattern_variety",
+    "pos_pattern_variety",
     "pos_pattern_density",
 
     # (4) Specific ratio features
     "propositional_density",
     "content_density",
     "noun_verb_ratio",
-    #"adj_noun_ratio",
+    "adj_noun_ratio",
 ]
 
 

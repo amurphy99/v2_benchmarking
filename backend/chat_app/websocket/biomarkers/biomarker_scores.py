@@ -24,11 +24,15 @@ TODO: Not 100% sure how to handle anomia. At this point, with Google's STT, we
       "umm", but I don't know if I like/fully trust that biomarker personally...
 
 """
+# From this project
 from .preprocessing.text_preprocessing     import preprocess
 from .core.altered_grammar.altered_grammar import generate_altered_grammar
 from .core.prosody        .prosody         import generate_prosody
 from .core.pronunciation  .pronunciation   import generate_pronunciation
 from .core.turntaking     .turntaking      import generate_turntaking
+
+# Config for IF scores should be generated
+from .biomarker_config import AG_MIN_UTT_WORDS
 
 
 # ================================================================================
@@ -46,9 +50,11 @@ def generate_utterance_biomarkers(recent_text, words, context_buffer):
     # Shared preprocessing step (e.g., only get POS tags once)
     cleaned, tokens, pos_tags = preprocess(recent_text)
 
-    # Generate text biomarker scores
+    # Generate text biomarker scores (Altered Grammar needs a minumum number of words)
     spans = []
-    spans.extend(generate_altered_grammar(cleaned, tokens, pos_tags, words))
+    if len(cleaned) >= AG_MIN_UTT_WORDS: spans.extend(generate_altered_grammar(cleaned, tokens, pos_tags, words))
+
+    
     # TODO: spans.extend(generate_perplexity(cleaned, tokens, pos_tags, words))
     # TODO: spans.extend(generate_pragmatic_impairment(cleaned, tokens, pos_tags, words))
 
