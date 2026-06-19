@@ -84,7 +84,7 @@ class LGBMEnsemble:
         # Otherwise we will just use the full set of given features
         else:
             self._feature_set = None
-            logger.info(f"{TAG} No features saved for {BOLD}{self._folder.name}{UNBOLD}; will use all given data to make inferences. .{RESET}")
+            logger.info(f"{TAG} No features saved for {BOLD}{self._folder.name}{UNBOLD}; will use all given data to make inferences.{RESET}")
 
         # --------------------------------------------------------------------------------
         # 2) Load in the pre-trained model and its training predictions for each fold
@@ -135,8 +135,6 @@ class LGBMEnsemble:
     # ================================================================================
     # TODO: This might not be a Pandas Series for Altered Grammar
     def predict_batch(self, feature_rows: list[pd.Series]) -> list[float]:
-        # Make sure we actually have input data
-        if not feature_rows: return []
 
         # If we loaded in a feature set, slice inputs to only that set of features
         if self._feature_set is not None:

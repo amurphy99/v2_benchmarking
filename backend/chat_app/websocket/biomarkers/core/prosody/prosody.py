@@ -18,10 +18,12 @@ from datetime import datetime
 # From this project
 from .features              import extract_prosody_features
 from ...utils.model_loading import LGBMEnsemble
+from ...utils.load_features import load_best_features
 
 # Module-level cache: loaded lazily on the first predict() call, then reused.
-_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "prosody"
-_ENSEMBLE   = LGBMEnsemble(_MODELS_DIR)
+PROSODY_MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "prosody"
+PROSODY_ENSEMBLE   = LGBMEnsemble(PROSODY_MODELS_DIR)
+PROSODY_FEATURES   = load_best_features(PROSODY_MODELS_DIR)
 
 
 # --------------------------------------------------------------------------------
@@ -33,8 +35,13 @@ def generate_prosody(windows: list[dict[pd.DataFrame, datetime, datetime]]) -> l
     # Finish feature preparation
     feature_rows: list[pd.Series] = [extract_prosody_features(window) for window in windows]
 
+    # Use the list of best features from training to trim the features down
+    batch_df   = pd.DataFrame(feature_rows)  # Convert to a DataFrame (N, F) 
+    batch_df   = batch_df[PROSODY_FEATURES]  # Slice to get only the needed features
+    X_features = batch_df.to_numpy()
+
     # Generate the biomarker scores
-    scores = _ENSEMBLE.predict_batch(feature_rows)
+    scores = PROSODY_ENSEMBLE.predict_batch(X_features)
 
     return [{
         "score_type" : "prosody",

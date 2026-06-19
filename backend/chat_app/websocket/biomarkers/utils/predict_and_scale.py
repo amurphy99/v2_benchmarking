@@ -113,7 +113,7 @@ def _percentile_of(raw_values, reference, assume_sorted: bool = True) -> np.ndar
     indices = np.searchsorted(sorted_ref, np.asarray(raw_values, dtype=float), side="right")
 
     # Dividing by the total number of training predictions converts that index to a percentile rank
-    percentiles = indices / len(len(sorted_ref))
+    percentiles = indices / len(sorted_ref)
     return percentiles
 
 # For "percentile_smooth": Continuous version of `np.quantile(y_ref, percentiles)`.
