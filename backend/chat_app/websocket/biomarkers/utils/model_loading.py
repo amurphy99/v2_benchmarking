@@ -37,6 +37,7 @@ from typing  import Iterable, Optional
 
 # From this project
 from ....services.logging_utils import RESET, BOLD, UNBOLD, BRIGHT_YELLOW
+from .predict_and_scale         import predict_and_scale
 
 TAG = f"{BRIGHT_YELLOW}[{BOLD}LightGBM{UNBOLD}]"  # Tag for this file to show in the logs
 
@@ -150,41 +151,36 @@ class LGBMEnsemble:
         if not models: return [random.random() for _ in feature_rows]
 
         # --------------------------------------------------------------------------------
-        # Ranker Models
+        # Ranking Models
         # --------------------------------------------------------------------------------
         # Percentile-rank each model's predictions against its training distribution
+        # Get a list of scores of shape (1, n_samples)
         if self._train_preds:
-            ensemble_preds = []
 
-            # Make a prediction with each fold model & **percentile** scale it according to that same models predictions on the training set
-            for model, sorted_train in zip(models, self._train_preds):
-                raw = model.predict(arr)
+            # Make a prediction with each fold model & scale it according to that same models predictions on the training set
+            batch_scores = predict_and_scale(
+                models = models,  # List of fold models, each exposing .predict(X) -> 1-D raw scores
+                X      = arr,     # Input inference data -- can be a single row (1-D array / Series) or many rows (2-D array / DataFrame)
 
-                # Search sorted finds the first index a value could be inserted at 
-                # ("right" means it goes to the right of any ties; though these should be rare with float predictions)
-                indices = np.searchsorted(sorted_train, raw, side="right") 
-
-                # Dividing by the total number of training predictions converts that index to a percentile rank
-                percentiles = indices / len(sorted_train)
-                ensemble_preds.append(percentiles)
-
-            # Take the average once the predictions are in percentile form
-            ensemble_average = np.stack(ensemble_preds, axis=0).mean(axis=0)  # (average of percentile-scaled ensemble predictions)
-
-            # Map to MoCA scale through training target quantiles & divide by the maximum score
-            if (self._y_ref is not None): 
-                ensemble_average = np.quantile(self._y_ref, ensemble_average)  # Mapped to MoCA scale through training target quantiles
-                ensemble_average = np.clip(ensemble_average / 30.0, 0.0, 1.0)  # Divide by 30 and clip between 0 and 1
+                # Reference data for scaling
+                ref_preds = self._train_preds,  # List (one per model) of ASCENDING-SORTED reference predictions
+                y_ref     = self._y_ref,        # 1-D array of reference target values (e.g. training MMSE/MoCA)
+                
+                # Prediction scaling configuration
+                mode = "percentile_smooth",  # Scaling mode: "percentile" (hard np.quantile) | "percentile_smooth" (continuous)
+                lo   =  0.0,                 # Lower target bound (used by "percentile_smooth" tails)
+                hi   = 30.0,                 # Upper target bound (used by "percentile_smooth" tails)
+            )
         
         # --------------------------------------------------------------------------------
         # Regression Models (or no reference data saved)
         # --------------------------------------------------------------------------------
         else:
             # Make predictions with each model & aggregate via taking the mean
-            ensemble_preds   = np.stack([m.predict(arr) for m in models], axis=0) # (N, F) -> (M, N)
-            ensemble_average = ensemble_preds.mean(axis=0)
+            ensemble_preds = np.stack([m.predict(arr) for m in models], axis=0) # (N, F) -> (M, N)
+            batch_scores   = ensemble_preds.mean(axis=0)
 
-        return ensemble_average.tolist()
+        return batch_scores.tolist()
 
 
     # Singular prediction (forward it as a batch of 1)
