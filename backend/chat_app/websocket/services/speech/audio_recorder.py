@@ -101,7 +101,7 @@ def accumulate_tts(
     consumer._rec_tts.extend(resampled)
 
     # Logging
-    logger.log(f"{AUDIO_REC} TTS accumulated: {AR_H}{len(resampled):,} bytes at offset {target_bytes:,} (pad={pad_needed:,}){RESET}")
+    logger.info(f"{AUDIO_REC} TTS accumulated: {AR_H}{len(resampled):,} bytes at offset {target_bytes:,} (pad={pad_needed:,}){RESET}")
 
 
 # --------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ def save_stereo_wav(
     #       bytes (e.g., the chat was with one of the robots that still does TTS
     #       locally)...
     if (not left_bytes) and (not right_bytes):
-        logger.warning(f"{AUDIO_REC} {RED}Both audio channels empty{BLUE} -- skipping WAV save.{RESET}")
+        logger.info(f"{AUDIO_REC} {RED}Both audio channels empty{BLUE} -- skipping WAV save.{RESET}")
         return ""
 
     # --------------------------------------------------------------------------------
