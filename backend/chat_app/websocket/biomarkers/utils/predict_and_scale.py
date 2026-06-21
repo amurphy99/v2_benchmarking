@@ -1,17 +1,19 @@
 """
-Ensemble prediction + scaling for OFFLINE / DEPLOYED inference.
+Ensemble prediction + scaling for OFFLINE/DEPLOYED inference.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.utils.predict_and_scale`
 
-This module is meant to be COPY-PASTED into the deployed project. Includes
-copies of the scaling math in `utils/ensemble_predict.py` (`percentile_of`,
-`scale_to_target`, `smooth_quantile_map`) so that the deployed scores cannot 
-drift from what was tuned and validated here. 
+This module is meant to be copied and pasted from my development repository, 
+`speech_biomarkers`, into the deployed project. It includes direct copies of the 
+scaling math in `utils/ensemble_predict.py` (`percentile_of`, `scale_to_target`, 
+`smooth_quantile_map`) so that the deployed scores are treated exactly the same
+as they were during training and validation.
 
-NOTE: If we ever change the scaling logic, it MUST also be changed here.
+NOTE: If the scaling logic is ever changed, it MUST also be changed here.
 
-What it does (per input row), for ranking ensembles whose raw outputs have
-arbitrary per-model scales:
+This is used for scaling the outputs of ranking models so that they can be
+ensembled. Each ranking model generates predictions of arbitrary magnitude, so
+they can't be used in their raw form. To handle this, for each input row, we:
     1. Each fold model predicts the row(s)              -> raw score per model
     2. Convert each raw score to its PERCENTILE within
        that model's reference (training) predictions    -> percentile per model
@@ -22,15 +24,6 @@ arbitrary per-model scales:
 Steps 1-3 happen in "percentile space" (rank-averaging across the ensemble); the
 non-linear target mapping (step 4) is applied once, at the end. The function
 returns one scaled score per input row.
-
-Inputs you need to persist at training time (see `save_models.save_ensemble`):
-  * models             : the fold models (anything with a `.predict(X)` method).
-  * sorted_train_preds : list (one per model) of each model's predictions on the
-                         reference data, ASCENDING-SORTED. This is the percentile
-                         reference for step 2.
-  * y_ref              : 1-D array of the reference TARGET VALUES (e.g. training
-                         MMSE/MoCA scores). This is the target distribution that 
-                         the percentiles are mapped onto in step 4.
 
 """
 import numpy  as np
@@ -46,8 +39,8 @@ def predict_and_scale(
     *,
 
     # Reference data for scaling
-    ref_preds : list[np.ndarray], # List (one per model) of ASCENDING-SORTED reference predictions
-    y_ref     : np.ndarray,       # 1-D array of reference target values (e.g. training MMSE/MoCA)
+    ref_preds : list[np.ndarray], # Lists of ASCENDING-SORTED reference predictions -- one per fold/model: (n_ref_samples, n_folds)
+    ref_true  :      np.ndarray,  # Reference target values (e.g. training MMSE/MoCA) -- reused for each fold: (n_ref_samples)
     
     # Prediction scaling configuration
     mode : str   = "percentile_smooth",  # Scaling mode: "percentile" (hard np.quantile) | "percentile_smooth" (continuous)
@@ -72,8 +65,8 @@ def predict_and_scale(
     # --------------------------------------------------------------------------------
     percentiles = np.empty((len(models), n_rows), dtype=float)
     for i, (model, ref) in enumerate(zip(models, ref_preds)):
-        raw_preds      = np.asarray(model.predict(X2d), dtype=float).ravel()      # Flattens to 1D
-        percentiles[i] = _percentile_of(raw_preds, ref, assume_sorted=ref_preds)  # Convert to percentiles 
+        raw_preds      = np.asarray(model.predict(X2d), dtype=float).ravel()  # Flattens to 1D
+        percentiles[i] = _percentile_of(raw_preds, ref, assume_sorted=True)   # Convert to percentiles 
 
     # --------------------------------------------------------------------------------
     # 3) Average the percentiles across models (rank-averaging), per row
@@ -84,11 +77,11 @@ def predict_and_scale(
     # --------------------------------------------------------------------------------
     # 4) Map to MoCA scale through training target quantiles & divide by the maximum score
     # --------------------------------------------------------------------------------
-    y_ref = np.asarray(y_ref, dtype=float)
+    ref_true = np.asarray(ref_true, dtype=float)
 
     # Here we differentiate between the "percentile" & "percentile_smooth" scaling modes
-    if mode == "percentile": scores = np.quantile         (y_ref, avg_percentile)
-    else:                    scores = _smooth_quantile_map(y_ref, avg_percentile, lo=lo, hi=hi)
+    if mode == "percentile": scores = np.quantile         (ref_true, avg_percentile)
+    else:                    scores = _smooth_quantile_map(ref_true, avg_percentile, lo=lo, hi=hi)
 
     # Finally, convert from 0-30 (MMSE/MoCA scale) to 0.0-1.0 scale before returning
     return np.clip(scores / hi, 0.0, 1.0)  # Divide by 30 and clip between 0 and 1

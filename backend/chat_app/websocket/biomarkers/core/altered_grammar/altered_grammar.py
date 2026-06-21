@@ -32,7 +32,7 @@ ALTERED_GRAMMAR_FEATURES   = load_best_features(ALTERED_GRAMMAR_MODELS_DIR)
 # --------------------------------------------------------------------------------
 # Wrapper function around final feature pre-processing & model inference
 # --------------------------------------------------------------------------------
-def generate_altered_grammar(cleaned, tokens, pos_tags, words) -> list[dict]:
+def generate_altered_grammar(cleaned: str, tokens: list[str], pos_tags, words: list[dict]) -> list[dict]:
     """
     Skips generating a score for this utterance if no sentence passes the guard
     for having >= 2 tokens (e.g. one-word "Yeah." responses).

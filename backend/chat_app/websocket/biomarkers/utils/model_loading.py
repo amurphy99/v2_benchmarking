@@ -162,7 +162,7 @@ class LGBMEnsemble:
 
                 # Reference data for scaling
                 ref_preds = self._train_preds,  # List (one per model) of ASCENDING-SORTED reference predictions
-                y_ref     = self._y_ref,        # 1-D array of reference target values (e.g. training MMSE/MoCA)
+                ref_true  = self._y_ref,        # 1-D array of reference target values (e.g. training MMSE/MoCA)
                 
                 # Prediction scaling configuration
                 mode = "percentile_smooth",  # Scaling mode: "percentile" (hard np.quantile) | "percentile_smooth" (continuous)
