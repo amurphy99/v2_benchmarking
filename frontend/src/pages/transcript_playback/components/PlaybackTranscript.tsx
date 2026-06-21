@@ -126,7 +126,7 @@ export default function PlaybackTranscript({
                                     Transcript
                                 </div>
                                 <div className="px-4 py-2 text-[11px] uppercase font-semibold text-admin-subtext border-b border-l border-admin-border">
-                                    Score
+                                    Average Score
                                 </div>
                             </>
                         )}

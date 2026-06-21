@@ -40,10 +40,12 @@ const SCI      = 0.3333;
 export type Band = "severe" | "moderate" | "mild" | "none";
 type RGB = [number, number, number];
 
-export const SEVERITY_HEX: Record<Exclude<Band, "none">, string> = {
+// export const SEVERITY_HEX: Record<Exclude<Band, "none">, string> = {
+export const SEVERITY_HEX: Record<Band, string> = {
     severe   : "#dc2626",  // red-600
     moderate : "#d97706",  // amber-600
     mild     : "#65a30d",  // lime-600
+    none     : "#0284c7",  // blue-600
 };
 
 export function bandForScore(score: number): Band {

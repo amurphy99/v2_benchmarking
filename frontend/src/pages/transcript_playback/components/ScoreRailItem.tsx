@@ -24,14 +24,24 @@ export default function ScoreRailItem({ stats }: Props) {
         );
     }
 
-    // Bar reflects the WORST score (0 = bad => empty bar; 1 = good => full bar)
-    const sev      = severityStyle(stats.worst);
-    const fillPct  = Math.round(stats.worst * 100);
-    const barColor = sev.band === "none" ? "transparent" : SEVERITY_HEX[sev.band];
+    // Bar reflects the average score (0 = bad => empty bar; 1 = good => full bar)
+    const sev      = severityStyle(stats.avg);
+    const fillPct  = Math.round(stats.avg * 100);
+    const barColor = sev.band === "none" ? SEVERITY_HEX["none"] : SEVERITY_HEX[sev.band];
+    //const barColor = sev.band === "none" ? "transparent" : SEVERITY_HEX[sev.band];
+
+    // Window(s)
+    const winStr = stats.spanCount > 1 ? "windows" : "window"
 
     // UI Component
     return (
         <div className="flex flex-col gap-1 w-[210px]">
+
+            {/*
+            <div className="flex items-baseline gap-3 font-mono text-[12px] tabular-nums text-admin-subtext whitespace-nowrap">
+                Average:
+            </div>
+            */}
 
             {/* Line 1: severity bar + worst score */}
             <div className="flex items-center gap-2">
@@ -41,15 +51,15 @@ export default function ScoreRailItem({ stats }: Props) {
                         style    ={{ width: `${fillPct}%`, backgroundColor: barColor }}
                     />
                 </div>
-                <span className="font-mono text-[13px] tabular-nums text-admin-text w-9 text-right" title="Worst score">
-                    {stats.worst.toFixed(3)}
+                <span className="font-mono text-[13px] tabular-nums text-admin-text w-9 text-right" title="Average score">
+                    {stats.avg.toFixed(3)}
                 </span>
             </div>
 
             {/* Line 2: average + flagged-span count */}
             <div className="flex items-baseline gap-3 font-mono text-[11px] tabular-nums text-admin-subtext whitespace-nowrap">
-                <span title="Utterance average score">avg {stats.avg.toFixed(3)}</span>
-                <span title="Number of flagged biomarker spans">{stats.flaggedCount}/{stats.spanCount} flagged</span>
+                <span title="Worst utterance score">worst {stats.worst.toFixed(3)}</span>
+                <span title="Number of biomarker spans">{stats.spanCount} {winStr} scored</span>
             </div>
 
         </div>
