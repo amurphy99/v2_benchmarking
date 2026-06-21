@@ -65,6 +65,13 @@ backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_02/*
 backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/*
 !backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/transcript_config.json
 
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_04/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_04/transcript_config.json
+
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_05/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_05/transcript_config.json
+
+
 # --------------------------------------------------------------------------------
 # Machine learning models
 # --------------------------------------------------------------------------------

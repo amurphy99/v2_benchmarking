@@ -1,0 +1,7 @@
+{
+  "speaker_map"      : {"PAR": "user", "INV": "assistant"},
+  "trans_filename"   : "me_test_05.csv",
+  "audio_filename"   : "me_test_05.wav",
+  "chat_datetime"    : "February 04, 2026 2:56 PM",
+  "date_offset_days" : 1
+}
