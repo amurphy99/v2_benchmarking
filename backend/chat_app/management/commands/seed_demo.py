@@ -280,9 +280,11 @@ class Command(BaseCommand):
         # --------------------------------------------------------------------------------
         if REMAKE_TRANSCRIPT_DATA:
             ChatSession.objects.filter(profile=profile, source="transcript").delete()
-            seed_transcript_chat(profile, primary_admin, test_dir = "test_01")
+            #seed_transcript_chat(profile, primary_admin, test_dir = "test_01")
             seed_transcript_chat(profile, primary_admin, test_dir = "test_02")
             seed_transcript_chat(profile, primary_admin, test_dir = "test_03")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_04")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_05")
 
         # Return both users
         return primary_admin, workshop_user
