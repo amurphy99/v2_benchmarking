@@ -198,6 +198,8 @@ async def invoke_agent1_chat(
             messages=openai_messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            #  disable thinking to avoid exhausting max_tokens in the reasoning phase (content=None) and long response times.
+            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         try:
@@ -261,6 +263,8 @@ async def _predict_and_update_next_scenario(
                 response_model=Agent2Output,
                 temperature=0.2,
                 max_tokens=1024,
+                #  disable thinking to avoid exhausting max_tokens in the reasoning phase (content=None) and long response times.
+                extra_body={"chat_template_kwargs": {"thinking": False}},
             )
 
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 instructions for Assistant: {resp.assistant_instructions}{lu.RESET}")
