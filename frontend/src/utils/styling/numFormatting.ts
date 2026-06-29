@@ -141,7 +141,7 @@ export function parseTs(ts: string): number {
 
 // Display elapsed time since chat start in M:SS.xx (xx = centiseconds)
 export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: string): string {
-  if (!chatStartMs) return "—";
+  if (!chatStartMs) return "?";
 
   const msgMs  = parseTs(msgTsIso);
   const diffMs = Math.max(0, msgMs - chatStartMs);
@@ -151,5 +151,18 @@ export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: strin
   const centis  = Math.floor((diffMs %  1_000) /    10); // 2 decimals of milliseconds
 
   return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
+
+// "M:SS.xx - M:SS.xx (D.DDs)" -- falls back to "?" if any input is missing
+export function formatElapsedMessageRange(
+    chatStartMs: number | null,
+    startTsIso : string | null | undefined,
+    endTsIso   : string | null | undefined,
+): string {
+  if (!chatStartMs || !startTsIso || !endTsIso) return "?";
+  const startStr = formatElapsedMessage(chatStartMs, startTsIso);
+  const endStr   = formatElapsedMessage(chatStartMs, endTsIso  );
+  const durSec   = Math.max(0, (parseTs(endTsIso) - parseTs(startTsIso)) / 1_000);
+  return `${startStr} - ${endStr} (${durSec.toFixed(2)}s)`;
 }
 

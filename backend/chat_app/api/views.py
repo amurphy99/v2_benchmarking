@@ -78,10 +78,10 @@ class ChatSessionView(generics.RetrieveAPIView):
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
         try:
-            session = ChatSession.objects.get(
-                id=sessionid, 
-            )
-            return session
+            return (ChatSession.objects
+                    .select_related("profile", "image")
+                    .prefetch_related("messages__words", "biomarker_scores")
+                    .get(id=sessionid))
         except:
             raise (f"ChatSession with id {sessionid} does not exist.")
 
@@ -174,17 +174,20 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
-        profile = self.get_profile()
-        
         # Filtering objects  
         active  = self.kwargs["active"]
         demo    = self.kwargs["demo"  ]
         
+        # Start with the base query (unfiltered by profile)
         objs = (ChatSession.objects
-                .filter(profile=profile)
-                .select_related  ("profile",  "image")
-                .prefetch_related("messages", "biomarker_scores"))
-        
+                .select_related("profile", "image")
+                .prefetch_related("messages__words", "biomarker_scores"))
+
+        # Restrict to the user's own profile ONLY if they are not staff
+        if not self.request.user.is_staff:
+            profile = self.get_profile()
+            objs = objs.filter(profile=profile)
+
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)
         elif int(active) == 1: objs = objs.filter(is_active=True )
@@ -208,7 +211,7 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
         return (ChatSession.objects
                 .filter(profile=profile)
                 .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores")
+                .prefetch_related("messages__words", "biomarker_scores")
                 .order_by("-end_ts")
                 .first())
 

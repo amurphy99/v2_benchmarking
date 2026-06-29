@@ -83,7 +83,8 @@ class ChatSession(models.Model):
     SOURCE_CHOICES = [
         ("webapp",  "WebApp" ), ("mobile",     "Mobile"    ),  # Web app frontend UI
         ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"),  # Access via physical robots
-        ("demo", "Demo"),                                      # Demo/preset data
+        ("demo",       "Demo"),                                # Random demo data (hidden from admin views)
+        ("transcript", "Transcript"),                          # Real CSV/imported transcript with word-level timestamps
     ]
 
     # Levels of risk evaluated in the post-chat analysis
@@ -108,8 +109,9 @@ class ChatSession(models.Model):
     # TODO: `start_ts`, `end_ts`, and `duration` should all be defined once upon chat 
     #       end, or as properties...
     is_active  = models.BooleanField (default=True)
-    end_ts     = models.DateTimeField(**init_args) # `start_ts` is a property defined elsewhere
-    audio_file = models.CharField    (**init_args, max_length=255)
+    end_ts          = models.DateTimeField(**init_args)                  # `start_ts` is a property defined elsewhere
+    audio_file      = models.CharField    (**init_args, max_length=255)  # Relative path to the saved WAV (e.g. "recordings/session_1.wav")
+    audio_start_ts  = models.DateTimeField(**init_args)                  # Wall-clock time when audio recording started (first "Start Chat" click) 
 
     # These are filled out based on the user's current settings at the time the chat ends
     taskType    = models.CharField(**init_args, max_length=255, default="chat")
@@ -189,7 +191,7 @@ class ChatMessage(models.Model):
     # TODO: We don't realy have anything implemented yet that could get these here. 
     # TODO: Temporarily adding the auto thing for end_ts, but should be set with the actual timestamp
     start_ts  = models.DateTimeField(**init_args)
-    end_ts    = models.DateTimeField(auto_now_add=True) 
+    end_ts    = models.DateTimeField(**init_args) 
 
     class Meta:
         ordering = ["ts", "id"]
@@ -201,11 +203,15 @@ class ChatMessage(models.Model):
 # ChatWord -- word-level STT timestamps associated with a ChatMessage
 # ================================================================================
 class ChatWord(models.Model):
+    """
+    TODO: Should the timestamps be float durations from start instead? That would probably help a lot with storage...
+    """
     message  = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name="words")
-    word     = models.CharField(max_length=64)
-    start_ts = models.DateTimeField()
-    end_ts   = models.DateTimeField()
-    index    = models.PositiveSmallIntegerField()  # 0-based position within the utterance
+    word       = models.CharField(max_length=64)          # Spoken word
+    start_ts   = models.DateTimeField()                   # Start timestamp of the word
+    end_ts     = models.DateTimeField()                   # End timestamp of the word
+    index      = models.PositiveSmallIntegerField()       # 0-based position within the utterance
+    confidence = models.FloatField(null=True, blank=True) # ASR confidence in the word (optional)
 
     class Meta:
         ordering = ["message", "index"]
@@ -218,13 +224,13 @@ class ChatWord(models.Model):
 # ================================================================================
 class ChatBiomarkerScore(models.Model):
     """
-    TODO: Some biomarkers may be linked to messages/utterances directly while others are
-    linked to timestamps (e.g., 5 seconds of audio)
+    Some biomarkers may be linked to messages/utterances directly while others are
+    linked to timestamps (e.g., 5 seconds of audio).
     """
     BIOMARKER_CHOICES = [
-        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "Pragmatic"),
+        ("alteredgrammar", "AlteredGrammar"), ("anomia", "Anomia"), ("pragmatic", "PragmaticImpairment"),
         ("pronunciation", "Pronunciation"), ("prosody", "Prosody"), ("turntaking", "Turntaking"),
-        ("perplexity", "Perplexity")
+        ("perplexity", "PerplexityDifference")
     ]
 
     session    = models.ForeignKey(ChatSession,  on_delete=models.CASCADE,  related_name="biomarker_scores")
@@ -245,6 +251,19 @@ class ChatBiomarkerScore(models.Model):
         ordering = ["ts", "score_type", "id"]
 
     def __str__(self): return f"{self.score_type:16}: {self.score:.4f}"
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ================================================================================
 # One-to-one Models

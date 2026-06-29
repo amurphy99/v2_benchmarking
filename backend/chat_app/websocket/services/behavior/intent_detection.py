@@ -41,8 +41,9 @@ MSG_PAUSE       = "Sure! Press the play button whenever you're ready to resume!"
 # End-chat Triggers
 _END_PATTERNS = [
     r"\bend\s+(the\s+|our\s+|this\s+)?chat\b",
+    r"\band\s+(the\s+|our\s+|this\s+)?chat\b",  # Adding "and" because it mis-hears that so often
     r"\bstop\s+(the\s+|our\s+|this\s+)?chat\b",
-    r"\b(i'?d?\s+like\s+to|i\s+want\s+to|let'?s|can\s+we)\s+(end|stop|finish|wrap\s+up)(\s+the\s+chat)?\b",
+    r"\b(i'?d?\s+like\s+to|i\s+want\s+to|let'?s|can\s+we)\s+(end|and|stop|finish|wrap\s+up)(\s+the\s+chat)?\b",
     r"\b(that'?s|i'?m|we'?re)\s+(all\s+)?(done|finished)(\s+now)?\b",
     r"\b(goodbye|bye(-?bye)?|farewell)\b",
     r"\bwrap\s+up\b",

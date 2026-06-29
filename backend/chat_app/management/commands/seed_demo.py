@@ -3,41 +3,47 @@ Seed demo data into the database.
 --------------------------------------------------------------------------------
 `backend.chat_app.management.commands.seed_demo`
 
-Two seeding modes are controlled by the constants below:
-  - REMAKE_SAMPLE_DATA   : wipe and recreate the random demo chats (source="demo", hidden from admin views)
-  - REMAKE_ANALYZED_DATA : wipe and recreate the fixed-transcript chats (source="webapp", visible to admins)
+Three seeding modes are controlled by the constants below:
+  - REMAKE_SAMPLE_DATA     : wipe and recreate the random demo chats (source="demo", hidden from admin views)
+  - REMAKE_ANALYZED_DATA   : wipe and recreate the fixed-transcript chats (source="webapp", visible to admins)
+  - REMAKE_TRANSCRIPT_DATA : wipe and recreate the CSV-imported transcript chat with word-level timestamps (source="transcript")
+
+TODO: Should also make it just check to see if the demo data types exist and add them if not
 
 """
-import asyncio, json as json_lib
-from datetime  import timedelta, time
-from pathlib   import Path
-from random    import random
+import os
+from datetime import timedelta
 
+# Django imports
 from django.core.management.base import BaseCommand
+from django.conf                 import settings as django_settings
 from django.db                   import transaction
 from django.utils                import timezone
 from django.contrib.auth         import get_user_model
 
-from chat_app.models                                   import Profile, Account, Access, UserSettings, Goal, Reminder, Activity, RAGInstructions
-from chat_app.models                                   import ChatSession, ChatMessage, ChatBiomarkerScore, AlbumImage
-from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
-from chat_app.services.db_services                     import ChatService
-from rag_vectorstore.services.vdb_services             import index_single_instruction
-
-from ._seed_demo_data import (
-    BIOMARKERS, DEMO_MESSAGES, DEMO_MESSAGES_ALERT,
-    DEMO_RAG_NAMES, DEMO_RAG_DESCRIPTIONS, DEMO_RAG_INSTRUCTIONS, DEMO_IMAGES,
-)
+# From this project
+from chat_app.models           import Profile, Account, Access, UserSettings, Goal, ChatSession, AlbumImage, RAGInstructions
+from ..seed_data.sample        import seed_images, seed_chats, seed_reminders, seed_activities, seed_rag_instructions
+from ..seed_data.analyzed      import seed_analyzed_chats
+from ..seed_data.transcript    import seed_transcript_chat
+from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 
 
 # --------------------------------------------------------------------------------
-# Config
+# Config (don't remake locally since I already have this stuff)
 # --------------------------------------------------------------------------------
+# If we are local or deployed (based on the .env file)
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
+LOCAL_MODE      = (APP_ENVIRONMENT == "local")
+
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA   = False
+REMAKE_SAMPLE_DATA = False # False # not LOCAL_MODE
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = False
+REMAKE_ANALYZED_DATA = False # False # not LOCAL_MODE
+
+# Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
+REMAKE_TRANSCRIPT_DATA = True # False # not LOCAL_MODE
 
 
 # ================================================================================
@@ -45,62 +51,39 @@ REMAKE_ANALYZED_DATA = False
 # ================================================================================
 class Command(BaseCommand):
 
+    # ================================================================================
+    # Handle
+    # ================================================================================
     @transaction.atomic
     def handle(self, *args, **kwargs):
+        # Reference time points for sample data
+        two_days_ago    = timezone.localdate() - timedelta(days= 2)
+        seven_days_ago  = timezone.localdate() - timedelta(days= 7)
+        thirty_days_ago = timezone.localdate() - timedelta(days=30)
+
         if REMAKE_SAMPLE_DATA:
             AlbumImage.objects.all().delete()
-            self.seed_images()
-
-        two_days_ago = timezone.localdate() - timedelta(days=2)
+            seed_images()
 
         # --------------------------------------------------------------------------------
-        # Profile 1: demo_patient & demo_caregiver
+        # Create seeded users and chat data
         # --------------------------------------------------------------------------------
-        # Using get_or_create so the user_id stays stable across runs.
-        # Stable IDs prevent dangling vector DB embeddings (linked by user_id across DBs).
-        plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
-        care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
+        # Create protected users (admin & demo data) using login info from the environment
+        primary_admin, workshop_user = self.set_environment_users(days_ago=two_days_ago)
 
-        plwd_account, _ = Account.objects.get_or_create(user=plwd, defaults={"role": "patient"  })
-        care_account, _ = Account.objects.get_or_create(user=care, defaults={"role": "caregiver"})
-        profile, _      = Profile.objects.get_or_create(account=plwd_account, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"})
+        # Setup dummy sample chat data (just random sentences; not shown on admin view)
+        self.setup_dummy_chats(days_ago=thirty_days_ago)
 
-        Access      .objects.get_or_create(account=care_account, profile=profile)
-        UserSettings.objects.get_or_create(profile=profile)
-        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": two_days_ago})
-
-        if REMAKE_SAMPLE_DATA:
-            self.seed_chats    (profile, days_back=10)
-            self.seed_reminders(profile, num_reminders=5)
+        # Designated demo user/caregiver combo for the test conversations I saved
+        self.setup_analyzed_data(days_ago=seven_days_ago)
 
         # --------------------------------------------------------------------------------
-        # Profile 2: buddy_user & buddy_care
+        # Other setup
         # --------------------------------------------------------------------------------
-        plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
-        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver", is_staff=True)
-
-        plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"  })
-        care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
-        profile_2, _      = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"})
-
-        Access      .objects.get_or_create(account=care_account_2, profile=profile_2)
-        UserSettings.objects.get_or_create(profile=profile_2)
-        Goal        .objects.get_or_create(profile=profile_2, defaults={"target": 5, "start_date": two_days_ago})
-
         # Close any sessions left active by a previous crash/restart
         closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
         if closed:
-            self.stdout.write(self.style.WARNING(f"[seed_demo] Closed {closed} stale active session(s) on startup."))
-            
-        if REMAKE_SAMPLE_DATA:
-            self.seed_chats         (profile_2, days_back=10)
-            self.seed_reminders     (profile_2, num_reminders=5)
-            self.seed_activities    ()
-            self.seed_rag_instructions()
-
-        if REMAKE_ANALYZED_DATA:
-            ChatSession.objects.filter(profile=profile_2, source="webapp").delete()
-            self.seed_analyzed_chats(profile_2, plwd_2)
+            self.stdout.write(self.style.WARNING(f"[seed_demo] Closed {closed} stale active session(s) on startup.{RESET}"))
         
         # Grant is_staff to an existing user account
         # This is just a temporary solution for testing the admin interface.
@@ -111,8 +94,9 @@ class Command(BaseCommand):
             add_sup.is_superuser = True
             add_sup.save(update_fields=["is_staff", "is_superuser"])
 
+
     # ================================================================================
-    # User Setup
+    # User Setup (handles remaking users)
     # ================================================================================
     def get_or_create_demo_user(self, username, **kwargs):
         User     = get_user_model()
@@ -139,7 +123,7 @@ class Command(BaseCommand):
         RAGInstructions.objects.filter(user=user).delete()
 
         # User's account is the primary account on a Profile
-        try:   
+        try:
             profile = Profile.objects.get(account=account)
             Goal        .objects.filter(profile=profile).delete()
             UserSettings.objects.filter(profile=profile).delete()
@@ -148,7 +132,7 @@ class Command(BaseCommand):
 
         # User's account is a secondary (caregiver) account linked via Access
         except Profile.DoesNotExist:
-            try:   
+            try:
                 access  = Access.objects.get(account=account)
                 profile = access.profile
                 Goal        .objects.filter(profile=profile).delete()
@@ -157,160 +141,151 @@ class Command(BaseCommand):
                 profile.delete()
 
             # Account exists but is not linked to any profile; nothing to clean up
-            except Access.DoesNotExist:
-                pass  
+            except Access.DoesNotExist:  pass
 
         account.delete()
 
-    # ================================================================================
-    # AlbumImages
-    # ================================================================================
-    def seed_images(self):
-        for img in DEMO_IMAGES:
-            AlbumImage.objects.create(
-                topic            = img["topic"],
-                url              = img["url"],
-                photographer     = img["photographer"],
-                photographer_url = img["photographer_url"],
-            )
 
     # ================================================================================
-    # ChatSessions (random demo data — source="demo" is hidden from admin views)
+    # Setup IU testing users & data ("analyzed data")
     # ================================================================================
-    def seed_chats(self, profile, days_back=6):
-        now_utc = timezone.now()
-
-        for i in range(1, days_back + 1):
-            started_at = (now_utc - timedelta(days=i)).replace(hour=9, minute=0, second=0, microsecond=0)
-            ended_at   =  started_at + timedelta(minutes=5)
-            image      =  AlbumImage.objects.get(topic=DEMO_IMAGES[i % len(DEMO_IMAGES)]["topic"])
-            session    = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at,
-                                                    topics=["Moon Landing", "Granddaughter", "Gardening", "Morning Routine"],
-                                                    sentiment="Positive", image=image)
-            session.date = started_at
-            session.save(update_fields=["date"])
-
-            for idx, text in enumerate(DEMO_MESSAGES):
-                ts   = started_at + timedelta(seconds=20 * idx)
-                role = "user" if idx % 2 == 0 else "assistant"
-                m    = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=ts, end_ts=ts + timedelta(seconds=20))
-                m.ts = ts; m.save(update_fields=["ts"])
-
-            for j in range(3):
-                ts = started_at + timedelta(seconds=40 * j + 20)
-                for score_type in BIOMARKERS:
-                    s    = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3))
-                    s.ts = ts; s.save(update_fields=["ts"])
-
-        # One session with negative sentiment / flagged content
-        image        = AlbumImage.objects.get(topic=DEMO_IMAGES[0]["topic"])
-        session      = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at,
-                                                  topics=["Moon Landing", "Granddaughter", "Gardening", "Morning Routine"],
-                                                  sentiment="Negative", image=image)
-        session.date = now_utc.replace(hour=9, minute=0, second=0, microsecond=0)
-        session.save(update_fields=["date"])
-
-        for idx, text in enumerate(DEMO_MESSAGES_ALERT):
-            ts   = started_at + timedelta(seconds=20 * idx)
-            role = "user" if idx % 2 == 0 else "assistant"
-            m    = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=ts, end_ts=ts + timedelta(seconds=20))
-            m.ts = ts; m.save(update_fields=["ts"])
-
-        for j in range(3):
-            ts = started_at + timedelta(seconds=40 * j + 20)
-            for score_type in BIOMARKERS:
-                s    = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3))
-                s.ts = ts; s.save(update_fields=["ts"])
-
-    # ================================================================================
-    # Reminders
-    # ================================================================================
-    def seed_reminders(self, profile, num_reminders=5):
-        now_utc = timezone.now()
-
-        for i in range(1, num_reminders + 1):
-            start_day = (now_utc - timedelta(days=i)).date()
-            Reminder.objects.create(profile=profile, title=f"Reminder {i}",
-                                    start=start_day, end=start_day,
-                                    startTime=time(0, 0, 0), endTime=time(2, 0, 0), daysOfWeek=[])
-
-        # Repeating reminder
-        Reminder.objects.create(profile=profile, title="Repeat reminder",
-                                start    = now_utc.date(),
-                                end      = (now_utc + timedelta(weeks=5)).date(),
-                                startTime= time(0, 0, 0), endTime=time(2, 0, 0), daysOfWeek=[3])
-
-    # ================================================================================
-    # Activities & RAG Instructions
-    # ================================================================================
-    def seed_activities(self):
-        Activity.objects.get_or_create(name="memory_activity")
-
-    def seed_rag_instructions(self):
-        User            = get_user_model()
-        memory_activity = Activity.objects.get(name="memory_activity")
-        demo_user       = User.objects.get(username="demo_caregiver")
-
-        for idx, name in enumerate(DEMO_RAG_NAMES):
-            obj, _ = RAGInstructions.objects.update_or_create(
-                name=name, user=demo_user, activity=memory_activity,
-                defaults={
-                    "description"      : DEMO_RAG_DESCRIPTIONS[idx],
-                    "instructions"     : DEMO_RAG_INSTRUCTIONS[idx],
-                    "instruction_order": 1,
-                },
-            )
-            try:    index_single_instruction(obj)
-            except Exception as e: print(f"[VectorDB] Failed to index seeded instruction {obj.id}: {e}")
-
-    # ================================================================================
-    # Analyzed Chats (hardcoded transcripts -> post-chat analysis pipeline)
-    # ================================================================================
-    def seed_analyzed_chats(self, profile, user):
+    def setup_analyzed_data(self, days_ago):
         """
-        Builds sessions from the transcripts in seed_demo_examples.json, then runs the
-        same post_chat_analysis() pipeline as close_session() to fill in summary,
-        sentiment, topics, and risk fields. source="webapp" so admin views include them.
+        Designated demo user/caregiver combo for the test conversations I saved
         """
-        examples_path = Path(__file__).parent / "seed_demo_examples.json"
-        examples = json_lib.loads(examples_path.read_text())
-        now_utc  = timezone.now()
+        # --------------------------------------------------------------------------------
+        # Start by setting up the users & profile
+        # --------------------------------------------------------------------------------
+        # Caregiver is NOT an admin -- admin view/transcript data is now protected
+        plwd_2 = self.get_or_create_demo_user("sample_user", password="1", first_name="Analysis", last_name="Tester"    )
+        care_2 = self.get_or_create_demo_user("sample_care", password="1", first_name="Sample",   last_name="Caregiver", is_staff=False)
 
-        for example in examples:
-            started_at = (now_utc - timedelta(days=example["date_offset_days"])).replace(hour=10, minute=0, second=0, microsecond=0)
-            ended_at   =  started_at + timedelta(minutes=8)
+        # Setup account and profile objects
+        plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"  })
+        care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
+        profile_2, _      = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"})
 
-            # 1) Session
-            session      = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at)
-            session.date = started_at
-            session.save(update_fields=["date"])
+        # Create other remaining related user objects
+        Access      .objects.get_or_create(account=care_account_2, profile=profile_2)
+        UserSettings.objects.get_or_create(profile=profile_2)
+        Goal        .objects.get_or_create(profile=profile_2, defaults={"target": 5, "start_date": days_ago})
 
-            # 2) Messages from transcript
-            messages = []
-            for idx, msg in enumerate(example["messages"]):
-                ts   = started_at + timedelta(seconds=30 * idx)
-                m    = ChatMessage.objects.create(session=session, role=msg["role"], content=msg["content"], start_ts=ts, end_ts=ts + timedelta(seconds=30))
-                m.ts = ts; m.save(update_fields=["ts"])
-                messages.append(m)
+        # Close any sessions left active by a previous crash/restart
+        closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
+        if closed:
+            self.stdout.write(self.style.WARNING(f"{SEED_DATA} Closed {SD_H}{closed}{SD_R} stale active session(s) on startup.{RESET}"))
 
-            # 3) Dummy biomarkers
-            for j in range(3):
-                ts = started_at + timedelta(seconds=40 * j + 20)
-                for score_type in BIOMARKERS:
-                    s    = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3))
-                    s.ts = ts; s.save(update_fields=["ts"])
+        # --------------------------------------------------------------------------------
+        # Remake sample data with the source set as this user
+        # --------------------------------------------------------------------------------
+        if REMAKE_SAMPLE_DATA:
+            seed_chats           (profile_2, days_back     = 10)
+            seed_reminders       (profile_2, num_reminders =  5)
+            seed_activities      ()
+            seed_rag_instructions()
 
-            # 4) Run post-chat analysis (same pipeline as close_session)
-            analysis = asyncio.run(post_chat_analysis(messages))
+        if REMAKE_ANALYZED_DATA:
+            ChatSession.objects.filter(profile=profile_2, source="webapp").delete()
+            seed_analyzed_chats(profile_2, plwd_2)
 
-            # 5) Save all analysis fields via the same helper used by close_session
-            ChatService.save_session_fields(
-                user, session, messages,
-                summary     = analysis.get("summary",     None),
-                sentiment   = analysis.get("sentiment",   None),
-                emotion     = analysis.get("emotion",     None),
-                topics      = analysis.get("topics",      None),
-                risk_level  = analysis.get("risk_rating", None),
-                risk_reason = analysis.get("risk_reason", None),
-                risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
+
+    # ================================================================================
+    # Setup dummy sample chat data (just random sentences; not shown on admin view)
+    # ================================================================================
+    def setup_dummy_chats(self, days_ago):
+        """
+        Profile 1: demo_patient & demo_caregiver
+        Pulls random sentences to make chats for filling up the user-facing UI.
+        """
+        # Using get_or_create so the user_id stays stable across runs.
+        # Stable IDs prevent dangling vector DB embeddings (linked by user_id across DBs).
+        plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
+        care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=False)
+
+        plwd_account, _ = Account.objects.get_or_create(user=plwd, defaults={"role": "patient"  })
+        care_account, _ = Account.objects.get_or_create(user=care, defaults={"role": "caregiver"})
+        profile,      _ = Profile.objects.get_or_create(account=plwd_account, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"})
+
+        Access      .objects.get_or_create(account=care_account, profile=profile)
+        UserSettings.objects.get_or_create(profile=profile)
+        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": days_ago})
+
+        if REMAKE_SAMPLE_DATA:
+            seed_chats    (profile, days_back     = 10)
+            seed_reminders(profile, num_reminders =  5)
+
+
+    # ================================================================================
+    # Set up users from the environment
+    # ================================================================================
+    def set_environment_users(self, days_ago):
+        """
+        Create protected users (admin & demo data) using login info from the environment
+        """
+        # --------------------------------------------------------------------------------
+        # Primary admin user (they can view all transcripts)
+        # --------------------------------------------------------------------------------
+        admin_username = django_settings.ADMIN_USERNAME_0
+        admin_password = django_settings.ADMIN_PASSWORD_0
+        if (admin_username and admin_password):
+            # Create the user
+            primary_admin = self.get_or_create_demo_user(
+                username   = admin_username, 
+                password   = admin_password, 
+                first_name = "Primary", 
+                last_name  = "Admin", 
+                is_staff   = True,
             )
+
+            # Logging
+            self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Primary admin user {SD_H}{admin_username}{SD_R} set from env.{RESET}"))
+
+        # --------------------------------------------------------------------------------
+        # Workshop demo data user (pre-loaded demo transcripts, audio, & biomarker scores)
+        # --------------------------------------------------------------------------------
+        demo_username = django_settings.DEMO_USERNAME_0
+        demo_password = django_settings.DEMO_PASSWORD_0
+        if (demo_username and demo_password):
+            # Create the user
+            workshop_user = self.get_or_create_demo_user(
+                username   = demo_username, 
+                password   = demo_password, 
+                first_name = "Workshop", 
+                last_name  = "Participant", 
+                is_staff   = False,
+            )
+
+            # Logging
+            self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Workshop demo data user {SD_H}{demo_username}{SD_R} set from env.{RESET}"))
+
+        # --------------------------------------------------------------------------------
+        # Setup account and profile objects
+        # --------------------------------------------------------------------------------
+        user_account, _ = Account.objects.get_or_create(user=workshop_user,   defaults={"role": "patient"  })
+        care_account, _ = Account.objects.get_or_create(user=primary_admin,   defaults={"role": "caregiver"})
+        profile, _      = Profile.objects.get_or_create(account=user_account, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"})
+
+        # Create other remaining related user objects
+        Access      .objects.get_or_create(account=care_account, profile=profile)
+        UserSettings.objects.get_or_create(profile=profile)
+        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": days_ago})
+
+        # Close any sessions left active by a previous crash/restart
+        closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
+        if closed:
+            self.stdout.write(self.style.WARNING(f"{SEED_DATA} Closed {SD_H}{closed}{SD_R} stale active session(s) on startup.{RESET}"))
+
+        # --------------------------------------------------------------------------------
+        # Seeded chats with complete transcripts/biomarkers/audio data
+        # --------------------------------------------------------------------------------
+        if REMAKE_TRANSCRIPT_DATA:
+            ChatSession.objects.filter(profile=profile, source="transcript").delete()
+            #seed_transcript_chat(profile, primary_admin, test_dir = "test_01")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_02")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_03")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_04")
+            seed_transcript_chat(profile, primary_admin, test_dir = "test_05")
+
+        # Return both users
+        return primary_admin, workshop_user
+

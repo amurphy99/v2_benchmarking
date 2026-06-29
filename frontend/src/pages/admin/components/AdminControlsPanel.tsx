@@ -1,10 +1,8 @@
 /* ================================================================================
 // AdminControlsPanel
 // ================================================================================
-Control panel for the admin chat listener page. Contains button groups that all 
+Control panel for the admin chat listener page. Contains button groups that all
 send commands to the backend.
-
-Currently three button groups only, and they are not yet implemented on the backend...
 
 // ================================================================================ */
 
@@ -13,10 +11,11 @@ import { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/ty
 import { useCommandAcks           } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
 
 // Button Groups
-import    DevSamplesGroup   from "./controlGroups/DevSamplesGroup";
-import  ChatControlsGroup   from "./controlGroups/ChatControlsGroup";
-import AvatarActionsGroup   from "./controlGroups/AvatarActionsGroup";
-import ResponseControlGroup from "./controlGroups/ResponseControlGroup";
+import    DevSamplesGroup       from "./controlGroups/DevSamplesGroup";
+import    ChatControlsGroup     from "./controlGroups/ChatControlsGroup";
+import    AvatarActionsGroup    from "./controlGroups/AvatarActionsGroup";
+import    ResponseControlGroup  from "./controlGroups/ResponseControlGroup";
+import    RecordingControlGroup from "./controlGroups/RecordingControlGroup";
 
 // ================================================================================
 // Control panel with commands the admin can send to the backend
@@ -52,54 +51,46 @@ export function AdminControlsPanel({
         registerAckHandler,
     });
 
-    // ================================================================================
+    // --------------------------------------------------------------------------------
     // UI Components
-    // ================================================================================
-    return (       
-        <div className="px-[1rem] grid grid-cols-2 gap-[1rem]">
+    // --------------------------------------------------------------------------------
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
             {/* Manually Control How the Robot Responds */}
-            <ResponseControlGroup 
-                connected          = {connected} 
-                manualMode         = {controlState.manualMode} 
+            <ResponseControlGroup
+                connected          = {connected}
+                manualMode         = {controlState.manualMode}
                 pending={{
                     pause_and_listen   : pending.pause_and_listen,
                     resume_and_respond : pending.resume_and_respond,
                     paraphrase_last    : pending.paraphrase_last,
                     send_custom        : pending.send_custom,
                 }}
-                onPauseAndListen   = {actions.pauseAndListen  } 
+                onPauseAndListen   = {actions.pauseAndListen  }
                 onResumeAndRespond = {actions.resumeAndRespond}
-                onParaphraseLast   = {actions.paraphraseLast  } 
+                onParaphraseLast   = {actions.paraphraseLast  }
                 onSendCustom       = {actions.sendCustom      }
                 suggestedDraft     = {null                    }
             />
-            
-            {/* Chat Response Controls */}
-            {/* 
-            <ChatControlsGroup
-                connected    = {connected}
-                controlState = {controlState}
-                pending={{
-                    pause_listening : pending.pause_listening,
-                    pause_responses : pending.pause_responses,
-                    respond_now     : pending.respond_now,
-                }}
-                onToggleListening = {actions.toggleListening}
-                onToggleResponses = {actions.toggleResponses}
-                onRespondNow      = {actions.respondNow     }
-            />
-            */}
 
             {/* Avatar Actions */}
             <AvatarActionsGroup
                 connected = {connected}
                 pending   = {{
-                    robot_emotion    : pending.robot_emotion,
-                    robot_animation  : pending.robot_animation,
+                    robot_emotion   : pending.robot_emotion,
+                    robot_animation : pending.robot_animation,
                 }}
-                onEmotion    = {actions.robotEmotion   }
-                onAnimation  = {actions.robotAnimation}
+                onEmotion   = {actions.robotEmotion  }
+                onAnimation = {actions.robotAnimation}
+            />
+
+            {/* Recording Toggle */}
+            <RecordingControlGroup
+                connected        = {connected}
+                recordingEnabled = {controlState.recordingEnabled}
+                pending          = {pending.toggle_recording}
+                onToggleRecording= {actions.toggleRecording}
             />
 
         </div>

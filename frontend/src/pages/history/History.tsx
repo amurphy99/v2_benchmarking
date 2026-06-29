@@ -24,7 +24,7 @@ export function History() {
     // --------------------------------------------------------------------
     if (isLoading) { return <p>Loading chat history...</p>; }
     return (
-    <div className="flex flex-col m-[1rem] gap-[0.5rem]">
+    <div className="flex flex-col m-[1rem] gap-[0.5rem] pb-[15rem]">
         <div className="flex align-middle gap-[1rem]">
             {/* Title & Sort Option */}
             <span className={h3}> Chat History </span>
@@ -47,10 +47,10 @@ export function History() {
         </div>
 
 
-        <div className="mt-[1rem]">
+        {/* <div className="mt-[1rem]">
             <span className="fst-italic"> (other option for style) </span>
             <ChatHistory/>
-        </div>
+        </div> */}
 
     </div>
     );

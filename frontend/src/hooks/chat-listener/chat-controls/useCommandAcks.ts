@@ -40,7 +40,10 @@ export function useCommandAcks({
         pause_and_listen   : false,
         resume_and_respond : false,
         paraphrase_last    : false,
-        send_custom        : false, 
+        send_custom        : false,
+
+        // Save the audio recording on chat completion
+        toggle_recording   : false,
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
 
@@ -63,9 +66,10 @@ export function useCommandAcks({
             // Apply confirmed state updates (ONLY on success)
             if (ack.ok && ack.state) {
                 setControlState((s) => ({
-                    listeningPaused : ack.state.listeningPaused ?? s.listeningPaused,
-                    responsesPaused : ack.state.responsesPaused ?? s.responsesPaused,
-                    manualMode      : ack.state.manualMode      ?? s.manualMode,
+                    listeningPaused  : ack.state!.listeningPaused  ?? s.listeningPaused,
+                    responsesPaused  : ack.state!.responsesPaused  ?? s.responsesPaused,
+                    manualMode       : ack.state!.manualMode       ?? s.manualMode,
+                    recordingEnabled : ack.state!.recordingEnabled ?? s.recordingEnabled,
                 }));
             }
         });
@@ -117,6 +121,9 @@ export function useCommandAcks({
         resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
         paraphraseLast   : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
         sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { message: text })},
+
+        // Toggle session audio recording on/off
+        toggleRecording  : (enabled: boolean) => {sendCommand("toggle_recording", "toggle_recording", { enabled })},
     };
 
     return { pending, sendCommand, actions };

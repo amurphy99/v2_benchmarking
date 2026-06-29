@@ -1,6 +1,6 @@
 import { PerspectiveCamera, useAnimations, useGLTF } from "@react-three/drei";
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import { AnimationClip, LoopOnce, Material, Mesh, Object3D } from "three";
+import { AnimationActionLoopStyles, AnimationClip, LoopOnce, Material, Mesh, Object3D } from "three";
 import { getAnimationFromEmotion, getZoom } from "./AvatarUtils";
 import { Canvas } from "@react-three/fiber";
 import QTModel from "./QTModel";
@@ -16,7 +16,7 @@ export const AvatarComponent = forwardRef(({ model, zoom, ...props } : { model: 
     const { actions, mixer } = useAnimations(animations, group);
     const zoomInfo = getZoom(zoom, model);
   
-    const playAnimation = (animation: string) => {
+    const playAnimation = (animation: string, mode: AnimationActionLoopStyles = LoopOnce, repetitions: number = 1) => {
         if (!actions || !animation) return;
 
         Object.values(actions).forEach((a) => a?.stop());
@@ -26,12 +26,12 @@ export const AvatarComponent = forwardRef(({ model, zoom, ...props } : { model: 
         if (!action) return;
 
         action.reset();
-        action.setLoop(LoopOnce, 1);
+        action.setLoop(mode, repetitions);
         action.clampWhenFinished = true;
         action.play();
     }
 
-    const playEmotion = (emotion: string) => {
+    const playEmotion = (emotion: string, mode: AnimationActionLoopStyles = LoopOnce, repetitions: number = 1) => {
         if (!actions || !emotion) return;
 
         const animation = getAnimationFromEmotion(emotion, model);
@@ -43,7 +43,7 @@ export const AvatarComponent = forwardRef(({ model, zoom, ...props } : { model: 
         if (!action) return;
 
         action.reset();
-        action.setLoop(LoopOnce, 1);
+        action.setLoop(mode, repetitions);
         action.clampWhenFinished = true;
         action.play();
     }

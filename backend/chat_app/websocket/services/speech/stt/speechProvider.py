@@ -48,6 +48,7 @@ class SpeechToTextProvider:
         self._audio_buffer        = Queue()
         self._streaming           = False
         self._thread              = None    # The thread we use for streaming
+        self._stream_start_dt     = None    # Wall-clock anchor for word-time offsets
 
         # Used to avoid processing duplicate STT results
         self._recent_transcript    = ""
@@ -98,8 +99,9 @@ class SpeechToTextProvider:
     # Initializes the configs and starts a new thread to handle the streaming without blocking.
     def start(self):
         # Guard to make sure we aren't already streaming
-        if getattr(self, "_thread", None) and self._thread.is_alive(): return    
-        self._streaming = True
+        if getattr(self, "_thread", None) and self._thread.is_alive(): return
+        self._streaming       = True
+        self._stream_start_dt = datetime.now()  # Anchors Google's stream-relative word offsets to wall-clock
 
         # Configure the stream
         config = speech.RecognitionConfig(
@@ -198,8 +200,9 @@ class SpeechToTextProvider:
                 if not valid: continue
 
                 # 2) Format the word-level timestamps how we want them
+                # Anchor to stream-start so absolute times reflect when each word was actually spoken
                 words = (
-                    SpeechToTextProvider._get_word_timestamps(datetime.now(), result.alternatives[0].words)
+                    SpeechToTextProvider._get_word_timestamps(self._stream_start_dt, result.alternatives[0].words)
                     if result.alternatives[0].words else []
                 )
 
@@ -224,13 +227,14 @@ class SpeechToTextProvider:
     # ================================================================================
     # Format STT results with timestamps
     # ================================================================================
-    # TODO: Doesn't work for transcript highlighting yet
-    # TODO: These timestamps need to be related to either the start of the ChatMessage, or real time
     @staticmethod
-    def _get_word_timestamps(now, words):
+    def _get_word_timestamps(stream_start: datetime, words):
+        """
+        Stream start allows us to get the real, wall-clock time for each word. 
+        """
         return [{
             "word"  : word.word, 
-            "start" : now + word.start_time, 
-            "end"   : now + word.end_time
+            "start" : stream_start + word.start_time, 
+            "end"   : stream_start + word.end_time
         } for word in words]
 

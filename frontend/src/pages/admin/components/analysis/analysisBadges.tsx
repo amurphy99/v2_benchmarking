@@ -52,14 +52,12 @@ export function topicBadge(topic?: string | null) {
     const t    = (topic ?? "").trim();
     const base = "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium";
 
-    if (!t) return <span className={`${base} bg-gray-50 text-gray-700 border-gray-200`}>—  </span>;
-    return         <span className={`${base} bg-gray-50 text-gray-700 border-gray-200`}>{t}</span>;
+    if (!t) return <span className={`${base} bg-black/5 text-gray-700 border-gray-200`}>—  </span>;
+    return         <span className={`${base} bg-black/5 text-gray-700 border-gray-200`}>{t}</span>;
 }
 
-export function topicsBadges(topics?: string[] | string | null) {
-    const list: string[] = Array.isArray(topics)
-        ? topics.map((s) => s.trim()).filter(Boolean)
-        : (topics ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+export function topicsBadges(topics?: string[] | null) {
+    const list: string[] = (topics ?? []).map((s) => s.trim()).filter(Boolean);
 
     if (list.length === 0) return topicBadge(null);
     return (

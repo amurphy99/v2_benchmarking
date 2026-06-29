@@ -43,6 +43,11 @@ async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
 # --------------------------------------------------------------------------------
 # TODO: In the future this is where any TTS controls would also go (e.g., pause TTS playback)
 async def _toggle_stream(consumer: ChatConsumer, data: dict):
+    """
+    NOTE: The audio "zero-time" anchor (_audio_start_mono / _audio_start_dt) is
+    set in `cc_callbacks.handle_audio_data()` when the FIRST audio chunk 
+    arrives.
+    """
     # Parse the input
     cmd = data.get("data", None)
 
@@ -51,7 +56,8 @@ async def _toggle_stream(consumer: ChatConsumer, data: dict):
     new_status    = "active" if (cmd == "start"           ) else "paused"
     logger.info(f"{CC_MAIN} STT toggled: {CC_H}{stream_status} -> {new_status}{CC_R} | {CC_H}{data}{CC_R} {RESET}")
 
-    # Stop the stream (unpause)
+    # Start the stream (start of chat OR unpause)
+    # TODO: I think? I don't remember if the start of chats is handled differently from unpausing
     if cmd == "start":
         if getattr(consumer, "streaming_active", False): return   # already active
         consumer.stt_provider.start()

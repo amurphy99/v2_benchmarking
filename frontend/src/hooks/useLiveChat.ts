@@ -19,19 +19,21 @@ export default function useLiveChat({
     onRagParseError,
     onChatError,
     onChatClosed,
-    onChatPaused, // Backend sent message telling us that the chat is paused
+    onChatPaused,      // Backend sent message telling us that the chat is paused
+    onRecordingStatus, // Backend updates the recording status (if we are saving the audio on chat end)
 } : {
-    onUserUtterance   : (text: string) => void;
-    onSystemUtterance : (text: string) => void;
-    onScores          : (            ) => void;
-    onEmotion         : (emotion: string) => void;
-    onExpression      : (data: any) => void;
-    wsPath           ?: string;
-    onDebugTurn      ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
-    onRagParseError  ?: () => void;
-    onChatError      ?: () => void;
-    onChatClosed     ?: () => void; 
-    onChatPaused     ?: () => void;
+    onUserUtterance   : (text    : string) => void;
+    onSystemUtterance : (text    : string) => void;
+    onScores          : (                ) => void;
+    onEmotion         : (emotion : string) => void;
+    onExpression      : (data    : any   ) => void;
+    wsPath            ?: string;
+    onDebugTurn       ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
+    onRagParseError   ?: () => void;
+    onChatError       ?: () => void;
+    onChatClosed      ?: () => void;
+    onChatPaused      ?: () => void;
+    onRecordingStatus ?: (enabled: boolean) => void;
 }) {
     // Misc. setup
     const qc = useQueryClient();
@@ -49,15 +51,9 @@ export default function useLiveChat({
         const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
         onDebugTurn?.({ role: "assistant", text, state, });
 
-        onDebugTurn?.({
-            role: "assistant",
-            text,
-            state,
-        });
+        onDebugTurn?.({role: "assistant", text, state, });
 
-        if (response.data.emotion) {
-            onEmotion(response.data.emotion)
-        }
+        if (response.data.emotion) { onEmotion(response.data.emotion); }
 
         // if (state === "close_chat") {
         //     setTimeout(() => {
@@ -90,7 +86,7 @@ export default function useLiveChat({
     const onStreamStatus = (status: string) => {
         if (status === "paused") { stopAudRef.current(); onChatPaused?.(); } // stopPlayer();
         // TODO: Depends on how we want this behavior to work. Should we stop talking on pause always?
-        // 
+        // ...
     };
 
     // Backend signals the chat has ended => wait to do end-of-chat navigation until "goodbye" audio finishes
@@ -105,17 +101,18 @@ export default function useLiveChat({
 	const { send } = useChatSocket({
 		recording,
         wsPath,
-		onLLMResponse   : onLLMres,
+		onLLMResponse     : onLLMres,
 		onScores,
-		onUserUtt       : onUserUttWrapped,
-		onAudio         : sendAudio,
+		onUserUtt         : onUserUttWrapped,
+		onAudio           : sendAudio,
         onStreamStatus,
-        onChatClosed    : handleChatEnded,
-        onError: (msg) => {
+        onChatClosed      : handleChatEnded,
+        onError           : (msg) => {
             if (msg?.type === "rag_parse_error") { onRagParseError?.(); return; }
             if (msg?.type ===      "chat_error") { onChatError    ?.(); return; }
         },
-        onExpression: onExpression,
+        onExpression      : onExpression,
+        onRecordingStatus : (enabled) => onRecordingStatus?.(enabled),
 	});
 	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
     stopAudRef.current = stopAud;  // keep ref in sync each render

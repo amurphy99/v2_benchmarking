@@ -27,6 +27,7 @@ export default function useChatListener({
     onCommandAck      = noopAny, // Relay "acks" confirming commands were received
     onControlState    = noopAny, // Relay new control states (depending on result of commands)
     onStreamStatus    = noopAny, // Relay stream status changes ("active" | "paused" | "ended")
+    onRecordingStatus = noopAny, // Relay recording toggle changes from the primary consumer
 }) {
     // --------------------------------------------------------------------------------
     // Timing (header UI)
@@ -59,9 +60,10 @@ export default function useChatListener({
         handlersRef.current = {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers};
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
-    // Acks
-    const controlHandlersRef = useRef({ onCommandAck, onControlState, onStreamStatus });
-    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus };}, [onCommandAck, onControlState, onStreamStatus]);
+    // Acks (command success/failure confirmation communications with the backend)
+    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus };
+    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus ]);
 
     // --------------------------------------------------------------------------------
     // Message Handling
@@ -69,12 +71,13 @@ export default function useChatListener({
     // Router parses messages received from the backend and handles consequences
     const onMessage = useMemo(() => {
         return createWsRouter({
-            setLastEventAt : (d  ) => setLastEventAt(d),
-            setLatencyMs   : (n  ) => setLatencyMs(n),
-            getHandlers    : (   ) => handlersRef.current,
-            onCommandAck   : (ack) => controlHandlersRef.current.onCommandAck  (ack),
-            onControlState : (st ) => controlHandlersRef.current.onControlState(st ),
-            onStreamStatus : (st ) => controlHandlersRef.current.onStreamStatus(st ),
+            setLastEventAt    : (d  ) => setLastEventAt(d),
+            setLatencyMs      : (n  ) => setLatencyMs(n),
+            getHandlers       : (   ) => handlersRef.current,
+            onCommandAck      : (ack) => controlHandlersRef.current.onCommandAck     (ack),
+            onControlState    : (st ) => controlHandlersRef.current.onControlState   (st ),
+            onStreamStatus    : (st ) => controlHandlersRef.current.onStreamStatus   (st ),
+            onRecordingStatus : (st ) => controlHandlersRef.current.onRecordingStatus(st ),
         });
     }, []);
 

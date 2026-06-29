@@ -6,14 +6,18 @@ Service for working with chat data
 TODO: Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-import logging, time
+import os, logging, time
 logger = logging.getLogger(__name__)
+
+
+
 
 # Django imports
 from channels.db         import database_sync_to_async
-from django  .db         import transaction
-from django  .db.models  import Min
-from django  .utils      import timezone
+from django.db           import transaction
+from django.db.models    import Min
+from django.utils        import timezone
+from django.conf         import settings as django_settings
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -54,7 +58,7 @@ class ChatService:
     # Close Session
     # ================================================================================
     @staticmethod
-    async def close_session(user_id, session_id, *, username="unknown", source="webapp"):
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp", audio_path=None, audio_start_ts=None):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -67,7 +71,16 @@ class ChatService:
 
         # Get messages for the session & make sure it is valid
         user, session, valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user_id, session_id)
-        if not valid: return None
+        if not valid:
+            # Session was deleted (empty chat) - clean up any saved audio file
+            if audio_path:
+                try:
+                    full = os.path.join(django_settings.MEDIA_ROOT, audio_path)
+                    if os.path.exists(full): os.unlink(full)
+                except Exception: pass
+            
+            # Return nothing
+            return None
         logger.info(f"{RED}[DB] ChatSession {BOLD}{session.id}{UNBOLD}: valid={BOLD}{valid}{UNBOLD}, num messages={BOLD}{len(messages)}{UNBOLD}. {RESET}")
 
         # Run a post-chat analysis to fill out the rest of the fields
@@ -76,13 +89,15 @@ class ChatService:
         # Save analysis results to the proper database fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
             user, session, messages,
-            summary     = analysis.get("summary",     None),
-            sentiment   = analysis.get("sentiment",   None),
-            emotion     = analysis.get("emotion",     None),
-            topics      = analysis.get("topics",      None),
-            risk_level  = analysis.get("risk_rating", None),
-            risk_reason = analysis.get("risk_reason", None),
-            risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
+            summary        = analysis.get("summary",     None),
+            sentiment      = analysis.get("sentiment",   None),
+            emotion        = analysis.get("emotion",     None),
+            topics         = analysis.get("topics",      None),
+            risk_level     = analysis.get("risk_rating", None),
+            risk_reason    = analysis.get("risk_reason", None),
+            risk_quotes    = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
+            audio_path     = audio_path,
+            audio_start_ts = audio_start_ts,
         )
 
         # Done
@@ -125,17 +140,21 @@ class ChatService:
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
+    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None, audio_path=None, audio_start_ts=None):
+        # Set the analysis fields 
         topics, sentiment = ChatService.set_analysis_fields(
             session, messages,
             summary=summary, sentiment=sentiment, emotion=emotion, topics=topics,
             risk_level=risk_level, risk_quotes=risk_quotes, risk_reason=risk_reason,
         )
-        
+
+        # Set the other fields to update 
+        update_fields = ["image", "taskType", "taskSubtype"]
+
         # Get an AlbumImage for the session
         album_image = get_image_for_topics(topics)
         session.image = album_image
-        
+
         # Get the chat type and subtype from the user's profile
         profile = get_profile(user)
         if profile is not None:
@@ -143,8 +162,18 @@ class ChatService:
             session.taskType    = settings.taskType
             session.taskSubtype = settings.taskSubtype
 
+        # Save the audio file path if provided
+        if audio_path:
+            session.audio_file = audio_path
+            update_fields.append("audio_file")
+
+        # Save the audio recording start time (used by frontend for accurate seeking)
+        if audio_start_ts:
+            session.audio_start_ts = audio_start_ts
+            update_fields.append("audio_start_ts")
+
         # Save & return the session
-        session.save(update_fields=["image", "taskType", "taskSubtype"])
+        session.save(update_fields=update_fields)
         return session
 
     # --------------------------------------------------------------------------------
@@ -198,26 +227,47 @@ class ChatService:
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
     
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
-    # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
+    # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
+    # TODO: IDK what types to set for the timestamps
     @staticmethod
-    def add_biomarker(session, score_type, score):
-        return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
+    def add_biomarker(session: ChatSession, score_type: str, score: float, message: ChatMessage | None = None, start_ts = None, end_ts = None):
+        return ChatBiomarkerScore.objects.create(
+            session    = session,
+            score_type = score_type,
+            score      = score,
+            message    = message,
+            start_ts   = start_ts,
+            end_ts     = end_ts,
+        )
     
     # Biomarker scores (in bulk)
+    # Each span is a dict: {"score_type", "score", "start_ts", "end_ts"}
+    # `message_id` may be None (e.g. audio-window scores not bound to an utterance)
     @staticmethod
-    def add_biomarkers_bulk(session_id, scores: dict):
+    def add_biomarker_spans_bulk(session_id, message_id, spans: list):
+        if not spans: return
         session = ChatSession.objects.get(id=session_id)
-        ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+        ChatBiomarkerScore.objects.bulk_create([
+            ChatBiomarkerScore(
+                session    = session,
+                message_id = message_id,
+                score_type = s["score_type"],
+                score      = s["score"],
+                start_ts   = s.get("start_ts"),
+                end_ts     = s.get("end_ts"),
+            ) for s in spans
+        ])
 
     # Word-level STT timestamps for a confirmed user message
     @staticmethod
     def add_words_bulk(message_id: int, words: list):
         """
-        Bulk-insert ChatWord records for a committed user message.
-        words: [{"word": str, "start": datetime, "end": datetime}, ...]
+        Bulk-insert ChatWord records for a committed user message (confidence is optional).
+        words: [{"word": str, "start": datetime, "end": datetime, "confidence": float}, ...]
         """
+        message = ChatMessage.objects.get(id=message_id)
         ChatWord.objects.bulk_create([
-            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i)
+            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i, confidence=w.get("confidence"))
             for i, w in enumerate(words)
         ])
 

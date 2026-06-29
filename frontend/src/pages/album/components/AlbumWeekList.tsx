@@ -14,9 +14,6 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
 
     const SessionCard = ( {session} : {session: ChatSession } ) => {
         const date = new Date(session.date);
-        const topics: string[] = !session.topics ? [] :
-            Array.isArray(session.topics) ? session.topics :
-            (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
         return (
             <div className="flex flex-row gap-2 rounded-md bg-white shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] 
             hover:cursor-pointer hover:shadow-[0px_0px_4px_4px_rgba(0,0,0,0.15)]"
@@ -29,9 +26,9 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
                         <p className="">{Math.round((session.duration / 60) * 100) / 100} minutes</p>
                     </div>
                     <div className={`${role}-text pb-2`}>
-                        <p className="font-bold text-3xl mb-1">{topics[0]}</p>
+                        <p className="font-bold text-3xl mb-1">{session.topics? session.topics[0] : "No topics detected"}</p>
                         <div className="flex flex-row flex-wrap gap-x-4 gap-y-1">
-                            {topics.map((topic, idx) => {
+                            {session.topics?.map((topic, idx) => {
                                 if (idx == 0) return;
                                 return (
                                     <span key={idx} className="text-xl whitespace-nowrap">{topic}</span>

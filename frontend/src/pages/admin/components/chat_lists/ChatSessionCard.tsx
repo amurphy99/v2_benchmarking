@@ -1,19 +1,26 @@
+/* ChatSessionCard view for the Admin chat lists page.
+--------------------------------------------------------------------------------
+`frontend/src/pages/admin/components/chat_lists/ChatSessionCard.tsx`
+
+*/
 import { memo, useMemo } from "react";
 
 // From this project
 import { ChatSession } from "@/api";
 import { dateFormatLong, formatElapsedTime } from "@/utils/styling/numFormatting";
+import { formatTimeAgo } from "./timeGrouping";
 
 // Components
-import { InfoPill                  } from "../admin_header/StatusComponents";
+import { deriveSessionAnalysis } from "../analysis/deriveSessionAnalysis";
+import { Pill                  } from "../ui/Pill";
 import { sentimentBadge, emotionBadge, riskBadge, topicsBadges } from "../analysis/analysisBadges";
-import { deriveSessionAnalysis     } from "../analysis/deriveSessionAnalysis";
+
 
 // ================================================================================
-// ChatSession Card View for the Admin Page
+// ChatSessionCard view for the Admin Page
 // ================================================================================
 export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick }: {session: ChatSession; onClick: () => void}) {
-    // Only get analysis for inactive sessions
+    // Load analysis
     const isActive = session.is_active;
     const analysis = useMemo(() => {
         if (isActive) return null;
@@ -21,51 +28,77 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
     }, [session, isActive]);
 
     // Header values
-    const s_date   = `${session.start_ts ? dateFormatLong.format(new Date(session.start_ts)) : "-"}`;
-    const title    = `${session.profile.account.user.username}`;
-    const subtitle = `Session #${session.id ?? "—"}`;
-    
-    // Style
-    const buttonStyle = "w-full text-left rounded-xl border border-black/10 bg-white shadow-sm hover:bg-black/100 transition px-4 py-3";
+    const startDate = session.start_ts ? new Date(session.start_ts) : null;
+    const dateText  = startDate ? dateFormatLong.format(startDate) : "—";
+    const agoText   = formatTimeAgo(startDate);
+    const title     = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
+    const sessionLabel = `Session #${session.id ?? "—"}`;
 
-    // Return UI component
+    // Active vs completed accent on the left edge.
+    const accentBorder = isActive ? "border-l-status-live" : "border-l-admin-border";
+
+    // UI Component
     return (
-        <button onClick={onClick} className={buttonStyle} >
-            
-            {/* Header / Title */}
+        <button
+            onClick   = {onClick}
+            className = {`group h-full text-left w-full rounded-xl border border-admin-border border-l-4 ${accentBorder} bg-admin-panel shadow-sm px-4 py-3 hover:bg-admin-muted hover:border-admin-accent/40 transition-colors cursor-pointer flex flex-col`}
+        >
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Header => Name + Session Number */}
+            {/* -------------------------------------------------------------------------------- */}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="text-base font-semibold truncate">{title }</div>
-                    <div className="text-sm   text-black/60 truncate">{s_date}</div>
+                    <div className="text-lg font-semibold text-admin-text truncate">{title}</div>
+                    <div className="text-base text-admin-text/80 font-medium">{sessionLabel}</div>
                 </div>
 
-                {/* Risk / Sentiment / Emotion (only for inactive chats) */}
-                {!isActive && analysis && (
                 <div className="flex gap-2 flex-wrap justify-end">
-                    <InfoPill label="Risk"      value={     riskBadge(analysis.risk_rating )} />
-                    <InfoPill label="Sentiment" value={sentimentBadge(analysis.sentiment   )} />
-                    <InfoPill label="Emotion"   value={  emotionBadge(analysis.emotion     )} />
+                    {isActive
+                        ? <Pill variant="live" dot value="Live" />
+                        : <Pill variant="info" value={agoText} />
+                    }
                 </div>
+            </div>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Date */}
+            {/* -------------------------------------------------------------------------------- */}
+            <div className="text-sm text-admin-subtext mt-0.5">{dateText}</div>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Stats row */}
+            {/* -------------------------------------------------------------------------------- */}
+            <div className="flex gap-2 flex-wrap mt-2">
+                <Pill label="Messages" value={session.messages.length ?? "—"     } />
+                <Pill label="Duration" value={formatElapsedTime(session.duration)} />
+            </div>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Summary & Topics (only inactive) */}
+            {/* -------------------------------------------------------------------------------- */}
+            <div className="flex-1 flex flex-col">
+                {!isActive && analysis && (
+                    <>
+                        <div className="text-sm text-admin-text/85 line-clamp-3 mt-3 leading-snug">
+                            {analysis.summary}
+                        </div>
+                        {session.topics && session.topics.length > 0 && (
+                            <div className="mt-2">{topicsBadges(session.topics.slice(0, 4))}</div>
+                        )}
+                    </>
                 )}
             </div>
 
-            {/* Subtitle / Summary / Topics (only for inactive chats) */}
-            <div className="flex flex-col mt-[0.25rem]">
-                <div className="text-sm text-black/60 truncate">{subtitle}</div>
-                {!isActive && analysis && (<>
-                    <div className="text-sm text-black/80 line-clamp-2 mt-0.5">{analysis.summary}</div>
-                    {session.topics && session.topics.length > 0 && (
-                        <div className="mt-1.5">{topicsBadges(session.topics.slice(0, 4))}</div>
-                    )}
-                </>)}
-            </div>
-
-            {/* Messages & Duration */}
-            <div className="mt-3 flex gap-2 flex-wrap">
-                <InfoPill label="Messages" value={session.messages.length ?? "—"     } />
-                <InfoPill label="Duration" value={formatElapsedTime(session.duration)} />
-            </div>
-
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Risk | Sentiment | Emotion (only for inactive chats) */}
+            {/* -------------------------------------------------------------------------------- */}
+            {!isActive && analysis && (
+                <div className="mt-3 flex gap-2 flex-wrap">
+                    <Pill label="Risk"      value={     riskBadge(analysis.risk_rating )} />
+                    <Pill label="Sentiment" value={sentimentBadge(analysis.sentiment   )} />
+                    <Pill label="Emotion"   value={  emotionBadge(analysis.emotion     )} />
+                </div>
+            )}
         </button>
     );
 });

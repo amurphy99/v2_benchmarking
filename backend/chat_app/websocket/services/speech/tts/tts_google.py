@@ -93,17 +93,21 @@ class TextToSpeechProvider:
         )
 
     # Get speech bytes from Google Cloud TTS and stream them to the client
-    def synthesize_speech(self, text) -> bytes:
+    def synthesize_speech(self, text) -> tuple[bytes, int, int, int]:
         """
+        Returns (pcm_bytes, sample_rate, num_channels, bits_per_sample). 
+        Stripping the WAV header here so the frontend receives raw PCM, while
+        preserving the actual format metadata so the recorder can resample
+        correctly regardless of what the voice/API actually returns.
+
         TODO: I don't think we are TRULY streaming yet... We wait until we have 
               the full audio from Google, and then we send it to the client in
               chunks. True streaming would need a different setup. 
-        TODO: Could convert the two commented out areas to switch based on a
-              conditional block (e.g. "if AUDIO_FMT==LINEAR16: ...").
         """
         # Guard / normalize input
         text = (text or "").strip()
-        if not text: return b""
+        if not text: return b"", SAMPLE_RATE_HZ, 1, 16
+
         try:
             response = self._client.synthesize_speech(
                 input        = g_tts.SynthesisInput(text=text),
@@ -112,20 +116,16 @@ class TextToSpeechProvider:
             )
 
             # Extract raw audio bytes from response
-            #data = response.audio_content
-            #logger.info(f"{TTS_MAIN} Speech synthesized by Google Cloud TTS ({len(data):,} bytes){RESET}")
-            #return data
-
-            # Extract raw audio bytes from response
-            data_wav = response.audio_content
+            data_wav         = response.audio_content
             pcm, sr, ch, bps = TextToSpeechProvider.wav_to_pcm_bytes(data_wav)
 
-            #logger.info(f"{TTS_MAIN} WAV->PCM: sr={sr}, ch={ch}, bps={bps}, pcm_bytes={len(pcm):,} {RESET}")
-            return pcm            
+            #logger.info(f"{TTS_MAIN} WAV->PCM: sr={sr} ch={ch} bps={bps} pcm={len(pcm):,}B{RESET}")
+            return pcm, sr, ch, bps
 
+        # Return default/empty audio on errors
         except Exception as e:
             logger.exception(f"{lu.RED}[TTS] Error synthesizing speech: {e}{RESET}")
-            return b""
+            return b"", SAMPLE_RATE_HZ, 1, 16
 
     # --------------------------------------------------------------------------------
     # Convert wav bytes from Google Cloud TTS to PCM before sending to the frontend

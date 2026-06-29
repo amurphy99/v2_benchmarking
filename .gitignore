@@ -27,6 +27,9 @@ start_ngrok.sh
 backend/staticfiles/
 backend/logs/
 backend/script/
+backend/media/
+
+
 # backend/websocket.log
 backend/chat_app/migrations/
 backend/chat_app/migrations/0001_initial.py
@@ -46,3 +49,37 @@ frontend/package-lock.json
 
 # VS Code
 .vscode/*
+
+# --------------------------------------------------------------------------------
+# Sample data (will have to add this again for every test I add I guess?)
+# --------------------------------------------------------------------------------
+# Sample chat #1 -- me speaking about basketball
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_01/transcript_config.json
+
+# Sample chat #2 -- real data
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_02/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_02/transcript_config.json
+
+# Sample chat #3 -- real data
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_03/transcript_config.json
+
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_04/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_04/transcript_config.json
+
+backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_05/*
+!backend/chat_app/management/seed_data/transcript_data/test_transcripts/test_05/transcript_config.json
+
+
+# --------------------------------------------------------------------------------
+# Machine learning models
+# --------------------------------------------------------------------------------
+# Altered Grammar
+backend/chat_app/websocket/biomarkers/models/altered_grammar/*
+!backend/chat_app/websocket/biomarkers/models/altered_grammar/.gitkeep
+
+# Prosody
+backend/chat_app/websocket/biomarkers/models/prosody/*
+!backend/chat_app/websocket/biomarkers/models/prosody/.gitkeep
+

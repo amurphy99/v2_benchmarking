@@ -1,3 +1,28 @@
+/* AdminChat.tsx
+--------------------------------------------------------------------------------
+This page is where admin users can monitor and interact with a users live chat 
+session in real time. It has two panels that receive live updates for the current 
+chats transcript and biomarkers. It also has a series of "pills" in the header 
+area where we receive other information about the chat like the duration, time 
+since the last message, pause/active status from the user, and status of our own 
+connection with the backend. 
+
+It has two sets of control panels at the bottom. One is for controlling response
+behavior from the chatbot -- pausing automatic responses (to allow more user 
+messages to build up before the assistant responds), sending commands for it to
+respond immediately, and a text box for admin users to have the bot say whatever
+they want. 
+
+The second set of controls is a simple panel with buttons. This is ultimately
+meant to change based on the "source" attribute of the ChatSession we are 
+listening in on, as that attribute indicates if the chat is with the web 
+interface (with a virtual robot avatar), or either of the two robots that we 
+also have configured to work with our system. Each one of these types of robots
+has a variety of actions/movements it can do such as making different 
+expressions (e.g. happy, sad, thinking, etc.) or subtle movements (e.g. nodding
+yes or no). 
+
+*/
 import { useState, useRef } from "react";
 import { useParams        } from "react-router-dom";
 
@@ -14,7 +39,7 @@ import { useLocalChatSession } from "@/hooks/live-chat";
 import { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
 // Components
-import { SessionHeader      } from  "./components/admin_header/SessionHeader";
+import { SessionHeader      } from "./components/admin_header/SessionHeader";
 import { SessionHistory     } from "./components/common/SessionHistory";
 import { AdminControlsPanel } from "./components/AdminControlsPanel";
 
@@ -24,6 +49,9 @@ import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listen
 // ================================================================================
 // AdminChat -- Monitor a participant's ChatSession in real time
 // ================================================================================
+// Live page is laid out as a fixed-viewport flex column so the controls always
+// stay on screen (no page-level scrolling). SessionHistory takes the remaining
+// space and scrolls internally; AdminControlsPanel pins to the bottom.
 export function AdminChat() {
     // SessionInfo sent initially by the backend
     const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
@@ -53,32 +81,34 @@ export function AdminChat() {
         onStreamStatus    : (st)   => { setStreamStatus(st?.status ?? "active"); },
         onControlState    : (st)   => {
             setControlState((s) => ({
-            listeningPaused : st?.listeningPaused ?? s.listeningPaused,
-            responsesPaused : st?.responsesPaused ?? s.responsesPaused,
-            manualMode      : st?.manualMode      ?? s.manualMode,
+                listeningPaused  : st?.listeningPaused  ?? s.listeningPaused,
+                responsesPaused  : st?.responsesPaused  ?? s.responsesPaused,
+                manualMode       : st?.manualMode       ?? s.manualMode,
+                recordingEnabled : st?.recordingEnabled ?? s.recordingEnabled,
             }));
+        },
+        onRecordingStatus : (st)   => {
+            setControlState((s) => ({...s, recordingEnabled: st?.enabled ?? s.recordingEnabled}));
         },
     });
 
-    // --------------------------------------------------------------------------------
-    // [DEBUGGING] Sample Data Methods 
-    // --------------------------------------------------------------------------------
+    // [DEBUGGING] Sample Data Methods
+    // TODO: I think we can delete these? There are multiple other places we have to look around for though...
     const [isUserRole, setIsUserRole] = useState<boolean>(true);
     function addSampleMessage       () {pushMessageObj(makeSampleMessage(isUserRole)); setIsUserRole((prev) => !prev);}
     function addSampleBiomarkerScore() {  pushScoreObj(makeSampleBiomarkerEvent()); }
 
-    // --------------------------------------------------------------------------------
     // Stream status (reflects user's chat state: active | paused | ended)
-    // --------------------------------------------------------------------------------
     const [streamStatus, setStreamStatus] = useState<StreamStatus>("active");
 
     // --------------------------------------------------------------------------------
-    // Control state (commands confirmed by backend)
+    // Control state (command success/failure confirmed by backend acks)
     // --------------------------------------------------------------------------------
     const [controlState, setControlState] = useState<ControlState>({
-        listeningPaused: false,
-        responsesPaused: false,
-        manualMode     : false,
+        listeningPaused  : false,
+        responsesPaused  : false,
+        manualMode       : false,
+        recordingEnabled : false,
     });
 
     // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)
@@ -89,8 +119,7 @@ export function AdminChat() {
     // UI Components
     // ================================================================================
     return (
-        <div className="pb-[15vh]">
-
+        <div className="h-screen flex flex-col bg-admin-surface text-admin-text overflow-hidden">
             {/* Page Header */}
             <SessionHeader
                 title         = "Monitor Live Chat Session"
@@ -99,8 +128,8 @@ export function AdminChat() {
                 source        = {sessionInfo?.source   ?? "unknown"}
                 mode          = "listener"
                 wsState       = {connected ? "connected" : "disconnected"}
-                lastEventAt   = {lastEventAt} // Date   | null
-                latencyMs     = {latencyMs}   // number | null
+                lastEventAt   = {lastEventAt}
+                latencyMs     = {latencyMs}
                 startTsUnix   = {sessionInfo?.startTs      ?? null}
                 messageCount  = {session.messages.length}
                 streamStatus  = {streamStatus}
@@ -110,20 +139,26 @@ export function AdminChat() {
             {/* -------------------------------------------------------------------------------- */}
             {/* Page Body */}
             {/* -------------------------------------------------------------------------------- */}
-            {/* Chat Messages & Biomarker History */}
-            <SessionHistory messages={session.messages} series={series} /> 
+            <main className="flex-1 min-h-0 flex flex-col px-4 md:px-6 pb-4 gap-3">
+                {/* Chat Messages & Biomarker History  (fills available space, scrolls internally) */}
+                <div className="flex-1 min-h-0 mt-3">
+                    <SessionHistory messages={session.messages} series={series} fillHeight />
+                </div>
 
-            {/* Control Buttons */}
-            <AdminControlsPanel
-                connected            = {connected}
-                send                 = {send}
-                controlState         = {controlState}
-                setControlState      = {setControlState}
-                registerAckHandler   = {registerAckHandler}
-                onAddSampleMessage   = {addSampleMessage}
-                onAddSampleBiomarker = {addSampleBiomarkerScore}
-            />
+                {/* Control Buttons (pinned to bottom) */}
+                <div className="shrink-0">
+                    <AdminControlsPanel
+                        connected            = {connected}
+                        send                 = {send}
+                        controlState         = {controlState}
+                        setControlState      = {setControlState}
+                        registerAckHandler   = {registerAckHandler}
+                        onAddSampleMessage   = {addSampleMessage}
+                        onAddSampleBiomarker = {addSampleBiomarkerScore}
+                    />
+                </div>
+            </main>
+
         </div>
     );
 }
-

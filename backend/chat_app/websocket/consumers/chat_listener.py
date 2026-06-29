@@ -174,6 +174,10 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     async def ws_stream_status(self, event):
         await self.send_json({"type": "stream_status", "data": event.get("data", {})})
 
+    # Receives recording toggle state from the primary consumer and relays to the admin frontend
+    async def ws_recording_status(self, event):
+        await self.send_json({"type": "recording_status", "data": event.get("data", {})})
+
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
     # ================================================================================

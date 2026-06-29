@@ -1,6 +1,15 @@
-// ================================================================================
-// Admin Chat Header Status Components
-// ================================================================================
+/* Status components (pills) for the active & inactive AdminChat headers.
+--------------------------------------------------------------------------------
+`frontend/src/pages/admin/components/admin_header/SessionHeader.tsx`
+
+There are some shared and some separate pills for the active and inactive
+versions of the pages.
+
+NOTE: The "general" pill wrapper `InfoPill` is only kept here for backwards-
+compatibility. New code adding status pills should import the `Pill` class from
+the `components/ui/Pill.tsx` file.
+
+*/
 import { memo, useMemo, useState, useEffect } from "react";
 import { formatAgo, formatElapsedTime, formatDurationFromStart } from "@/utils/styling/numFormatting";
 
@@ -34,11 +43,12 @@ export const ConnectionPill = memo(function ConnPill({ wsState, label }: { wsSta
 // ================================================================================
 // Live-updating StatusPills for the AdminChat page headers
 // ================================================================================
-// General "pill" wrapper for different status information
+// General "pill" wrapper for different status information.
+// Kept for backwards-compatibility; new code should import `Pill` from ui/.
 export const InfoPill: React.FC<{ label: string; value?: React.ReactNode, children?: React.ReactNode }> = ({ label, value, children }) => (
-    <div className="flex items-center gap-2 rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs whitespace-nowrap">
-        <span className="text-black/60">{label}                    </span>
-        <span className="font-medium">  {value ?? children ?? "—"} </span>
+    <div className="flex items-center gap-2 rounded-full border border-admin-border bg-admin-muted px-3 py-1 text-xs whitespace-nowrap">
+        <span className="text-admin-subtext">{label}                </span>
+        <span className="font-medium text-admin-text">{value ?? children ?? "—"}</span>
     </div>
 );
 

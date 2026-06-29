@@ -8,7 +8,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
-    const [show, setShow] = useState<boolean>(true);
     const role = useAuth().account.role;
     const navigate = useNavigate();
 
@@ -19,18 +18,16 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
     return (
         <div className="flex flex-col gap-[1rem]">
             <h2 className="items-start hover:cursor-pointer underline z-1" 
-            onClick={() => {() => setShow(!show)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
+            onClick={() => {toWeeklySummary(week)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()} </h2>
             <div>
-                <div className={`carousel-container w-[95%] ${show ? "" : "hidden"}`}>
+                <div className={`carousel-container w-[95%]`}>
                     { sessions.map( (session, idx) => {
                         if (!session.image) {
                             session.image = defaultImage
                         }
                         const date = new Date(session.date);
-                        const topics: string[] = !session.topics ? [] :
-                            Array.isArray(session.topics) ? session.topics :
-                            (session.topics as unknown as string).replace(/[\[\]"']/g, "").split(",");
+                        const topics = session.topics;
                         return (
                             <div key={idx} className={`${smallShadow} flex flex-col p-2 rounded-lg album-img hover:cursor-pointer hover:scale-110`}
                             onClick={() => {toDaySummary(session)}}>
@@ -49,7 +46,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                                         </a>
                                     </div>
                                 </div>
-                                <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics[0]}</p>
+                                <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics ? topics[0] : "No topics detected"}</p>
                                 <p className="m-0 mx-auto">{Math.round(session.duration / 60 * 100)/100} minutes</p>
                             </div>
                         )
