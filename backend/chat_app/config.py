@@ -15,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
 USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
 THIS_LANGUAGE = "en-US"
-INSTRUCTOR_MODEL_NAME = "llama-4-scout"  # model name for the Instructor client
+INSTRUCTOR_MODEL_NAME = os.getenv("LLM_NAME", "gemma-4-31B-it")  # model name for the Instructor client
 
 # LLM Parameters
 MAX_LENGTH = 128 # 256
