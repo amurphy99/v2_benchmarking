@@ -16,6 +16,6 @@ LLM_URL = os.getenv("IU_URL", "http://127.0.0.1:8080/v1")
 API_KEY = os.getenv("IU_KEY", "DEFAULT_TOKEN"           ) # Absolutely will not work with the default values
 
 # Model configuration
-MODEL_NAME  = "gemma-4-31B-it" # "llama-4-scout"  # TODO: Maybe grab this from the environment as well
+MODEL_NAME  = os.getenv("LLM_NAME", "gemma-4-31B-it")
 TEMPERATURE = 0.50
 
