@@ -232,17 +232,18 @@ class ChatHandler:
         else:                    system_resp = use_response
 
         system_ts = now_ts()
+        system_text = ChatHandler._extract_text(system_resp)  # Extract text if the response is a dict (e.g. from RAG); otherwise use as-is
         consumer.last_response = system_resp
 
         # Immediately send the response back through the websocket & update the DB + chat context
         await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
-        await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts)
+        await consumer.handle_chat_messages(role="assistant", text=system_text, ts=system_ts)
 
         # Admin-triggered path has no STT word timestamps -- text/audio biomarkers
         # are skipped here; the on_*_biomarkers callbacks early-return on empty words.
 
         # Synthesize speech with TTS if specified (pass the consumer to store the audio bytes)
-        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
+        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_text, consumer.send, consumer)
 
         return system_resp
 
