@@ -1,0 +1,15 @@
+# Build-generated stuff
+**/__pycache__/
+*.py[cod]
+**/.DS_Store
+
+# Runtime-generated dirs (recreated at runtime; also provided via the .:/app bind mount)
+media/
+logs/
+staticfiles/
+script/
+
+# Large audio / test data (not needed to build the image)
+# (At runtime the container reads from the bind-mounted host dir, not from the image.)
+**/*.wav
+**/test_transcripts/**/*.csv
