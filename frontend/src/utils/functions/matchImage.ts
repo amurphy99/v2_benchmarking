@@ -16,7 +16,7 @@ export const defaultImage = {
  */
 export function matchImage(sessions: ChatSession[], topic: string) {
     for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
+        var session = sessions[i];
         var sessionTopics = session.topics;
         if (!sessionTopics) continue;
         if (sessionTopics[0].trim() == topic) {

@@ -145,6 +145,23 @@ class ChatSessionSerializer(serializers.ModelSerializer):
     def get_start_ts      (self, obj): return obj.start_ts
     def get_duration      (self, obj): return obj.duration
     def get_average_scores(self, obj): return obj.average_scores
+    
+class ChatSessionSummarySerializer(serializers.ModelSerializer):
+    profile        = ProfileSerializer    (           read_only=True)
+    image          = AlbumImageSerializer (           read_only=True)
+    start_ts       = serializers.SerializerMethodField()
+    duration       = serializers.SerializerMethodField()
+    average_scores = serializers.SerializerMethodField()
+    
+    class Meta:
+        model  = ChatSession
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics",
+                  "sentiment", "emotion", "average_scores", "image")
+        read_only_fields = fields # ToDo: "notes" shouldn't be read only...
+
+    def get_start_ts      (self, obj): return obj.start_ts
+    def get_duration      (self, obj): return obj.duration
+    def get_average_scores(self, obj): return obj.average_scores
 
 # ================================================================================
 # Other Data

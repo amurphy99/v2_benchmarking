@@ -12,6 +12,7 @@ from .views import (
     MyTokenRefreshView,                      # JWT token refresh
     LatestChatSessionView,
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
+    ChatSessionSummaryViewSet,
     ChatSessionView,
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
@@ -24,6 +25,7 @@ from .views import (
 router = DefaultRouter()
 # The regex allows us to filter by active and demo status: 0 for false, 1 for true
 router.register(r"chatsessions/(?P<active>\d+)/(?P<demo>\d+)", ChatSessionViewSet, basename="chatsession")
+router.register(r"all-chatsessions", ChatSessionSummaryViewSet, basename="chatsessions_summary")
 router.register(r"reminders",    ReminderViewSet,    basename="reminder"   )
 router.register(r"accesses",       AccessViewSet,      basename="accesses" )
 router.register(r"rags",          RAGInstructionsViewSet, basename="rag_instructions")

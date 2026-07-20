@@ -1,13 +1,10 @@
 import { GiAlarmClock, GiRobotAntennas, GiChatBubble } from "react-icons/gi";
 import { useAuth      } from "@/context/AuthProvider";
-import { ChatSession  } from "@/api";
-import { h3           } from "@/utils/styling/sharedStyles";
 import   getExercises   from "@/utils/functions/getExercises";
 import   GoalProgress   from "@/components/graphics/GoalProgress";
 import { Avatar } from "@/pages/common/avatar/Avatar";
 import { Spinner } from "react-bootstrap";
 import { useProfile } from "@/hooks/queries/useProfile";
-import { useGoal } from "@/hooks/queries/useGoal";
 
 
 // ====================================================================

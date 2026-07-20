@@ -7,8 +7,11 @@ from rest_framework_simplejwt.state import token_backend
 from rest_framework.exceptions import PermissionDenied
 
 # Can I move the serializers.py file into this folder ?
-from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from ..models      import (Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity)
+from  .serializers import (AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer,
+                           GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, 
+                           ChatSessionSummarySerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, 
+                           RAGInstructionsSerializer)
 from  .mixins      import ProfileMixin
 from ..helpers.downloadHelpers     import get_download_data
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
@@ -184,6 +187,35 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
                 .filter(profile=profile)
                 .select_related  ("profile",  "image")
                 .prefetch_related("messages__words", "biomarker_scores"))
+
+        # Filter for active / inactive chats
+        if   int(active) == 0: objs = objs.filter(is_active=False)
+        elif int(active) == 1: objs = objs.filter(is_active=True )
+
+        # Filter for demo vs. real data
+        if   int(demo) == 0:  objs = objs.exclude(source="demo")
+        elif int(demo) == 1:  objs = objs.filter (source="demo")
+
+        # Return ChatSessions ordered by creation date
+        return objs.order_by("-date")
+    
+class ChatSessionSummaryViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
+    """
+    TODO: Should this be protected based on what kind of user you are?
+    """
+    serializer_class   = ChatSessionSummarySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): 
+        profile = self.get_profile()
+        
+        # Filtering objects  
+        active  = self.kwargs["active"]
+        demo    = self.kwargs["demo"  ]
+        
+        objs = (ChatSession.objects
+                .filter(profile=profile)
+                .select_related  ("profile",  "image"))
 
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)

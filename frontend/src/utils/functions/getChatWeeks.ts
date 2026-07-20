@@ -1,4 +1,4 @@
-import { ChatSession, BiomarkerType, ChatMessage, AlbumImage      } from "@/api";
+import { ChatSession, BiomarkerType, ChatMessage, AlbumImage } from "@/api";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { matchImage } from "./matchImage";
 import { sortUniqueByFrequency } from "./sortUniqueByFrequency";
@@ -39,7 +39,7 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
     // Prepare objects to store the results
     const result : ChatWeek[]    = [];
     let cursor   : Date          = new Date(weekStart);
-    let bucket   : ChatSession[] = [];
+    let bucket = [];
 
     for (const chat of sorted) {
         const chatDate = new Date(chat.date);
@@ -149,6 +149,7 @@ export function getMessages(sessions: ChatSession[]) {
     var messages: ChatMessage[] = [];
     for (var i = 0; i < sessions.length; i++) {
         var session: ChatSession = sessions[i];
+        if (!session.messages) continue;
         for (var j = 0; j < session.messages.length; j++) {
             messages.push(session.messages[j]);
         }
@@ -173,10 +174,10 @@ export function getTopics(sessions: ChatSession[]): string[] {
 }
 
 // Get the most common topic
-export function getMainTopic(sessions: ChatSession[]) {
+export function getMainTopic(sessions: ChatSession[]): string {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
+        var session = sessions[i];
         var sessionTopics = session.topics;
         if (!sessionTopics) continue;
         for (var j = 0; j < sessionTopics.length; j++) {
@@ -191,6 +192,7 @@ export function getMainTopic(sessions: ChatSession[]) {
     const mostFrequent = Array.from(new Set(topics)).reduce((prev, curr) =>
         topics.filter(el => el === curr).length > topics.filter(el => el === prev).length ? curr : prev
     );
+    return mostFrequent;
 }
 
 // --------------------------------------------------------------------

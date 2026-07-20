@@ -165,22 +165,22 @@ export interface ChatSession {
   audio_file: string | null;
 
   topics    : string[] | null;
-  image     : AlbumImage;
+  image     : AlbumImage | null;
   sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
   emotion   : string | null;
-  notes     : string | null;
-  summary   : string | null;
+  notes?     : string | null;
+  summary?   : string | null;
 
-  risk_level    : number;
-  risk_quotes   : string[];
-  risk_reason   : string;
+  risk_level?    : number | null;
+  risk_quotes?   : string[] | null;
+  risk_reason?   : string | null;
 
-  taskType      : string;
-  taskSubtype   : string | null;
+  taskType?      : string | null;
+  taskSubtype?   : string | null;
 
-  messages        : ChatMessage[];
-  biomarkers      : ChatBiomarkerScore[];
-  average_scores  : Record<string, number>;
+  messages?        : ChatMessage[] | null;
+  biomarkers?      : ChatBiomarkerScore[] | null;
+  average_scores   : Record<string, number>;
 }
 
 // =======================================================================

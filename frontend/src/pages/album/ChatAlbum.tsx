@@ -3,17 +3,16 @@ import { IoGridOutline, IoList } from "react-icons/io5";
 
 import AlbumWeekGrid from "./components/AlbumWeekGrid";
 import AlbumWeekList from "./components/AlbumWeekList";
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { groupSessionsByWeek } from "@/utils/functions/getChatWeeks";
 import { useLocation } from "react-router-dom";
 import AlbumWeekDesktop from "./components/AlbumWeekDesktop";
-import { useUserSettings } from "@/hooks/queries/useUserSettings";
 
 
 export function ChatAlbum() {
     const { state } = useLocation() as { state?: { albumDisplay: string } };
     const [display, setDisplay] = useState(state ?? "grid");
-    const { data: sessions, isLoading } = useChatSessions();
+    const { data: sessions, isLoading } = useChatSessionSummaries();
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
