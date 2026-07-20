@@ -17,6 +17,10 @@ export default function ChatOverview() {
     const { account } = useAuth();
     const { data: profile, isLoading } = useProfile();
 
+    if (isLoading) {
+        return <Spinner />
+    }
+
     // User info
     const role      = account.role;
     const first     = profile.account.user.first_name;
@@ -28,10 +32,6 @@ export default function ChatOverview() {
     const conclStyle = "flex flex-row items-center gap-4 text-xl";
     const cStyle = "text-green-700 text-2xl";
     const rStyle = "text-fuchsia-900 text-2xl";
-
-    if (isLoading) {
-        return <Spinner />
-    }
 
     // Return UI component
     return (
