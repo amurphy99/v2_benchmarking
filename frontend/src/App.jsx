@@ -3,9 +3,9 @@ import { AuthProvider            } from "@/context/AuthProvider";
 
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient, IsStaff } from "@/routes";
 
-import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary, 
-    WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest, 
-    PracticePage, Profile, Admin, AdminChat, AdminChatInactive } from "@/pages";
+import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary,
+    WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest,
+    PracticePage, Profile, Admin, AdminChat, AdminChatInactive, TranscriptPlayback } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
 import SignUpPatient   from "@/pages/SignUpPatient";
@@ -74,7 +74,8 @@ export default function App() {
                 <Route path="/day"      element={<DaySummary      />} />
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/analysis/flagged" element={<AnalysisFlagged />} />
-                <Route path="/transcript" element={<Transcript    />} />
+                <Route path="/transcript"          element={<Transcript         />} />
+                <Route path="/transcript-playback" element={<TranscriptPlayback />} />
 
                 {/* v2 Testing and old routes */}
                 <Route path="/v2"           element={<ProgressSummary />} />

@@ -27,8 +27,9 @@ export default defineConfig({
         strictPort   : true,           // make sure it uses 5173
         cors         : true,           // allow cross-origin access if needed
         proxy        : {
-            '/ws'  : {target: 'http://127.0.0.1:8000', ws: true}, // backend
-            '/api' : {target: 'http://127.0.0.1:8000', },         // changeOrigin: true,
+            '/ws'   : {target: 'http://127.0.0.1:8000', ws: true}, // backend
+            '/api'  : {target: 'http://127.0.0.1:8000', },         // changeOrigin: true,
+            '/media': {target: 'http://127.0.0.1:8000', },         // For audio playback (routes to Django media storage)
         },
         allowedHosts : ["localhost", "127.0.0.1", "frontend", "cognibot.org", "deployment.cognibot.org", "sandbox.cognibot.org", "sandbox2.cognibot.org", "sandbox3.cognibot.org"], 
     },

@@ -4,25 +4,35 @@ Shared channel group methods.
 `backend.chat_app.websocket.consumers.utils.groups`
 
 Broadcast rooms:
-* "room_group"
-    - From `ChatConsumer` to `ChatListener`
-    - Gets incoming messages from the chat (user & robot)
+"room_group"
+  - From `ChatConsumer` to `ChatListener`
+  - Gets incoming messages from the chat (user & robot)
 
-* "monitor_group"
-    - From `ChatConsumer` to `ChatListener`
-    - Gets all biomarker scores upon calculation
+"monitor_group"
+  - From `ChatConsumer` to `ChatListener`
+  - Gets all biomarker scores upon calculation
 
-* "control_group"
-    - From `ChatListener` to `ChatConsumer`
-    - Relays commands sent to the ChatListener (e.g. "respond_now")
+"control_group"
+  - From `ChatListener` to `ChatConsumer`
+  - Relays commands sent to the ChatListener (e.g. "respond_now")
+
+"ack_group"
+  - TODO: IDK I forgot...
+  - I think something like consumer gets a command, executes it, then sends an ack
+    to the listener confirming if it was done
 
 """
+from __future__ import annotations
 
 import logging, time
 logger = logging.getLogger(__name__)
 
-
+# From this project
 from ....services.logging_utils import CC_MAIN, CC_H, CC_R, RESET
+
+# Import the class for type checking
+from typing import TYPE_CHECKING
+if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 
 # --------------------------------------------------------------------------------
@@ -32,9 +42,9 @@ from ....services.logging_utils import CC_MAIN, CC_H, CC_R, RESET
 async def join_chat_consumer_groups(consumer):
     session_id = consumer.session.id
     consumer.room_group    = f"chat_{session_id}"
-    consumer.monitor_group = f"chat_{session_id}_mon"
-    consumer.control_group = f"chat_{session_id}_ctl"
-    consumer.ack_group     = f"chat_{session_id}_ack"   # for relaying command acks to frontend
+    consumer.monitor_group = f"chat_{session_id}_mon"   # Gets all biomarker scores
+    consumer.control_group = f"chat_{session_id}_ctl"   # Relays commands sent to the ChatListener (ChatListener -> ChatConsumer)
+    consumer.ack_group     = f"chat_{session_id}_ack"   # Relays command acks to frontend (ChatConsumer -> ChatListener)
 
     # Join base room & control room (send updates to listeners, receive commands from listeners)
     await consumer.channel_layer.group_add(consumer.   room_group, consumer.channel_name)
@@ -86,34 +96,49 @@ def format_biomarker_broadcast(event):
 # ================================================================================
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
-# TODO: This isn't just formatting, I'm also just sending it from this function, need to clean up documentation
-async def format_send_actions_command(consumer, payload):
+async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
     """
     Commands can look like:
         {'id': '..', 'name': 'robot_action', 'data': {'emotion': 'Happy'}}
     or
         {'id': '..', 'name': 'robot_action', 'data': {'animation': 'Idle'}}
 
-    TODO: This whole thing needs to be clenaed up...
+    TODO: This whole thing needs to be cleaned up...
     TODO: After sending to the frontend client, send an "ack" to the listener that issued the command, using the ID from the payload
+    
+    Two ways of getting an action command here: (1) we get it from structured generation
+    of the LLM, or (2) we get it from the admin page using a command button. In both
+    cases, we need to make sure the command we have selected matches the current chat's
+    "interface", so the web UI or the physical robots. Each one takes different options
+    for behaviors. 
 
     """
+    # Check what source we are chatting with; this will tell us 
+    # TODO: Use this to handle the command formatting stuff
+    chat_source = consumer.source
+
+    # Get the command data
     value = payload.get("data", {"action": "HAPPY"})
 
-    # Temporary mapping values for spin to be "angry"
-    emotion     = value.get("emotion")
-    animation   = value.get("animation")
-    if   emotion    : data = {"type": "emotion", "value": emotion}
-    elif animation  : data = {"type": "animation", "value" : animation}
-    else            : 
-        logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
-        data = {}
+    # Flexible; we can take an "emotion", "animation", or "expression" since different robots take different options
+    emotion    : str = value.get("emotion")
+    animation  : str = value.get("animation")
+    expression : str = value.get("action")
+
+    data = {}
+    if   emotion    : data = {"type":      "emotion",   "value": emotion  }
+    elif animation  : data = {"type":      "animation", "value": animation}
+    elif expression : data = {"expression": "EXCITED",  "duration_ms": 3_000}
+    else            : logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
         
     # Build & send the payload to the frontend client
-    relay_payload = {
-        "type": "expression",
-        "data": data
-    }
-
+    relay_payload = {"type": "expression", "data": data}
     logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now... {RESET}")
     await consumer.send_json(relay_payload)
+
+# TODO: Temporary helper; should be replaced by something that handles all UIs
+def map_action_to_webapp():
+    pass
+
+
+

@@ -172,6 +172,7 @@ export function getTopics(sessions: ChatSession[]): string[] {
     return sortUniqueByFrequency(topics);
 }
 
+// Get the most common topic
 export function getMainTopic(sessions: ChatSession[]) {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
@@ -185,10 +186,11 @@ export function getMainTopic(sessions: ChatSession[]) {
             }
         }
     }
+    // If no topics, return empty string
+    if (topics.length === 0) return "";
     const mostFrequent = Array.from(new Set(topics)).reduce((prev, curr) =>
         topics.filter(el => el === curr).length > topics.filter(el => el === prev).length ? curr : prev
     );
-    return mostFrequent;
 }
 
 // --------------------------------------------------------------------

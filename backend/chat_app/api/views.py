@@ -78,10 +78,10 @@ class ChatSessionView(generics.RetrieveAPIView):
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
         try:
-            session = ChatSession.objects.get(
-                id=sessionid, 
-            )
-            return session
+            return (ChatSession.objects
+                    .select_related("profile", "image")
+                    .prefetch_related("messages__words", "biomarker_scores")
+                    .get(id=sessionid))
         except:
             raise (f"ChatSession with id {sessionid} does not exist.")
 
@@ -183,8 +183,8 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         objs = (ChatSession.objects
                 .filter(profile=profile)
                 .select_related  ("profile",  "image")
-                .prefetch_related("messages", "biomarker_scores"))
-        
+                .prefetch_related("messages__words", "biomarker_scores"))
+
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)
         elif int(active) == 1: objs = objs.filter(is_active=True )
@@ -208,7 +208,7 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
         return (ChatSession.objects
                 .filter(profile=profile)
                 .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores")
+                .prefetch_related("messages__words", "biomarker_scores")
                 .order_by("-end_ts")
                 .first())
 

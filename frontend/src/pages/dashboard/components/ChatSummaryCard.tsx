@@ -51,7 +51,7 @@ export default function ChatSummaryCard({ chatSession }: { chatSession: ChatSess
             <div className="flex flex-row gap-4">
                 <div className="flex flex-col gap-1 items-start text-left">
                     <h4>{dateFormat.format(date)}</h4>
-                    <div><b>Topics covered:</b> {chatSession.topics}</div>
+                    <div><b>Topics covered:</b> {chatSession.topics?.join(", ")}</div>
                     {overallCondition()}
                 </div>
                 <div className={durationStyle}> <p><b>{duration}</b> minutes</p> </div>

@@ -141,7 +141,7 @@ export function parseTs(ts: string): number {
 
 // Display elapsed time since chat start in M:SS.xx (xx = centiseconds)
 export function formatElapsedMessage(chatStartMs: number | null, msgTsIso: string): string {
-  if (!chatStartMs) return "—";
+  if (!chatStartMs) return "?";
 
   const msgMs  = parseTs(msgTsIso);
   const diffMs = Math.max(0, msgMs - chatStartMs);

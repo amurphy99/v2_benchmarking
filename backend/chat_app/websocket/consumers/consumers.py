@@ -23,6 +23,9 @@ from  ..services.bg_helpers                import fire_and_log
 from  ..services.chatHelpers               import ChatHandler
 from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
+# Proper import paths...
+from chat_app.websocket.services.speech.audio_recorder import save_stereo_wav
+
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_send_actions_command
@@ -32,8 +35,15 @@ from .handlers.ws_events    import handle_receive_json, _toggle_stream
 # Delegation / passthroughs
 from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
 from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
+from .handlers.cc_callbacks import on_audio_biomarkers     as _on_audio_biomarkers
 from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
 
+
+# --------------------------------------------------------------------------------
+# TODO: TEMPORARILY PLACING HERE
+# --------------------------------------------------------------------------------
+from ...services.llm.live_chat.cognibot_api import CognibotResponse
+from   .utils.groups                        import format_send_actions_command
 
 # ================================================================================
 # ChatConsumer 
@@ -46,6 +56,21 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # How many recent messages to keep for the LLM
     MAX_CONTEXT = 30  
 
+    # --------------------------------------------------------------------------------
+    # TODO: TEMPORARILY PLACING HERE
+    # --------------------------------------------------------------------------------
+    # Send emotion command to the client & return the string response
+    async def response_method(self, context_buffer) -> str:
+        # Get structured response
+        response: CognibotResponse = await get_LLM_response(context_buffer)
+
+        # Send emotion command to client
+        payload = {"data": {"action": response.response_mood.upper()}}
+        await format_send_actions_command(self, payload)
+        
+        # Return just the string message value
+        return response.message
+
     # ================================================================================
     # Connect
     # ================================================================================
@@ -54,7 +79,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._init_response_state()
 
         # Define the response generation method to be used in the chat
-        self.response_method = get_LLM_response
+        self.response_method = self.response_method
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -70,8 +95,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Configuration based on the source platform for the chat
         self.use_backend_STT   = (self.source == "webapp") # Send the user text to the frontend so it can see it too
         self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
-        self.reply_on_user_utt = True                      # Should the ChatHandler reply instantly when receiving a user utterance
 
+        self.reply_on_user_utt = (self.source != "qtrobot")   # Robot uses the staged utterances, won't reply immediately
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
@@ -105,9 +130,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await join_chat_consumer_groups(self)
 
         # Create new audio buffer & speech provider instances
-        self.audio_buffer     = bytearray()
+        self.audio_buffer     = bytearray() # TODO: This was for the audio biomarkers, might get audio for that differently now...
         self.stt_provider     = SpeechToTextProvider(consumer=self, loop=asyncio.get_running_loop())
         self.streaming_active = True
+
+        # Session recording buffers (NOT in _init_response_state - must survive until disconnect saves them)
+        self.save_audio        = False             # Should we save the audio bytes on chat end?
+        self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
+        self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
+        self._session_start_ts = time.monotonic()  # Reference point for TTS position in recording
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
@@ -151,9 +182,25 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             self._staged_utterances.clear()
             self._staged_words     .clear()
 
+        # --------------------------------------------------------------------------------
+        # Save session audio recording (stereo WAV: left = user mic, right = TTS)
+        # --------------------------------------------------------------------------------
+        audio_path = None
+        if self.save_audio and session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
+            try:
+                audio_path = await asyncio.to_thread(
+                    save_stereo_wav, session_id,
+                    bytes(getattr(self, "_rec_user", b"")),
+                    bytes(getattr(self, "_rec_tts",  b"")),
+                )
+            except Exception:
+                logger.exception(f"{lu.CC_MAIN} {lu.RED}Warning:{lu.CC_R} Failed to save session recording.{lu.RESET}")
+
+        # --------------------------------------------------------------------------------
         # Close the ChatSession in the DB
+        # --------------------------------------------------------------------------------
         if user_id and session_id:
-            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source),
+            fire_and_log(ChatService.close_session(user_id, session_id, username=username, source=self.source, audio_path=audio_path),
                          name=f"disconnect::close-session-{session_id}")
 
         # Cancel background tasks (only connection-based ones; not the close_session task)
@@ -168,6 +215,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
         log.log_disconnect(self.user, session_id, code)
 
+
     # ================================================================================
     # Handle Incoming Data (processing "callbacks" used to maintain the chat)
     # ================================================================================
@@ -180,6 +228,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     # Handle on-utterance biomarkers
     async def on_utterance_biomarkers(self): return await _on_utterance_biomarkers(self)
+
+    # Handle on-audio biomarkers (fires per committed user utterance)
+    async def on_audio_biomarkers(self): return await _on_audio_biomarkers(self)
 
     # Handle "streamed" audio data from the frontend client
     async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)
@@ -235,9 +286,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Conveniently access the LLMs last response (for 'repeat_last_response()')
         self.last_response            = None
 
-        # Old turn-taking/overlapped speech functionality
-        self.overlapped_speech_count  = 0.0
-        self.audio_windows_count      = 0.0 
+        # Turn-taking / overlapped speech (reset per user utterance by on_audio_biomarkers)
+        self.overlapped_speech_count  = 0.0    # TODO: Need to track down everywhere this is tracked, probably can delete...
         self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
 
         # Response task state

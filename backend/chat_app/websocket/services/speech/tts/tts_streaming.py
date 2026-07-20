@@ -16,6 +16,7 @@ from time         import monotonic as now_ts
 # From this project
 from .....services               import logging_utils as lu
 from .....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
+from    ..audio_recorder         import accumulate_tts
 from     .tts_google             import TextToSpeechProvider
 
 # Chunk size (bytes) of TTS audio streamed back to frontend client. 
@@ -25,16 +26,21 @@ CHUNK_SIZE = 8_192   # 8_192 | 4_800
 # ================================================================================
 # Stream a TTS audio response to the frontend in base64 chunks
 # ================================================================================
-async def synthesize_and_stream_tts(system_resp, send_callback):
+async def synthesize_and_stream_tts(system_resp, send_callback, consumer=None):
     """
     1) Synthesize speech bytes (run sync TTS off the event loop)
-    2) Chunk + stream to the frontend over websocket
+    2) Record TTS audio into the session recording buffer (if consumer provided)
+    3) Chunk + stream to the frontend over websocket
     """
     t0 = now_ts()
 
     # Synthesize speech (sync network call -> run in thread)
     tts_provider = TextToSpeechProvider()
     audio_bytes  = await sync_to_async(tts_provider.synthesize_speech)(system_resp)
+
+    # Accumulate TTS audio into the session recording (right channel)
+    # Called before streaming so the start offset matches when audio begins playing
+    if (consumer is not None) and (audio_bytes): accumulate_tts(consumer, audio_bytes)
 
     # Stream audio chunks to client
     await stream_audio_chunks(audio_bytes, send_callback)

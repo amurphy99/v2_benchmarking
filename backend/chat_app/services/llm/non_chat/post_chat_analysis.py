@@ -17,11 +17,11 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 from ....config                 import USE_LLM
 
 # Import helper methods 
-from .utils            import to_transcript
-from .instruct_wrapper import InstructWrapper
-from .chat_summary     import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summary_topics_messages,  log_summary_response
-from .chat_sentiment   import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
-from .chat_risks       import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
+from .utils                          import to_transcript
+from .instruct_wrapper               import InstructWrapper
+from .response_models.chat_summary   import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summary_topics_messages,  log_summary_response
+from .response_models.chat_sentiment import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
+from .response_models.chat_risks     import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
 
 # Load constants from the new endpoint
 from ..endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE

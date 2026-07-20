@@ -1,34 +1,23 @@
 
 // --------------------------------------------------------------------------------
-// Format a topics value (string[] from DB, or legacy string) into display text
+// Format a topics value (string[] from DB) into display text
 // --------------------------------------------------------------------------------
-export function formatTopics(raw: unknown): string {
-    if (Array.isArray(raw))      { return raw.filter(Boolean).join(", "); }
-    if (typeof raw !== "string") { return "—"; }
-    const s = raw.trim();
-    try {
-        const parsed = JSON.parse(s);
-        if (Array.isArray(parsed)) return parsed.filter(Boolean).join(", ");
-    } catch {}
-    return s
-        .replace(/[\[\]"']/g, "")
-        .split  (",")
-        .map    ((t) => t.trim())
-        .filter (Boolean)
-        .join   (", ");
+export function formatTopics(raw: string[] | null | undefined): string {
+    if (!raw || raw.length === 0) return "—";
+    return raw.filter(Boolean).join(", ");
 }
 
 // --------------------------------------------------------------------------------
 // Session type for analysis display components
 // --------------------------------------------------------------------------------
 export type SessionLike = {
-    topics      ?: string[] | string | null;
-    sentiment   ?: string        | null;
-    emotion     ?: string        | null;
-    summary     ?: string        | null;
-    risk_level  ?: number        | null;
-    risk_quotes ?: string[]      | null;
-    risk_reason ?: string        | null;
+    topics      ?: string[] | null;
+    sentiment   ?: string   | null;
+    emotion     ?: string   | null;
+    summary     ?: string   | null;
+    risk_level  ?: number   | null;
+    risk_quotes ?: string[] | null;
+    risk_reason ?: string   | null;
 };
 
 // --------------------------------------------------------------------------------

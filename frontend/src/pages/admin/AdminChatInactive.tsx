@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
+import { BsPlayCircle           } from "react-icons/bs";
 
 // Components
 import { SessionHeader  } from "./components/admin_header/SessionHeader";
@@ -40,6 +41,21 @@ export function AdminChatInactive() {
                 inactive_chat = {true}
                 duration      = {session?.duration}
             />
+
+            {/* TEMPORARY -- should find a different place for this... or at least move this to the header */}
+            {/*           -- so multiple pages could link to this, from here or from the main user-facing web app */}
+            {/* Transcript Playback link (only for sessions with audio) */}
+            {session.audio_file && (
+                <div className="mx-[1rem] mt-[1rem]">
+                    <button
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+                        onClick={() => navigate("/transcript-playback", { state: { chatSession: session } })}
+                    >
+                        <BsPlayCircle size={20} />
+                        <span className="font-medium">Transcript Playback</span>
+                    </button>
+                </div>
+            )}
 
             {/* Page Body */}
             <AnalysisPanel  session={session} /> {/* Analysis Panel (topics, sentiment, summary, risk factors) */}
