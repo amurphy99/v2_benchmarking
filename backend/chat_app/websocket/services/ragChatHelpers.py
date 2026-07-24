@@ -132,19 +132,29 @@ def get_available_scenarios(user_id: int, activity_id: int) -> list[dict]:
     return list(qs)
 
 
-def format_available_scenarios(scenarios: list[dict]) -> str:
+def format_available_scenarios(
+    scenarios: list[dict],
+    completed_states: set[str] | None = None,
+) -> str:
     """
-    Turn:
-      [{"name": "initiate_smalltalk", "description": "..."}]
-    into a nice prompt chunk:
-      - initiate_smalltalk: ...
+    Formats a list of available scenarios into a human-readable string.
+
+    Args:
+        scenarios: List of scenario dictionaries with keys "name" and "description".
+        completed_states: Optional set of scenario names that have been completed.
+
+    Returns:
+        A formatted string listing all scenarios, marking completed ones, and ensuring the start scenario is included.
     """
+    completed_states = completed_states or set()
     lines = []
     for s in scenarios:
-        lines.append(f"- {s['name']}: {s['description']}")
-    # Ensure start scenario is always present in the prompt
+        label = f"{s['name']} [COMPLETED]" if s["name"] in completed_states else s["name"] # mark completed scenarios
+        lines.append(f"- {label}: {s['description']}")
+    
+    # if the start scenario is not in the list, add it at the beginning
     if not any(s["name"] == START_SCENARIO for s in scenarios):
-        lines.insert(0, f"- {START_SCENARIO}: starting state of the conversation")
+        lines.insert(0, f"- {START_SCENARIO}: Starting state of the conversation. Politely greet the user.")
     return "\n".join(lines)
 
 

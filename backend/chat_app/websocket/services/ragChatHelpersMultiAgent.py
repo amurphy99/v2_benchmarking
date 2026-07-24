@@ -35,6 +35,8 @@ CLOSE_SESSION_DESCRIPTION = (
     "This triggers automatic session termination. Never skip directly to this from other states."
 )
 
+MAX_SAME_STATE_TURNS = 5 # Maximum number of turns allowed in the same state before forcing a transition
+
 # =============================================================================
 # Agent-2 structured output schema
 # =============================================================================
@@ -134,6 +136,7 @@ def build_agent2_system_prompt(
     You will also determine whether to stay in the current state or transition to a new state.
     Here is an ordered list of AVAILABLE_STATES:
     {available_scenarios_text}
+    States marked [COMPLETED] have already been addressed. Do NOT return to them unless the user explicitly brings up that topic.
 
     CURRENT_STATE:
     "{current_scenario}"
@@ -271,10 +274,14 @@ async def _predict_and_update_next_scenario(
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 updated memory: {resp.updated_memory}{lu.RESET}")
 
-            # Update rag_state with new scenario and instructions for agent1
+            # Update rag_state with new scenario
             rag_state["agent2_instructions"] = resp.assistant_instructions
             rag_state["current_scenario"] = resp.next_state
-            rag_state["_last_predicted_next_scenario"] = resp.next_state
+
+            if resp.next_state != current:
+                completed: set[str] = rag_state.setdefault("_completed_states", set())
+                completed.add(current)
+
             rag_state["agent2_memory"]                 = resp.updated_memory
 
 
@@ -325,7 +332,8 @@ async def rag_response_fn(
 
     # --- Load available scenarios (for validation/matching) ---
     scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
-    available_scenarios_text = format_available_scenarios(scenarios)
+    completed_states: set[str] = rag_state.get("_completed_states", set()) # initialize completed states with any previously completed ones, set to empty set if none exist
+    available_scenarios_text = format_available_scenarios(scenarios, completed_states=completed_states)
     available_scenarios_text = available_scenarios_text + f"\n{CLOSE_SESSION_DESCRIPTION}"
 
     if not _available_scenarios_logged:
@@ -380,6 +388,28 @@ async def rag_response_fn(
         rag_state=rag_state,
     )
 
+    new_state = rag_state.get("current_scenario", current)
+    if new_state == current:
+        same_count = rag_state.get("_same_state_turn_count", 0) + 1 
+        rag_state["_same_state_turn_count"] = same_count
+        if same_count >= MAX_SAME_STATE_TURNS:
+            scenario_names = [s["name"] for s in scenarios]  # already ordered by instruction_order
+            try:
+                idx = scenario_names.index(current)
+                if idx + 1 < len(scenario_names):
+                    forced_next = scenario_names[idx + 1]
+                    logger.warning(
+                        f"{lu.RED}[Multi-Agent][{trace_id}] Forcing advance '{current}' → '{forced_next}' "
+                        f"after {same_count} consecutive turns.{lu.RESET}"
+                    )
+                    # the state will be change in the next turn
+                    rag_state["current_scenario"] = forced_next
+                    rag_state["_same_state_turn_count"] = 0
+            except ValueError:
+                pass
+    else:
+        rag_state["_same_state_turn_count"] = 0
+
     try:
         agent2_instructions = rag_state.get("agent2_instructions") or "Respond warmly and briefly. Ask one gentle follow-up question."
 
@@ -399,8 +429,8 @@ async def rag_response_fn(
         )
         assistant_text = (assistant_text or "").strip()
 
-        chat_state.add_message(HumanMessage(content=user_text), scenario=rag_state["current_scenario"])
-        chat_state.add_message(AIMessage(content=assistant_text), scenario=rag_state["current_scenario"])
+        chat_state.add_message(HumanMessage(content=user_text), scenario=current)
+        chat_state.add_message(AIMessage(content=assistant_text), scenario=current)
 
         tail_history.append(HumanMessage(content=user_text))
         tail_history.append(AIMessage(content=assistant_text))
@@ -422,7 +452,7 @@ async def rag_response_fn(
 
     return {
         "text": assistant_text,
-        "current_scenario": rag_state["current_scenario"],
+        "current_scenario": current,
         "next_scenario": "",  # frontend doesn’t need this at the moment
         "close_session": rag_state["current_scenario"] == CLOSE_SESSION_STATE, # frontend or robot can use this to trigger session closure
     }
