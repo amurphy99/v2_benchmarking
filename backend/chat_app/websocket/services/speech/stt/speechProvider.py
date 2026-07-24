@@ -12,6 +12,7 @@ New chat-response flow:
 TODO: Really need to test it out without KEEP_ALIVE_SEC
 
 """
+import json
 import logging, threading, asyncio, base64, weakref
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,15 @@ class SpeechToTextProvider:
                     self._loop, ChatHandler.stage_and_schedule(data, consumer, words),
                     name="stt::stage_and_schedule"
                 )
-                def _done(_, _ts=t_sched): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
+                def _done(_, _ts=t_sched, _consumer=consumer):
+                    logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
+                    # Notify the qtrobot client that the transcript has been staged.
+                    # Only sent for "qtrobot" source
+                    if getattr(_consumer, "source", None) == "qtrobot":
+                        asyncio.run_coroutine_threadsafe(
+                            _consumer.send(json.dumps({"type": "stt_staged"})),
+                            self._loop,
+                        )
                 fut.add_done_callback(_done)
 
 
