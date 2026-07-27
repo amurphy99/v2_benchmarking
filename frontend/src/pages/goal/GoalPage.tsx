@@ -2,7 +2,7 @@ import { useAuth     } from "@/context/AuthProvider";
 
 import GoalProgress from "@/components/graphics/GoalProgress";
 import WeekTrack     from "./components/WeekTrack";
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import { useProfile } from "@/hooks/queries/useProfile";
 import { Avatar } from "../common/avatar/Avatar";
@@ -10,7 +10,7 @@ import { Avatar } from "../common/avatar/Avatar";
 export function Goal() {
     const role = useAuth().account.role;
     const isCare = role != "patient";
-    const { data: sessions, isLoading } = useChatSessions();
+    const { data: sessions, isLoading } = useChatSessionSummaries();
     const { data: profile, isLoading: isLoadingProfile } = useProfile();
     if (isLoading || isLoadingProfile) { 
         return <p>Loading goal...</p>; 

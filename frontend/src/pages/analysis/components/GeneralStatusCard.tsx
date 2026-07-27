@@ -15,20 +15,20 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
     return (
         <div className={`${blockStyle} flex flex-col`}>
             <h2 className={`${role}-text`}>General Cognitive Status</h2>
-            <div className="flex flex-row w-full mb-2">
-                <div className="w-1/2">
-                    <p className="text-lg italic text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
-                    <div className="flex mt-4 grid grid-cols-2 justify-center items-center gap-2 text-lg w-full">
+            <p className="text-lg italic text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
+            <div className="flex flex-row h-full w-full mb-2">
+                <div className="w-1/2 flex self-center">
+                    <div className="flex mt-4 grid grid-cols-2 gap-2 text-lg w-full justify-center items-center">
                         <b className="text-xl col-span-full text-center">Fairly Good</b>
-                        <p className="mb-0 text-right">2 signs</p>
+                        <p className="mb-0 text-center">2 signs</p>
                         <p className={`${role}-highlight mb-0 text-center p-2 rounded-full`}>Flagged</p>
-                        <p className="mb-0 text-right">1 sign</p>
+                        <p className="mb-0 text-center">1 sign</p>
                         <p className={`${role}-highlight mb-0 text-center p-2 rounded-full`}>Impact</p>
                     </div>
                 </div>
                 
-                <div className="flex flex-col w-1/2 h-full">
-                    <div className="w-full h-full scale-120">
+                <div className="flex flex-col w-1/2 h-full min-h-[10rem]">
+                    <div className={`w-full h-full min-h-[10rem]`}>
                         <CircularProgress score={curScore} role={role} />
                     </div>
                     {prevWeek.start ? 

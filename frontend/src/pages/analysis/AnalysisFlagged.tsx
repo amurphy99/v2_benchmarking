@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthProvider";
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { groupSessionsByWeek } from "@/utils/functions/getChatWeeks";
 import { averageScore, getExemplarDays, getFlaggedBiomarkers, getFlaggedDays, getPerformance } from "@/utils/misc/scores";
 import { colStyle } from "@/utils/styling/sharedStyles";
@@ -7,7 +7,7 @@ import BiomarkerCard from "./components/BiomarkerCard";
 
 export function AnalysisFlagged() {
     const role = useAuth().account.role == "patient" ? "patient" : "caregiver";
-    const { data: sessions, isLoading } = useChatSessions();
+    const { data: sessions, isLoading } = useChatSessionSummaries();
 
     if (isLoading) { 
         return <p>Loading...</p>; 

@@ -244,6 +244,37 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
                 .order_by("-end_ts")
                 .first())
 
+# ================================================================================ 
+# [Read-Only] Chat Alerts
+# ================================================================================ 
+class SessionAlertsViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
+    serializer_class   = ChatSessionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self): 
+        profile = self.get_profile()
+        
+        # Filtering objects  
+        active  = self.kwargs["active"]
+        demo    = self.kwargs["demo"  ]
+        
+        objs = (ChatSession.objects
+                .filter(profile=profile)
+                .filter(risk_level__gt=0)
+                .select_related  ("profile",  "image")
+                .prefetch_related("messages__words", "biomarker_scores"))
+
+        # Filter for active / inactive chats
+        if   int(active) == 0: objs = objs.filter(is_active=False)
+        elif int(active) == 1: objs = objs.filter(is_active=True )
+
+        # Filter for demo vs. real data
+        if   int(demo) == 0:  objs = objs.exclude(source="demo")
+        elif int(demo) == 1:  objs = objs.filter (source="demo")
+
+        # Return ChatSessions ordered by creation date
+        return objs.order_by("-date")
+
 # ======================================================================= ===================================
 # Profile Related Views
 # ======================================================================= ===================================

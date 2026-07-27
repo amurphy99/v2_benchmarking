@@ -1,5 +1,5 @@
 import   ReactApexChart    from "react-apexcharts";
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { dateFormatShort                } from "@/utils/styling/numFormatting";
 import { biomarkerKeys, biomarkerColors } from "@/utils/styling/options";
 
@@ -8,7 +8,7 @@ import { biomarkerKeys, biomarkerColors } from "@/utils/styling/options";
 // ====================================================================
 export default function ScoreTrackGraph() {
     // Load ChatSessions for the patient
-    const { data, isLoading } = useChatSessions();
+    const { data, isLoading } = useChatSessionSummaries();
     if (isLoading   ) return <p>Loading ...</p>;
     if (!data.length) return <p>No sessions yet.</p>;
 

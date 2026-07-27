@@ -1,4 +1,4 @@
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { ChatWeek, getTopics, groupSessionsByWeek } from "@/utils/functions/getChatWeeks"
 import { useAuth } from "@/context/AuthProvider";
 
@@ -13,7 +13,7 @@ import { NavLink } from "react-router-dom";
 
 export function Analysis() {
     const role = useAuth().account.role == "patient" ? "patient" : "caregiver";
-    const { data: sessions, isLoading } = useChatSessions();
+    const { data: sessions, isLoading } = useChatSessionSummaries();
     if (isLoading) { 
         return <p>Loading...</p>; 
     }
@@ -33,10 +33,19 @@ export function Analysis() {
 
     return (
         <div className={colStyle}>
-            <div className={`flex flex-col w-full gap-[2rem] md:flex-row md:gap-[1rem]`}>
-                <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
-                <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
-            </div>
+            
+            {window.isMobile ? 
+                <div>
+                    <div className="flex flex-row gap-4 w-full mb-4">
+                        <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
+                    </div>
+                    <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
+                </div> : 
+                <div className="flex flex-row gap-4 w-full">
+                    <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
+                    <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
+                </div>
+            }
             <MoodCard week={currentWeek} />
             <p id="factors" className="h-0 w-0 p-0 m-0"/>
             <h2 className={`flex ${widthStyle} mt-[-2rem]`}>Flagged Signs</h2>

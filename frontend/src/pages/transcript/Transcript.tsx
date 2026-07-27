@@ -1,5 +1,5 @@
 import { ChatSession } from "@/api";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ChatTranscript from "../chatDetails/components/ChatTranscript";
 import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
@@ -10,13 +10,19 @@ import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { Icon } from "@iconify/react/dist/iconify.js";
 import getMoodIcon from "@/utils/functions/getMoodIcon";
 import { BsPlayCircle } from "react-icons/bs";
+import { useChatSession } from "@/hooks/queries/useChatSessions";
 
 export function Transcript() {
     const role = useAuth().account.role;
-    const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay?: string } };
+    const { id } = useParams();
+    const { data: chatSession, isLoading } = useChatSession(id);
+    while (isLoading) { 
+        return <p>Loading...</p>; 
+    }
+    const chatDate = new Date(chatSession.date);
     const [biomarker, setBiomarker] = useState<string>("");
     const navigate = useNavigate();
-    const toDaySummary = () => {navigate("/day", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}})}
+    const toDaySummary = () => {navigate(`/day/${chatSession.id}`)}
 
     function BiomarkerSummary({biomarker} : {biomarker: string}) {
         const summaryStyle = "flex flex-col gap-2 rounded-lg"
@@ -66,7 +72,7 @@ export function Transcript() {
                     <h3 className={`${role}-text mx-auto`}>Play Audio</h3>
                 </button>
                 <div className={blockStyle}>
-                    <ChatTranscript chatSession={state.chatSession} />
+                    <ChatTranscript chatSession={chatSession} />
                 </div>
             </div>
             
@@ -96,12 +102,12 @@ export function Transcript() {
                     </select>
                     <BiomarkerSummary biomarker={biomarker} />
                     <h2 className="mt-[1rem]">Overview</h2>
-                    <p>{new Date(state.chatSession.date).toLocaleDateString("en-US", dateFormatOptions)}</p>
+                    <p>{new Date(chatSession.date).toLocaleDateString("en-US", dateFormatOptions)}</p>
                     <div>
                         <div className={`${smallShadow} flex flex-col justify-center items-center py-[1rem] px-[3rem] rounded-lg mb-[1rem]`}>
                             <h2 className={`${role}-text`}>Mood</h2>
-                            <Icon icon={getMoodIcon(state?.chatSession.sentiment)} width={"full"}/>
-                            <h3>{state?.chatSession.sentiment}</h3>
+                            <Icon icon={getMoodIcon(chatSession.sentiment)} width={"full"}/>
+                            <h3>{chatSession.sentiment}</h3>
                         </div>
                     </div>
                     <div className={`${smallShadow} flex flex-col gap-2 items-center rounded-lg p-[1rem]`}>
@@ -109,7 +115,7 @@ export function Transcript() {
                         <div>
                             <div className="flex flex-col text-lg text-center">
                                 <b>Total Length</b>
-                                <p>{state?.chatSession.duration} mins </p>
+                                <p>{chatSession.duration} mins </p>
                             </div>
                             <div className="flex flex-col text-lg text-center">
                                 <b>Time Spent Speaking</b>
@@ -126,7 +132,7 @@ export function Transcript() {
                         <h3 className={`${role}-text mx-auto`}>Play Audio</h3>
                     </button>
                     <div className={`${blockStyle} h-full`}>
-                        <ChatTranscript chatSession={state.chatSession} />
+                        <ChatTranscript chatSession={chatSession} />
                     </div>
                 </div>
             </div>

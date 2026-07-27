@@ -1,15 +1,14 @@
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessions, useChatSessionSummaries } from "@/hooks/queries/useChatSessions";
 import { ChatWeek, getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle, colStyle } from "@/utils/styling/sharedStyles";
 import WeeklyMoods from "@/components/graphics/WeeklyMoods";
 import { getMoodAlert, getWordAlert, WordAlert } from "@/utils/functions/getAlerts";
-import { useAuth } from "@/context/AuthProvider";
 import { dateFormatOptionsMed, dateFormatOptionsShort } from "@/utils/styling/numFormatting";
-import { useUserSettings } from "@/hooks/queries/useUserSettings";
 import { useProfile } from "@/hooks/queries/useProfile";
+import { useSessionAlerts } from "@/hooks/queries/useAlerts";
 
 export function Alert() {
-    const { data: sessions, isLoading } = useChatSessions();
+    const { data: sessions, isLoading } = useSessionAlerts();
 
     if (isLoading) { 
         return <p>Loading...</p>; 

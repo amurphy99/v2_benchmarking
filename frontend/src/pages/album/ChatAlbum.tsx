@@ -12,7 +12,7 @@ import AlbumWeekDesktop from "./components/AlbumWeekDesktop";
 export function ChatAlbum() {
     const { state } = useLocation() as { state?: { albumDisplay: string } };
     const [display, setDisplay] = useState(state ?? "grid");
-    const { data: sessions, isLoading } = useChatSessionSummaries();
+    const { data: sessions, isLoading } = useChatSessionSummaries(0, 2);
     if (isLoading) { 
         return <p>Loading...</p>; 
     }

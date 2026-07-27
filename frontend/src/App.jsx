@@ -71,10 +71,10 @@ export default function App() {
                 <Route path="/goal"     element={<Goal            />} />
                 <Route path="/album"    element={<ChatAlbum       />} />
                 <Route path="/week"     element={<WeekSummary     />} />
-                <Route path="/day"      element={<DaySummary      />} />
+                <Route path="/day/:id"      element={<DaySummary      />} />
                 <Route path="/analysis" element={<Analysis        />} />
                 <Route path="/analysis/flagged" element={<AnalysisFlagged />} />
-                <Route path="/transcript"          element={<Transcript         />} />
+                <Route path="/transcript/:id"          element={<Transcript         />} />
                 <Route path="/transcript-playback" element={<TranscriptPlayback />} />
 
                 {/* v2 Testing and old routes */}

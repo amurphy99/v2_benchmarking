@@ -13,4 +13,4 @@ export const listActiveChatSessions = () => request<ChatSession[]>("/activechats
 
 export const getLatestSession = () => request<ChatSession>("/chatsession/latest/");
 
-export const listChatSessionSummaries = () => request<ChatSession[]>("/all-chatsessions/");
+export const listChatSessionSummaries = (active: number = 0, demo: number = 2) => request<ChatSession[]>(`/all-chatsessions/${active}/${demo}/`);

@@ -8,8 +8,8 @@ import { useNavigate } from "react-router-dom";
 export default function AlbumWeekList({ week } : { week: ChatWeek }) {
     const role = useAuth().account.role;
     const navigate = useNavigate();
-    const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
-    const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )
+    const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week } } )
+    const toDaySummary = (session: ChatSession) => navigate(`/day/${session.id}`)
     const sessions = week.sessions.slice().reverse();
 
     const SessionCard = ( {session} : {session: ChatSession } ) => {
@@ -41,18 +41,20 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
         )
     }
 
-    return (
-        <div className={`${widthStyle} flex flex-col gap-4 border-gray-400 py-[1rem]`}>
-            <a className="underline hover:cursor-pointer text-3xl text-black font-bold" onClick={() => {toWeeklySummary(week)}}>
-                {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}
-            </a>
-            <div className="grid grid-rows-1 w-full gap-3">
-                { sessions.map( (session, idx) => {
-                    return (
-                        <SessionCard key={idx} session={session} />
-                    )
-                })}
+    if (sessions.length > 0) {
+        return (
+            <div className={`${widthStyle} flex flex-col gap-4 border-gray-400 py-[1rem]`}>
+                <a className="underline hover:cursor-pointer text-3xl text-black font-bold" onClick={() => {toWeeklySummary(week)}}>
+                    {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()}
+                </a>
+                <div className="grid grid-rows-1 w-full gap-3">
+                    { sessions.map( (session, idx) => {
+                        return (
+                            <SessionCard key={idx} session={session} />
+                        )
+                    })}
+                </div>
             </div>
-        </div>
-    )
+        )
+    }
 }
