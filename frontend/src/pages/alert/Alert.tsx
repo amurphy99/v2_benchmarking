@@ -9,6 +9,7 @@ import { useSessionAlerts } from "@/hooks/queries/useAlerts";
 
 export function Alert() {
     const { data: sessions, isLoading } = useSessionAlerts();
+    console.log(sessions)
 
     if (isLoading) { 
         return <p>Loading...</p>; 

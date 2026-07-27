@@ -29,7 +29,7 @@ from .transcript_data.data import BIOMARKERS
 # ================================================================================
 # Seed chats with post-chat analysis results
 # ================================================================================
-def seed_analyzed_chats(profile, user):
+def seed_analyzed_chats(profile, user, analyze_mood=True):
     # Load the real examples from JSON and pick an arbitrary time
     examples = json_lib.loads((Path(__file__).parent / "transcript_data" / "examples.json").read_text())
     now_utc  = timezone.now()
@@ -58,17 +58,35 @@ def seed_analyzed_chats(profile, user):
                 s    = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3))
                 s.ts = ts; s.save(update_fields=["ts"])
 
-        # 4) Run post-chat analysis (same as in close_session)
-        analysis = asyncio.run(post_chat_analysis(messages))
+        # 4) Run post-chat analysis (same as in close_session) / get risk level from json file
+        if analyze_mood:
+            analysis = asyncio.run(post_chat_analysis(messages))
+        else:
+            risk_level = example.get("risk_level", 0)
+            risk_reason = example.get("risk_reason", "")
+            risk_quotes = example.get("risk_quotes", [])
 
         # 5) Save all analysis fields via the same helper used by close_session
-        ChatService.save_session_fields(
-            user, session, messages,
-            summary     = analysis.get("summary",     None),
-            sentiment   = analysis.get("sentiment",   None),
-            emotion     = analysis.get("emotion",     None),
-            topics      = analysis.get("topics",      None),
-            risk_level  = analysis.get("risk_rating", None),
-            risk_reason = analysis.get("risk_reason", None),
-            risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
-        )
+        
+        if analyze_mood:
+            ChatService.save_session_fields(
+                user, session, messages,
+                summary     = analysis.get("summary",     None),
+                sentiment   = analysis.get("sentiment",   None),
+                emotion     = analysis.get("emotion",     None),
+                topics      = analysis.get("topics",      None),
+                risk_level  = analysis.get("risk_rating", None),
+                risk_reason = analysis.get("risk_reason", None),
+                risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
+            )
+        else:
+            ChatService.save_session_fields(
+                user, session, messages,
+                summary     = analysis.get("summary",     None),
+                sentiment   = analysis.get("sentiment",   None),
+                emotion     = analysis.get("emotion",     None),
+                topics      = analysis.get("topics",      None),
+                risk_level  = risk_level,
+                risk_reason = risk_reason,
+                risk_quotes = [q.strip() for q in risk_quotes if q and q.strip()],
+            )

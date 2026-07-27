@@ -8,7 +8,10 @@
       {"role": "user",      "content": "My granddaughter just started school this year. She loves to draw and paint."},
       {"role": "assistant", "content": "How lovely! Do you get to spend much time with her?"},
       {"role": "user",      "content": "Yes, she visits on weekends. We garden together sometimes."}
-    ]
+    ],
+    "risk_level": 0,
+    "risk_reason": "",
+    "risk_quotes": []
   },
   {
     "date_offset_days": 34,
@@ -19,7 +22,10 @@
       {"role": "user",      "content": "My family lives far away and I don't get out much anymore."},
       {"role": "assistant", "content": "That must be difficult. Are there any activities nearby you enjoy?"},
       {"role": "user",      "content": "I used to like going to the senior center but it feels hard to get motivated."}
-    ]
+    ],
+    "risk_level": 2,
+    "risk_reason": "The user reported feeling lonely and isolated.",
+    "risk_quotes": ["I've been feeling a bit lonely lately.", "My family lives far away and I don't get out much anymore.", "It feels hard to get motivated." ]
   },
   {
     "date_offset_days": 1,
@@ -50,7 +56,10 @@
         {"role": "assistant", "content": "New places sound exciting! Eating together can be a great way to connect. Do you want to try one soon?"},
         {"role": "user",      "content": "um, I'm not sure. Sometimes it's hard for me to reach out first. I always hesitate whether other people. Have time during the week and whether they have their own plans. So, um, You know, it can be awkward to eat along in a restaurant. But asking if friend to accompany me also feels awkward. I don't know. it's just feels like, I'm not that outgoing person. Um, I might Think to much. I don't know."},
         {"role": "assistant", "content": "It sounds a bit tough for you in restaurants. Would having someone with you make things easier?"}
-        ]
+        ],
+    "risk_level": 2,
+    "risk_reason": "The user reported feeling lonely and isolated.",
+    "risk_quotes": ["Sometimes I might feel lonely and I feel like I have no friends. Because we don't contact each other.", "Sometimes I don't feel like the day Has a purpose.", " I feel like, I don't have connections with others."]
   },
   {
     "date_offset_days": 2,
@@ -89,7 +98,10 @@
       {"role": "assistant", "content": "It's been nice talking to you! Remember, I'm here whenever you want to share your day or talk about anything, even if it's not about schools. Take care and feel free to come back anytime. Is there something else on your mind today that we could discuss?"},
       {"role": "user",      "content": "Know."},
       {"role": "assistant", "content": "Great! What have you learned recently that made you happy or excited? Sharing those moments can be quite uplifting. Remember, every day has its share of learning too, no matter how small it might seem. Can I hear about any fun thing you did today?"}
-    ]
+    ],
+    "risk_level": 1,
+    "risk_reason": "The user reported feeling uncomfortable due to eating ice cream and worried that their grandchildren's mother would be upset at them.",
+    "risk_quotes": ["My stomach is not feeling good.", "I don't know whether they're mom will be mad at me."]
   },
   {
     "date_offset_days": 3,
@@ -113,7 +125,10 @@
       {"role": "assistant", "content": "I'm sorry if my responses are too frequent. Let's take it one question at a time so everything is easier for you. Is there something specific you'd like to talk about right now? :)\""},
       {"role": "user",      "content": "Can you stop talking? Good. Well, you just ruined the mood. I don't want to talk to you anymore."},
       {"role": "assistant", "content": "I'm here if and when you feel like chatting again. Your comfort is my priority. If there's a specific topic or activity that usually brings you joy, maybe we can explore that together? :)\""}
-    ]
+    ],
+    "risk_level": 2,
+    "risk_reason": "The user reported not having a good day and frustration with the voice assistant.",
+    "risk_quotes": ["I don't feel good.", "I'm not feeling good and you have this laughing face.", "Well, you just ruined the mood."]
   },
   {
     "date_offset_days": 4,
@@ -144,6 +159,9 @@
       {"role": "assistant", "content": "Yes! An apple consists of 5 individual letters: A, P, P, L, E. Does that help with remembering it better? Would you like to try another five-letter word related to fruits now?"},
       {"role": "user",      "content": "Know I think I'm okay, I'm done."},
       {"role": "assistant", "content": "That's great! Remember, if something bothers you or if you want to talk more about your favorite things, I'm here for you. What's one of your favorite foods?"}
-    ]
+    ],
+    "risk_level": 2,
+    "risk_reason": "The user reported physical symtpoms of dizziness and difficulty breathing.",
+    "risk_quotes": ["Hi, I'm not feeling good.", "I feel a little bit dizzy. Um, I feel hard to breathe.", "I'm alone at home. I don't have anybody to talk to. um, I don't have friends."]
   }
 ]
