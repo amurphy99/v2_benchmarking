@@ -316,4 +316,5 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.streaming_active         = False  # True while STT stream is active (paused state)
         self._tts_streaming           = False  # True while audio chunks are actively being sent to the frontend
         self._pending_action          = None   # Tracks pending user-initiated action ("end_chat" | None)
+        self._robot_audio_done         = False  # True once the robot has finished sending all audio for the current turn
 

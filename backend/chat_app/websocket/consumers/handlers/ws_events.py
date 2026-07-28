@@ -31,6 +31,7 @@ async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
     elif data["type"] == "audio_data"        : await consumer.handle_audio_data(data)
     elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
     elif data["type"] == "robot_send_staged" : await consumer.reply_now() # flush the staged utterance and reply immediately
+    elif data["type"] == "robot_user_audio_complete"        : await _handle_robot_audio_done(consumer) # handle when the user has finished sending audio
     elif data["type"] == "end_chat"          : await consumer.close(code=1000)   
     elif data["type"] == "toggle_stream"     : await _toggle_stream(consumer, data)
 
@@ -88,3 +89,16 @@ async def _handle_overlap(consumer: ChatConsumer, data=None):
     consumer.overlapped_speech_events.append(time.time())
     logger.info(f"{CC_MAIN} Overlapped speech detected. Count: {CC_H}{consumer.overlapped_speech_count}{CC_R} {RESET}")
 
+async def _handle_robot_audio_done(consumer: ChatConsumer):
+    """
+    Called when the robot signals that all audio for this turn has been fully sent.
+    Marks the consumer as ready to send stt_staged once a final STT result arrives.
+    If a final result already arrived before this message, send stt_staged now.
+    """
+    consumer._robot_audio_done = True
+    logger.info(f"{CC_MAIN} audio_done received. staged_count={len(consumer._staged_utterances)} {RESET}")
+
+    # If a final STT result already came in while we were still sending audio,
+    # the stt_staged signal was held back — send it now.
+    if consumer._staged_utterances:
+        await consumer.send(json.dumps({"type": "stt_staged"}))

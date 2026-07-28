@@ -221,15 +221,18 @@ class SpeechToTextProvider:
                     self._loop, ChatHandler.stage_and_schedule(data, consumer, words),
                     name="stt::stage_and_schedule"
                 )
+
                 def _done(_, _ts=t_sched, _consumer=consumer):
                     logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
-                    # Notify the qtrobot client that the transcript has been staged.
-                    # Only sent for "qtrobot" source
+                    # Only notify qtrobot once robot_audio_done is confirmed.
+                    # If robot_audio_done hasn't arrived yet, _handle_robot_audio_done will send the signal instead.
                     if getattr(_consumer, "source", None) == "qtrobot":
-                        asyncio.run_coroutine_threadsafe(
-                            _consumer.send(json.dumps({"type": "stt_staged"})),
-                            self._loop,
-                        )
+                        if getattr(_consumer, "_robot_audio_done", False):
+                            asyncio.run_coroutine_threadsafe(
+                                _consumer.send(json.dumps({"type": "stt_staged"})),
+                                self._loop,
+                            )
+
                 fut.add_done_callback(_done)
 
 
