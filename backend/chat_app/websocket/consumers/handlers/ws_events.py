@@ -93,12 +93,16 @@ async def _handle_robot_audio_done(consumer: ChatConsumer):
     """
     Called when the robot signals that all audio for this turn has been fully sent.
     Marks the consumer as ready to send stt_staged once a final STT result arrives.
-    If a final result already arrived before this message, send stt_staged now.
+    If STT is already idle and results are staged, send stt_staged now.
+    If STT still has pending audio in-flight, the _done callback in speechProvider
+    will send stt_staged once the final result arrives.
     """
     consumer._robot_audio_done = True
-    logger.info(f"{CC_MAIN} audio_done received. staged_count={len(consumer._staged_utterances)} {RESET}")
+    logger.info(f"{CC_MAIN} robot_audio_done received. staged_count={len(consumer._staged_utterances)} {RESET}")
 
-    # If a final STT result already came in while we were still sending audio,
-    # the stt_staged signal was held back — send it now.
-    if consumer._staged_utterances:
+    # Check if STT still has unprocessed audio in-flight
+    stt_is_idle = not getattr(consumer.stt_provider, "_has_pending_audio", False)
+
+    if stt_is_idle and consumer._staged_utterances:
+        # STT is done and results are already staged — send the signal now
         await consumer.send(json.dumps({"type": "stt_staged"}))

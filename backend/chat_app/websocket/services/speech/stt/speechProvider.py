@@ -55,6 +55,8 @@ class SpeechToTextProvider:
         self._recent_transcript    = ""
         self._recent_transcript_ts = now_ts()
 
+        self._has_pending_audio = False  # True when audio is queued but no final result yet
+
         # From ChatConsumer
         self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
         self._loop         = loop                    # Loop from the consumer
@@ -153,6 +155,7 @@ class SpeechToTextProvider:
     def send_audio(self, data):
         audio_bytes = base64.b64decode(data["data"])
         self._audio_buffer.put((now_ts(), audio_bytes))
+        self._has_pending_audio = True  # audio queued, awaiting STT result (used in the _done callback for qtrobot in _listen_responses)
 
         # Restart if not streaming OR thread is dead
         # TODO: This might make pausing not work
@@ -224,8 +227,9 @@ class SpeechToTextProvider:
 
                 def _done(_, _ts=t_sched, _consumer=consumer):
                     logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
+                    # the final result for the last audio chunk has been processed - mark STT as idle
+                    _consumer.stt_provider._has_pending_audio = False
                     # Only notify qtrobot once robot_audio_done is confirmed.
-                    # If robot_audio_done hasn't arrived yet, _handle_robot_audio_done will send the signal instead.
                     if getattr(_consumer, "source", None) == "qtrobot":
                         if getattr(_consumer, "_robot_audio_done", False):
                             asyncio.run_coroutine_threadsafe(
