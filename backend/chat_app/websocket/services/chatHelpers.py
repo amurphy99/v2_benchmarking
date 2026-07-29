@@ -60,8 +60,6 @@ class ChatHandler:
     ):
         # 1) Process the input
         user_text = data["data"]
-        # reset the robot audio done flag whenever a new user utterance is staged
-        consumer._robot_audio_done = False
 
         # 2) If this is using STT from the backend, also send the utterance back to the frontend
         if consumer.use_backend_STT:

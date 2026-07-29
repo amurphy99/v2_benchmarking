@@ -236,6 +236,8 @@ class SpeechToTextProvider:
                                 _consumer.send(json.dumps({"type": "stt_staged"})),
                                 self._loop,
                             )
+                            # reset _robot_audio_done flag
+                            _consumer._robot_audio_done = False
 
                 fut.add_done_callback(_done)
 
