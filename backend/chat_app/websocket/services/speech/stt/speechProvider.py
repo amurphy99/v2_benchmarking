@@ -155,7 +155,6 @@ class SpeechToTextProvider:
     def send_audio(self, data):
         audio_bytes = base64.b64decode(data["data"])
         self._audio_buffer.put((now_ts(), audio_bytes))
-        self._has_pending_audio = True  # audio queued, awaiting STT result (used in the _done callback for qtrobot in _listen_responses)
 
         # Restart if not streaming OR thread is dead
         # TODO: This might make pausing not work
@@ -183,6 +182,9 @@ class SpeechToTextProvider:
                     # Check if empty; skip if so
                     transcript = result.alternatives[0].transcript.strip()
                     if not transcript: continue
+
+                    # interim transcript detected — mark STT as having pending audio to resolve
+                    self._has_pending_audio = True
 
                     # If there is a result; cancel any pending response task
                     consumer = self._consumer()
