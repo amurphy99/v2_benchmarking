@@ -104,27 +104,29 @@ export function AdminChatActivities() {
         <AdminPage>
             <div className="flex flex-col gap-6 pt-6">
 
-                {/* Back navigation */}
-                <button
-                    className="text-sm text-admin-subtext hover:text-admin-text transition-colors w-fit"
-                    onClick={() => navigate("/admin")}
-                >
-                    ← Back to Admin
-                </button>
-
-                {/* Page header */}
-                <SectionHeader
-                    title    = "Activity Instructions"
-                    subtitle = "These instructions define the conversation states for the memory activity chat. Changes apply to all users."
-                    actions  = {
-                        <button
-                            className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                            onClick={openCreateModal}
-                        >
-                            + New Instruction
-                        </button>
-                    }
-                />
+                {/* Header Container */}
+                <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+                    <button
+                        className="text-sm text-admin-subtext hover:text-admin-text transition-colors mb-4 w-fit"
+                        onClick={() => navigate("/admin")}
+                    >
+                        ← Back to Admin
+                    </button>
+                    
+                    {/* Page header */}
+                    <SectionHeader
+                        title    = "Activity Instructions"
+                        subtitle = "These instructions define the conversation states for the memory activity chat. Changes apply to all users."
+                        actions  = {
+                            <button
+                                className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                                onClick={openCreateModal}
+                            >
+                                + New Instruction
+                            </button>
+                        }
+                    />
+                </div>
 
                 {/* Instructions list */}
                 <AdminCard>
