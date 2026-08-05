@@ -390,6 +390,7 @@ async def rag_response_fn(
     if new_state == current:
         same_count = rag_state.get("_same_state_turn_count", 0) + 1 
         rag_state["_same_state_turn_count"] = same_count
+        logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] same_state_turn_count={same_count} for scenario={current}{lu.RESET}")
         if same_count >= MAX_SAME_STATE_TURNS:
             scenario_names = [s["name"] for s in scenarios]  # already ordered by instruction_order
             try:

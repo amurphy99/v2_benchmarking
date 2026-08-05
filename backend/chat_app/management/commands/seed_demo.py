@@ -120,8 +120,6 @@ class Command(BaseCommand):
         account = Account.objects.filter(user=user).first()
         if not account: return
 
-        RAGInstructions.objects.filter(user=user).delete()
-
         # User's account is the primary account on a Profile
         try:
             profile = Profile.objects.get(account=account)
