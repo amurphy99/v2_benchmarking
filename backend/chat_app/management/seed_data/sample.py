@@ -111,13 +111,11 @@ def seed_activities():
     Activity.objects.get_or_create(name="memory_activity")
 
 def seed_rag_instructions():
-    User            = get_user_model()
     memory_activity = Activity.objects.get(name="memory_activity")
-    demo_user       = User.objects.get(username="demo_caregiver")
 
     for idx, name in enumerate(DEMO_RAG_NAMES):
         obj, _ = RAGInstructions.objects.update_or_create(
-            name=name, user=demo_user, activity=memory_activity,
+            name=name, activity=memory_activity,
             defaults={
                 "description"      : DEMO_RAG_DESCRIPTIONS[idx],
                 "instructions"     : DEMO_RAG_INSTRUCTIONS[idx],
