@@ -10,7 +10,6 @@ export function Settings() {
     <div className="m-[1rem] pb-[5rem]">
         <GoalForm />
         <ChatTypeForm />
-        <RAGForm />
     </div>
     );
 }
