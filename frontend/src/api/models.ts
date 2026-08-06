@@ -33,28 +33,30 @@ export interface Goal {
   current    : number;
   remaining  : number;
 }
+// =======================================================================
+// RAG/Activity Instructions
+// =======================================================================
 
 export interface RAGInstructions {
-    id          : number;
-    name        : string;
-    instructions: string;
-    description : string;
-    user        : number; // PK of user
-    activity    : number; // PK of Activity
-    instruction_order: number;   // order of state instructions
+    id               : number;
+    name             : string;
+    instructions     : string;
+    description      : string;
+    activity         : number; // PK of Activity
+    instruction_order: number;
 }
 
 export interface CreateRAGInstructionsPayload {
-    name        : string;
-    instructions: string;
-    description : string;
+    name             : string;
+    instructions     : string;
+    description      : string;
     instruction_order?: number;
 }
 
 export interface UpdateRAGInstructionsPayload {
-    name?: string;
-    instructions: string;
-    description : string;
+    name?            : string;
+    instructions     : string;
+    description      : string;
     instruction_order?: number;
 }
 

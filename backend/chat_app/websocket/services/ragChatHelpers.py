@@ -11,7 +11,7 @@ from channels.db import database_sync_to_async
 
 from pgvector.django import CosineDistance
 
-from chat_app.models import RAGInstructions, Activity, Account, Profile, Access
+from chat_app.models import RAGInstructions, Activity
 from chat_app.services import logging_utils as lu
 from rag_vectorstore.models import RAGInstructionChunkEmbedding  
 from rag_vectorstore.services.vdb_services import get_embeddings_model
@@ -30,48 +30,6 @@ START_SCENARIO = "start_conversation"
 
 output_parser = PydanticOutputParser(pydantic_object=LlmResponse)
 _available_scenarios_logged = False
-
-@database_sync_to_async
-def resolve_instruction_owner(user):
-    """
-    If `user` is a patient, pick ONE caregiver (alphabetical by username)
-    from the caregivers who have Access to the patient's Profile.
-    Otherwise return `user` (treat as caregiver/unpaired).
-    """
-    try:
-        account = Account.objects.select_related("user").get(user=user)
-    except Account.DoesNotExist:
-        logger.warning("No account found for user_id=%s", getattr(user, "id", None))
-        return None
-
-    # If the logged-in user is not a patient, just use them directly
-    if (account.role or "").lower() != "patient":
-        logger.info("Logged-in user_id=%s is not a patient", getattr(user, "id", None))
-        return None
-
-    # Patient -> Profile
-    try:
-        profile = Profile.objects.get(account=account)
-    except Profile.DoesNotExist:
-        logger.warning("No profile found for patient account_id=%s user_id=%s", account.id, getattr(user, "id", None))
-        return None
-
-    # Profile -> caregiver Access rows -> pick first caregiver alphabetically
-    caregiver_access = (
-        Access.objects
-        .select_related("account__user")
-        .filter(profile=profile, account__role__isnull=False)
-        .filter(account__role__iexact="Caregiver")  
-        .order_by(Lower("account__user__username"))
-        .first()
-    )
-
-    if caregiver_access:
-        return caregiver_access.account.user
-
-    # No caregiver linked yet
-    logger.warning("No caregiver linked for patient account_id=%s user_id=%s", account.id, getattr(user, "id", None))
-    return None
 
 
 def _message_content_to_text(content: Any) -> str:
@@ -119,18 +77,17 @@ def get_activity(activity_name: str) -> Activity:
     return Activity.objects.get(name=activity_name)
 
 @database_sync_to_async
-def get_available_scenarios(user_id: int, activity_id: int) -> list[dict]:
+def get_available_scenarios(activity_id: int) -> list[dict]:
     """
     Returns [{name: ..., description: ...}, ...]
     """
     qs = (
         RAGInstructions.objects
-        .filter(user_id=user_id, activity_id=activity_id)
+        .filter(activity_id=activity_id)
         .order_by("instruction_order", "name")
-        .values("name",  "description", "instructions", "instruction_order")
+        .values("name", "description", "instructions", "instruction_order")
     )
     return list(qs)
-
 
 def format_available_scenarios(
     scenarios: list[dict],
@@ -169,7 +126,6 @@ def embed_query(text: str) -> list[float]:
 def retrieve_instruction_chunks(
     *,
     instruction_name: str,
-    user_id:int,
     activity_id: int,
     query_text: str,
     k: int = 4,
@@ -181,7 +137,7 @@ def retrieve_instruction_chunks(
 
     fetched_instructions = list(
         RAGInstructionChunkEmbedding.objects
-        .filter(name=instruction_name, user_id=user_id, activity_id=activity_id)
+        .filter(name=instruction_name, activity_id=activity_id)
         .annotate(distance=CosineDistance("embedding", q_emb))
         .order_by("distance")[:k]
     )
@@ -197,7 +153,6 @@ def retrieve_instruction_chunks(
 def get_full_instruction_text(
     *,
     instruction_name: str,
-    user_id: int,
     activity_id: int,
 ) -> str:
     """
@@ -208,13 +163,12 @@ def get_full_instruction_text(
     """
     try:
         inst = RAGInstructions.objects.get(
-            user_id=user_id,
             activity_id=activity_id,
             name=instruction_name,
         )
         return inst.instructions
     except ObjectDoesNotExist:
-        logger.info(f"{lu.BG_RED}[RAG-PHI3] No RAGInstructions row found for user_id={user_id} activity_id={activity_id} name='{instruction_name}'{lu.RESET}")
+        logger.info(f"{lu.BG_RED}[RAG-Helper] No RAGInstructions row found for activity_id={activity_id} name='{instruction_name}'{lu.RESET}")
         return ""
 
 def chunks_to_text(chunks: list[RAGInstructionChunkEmbedding]) -> str:

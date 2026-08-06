@@ -11,7 +11,6 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Base
 from ... import config as cf
 from chat_app.services import logging_utils as lu 
 from .ragChatHelpers import (
-    resolve_instruction_owner, 
     _lc_messages_to_openai,
     get_activity,
     get_available_scenarios,
@@ -326,12 +325,12 @@ async def rag_response_fn(
 
     # --- Resolve activity + instruction owner ---
     activity = await get_activity(activity_name)
-    instruction_owner = await resolve_instruction_owner(user)
 
-    logger.info(f"{lu.CYAN}[Multi-Agent][{trace_id}] user={getattr(user, 'id', None)} instruction_owner={getattr(instruction_owner, 'id', None)} activity={activity_name}{lu.RESET}")
+    logger.info(f"{lu.CYAN}[Multi-Agent][{trace_id}] user={getattr(user, 'id', None)} activity={activity_name}{lu.RESET}")
 
-    # --- Load available scenarios (for validation/matching) ---
-    scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
+    # --- Load available scenarios (globally) ---
+    scenarios = await get_available_scenarios(activity.id)
+
     completed_states: set[str] = rag_state.get("_completed_states", set()) # initialize completed states with any previously completed ones, set to empty set if none exist
     available_scenarios_text = format_available_scenarios(scenarios, completed_states=completed_states)
     available_scenarios_text = available_scenarios_text + f"\n{CLOSE_SESSION_DESCRIPTION}"
@@ -366,7 +365,6 @@ async def rag_response_fn(
 
     instructions_text_call_1 = await get_full_instruction_text(
         instruction_name=current,
-        user_id=instruction_owner.id,
         activity_id=activity.id,
     )
 
@@ -392,6 +390,7 @@ async def rag_response_fn(
     if new_state == current:
         same_count = rag_state.get("_same_state_turn_count", 0) + 1 
         rag_state["_same_state_turn_count"] = same_count
+        logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] same_state_turn_count={same_count} for scenario={current}{lu.RESET}")
         if same_count >= MAX_SAME_STATE_TURNS:
             scenario_names = [s["name"] for s in scenarios]  # already ordered by instruction_order
             try:

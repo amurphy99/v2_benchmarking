@@ -55,17 +55,15 @@ class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
 class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     """
     GET  /api/rag/<int:ragid>/  => fetch a single set of RAG instructions
-    PUT  /api/rag/<int:ragid>/  => update various fields
+    PUT  /api/rag/<int:ragid>/  => update various fields (admin only)
     """
     serializer_class   = RAGInstructionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get_object(self):
         ragid = self.kwargs["ragid"]
-        instructions = RAGInstructions.objects.get(
-            id=ragid, 
-            user=self.request.user, # only allow access to own instructions
-        )
+        # make instructions global for all users, so no user_id filtering
+        instructions = RAGInstructions.objects.get(id=ragid)
         return instructions
     
 class ChatSessionView(generics.RetrieveAPIView):
@@ -106,32 +104,22 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
         
 class RAGInstructionsViewSet(viewsets.ModelViewSet):
     """
-    GET  /api/rag/  => fetch all RAG instructions for the current user
+    GET    /api/rags/        => fetch all global RAG instructions (admin only)
+    POST   /api/rags/        => create a new global RAG instruction (admin only)
+    PUT    /api/rags/<id>/   => update (admin only)
+    DELETE /api/rags/<id>/   => delete (admin only)
     """
     serializer_class   = RAGInstructionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def _require_caregiver(self):
-        """
-        Ensure only caregivers can create/update/delete RAG instructions.
-        """
-        try:
-            if self.request.user.account_user.role.lower() != "caregiver":
-                raise PermissionDenied("Only caregivers can manage RAG instructions.")
-        except Exception:
-            raise PermissionDenied("Only caregivers can manage RAG instructions.")
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get_queryset(self):
-        self._require_caregiver()
-        # Only return instructions belonging to the logged-in user
-        return RAGInstructions.objects.filter(user=self.request.user).order_by("instruction_order", "name")
+        # Instructions are now global; return all ordered for display
+        return RAGInstructions.objects.order_by("instruction_order", "name")
 
     def perform_create(self, serializer):
-        # Only caregivers should be able to create RAG instructions, since they are the ones configuring the activities for the PLWD. Enforce this at the API level.
-        self._require_caregiver()
         # For now, always use the 'memory_activity'
         activity = Activity.objects.get(name="memory_activity")
-        instance = serializer.save(user=self.request.user, activity=activity)
+        instance = serializer.save(activity=activity)
 
         # Vector DB update
         try:
@@ -140,8 +128,6 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to index new instruction {instance.id}: {e}")
 
     def perform_update(self, serializer):
-        self._require_caregiver()
-        # Save the updated instruction to the default DB
         instance = serializer.save()
 
         # Update the vector store for this instruction
@@ -151,7 +137,6 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to update embedding for instruction {instance.id}: {e}")
 
     def perform_destroy(self, instance):
-        self._require_caregiver()
         inst_id = instance.id
 
         # Delete chunks from vector DB first

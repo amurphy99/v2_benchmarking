@@ -11,17 +11,22 @@ page.
 
 */
 import { useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 // From this project
 import { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList      } from "./components/chat_lists/ChatList";
 import { AdminPage     } from "./components/ui/AdminPage";
+import { AdminCard     } from "./components/ui/AdminCard";
+import { SectionHeader } from "./components/ui/SectionHeader";
 import { NON_DEMO_ONLY } from "@/utils/misc/constants";
 
 // ================================================================================
 // Admin list view of all ChatSessions (split into active and inactive chats)
 // ================================================================================
 export function Admin() {
+    const navigate = useNavigate();
+
     // Query the DB for a list of ChatSessions
     const { data:   active, isLoading: loading_1, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
     const { data: inactive, isLoading: loading_2, refetch: refetchInactive } = useInactiveChatSessions(NON_DEMO_ONLY);
@@ -62,6 +67,23 @@ export function Admin() {
                     variant     = "active"
                 />
 
+                {/* Activity & Instructions Management */}
+                <AdminCard
+                    header={
+                        <SectionHeader
+                            title    = "Activity Instructions"
+                            subtitle = "Manage chat activities and their conversation instructions. Define and edit the instructions that guide the AI during memory activity chat sessions. Changes here affect all users."
+                        />
+                    }
+                >
+                    <button
+                        className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                        onClick={() => navigate("/admin/chat/activities")}
+                    >
+                        Manage Activity Instructions
+                    </button>
+                </AdminCard>
+
                 {/* All Sessions */}
                 <ChatList
                     title       = "Completed Chat Sessions"
@@ -72,6 +94,7 @@ export function Admin() {
                     variant     = "completed"
                     grouped     = {true}
                 />
+
             </div>
         </AdminPage>
     );
