@@ -1,7 +1,10 @@
 """
-Custom, dependency-free queue audio queue for streaming STT.
+Ordered audio and control-marker queue for streaming STT.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.speech.stt.audio_queue`
+
+Keep cross-thread chunk ordering, barrier completion, and stream-stop signaling in
+one place so the STT request generator sees a consistent queue lifecycle.
 
 """
 from __future__         import annotations
@@ -99,4 +102,3 @@ class AudioInputQueue:
             except Empty: break
         
         self._items.put(StopSignal())
-

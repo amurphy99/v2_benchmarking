@@ -1,10 +1,10 @@
 """
-Unit tests for the dependency-free `reply_now` state helpers.
+Unit tests for the `reply_now` state and command helpers.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_reply_state`
 
 Exercise queue barriers, staged transcript snapshots, command acknowledgements, and
-interim STT comparison without starting Docker, Django, Google STT, or the database.
+interim STT comparison.
 
 """
 import unittest
@@ -156,4 +156,3 @@ class CommandDispatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

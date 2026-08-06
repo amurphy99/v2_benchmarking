@@ -33,9 +33,9 @@ from ...services.db_services              import ChatService
 from typing import TYPE_CHECKING
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
-REPLY_BARRIER_TIMEOUT_SEC = 2.0
-REPLY_SETTLE_SEC          = 0.2
-REPLY_EMPTY_WAIT_SEC      = 1.0
+REPLY_BARRIER_TIMEOUT_SEC = 2.0  # Maximum wait for pre-command audio to reach the STT request generator
+REPLY_SETTLE_SEC          = 0.2  # Quiet period required after meaningful STT progress
+REPLY_EMPTY_WAIT_SEC      = 1.0  # Maximum wait for finalized text before completing an empty reply
 
 
 # ================================================================================

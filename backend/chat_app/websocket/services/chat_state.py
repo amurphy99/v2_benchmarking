@@ -1,5 +1,5 @@
 """
-Dependency-free state objects used by the live chat pipeline.
+Atomic staged-utterance state for cancellable chat responses.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.chat_state`
 
@@ -94,4 +94,3 @@ class StagedUtteranceBuffer:
     # Iterate over staged records without exposing the backing list
     def __iter__(self) -> Iterator[StagedUtterance]:
         return iter(self._items)
-

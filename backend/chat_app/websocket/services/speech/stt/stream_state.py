@@ -1,20 +1,17 @@
 """
-Dependency-free transcript-progress tracker for streaming STT.
+Interim transcript-progress tracking for streaming STT.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.speech.stt.stream_state`
 
-We want to be able to tell if new recognized speech is actually new, and not 
-just the "final result" version of the STT process (i.e., after a period of
-silence, a series of interrim word-level results are gathered into the full 
-final resulting utterance). 
+Keep transcript comparison and timing-watermark state together so the STT provider
+only cancels a response when Google has recognized additional speech.
 
 """
 from __future__         import annotations
 from typing             import Any
 import re
 
-# Ignores really small timing revisions when checking if new results are "different" enough
-INTERIM_PROGRESS_EPSILON_SEC = 0.04
+INTERIM_PROGRESS_EPSILON_SEC = 0.04  # Minimum result-end advancement treated as timing progress
 
 
 # ================================================================================
@@ -89,4 +86,3 @@ class InterimProgressTracker:
         if result_end is not None:
             self._max_result_end_sec = max(self._max_result_end_sec, result_end)
         self._latest_interim = ""
-
