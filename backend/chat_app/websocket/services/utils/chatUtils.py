@@ -95,66 +95,6 @@ def extract_ts_best_match(text: str, target_header: str, threshold: float = 0.7)
 
     return "\n".join(extracted_lines)
 
-def extract_transition_signals(instruction: str) -> tuple[List[str], List[str]]:
-    # Search for Transition Signals
-    ts_match = re.search(
-        r"Signals for changing the conversation topic:\s*(.*?)(?:\n\n|$)",
-        instruction,
-        re.DOTALL
-    )
-    if ts_match:
-        ts_text = ts_match.group(1)
-        logger.info(f"{lu.BG_GREEN}[Info] Successfully extracted Transition Signals using regex.{lu.RESET}")
-    else:
-        try:
-            ts_text = extract_ts_best_match(
-                instruction,
-                "Signals for changing the conversation topic:",
-            )
-            logger.info(f"{lu.BG_GREEN}[Info] Successfully extracted Transition Signals using best match fallback.{lu.RESET}")
-        except Exception:
-            ts_text = ""
-            logger.warning(f"{lu.BG_RED}[Warning] Failed to extract Transition Signals using best match fallback.{lu.RESET}")
-    
-    # Search for Example Responses
-    er_match = re.search(
-        r"Example User Responses:\s*(.*?)(?:\n\n|$)",
-        instruction,
-        re.DOTALL
-    )
-
-    if er_match:
-        er_text = er_match.group(1)
-        logger.info(f"{lu.BG_GREEN}[Info] Successfully extracted Example Responses using regex.{lu.RESET}")
-    else:
-        try:
-            er_text = extract_ts_best_match(
-                instruction,
-                "Example User Responses:"
-            )
-            logger.info(f"{lu.BG_GREEN}[Info] Successfully extracted Example Responses using best match fallback.{lu.RESET}")
-        except Exception:
-            er_text = ""
-            logger.warning(f"{lu.BG_RED}[Warning] Failed to extract Example Responses using best match fallback.{lu.RESET}")
-    
-    # Process lists (splitlines works fine on empty strings)
-    ts_list = [line.strip("•- \t") for line in ts_text.splitlines() if line.strip()]
-    er_list = [line.strip("•- \t") for line in er_text.splitlines() if line.strip()]
-
-    return ts_list, er_list
-
-def construct_transition_criteria_text (ts_list: List[str], er_list: List[str]) -> str:
-    transition_criterias = f"Signals for changing the conversation topic:"
-
-    for ts in ts_list:
-        transition_criterias += f"\n- {ts}"
-    
-    transition_criterias += f"\nExpected User Responses:"
-
-    for er in er_list:
-        transition_criterias += f"\n- {er}"
-
-    return transition_criterias
 
 def cosine_similarity(v1, v2):
     v1 = np.array(v1)
@@ -198,12 +138,6 @@ def organize_full_conversation(state: ChatState, exclude_states: Optional[List[s
         parts.append(organize_message_history(state.get_state_history(s)))
 
     return "".join(parts)
-
-
-def tail_messages(msg_history: List[BaseMessage], max_messages: int) -> List[BaseMessage]:
-    if max_messages <= 0:
-        return []
-    return msg_history[-max_messages:]
 
 
 def clean_llm_response(text: str) -> str:
