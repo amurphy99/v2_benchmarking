@@ -67,17 +67,6 @@ export function Admin() {
                     variant     = "active"
                 />
 
-                {/* All Sessions */}
-                <ChatList
-                    title       = "Completed Chat Sessions"
-                    subtitle    = "View post-chat analysis results."
-                    sessions    = {inactive}
-                    onRefresh   = {refreshBoth}
-                    navigate_to = {"/admin/chat/inactive/"}
-                    variant     = "completed"
-                    grouped     = {true}
-                />
-
                 {/* Activity & Instructions Management */}
                 <AdminCard
                     header={
@@ -94,6 +83,17 @@ export function Admin() {
                         Manage Activity Instructions
                     </button>
                 </AdminCard>
+
+                {/* All Sessions */}
+                <ChatList
+                    title       = "Completed Chat Sessions"
+                    subtitle    = "View post-chat analysis results."
+                    sessions    = {inactive}
+                    onRefresh   = {refreshBoth}
+                    navigate_to = {"/admin/chat/inactive/"}
+                    variant     = "completed"
+                    grouped     = {true}
+                />
 
             </div>
         </AdminPage>
