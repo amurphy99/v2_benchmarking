@@ -19,7 +19,7 @@ export default function ChatControlsGroup({
     pending      : {
         pause_listening : boolean;
         pause_responses : boolean;
-        respond_now     : boolean;
+        reply_now       : boolean;
     };
     onToggleListening : () => void;
     onToggleResponses : () => void;
@@ -88,11 +88,11 @@ export default function ChatControlsGroup({
                 {/* Respond Now */}
                 {/* -------------------------------------------------------------------------------- */}
                 <button
-                    className = {btnClass(pending.respond_now || !connected, "primary")}
-                    disabled  = {pending.respond_now || !connected}
+                    className = {btnClass(pending.reply_now || !connected, "primary")}
+                    disabled  = {         pending.reply_now || !connected            }
                     onClick   = {onRespondNow}
                 >
-                {pending.respond_now ? "Sending..." : "Respond now"}
+                {pending.reply_now ? "Sending..." : "Respond now"}
                 </button>
 
             </div>

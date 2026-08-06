@@ -14,7 +14,7 @@ Broadcast rooms:
 
 "control_group"
   - From `ChatListener` to `ChatConsumer`
-  - Relays commands sent to the ChatListener (e.g. "respond_now")
+  - Relays commands sent to the ChatListener (e.g. "reply_now")
 
 "ack_group"
   - TODO: IDK I forgot...

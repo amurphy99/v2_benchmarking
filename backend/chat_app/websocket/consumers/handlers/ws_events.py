@@ -17,6 +17,7 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 
 # Handling messages
 from  ...services.chatHelpers import ChatHandler
+from    .command_dispatch     import dispatch_command
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
@@ -24,15 +25,22 @@ if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 
 # ================================================================================
-# Handle all forms of incoming data | TODO: are we supposed to guard here more?
+# Handle all forms of incoming data
 # ================================================================================
-async def handle_receive_json(consumer: ChatConsumer, data, **kwargs):
-    if   data["type"] == "overlapped_speech" : await _handle_overlap(consumer, data=data)
-    elif data["type"] == "audio_data"        : await consumer.handle_audio_data(data)
-    elif data["type"] == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
-    elif data["type"] == "robot_send_staged" : await consumer.reply_now() # flush the staged utterance and reply immediately
-    elif data["type"] == "end_chat"          : await consumer.close(code=1000)   
-    elif data["type"] == "toggle_stream"     : await _toggle_stream(consumer, data)
+async def handle_receive_json(consumer: ChatConsumer, data: dict, **kwargs: object) -> None:
+    """
+    Route decoded client messages, including canonical commands with immediate acks.
+    """
+    msg_type = data.get("type")
+
+    if   msg_type == "overlapped_speech" : await _handle_overlap(consumer, data=data)
+    elif msg_type == "audio_data"        : await consumer.handle_audio_data(data)
+    elif msg_type == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
+    elif msg_type == "command":
+        ack = dispatch_command(consumer, data.get("data", {}) or {})
+        await consumer.send_json({"type": "command_ack", "data": ack})
+    elif msg_type == "end_chat"          : await consumer.close(code=1000)
+    elif msg_type == "toggle_stream"     : await _toggle_stream(consumer, data)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")

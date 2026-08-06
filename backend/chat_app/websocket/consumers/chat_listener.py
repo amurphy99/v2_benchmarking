@@ -19,7 +19,7 @@ Frontend sends commands such as:
     { "type": "command", "data": { "cmd": "resume_auto" } }
 
 - Tell LLM to respond immediately with whatever context it has heard recently (e.g. button control)
-    { "type": "command", "data": { "cmd": "respond_now" } } 
+    { "type": "command", "data": { "name": "reply_now" } }
 
     
 TODO: Future possibilities:
@@ -204,8 +204,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
             # Route to the primary consumer through the control group
             await self.channel_layer.group_send(
-                self.control_group,
-                {"type": "ws.command", "payload": payload}
+                self.control_group, {"type": "ws.command", "payload": payload, "reply_channel" : self.channel_name}
             )
 
             # Log update

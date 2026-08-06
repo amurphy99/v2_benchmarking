@@ -30,7 +30,7 @@ export function useCommandAcks({
         // Responses
         pause_listening : false,
         pause_responses : false,
-        respond_now     : false,
+        reply_now       : false,
 
         // Avatar or Robot controls
         robot_emotion      : false,
@@ -108,7 +108,7 @@ export function useCommandAcks({
         // Control system response behavior
         toggleListening: () => {sendCommand("pause_listening", "pause_listening", !controlState.listeningPaused);},
         toggleResponses: () => {sendCommand("pause_responses", "pause_responses", !controlState.responsesPaused);},
-        respondNow     : () => {sendCommand("respond_now",     "respond_now")},
+        respondNow     : () => {sendCommand("reply_now",       "reply_now")},
         
         // Control avatar or robot emotions or animations
         robotEmotion    : (emotion: string)     => {sendCommand("robot_emotion",    "robot_action", { emotion: emotion  })},

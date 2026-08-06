@@ -20,7 +20,7 @@ export type CommandAck = {
 export type PendingKey =
     | "pause_listening"
     | "pause_responses"
-    | "respond_now"
+    | "reply_now"
     | "robot_emotion"
     | "robot_animation"
     | "pause_and_listen"

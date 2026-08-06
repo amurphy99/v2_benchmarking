@@ -21,6 +21,7 @@ from ...services.db_services               import ChatService
 from ...services.llm.chat_utilities        import get_LLM_response
 from  ..services.bg_helpers                import fire_and_log
 from  ..services.chatHelpers               import ChatHandler
+from  ..services.chat_state                import StagedUtteranceBuffer
 from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
 # Proper import paths...
@@ -173,6 +174,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             pending.cancel()
             await asyncio.gather(pending, return_exceptions=True)
 
+        reply_task = getattr(self, "_reply_now_task", None)
+        if (reply_task is not None) and (not reply_task.done()):
+            reply_task.cancel()
+            await asyncio.gather(reply_task, return_exceptions=True)
+
         # Snapshot IDs (don't pass model instances into background tasks)
         user_id    = getattr(self.user,    "id",    None)
         session_id = getattr(self.session, "id",    None)
@@ -180,12 +186,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Flush any staged utterances to DB before post-chat analysis runs
         # (awaited so the message exists before close_session queries for it)
-        staged = getattr(self, "_staged_utterances", [])
+        staged = getattr(self, "_staged_utterances", None)
         if staged:
-            try: await db_s2a(ChatService.add_message)(session_id, "user", (" ".join(staged)))
+            try: await ChatHandler.flush_staged_utterances(self)
             except Exception: pass
-            self._staged_utterances.clear()
-            self._staged_words     .clear()
 
         # --------------------------------------------------------------------------------
         # Save session audio recording (stereo WAV: left = user mic, right = TTS)
@@ -281,10 +285,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # ================================================================================
     # Additional Helpers
     # ================================================================================
-    # Reply to the user immediately. Can pass a message, otherwise will query the LLM.
-    async def reply_now(self, use_response=None):
-        await ChatHandler.flush_staged_utterances(self)
-        return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=use_response)
+    # Request a staged response without blocking the WebSocket receive loop
+    def reply_now(self) -> asyncio.Task[str | None]:
+        barrier = self.stt_provider.create_audio_barrier()
+        return ChatHandler.request_reply_now(self, barrier)
+
+    # Speak supplied text independently of STT/staged-response coordination
+    async def speak_response(self, response : str | dict[str, object] | None) -> str | dict[str, object]:
+        return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=response)
 
     # Pause/Resume -- Toggle the STT stream (wrapper for '_toggle_stream' in ws_events.py)
     async def toggle_stream(self, data_or_cmd):
@@ -308,9 +316,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
 
         # Response task state
-        self._staged_utterances       = []     # Raw STT transcripts waiting to be committed
-        self._staged_words            = []     # Parallel list of word-timestamp lists (per utterance)
+        self._staged_utterances       = StagedUtteranceBuffer()
         self._pending_response_task   = None   # Current 'asyncio.Task' for '_execute_response'
+        self._reply_now_task          = None   # Coordinator retaining a forced-reply request across retries
+        self._reply_now_generation    = 0      # Newer reply requests supersede older queue boundaries
+        self._stt_progress_revision   = 0      # Meaningful interim/final progress used by settling logic
 
         # Chat status tracking
         self.streaming_active         = False  # True while STT stream is active (paused state)

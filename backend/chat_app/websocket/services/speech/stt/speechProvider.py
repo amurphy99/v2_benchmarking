@@ -12,12 +12,13 @@ New chat-response flow:
 TODO: Really need to test it out without KEEP_ALIVE_SEC
 
 """
-import logging, threading, asyncio, base64, weakref
+import logging, threading, base64, weakref
 logger = logging.getLogger(__name__)
 
-from datetime import datetime, timedelta
-from queue    import Queue, Empty
+from datetime import datetime
+from queue    import Empty
 from time     import monotonic as now_ts
+from typing   import Any, Iterable
 
 # Google imports
 from google.cloud import speech
@@ -28,6 +29,8 @@ from .....services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
 from ...chatHelpers import ChatHandler
 from ...bg_helpers  import threadsafe_fire_and_log as thread_FL
+from  .audio_queue  import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
+from  .stream_state import InterimProgressTracker
 
 # Constants
 SAMPLE_RATE   = 16_000
@@ -45,7 +48,7 @@ class SpeechToTextProvider:
     def __init__(self, *, consumer, loop):
         self._client              = speech.SpeechClient()
         self._streaming_config    = None
-        self._audio_buffer        = Queue()
+        self._audio_buffer        = AudioInputQueue()
         self._streaming           = False
         self._thread              = None    # The thread we use for streaming
         self._stream_start_dt     = None    # Wall-clock anchor for word-time offsets
@@ -53,6 +56,7 @@ class SpeechToTextProvider:
         # Used to avoid processing duplicate STT results
         self._recent_transcript    = ""
         self._recent_transcript_ts = now_ts()
+        self._interim_progress     = InterimProgressTracker()
 
         # From ChatConsumer
         self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
@@ -69,15 +73,20 @@ class SpeechToTextProvider:
     def _audio_generator(self):
         while self._streaming:
             # Keep streaming alive during short pauses
-            try:          ts_in, data = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
+            try:          item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
             except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
 
-            delay = now_ts() - ts_in
-            if delay > 0.25: logger.warning(f"{STT_MAIN} audio queue delay={delay:.3f}s qsize≈{self._audio_buffer.qsize()}{RESET}")
+            # Process the different possible types of queue entries
+            if     isinstance(item, AudioBarrier): continue  # Pass over the AudioBarriers
+            if     isinstance(item, StopSignal  ): break     # Break the audio processing loop if stop command is given
+            if not isinstance(item, AudioChunk  ):
+                logger.warning(f"{STT_MAIN} Ignoring unknown audio queue item: {type(item).__name__}.{RESET}")
+                continue
 
-            # Break the loop if there is still no data
-            if data is None: break
-            yield speech.StreamingRecognizeRequest(audio_content=data)
+            # Check if there is a delay in processing audio chunks (this would happen if the queue got backed up somehow)
+            delay = now_ts() - item.received_at
+            if delay > 0.25: logger.warning(f"{STT_MAIN} audio queue delay={delay:.3f}s qsize≈{self._audio_buffer.qsize()}{RESET}")
+            yield speech.StreamingRecognizeRequest(audio_content=item.data)
 
     # Validate transcripts from the STT results
     def _check_transcript(self, transcript):
@@ -102,6 +111,7 @@ class SpeechToTextProvider:
         if getattr(self, "_thread", None) and self._thread.is_alive(): return
         self._streaming       = True
         self._stream_start_dt = datetime.now()  # Anchors Google's stream-relative word offsets to wall-clock
+        self._interim_progress.reset()
 
         # Configure the stream
         config = speech.RecognitionConfig(
@@ -135,38 +145,50 @@ class SpeechToTextProvider:
         finally: self._streaming = False  
 
     # --------------------------------------------------------------------------------
-    # Stop the stream | TODO: Maybe change to keep recognizing the drained content?
+    # Stop the stream
     # --------------------------------------------------------------------------------
+    # TODO: Maybe change to keep recognizing the drained content?
+    # TODO: Should this just enque a `StopSignal`?
+    # Discards old audio, releases pending barriers, and wakes the generator
     def stop(self):
         self._streaming = False
-        self._audio_buffer.put(None)
-
-        # Drain the queue so we don't replay old audio later 
-        while not self._audio_buffer.empty():
-            try: self._audio_buffer.get_nowait()
-            except: break
+        self._audio_buffer.stop()  
 
     # --------------------------------------------------------------------------------
     # Sends audio data to the audio buffer
     # --------------------------------------------------------------------------------
     def send_audio(self, data):
         audio_bytes = base64.b64decode(data["data"])
-        self._audio_buffer.put((now_ts(), audio_bytes))
+        self._audio_buffer.put_audio(received_at=now_ts(), data=audio_bytes)
 
         # Restart if not streaming OR thread is dead
         # TODO: This might make pausing not work
         if (not self._streaming) or (not getattr(self, "_thread", None)) or (not self._thread.is_alive()): 
             logger.info(f"{STT_MAIN} Restarting streaming. {RESET}")
             self.start()
+
+    # Enqueue a boundary after all audio received so far (resolves once the generator reaches it)
+    def create_audio_barrier(self) -> AudioBarrier:
+        barrier = AudioBarrier()
+        thread  = getattr(self, "_thread", None)
+        if (not self._streaming) or (thread is None) or (not thread.is_alive()):
+            barrier.fail("STT stream is not active")
+            return barrier
+
+        self._audio_buffer.put_barrier(barrier)
+        return barrier
     
 
     # ================================================================================
     # Handles responses from the Google Cloud STT API
     # ================================================================================
-    def _listen_responses(self, responses):
+    def _listen_responses(self, responses : Iterable[Any]) -> None:
         """
-        Routes interim results to cancel any pending response task, and final results to
-        `ChatHandler.stage_and_schedule` along with word-level timestamps.
+        Routes genuinely advancing interim results to response cancellation, as well
+        as staging final results with their word-level timestamps. Text that was repeated
+        do to glitches or same-length reinterpretations of the same audio do not cancel 
+        a pending response.
+        TODO: Need to double check the logic on the repeated-text thing...
         """
         for response in responses:
             for result in response.results:
@@ -174,19 +196,19 @@ class SpeechToTextProvider:
                 # --------------------------------------------------------------------------------
                 # Interim Result: the user is still speaking
                 # --------------------------------------------------------------------------------
-                # Non-empty interim means the user is still speaking -> cancel any pending response
+                # Interim results only cancel when timing + transcript progress show
+                # speech beyond the response attempt's current snapshot
                 if not result.is_final:
                     # Check if empty; skip if so
                     transcript = result.alternatives[0].transcript.strip()
                     if not transcript: continue
 
-                    # If there is a result; cancel any pending response task
+                    # Repeated/revised interims for the same audio do not invalidate a
+                    # response; only meaningful timing/transcript progress does
                     consumer = self._consumer()
-                    if consumer:
-                        task = getattr(consumer, "_pending_response_task", None)
-                        if task and not task.done():
-                            self._loop.call_soon_threadsafe(task.cancel)
-                            logger.info(f"{STT_MAIN} Interim result: cancelling pending response. {RESET}")
+                    if (consumer is not None) and self._interim_progress.has_new_speech(result, transcript):
+                        self._loop.call_soon_threadsafe(ChatHandler.note_stt_progress, consumer)
+                        logger.info(f"{STT_MAIN} Interim speech progress: cancelling pending response. {RESET}")
                     
                     # Never actually process interim results as a transcription
                     continue  
@@ -196,6 +218,7 @@ class SpeechToTextProvider:
                 # --------------------------------------------------------------------------------
                 # 1) Make sure this isn't a duplicate transcript
                 transcript = result.alternatives[0].transcript.strip()
+                self._interim_progress.record_final(result)
                 valid, transcript = self._check_transcript(transcript)
                 if not valid: continue
 

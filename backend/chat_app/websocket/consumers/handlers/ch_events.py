@@ -17,6 +17,7 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
 
 from ..utils.logging   import ChatConsumerLogging as log
 from ..utils.groups    import format_send_actions_command
+from .command_dispatch import dispatch_command
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
@@ -26,7 +27,7 @@ if TYPE_CHECKING: from ..consumers import ChatConsumer
 # ================================================================================
 # Handle all messages send from consumer-to-consumer
 # ================================================================================
-async def handle_ws_command(consumer: ChatConsumer, event):
+async def handle_ws_command(consumer: ChatConsumer, event: dict) -> None:
     """
     Handle all commands from ChatListener consumers.
 
@@ -37,14 +38,19 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     payload = event  .get("payload", {}) or {}
     command = payload.get("name")
     id      = payload.get("id"  )
+    reply_channel = event.get("reply_channel")
     logger.info(f"{CC_MAIN} Listener command received: {lu.YELLOW}{payload}{RESET}")
 
     # Act accordingly
+    # Canonical command shared with primary frontend/robot WebSockets
+    if command == "reply_now":
+        ack = dispatch_command(consumer, payload)
+        await send_command_ack(consumer, ack, command, reply_channel=reply_channel)
+
     # --------------------------------------------------------------------------------
     # Pause or resume automatic responses (respond whenever we get a user utterance)
     # --------------------------------------------------------------------------------
-    # TODO: Deprecated
-    if command == "pause_responses":
+    elif command == "pause_responses":
         # This cancels the current response from the LLM/TTS
         task = getattr(consumer, "_pending_response_task", None)
         if task and not task.done():
@@ -64,18 +70,13 @@ async def handle_ws_command(consumer: ChatConsumer, event):
     # --------------------------------------------------------------------------------
     # Control system responses
     # --------------------------------------------------------------------------------
-    # TODO: Deprecated
-    # Respond with the LLM immediately
-    elif command == "respond_now":
-        await consumer.reply_now()
-
     # Repeat the last message
     elif command == "repeat_response":
-        await consumer.reply_now(use_response=consumer.last_response)
+        await consumer.speak_response(consumer.last_response)
 
     # Speak custom message
     elif command == "respond_manual":
-        await consumer.reply_now(use_response=payload.get("data", None))
+        await consumer.speak_response(payload.get("data", None))
 
     # --------------------------------------------------------------------------------
     # Control the avatar
@@ -96,13 +97,13 @@ async def handle_ws_command(consumer: ChatConsumer, event):
 
     # Respond immediately and resume automatic responses
     elif command == "resume_and_respond":
-        await consumer.reply_now(use_response=payload.get("data", None))
+        consumer.reply_now()
         consumer.reply_on_user_utt = True
         await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}}, command)
 
     # Repeat the robots last message
     elif command == "paraphrase_last": 
-        await consumer.reply_now(use_response=consumer.last_response)
+        await consumer.speak_response(consumer.last_response)
         await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": True}}, command)
 
     # Admin has sent a custom message for the robot to say
@@ -110,7 +111,7 @@ async def handle_ws_command(consumer: ChatConsumer, event):
         custom_response = payload        .get("value",   {}) or {}
         custom_response = custom_response.get("message", {})
         if custom_response:
-            await consumer.reply_now(use_response=custom_response)
+            await consumer.speak_response(custom_response)
             await send_command_ack(consumer, {"id": id, "ok": True, "state": {"manualMode": False}}, command)
             consumer.reply_on_user_utt = True
         else:
@@ -145,9 +146,19 @@ async def handle_ws_command(consumer: ChatConsumer, event):
 # ================================================================================
 # Respond with "ack"
 # ================================================================================
-async def send_command_ack(consumer: ChatConsumer, data: dict, command: str = "command"):
+async def send_command_ack(
+    consumer      : ChatConsumer,       # Primary consumer sending the acknowledgement
+    data          : dict[str, object],  # Correlated command result for the caller
+    command       : str = "command",
+    *,
+    reply_channel : str | None = None,  # Specific listener channel when one originated the request
+) -> None:
+    """
+    Send a command acknowledgement to its listener or the shared fallback group.
+    """
     payload = {"type": "ws.command_acks", "payload": {"type": "command_ack", "data": data}}
-    await consumer.channel_layer.group_send(consumer.ack_group, payload)
+    if reply_channel: await consumer.channel_layer.send      (reply_channel,      payload)
+    else:             await consumer.channel_layer.group_send(consumer.ack_group, payload)
     logger.info(f"{CC_MAIN} Sent ack for command:      {lu.YELLOW}{data}{CC_R} ({CC_H}{command}{CC_R}) {RESET}")
 
 # Double logs the commands that aren't set up yet
@@ -160,7 +171,5 @@ def log_command(command_type):
 # TODO: No need to separately send things to the client, just forward it from here after broadcasting
 async def forward_payload_to_client(consumer: ChatConsumer, event):
     await consumer.send_json(event["payload"])
-
-
 
 
