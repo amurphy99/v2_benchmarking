@@ -3,7 +3,7 @@ Async wrappers around the biomarker pipelines.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.biomarkers.biomarker_extraction`
 
-Two entry points called by `cc_callbacks`:
+Two entry points called by `biomarkers.callbacks`:
   * `extract_text_biomarkers (recent_text, words, context_buffer)`
   * `extract_audio_biomarkers(audio_chunks, overlapped_speech_count, words)`
 

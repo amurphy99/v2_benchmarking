@@ -11,7 +11,6 @@ import asyncio, collections, logging, time
 logger = logging.getLogger(__name__)
 
 # Django
-from django.apps                import apps
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
@@ -31,21 +30,13 @@ from chat_app.websocket.services.speech.audio_recorder import save_stereo_wav
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_send_actions_command
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
-from .handlers.ws_events    import handle_receive_json, _toggle_stream
-
-# Delegation / passthroughs
-from .handlers.cc_callbacks import handle_chat_messages    as _handle_chat_messages
-from .handlers.cc_callbacks import on_utterance_biomarkers as _on_utterance_biomarkers
-from .handlers.cc_callbacks import on_audio_biomarkers     as _on_audio_biomarkers
-from .handlers.cc_callbacks import handle_audio_data       as _handle_audio_data
+from .handlers.ws_events    import handle_receive_json
 
 
 # --------------------------------------------------------------------------------
 # TODO: TEMPORARILY PLACING HERE
 # --------------------------------------------------------------------------------
 from ...services.llm.live_chat.cognibot_api import CognibotResponse
-from   .utils.groups                        import format_send_actions_command
-
 # ================================================================================
 # ChatConsumer 
 # ================================================================================
@@ -78,6 +69,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         # Initialize all per-session state attributes (also called on disconnect to reset them)
         self._init_response_state()
+        self._close_scheduled = False
+        self.user             = self.scope.get("user")
+        self.source           = self.scope.get("source", "unknown")
+        self.session          = None
+        self.session_id       = None
+        self.context_buffer   = []
+        self.stt_provider     = None
 
         # Define the response generation method to be used in the chat
         self.response_method = self.response_method
@@ -86,18 +84,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # 1) Authenticate before accepting connection
         # --------------------------------------------------------------------------------
         # Custom "unauth" code
-        if not self.scope["user"].is_authenticated: 
+        if not self.user.is_authenticated:
             await self.close(code=4001); return
+        if self.source == "unknown":
+            await self.close(code=4002); return
         
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
-        self.user   = self.scope["user"]
-        self.source = self.scope.get("source", "unknown")
-        
         # Configuration based on the source platform for the chat
-        self.use_backend_STT   = (self.source == "webapp") # Send the user text to the frontend so it can see it too
-        self.use_backend_TTS   = (self.source == "webapp") # Should the ChatHandler reply with audio bytes as well as text 
-
+        self.use_backend_STT   = (self.source == "webapp" )  # Send the user text to the frontend so it can see it too
+        self.use_backend_TTS   = (self.source == "webapp" )  # Should the ChatHandler reply with audio bytes as well as text 
         self.reply_on_user_utt = (self.source != "qtrobot")  # for qtrobot, we turn off auto-reply so that we can control from the robot when to reply
+
         # Accept the connection
         await self.accept()
         log.log_connect(self.user, self.source)
@@ -107,7 +104,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # --------------------------------------------------------------------------------
         # TODO: Change this back (and fix whatever was wrong) so that we CAN reconnect to old chats
         # Close any currently-active session for this user (to avoid clashes between multiple connections)
-        await db_s2a(ChatService.close_any_active_session)(self.user)
+        closed_sessions = await db_s2a(ChatService.close_any_active_session)(self.user)
+        for closed in closed_sessions:
+            fire_and_log(
+                ChatService.close_session(self.user.id, closed["id"], username=self.user.username, source=closed["source"]),
+                name=f"connect::close-stale-session-{closed['id']}",
+            )
 
         # Load the most recent active session for this user
         self.session    = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
@@ -115,7 +117,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Load existing messages
         # TODO: This behavior is for resuming existing chats; doesn't do anything here yet
-        recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-start_ts")[: self.MAX_CONTEXT])[::-1])()
+        recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-ts")[: self.MAX_CONTEXT - 1])[::-1])()
 
         # TODO: I added the timestamps in just now for biomarker scores, but I actually don't really like how this works at the moment...
         # Actually since I want to remove the "resume" chat thing, probably don't need to do this with the context buffer (loading in old data)
@@ -135,7 +137,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.streaming_active = True
 
         # Rolling timestamped audio chunk buffer for audio biomarkers
-        # Contains: (datetime_received, raw_pcm_bytes). Pruned to last AUDIO_CHUNKS_RETAIN_SEC seconds in handle_audio_data
+        # Contains: (datetime_received, raw_pcm_bytes). Pruned by processing.audio
         self._audio_chunks = collections.deque()
 
         # Session recording buffers (NOT in _init_response_state -- must survive until disconnect saves them)
@@ -147,8 +149,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._audio_start_dt   = None              # Wall-clock equivalent (saved to DB for frontend seeking)
 
         # Log the successful connection
-        log.log_connect_done(self.user, self.session.id, config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
-        
+        log.log_connect_done(self.user, self.session.id, 
+                             config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
     
     # ================================================================================
     # Disconnect
@@ -162,7 +164,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._close_scheduled = True
 
         # Shut down the STT provider
-        if getattr(self, "stt_provider", None): self.stt_provider.stop()
+        if getattr(self, "stt_provider", None): self.stt_provider.shutdown()
 
         # Notify listeners that the user has disconnected
         try: await self._broadcast_stream_status("ended")
@@ -179,23 +181,30 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             reply_task.cancel()
             await asyncio.gather(reply_task, return_exceptions=True)
 
+        manual_task = getattr(self, "_manual_response_task", None)
+        if (manual_task is not None) and (not manual_task.done()):
+            manual_task.cancel()
+            await asyncio.gather(manual_task, return_exceptions=True)
+
         # Snapshot IDs (don't pass model instances into background tasks)
-        user_id    = getattr(self.user,    "id",    None)
-        session_id = getattr(self.session, "id",    None)
-        username   = getattr(self.user, "username", None)
+        user       = getattr(self,    "user",     None)
+        session    = getattr(self,    "session",  None)
+        user_id    = getattr(user,    "id",       None)
+        session_id = getattr(session, "id",       None)
+        username   = getattr(user,    "username", None)
 
         # Flush any staged utterances to DB before post-chat analysis runs
         # (awaited so the message exists before close_session queries for it)
         staged = getattr(self, "_staged_utterances", None)
         if staged:
             try: await ChatHandler.flush_staged_utterances(self)
-            except Exception: pass
+            except Exception: logger.exception(f"{lu.CC_MAIN} Failed to save staged utterances during disconnect.{lu.RESET}")
 
         # --------------------------------------------------------------------------------
         # Save session audio recording (stereo WAV: left = user mic, right = TTS)
         # --------------------------------------------------------------------------------
         audio_path = None
-        if self.save_audio and session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
+        if getattr(self, "save_audio", False) and session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
             try:
                 audio_path = await asyncio.to_thread(
                     save_stereo_wav, session_id,
@@ -209,52 +218,36 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Close the ChatSession in the DB
         # --------------------------------------------------------------------------------
         if user_id and session_id:
+            await db_s2a(ChatService.deactivate_session)(session_id)
             fire_and_log(ChatService.close_session(
                 user_id, session_id,
                 username        = username,
-                source          = self.source,
+                source          = getattr(self, "source", "unknown"),
                 audio_path      = audio_path,
                 audio_start_ts  = getattr(self, "_audio_start_dt", None),
             ), name=f"disconnect::close-session-{session_id}")
 
-        # Cancel background tasks (only connection-based ones; not the close_session task)
-        for task in           getattr(self, "_bg_tasks", []): task.cancel()
-        await asyncio.gather(*getattr(self, "_bg_tasks", []), return_exceptions=True)
+        # Leave groups while connection attributes are still available
+        await leave_all_groups(self, log)
 
         # Reset all per-session attributes for the next connection
         self.session        = None
         self.context_buffer = []
         self._init_response_state()
 
-        leave_all_groups(self, log) # TODO: I don't think I've EVER seen this in the logs btw...
-        log.log_disconnect(self.user, session_id, code)
+        log.log_disconnect(user, session_id, code)
 
 
     # ================================================================================
-    # Handle Incoming Data (processing "callbacks" used to maintain the chat)
+    # Handle incoming & outgoing WebSocket communication
     # ================================================================================
     # Overall communication handler; all incoming messages come through here first
-    async def receive_json(self, data, **kwargs):
+    async def receive_json(self, data: object, **kwargs: object) -> None:
         await handle_receive_json(self, data)
- 
-    # Add messages to the database & update the local context (role must be "user" or "assistant")
-    async def handle_chat_messages(self, role, text, ts): return await _handle_chat_messages(self, role, text, ts)
 
-    # Handle on-utterance biomarkers (fires per committed user utterance)
-    async def on_utterance_biomarkers(self, message, recent_text, words):
-        return await _on_utterance_biomarkers(self, message, recent_text, words)
-
-    # Handle on-audio biomarkers (fires per committed user utterance)
-    async def on_audio_biomarkers(self, message, words):
-        return await _on_audio_biomarkers(self, message, words)
-
-    # Handle "streamed" audio data from the frontend client
-    async def  handle_audio_data(self, data): return await _handle_audio_data(self, data)
-
-
-    # ================================================================================
+    # --------------------------------------------------------------------------------
     # Group Event Handlers
-    # ================================================================================
+    # --------------------------------------------------------------------------------
     # Receives commands from listener consumers
     # Forwards payloads to websocket client (catches our own broadcasts and forwards them)
     async def ws_command         (self, event): await handle_ws_command        (self, event)
@@ -281,6 +274,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def _broadcast_recording_state(self, enabled: bool):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.recording_status", "data": {"enabled": enabled}})
 
+    # Broadcasts the complete canonical control state to every listener
+    async def _broadcast_control_state(self, state: dict[str, bool]) -> None:
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.control_state", "data": state})
+
 
     # ================================================================================
     # Additional Helpers
@@ -291,16 +288,16 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         return ChatHandler.request_reply_now(self, barrier)
 
     # Speak supplied text independently of STT/staged-response coordination
-    async def speak_response(self, response : str | dict[str, object] | None) -> str | dict[str, object]:
-        return await ChatHandler.respond_to_user(self.context_buffer, self, use_response=response)
+    def speak_response(self, response: str | dict[str, object] | None) -> asyncio.Task:
+        pending = getattr(self, "_pending_response_task", None)
+        if (pending is not None) and (not pending.done()): pending.cancel()
 
-    # Pause/Resume -- Toggle the STT stream (wrapper for '_toggle_stream' in ws_events.py)
-    async def toggle_stream(self, data_or_cmd):
-        """
-        Accepts either a raw command string ("start" | "stop") or a full data dictionary (JSON).
-        """
-        data = data_or_cmd if isinstance(data_or_cmd, dict) else {"data": data_or_cmd}
-        await _toggle_stream(self, data)
+        previous = getattr(self, "_manual_response_task", None)
+        if (previous is not None) and (not previous.done()): previous.cancel()
+
+        task = fire_and_log(ChatHandler.respond_to_user(self.context_buffer, self, use_response=response), name="chat::manual_response")
+        self._manual_response_task = task
+        return task
 
     # Session State Attributes
     def _init_response_state(self):
@@ -311,16 +308,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Conveniently access the LLMs last response (for 'repeat_last_response()')
         self.last_response            = None
 
-        # Turn-taking / overlapped speech (reset per user utterance by on_audio_biomarkers)
+        # Turn-taking / overlapped speech (reset per user utterance by audio biomarkers)
         self.overlapped_speech_count  = 0.0    # TODO: Need to track down everywhere this is tracked, probably can delete...
         self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
 
         # Response task state
         self._staged_utterances       = StagedUtteranceBuffer()
         self._pending_response_task   = None   # Current 'asyncio.Task' for '_execute_response'
+        self._manual_response_task    = None   # Current admin-supplied or repeated response task
         self._reply_now_task          = None   # Coordinator retaining a forced-reply request across retries
         self._reply_now_generation    = 0      # Newer reply requests supersede older queue boundaries
         self._stt_progress_revision   = 0      # Meaningful interim/final progress used by settling logic
+        self._stage_lock              = asyncio.Lock()  # Serializes final-transcript scheduling decisions
+        self._response_lock           = asyncio.Lock()  # Gives one response task ownership of staged text
 
         # Chat status tracking
         self.streaming_active         = False  # True while STT stream is active (paused state)

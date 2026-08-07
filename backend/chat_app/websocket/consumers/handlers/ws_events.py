@@ -1,98 +1,89 @@
 """
-Handle events from the ChatConsumer's WebSocket client.
+Route messages received from the primary chat WebSocket client.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.handlers.ws_events`
 
-These methods get implemented by the consumers via simple passthroughs.
+This is the transport boundary for audio payloads, direct transcriptions,
+canonical commands, overlap notifications, and end-chat requests.
+
+NOTE: Serves as a passthrough routing all incoming message types that the main
+      consumer receives to the proper handling endpoints. 
 
 """
 from __future__ import annotations
+from typing     import TYPE_CHECKING
 
-import logging, time, json
+import logging, time
 logger = logging.getLogger(__name__)
 
 # From this project
 from ....services import logging_utils as lu 
-from ....services.logging_utils import RESET, BOLD, UNBOLD, CC_MAIN, CC_H, CC_R
+from ....services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
 
-# Handling messages
-from  ...services.chatHelpers import ChatHandler
-from    .command_dispatch     import dispatch_command
+# Handling incoming payloads
+from ...services.chatHelpers import ChatHandler
+from  ..processing.audio     import ingest_audio_payload
+from  ..processing.commands  import dispatch_command
 
-# Import the class for type checking
-from typing import TYPE_CHECKING
 if TYPE_CHECKING: from ..consumers import ChatConsumer
+
+MAX_TRANSCRIPT_CHARS = 20_000  # Maximum direct transcription length accepted from a frontend
 
 
 # ================================================================================
 # Handle all forms of incoming data
 # ================================================================================
-async def handle_receive_json(consumer: ChatConsumer, data: dict, **kwargs: object) -> None:
+async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
     """
     Route decoded client messages, including canonical commands with immediate acks.
     """
+    if not isinstance(data, dict):
+        logger.info(f"{CC_MAIN} {lu.RED}Non-object JSON{CC_R} received: {type(data).__name__}.{RESET}")
+        return
+
     msg_type = data.get("type")
 
-    if   msg_type == "overlapped_speech" : await _handle_overlap(consumer, data=data)
-    elif msg_type == "audio_data"        : await consumer.handle_audio_data(data)
-    elif msg_type == "transcription"     : await ChatHandler.handle_transcription(data, consumer)
-    elif msg_type == "command":
-        ack = dispatch_command(consumer, data.get("data", {}) or {})
-        await consumer.send_json({"type": "command_ack", "data": ack})
+    if   msg_type == "overlapped_speech" : await handle_overlap              (consumer, data)
+    elif msg_type == "audio_data"        : await ingest_audio_payload        (consumer, data)
+    elif msg_type == "transcription"     : await handle_transcription_message(consumer, data)
+    elif msg_type == "command"           : await handle_client_command       (consumer, data)
     elif msg_type == "end_chat"          : await consumer.close(code=1000)
-    elif msg_type == "toggle_stream"     : await _toggle_stream(consumer, data)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")
 
-
-# --------------------------------------------------------------------------------
-# Toggle the stream of audio data (pause and unpause on the frontend)
-# --------------------------------------------------------------------------------
-# TODO: In the future this is where any TTS controls would also go (e.g., pause TTS playback)
-async def _toggle_stream(consumer: ChatConsumer, data: dict):
-    """
-    NOTE: The audio "zero-time" anchor (_audio_start_mono / _audio_start_dt) is
-    set in `cc_callbacks.handle_audio_data()` when the FIRST audio chunk 
-    arrives.
-    """
-    # Parse the input
-    cmd = data.get("data", None)
-
-    # Log the command
-    stream_status = "active" if (consumer.streaming_active) else "paused"
-    new_status    = "active" if (cmd == "start"           ) else "paused"
-    logger.info(f"{CC_MAIN} STT toggled: {CC_H}{stream_status} -> {new_status}{CC_R} | {CC_H}{data}{CC_R} {RESET}")
-
-    # Start the stream (start of chat OR unpause)
-    # TODO: I think? I don't remember if the start of chats is handled differently from unpausing
-    if cmd == "start":
-        if getattr(consumer, "streaming_active", False): return   # already active
-        consumer.stt_provider.start()
-        consumer.streaming_active = True
-        status = "active"
-
-    # Stop the STT stream (pause)
-    elif cmd == "stop":
-        if not getattr(consumer, "streaming_active", True): return   # already stopped
-        consumer.stt_provider.stop()
-        consumer.streaming_active = False
-        status = "paused"
-
-    # Unknown command / new status given
-    else: return
-
-    # Notify the frontend chat client directly, then broadcast to ChatListener
-    try: await consumer.send(json.dumps({"type": "stream_status", "data": status}))
-    except Exception: pass
-    await consumer._broadcast_stream_status(status)
-
-
 # --------------------------------------------------------------------------------
 # Overlapped Speech | TODO: Not really used for anything at the moment
 # --------------------------------------------------------------------------------
-async def _handle_overlap(consumer: ChatConsumer, data=None):
+async def handle_overlap(consumer: ChatConsumer, data: dict[str, object]) -> None:
     consumer.overlapped_speech_count += 1
     consumer.overlapped_speech_events.append(time.time())
     logger.info(f"{CC_MAIN} Overlapped speech detected. Count: {CC_H}{consumer.overlapped_speech_count}{CC_R} {RESET}")
 
+# --------------------------------------------------------------------------------
+# [TEXT] Validate and normalize the payload before passing it off to ChatHandler
+# --------------------------------------------------------------------------------
+async def handle_transcription_message(consumer: ChatConsumer, data: dict[str, object]) -> None:
+    # Validate the transport payload (text transcript)
+    transcript = data.get("data")
+    if (not isinstance(transcript, str)) or (not transcript.strip()) or (len(transcript) > MAX_TRANSCRIPT_CHARS):
+        logger.warning(f"{CC_MAIN} Ignoring invalid direct transcription payload.{RESET}")
+        return
+
+    # Normalize transport data before passing an explicit utterance into ChatHandler
+    timestamp = data.get("time", time.time())
+    if not isinstance(timestamp, (int, float)): timestamp = time.time()
+    await ChatHandler.stage_and_schedule(consumer, transcript.strip(), float(timestamp), words=None)
+
+# --------------------------------------------------------------------------------
+# [CONTROL] Validate & handle incoming client commands (e.g., `reply_now`)
+# --------------------------------------------------------------------------------
+async def handle_client_command(consumer: ChatConsumer, data: dict[str, object]) -> None:
+    # Validate the command envelope & dispatch the command
+    payload = data.get("data", {}) or {}
+    if not isinstance(payload, dict): payload = {}
+    ack = await dispatch_command(consumer, payload)
+
+    # Send an acknowledgement back through the same socket & broadcast the confirmed control state
+    await consumer.send_json({"type": "command_ack", "data": ack})
+    if ack["ok"]: await consumer._broadcast_control_state(ack["state"])

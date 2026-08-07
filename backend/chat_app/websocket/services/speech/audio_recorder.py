@@ -10,7 +10,7 @@ Records both sides of a chat session into a single stereo WAV file:
 
 NOTE: Time Alignment:
     Both channels share a single zero-time anchor: `consumer._audio_start_mono`
-    (set in ws_events._toggle_stream when the user first clicks "Start Chat").
+    (set when processing.audio.ingest_audio_payload receives the first audio chunk).
 
     Left channel: 
     User audio chunks arrive from the frontend shortly after _audio_start_mono. 
@@ -28,8 +28,8 @@ NOTE: Time Alignment:
 
 
 Call sequence:
-  1. Consumer sets _audio_start_mono/_audio_start_dt in ws_events (first "start")
-  2. handle_audio_data() extends consumer._rec_user each chunk
+  1. ingest_audio_payload() sets _audio_start_mono/_audio_start_dt on the first chunk
+  2. Each accepted payload extends consumer._rec_user
   3. synthesize_and_stream_tts() calls accumulate_tts() once per TTS response
   4. disconnect() calls save_stereo_wav() and passes the path to close_session()
 
@@ -206,4 +206,3 @@ def save_stereo_wav(
 
     # Returns a string with the path to the audio file (in the Django media folder)
     return f"recordings/session_{session_id}.wav"
-

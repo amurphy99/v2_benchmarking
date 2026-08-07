@@ -55,7 +55,7 @@ class InterimProgressTracker:
     # --------------------------------------------------------------------------------
     # Check if an interim contains speech beyond the previous progress "watermark"
     # --------------------------------------------------------------------------------
-    def has_new_speech(self, result: Any, transcript: str,) -> bool:
+    def has_new_speech(self, result: Any, transcript: str) -> bool:
         normalized = self._normalize(transcript)
         previous   = self._latest_interim
 

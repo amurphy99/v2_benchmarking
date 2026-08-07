@@ -9,9 +9,6 @@ TODO: Later on may need to specifically add start/end timestamps to chats/messag
 import os, logging, time
 logger = logging.getLogger(__name__)
 
-
-
-
 # Django imports
 from channels.db         import database_sync_to_async
 from django.db           import transaction
@@ -27,7 +24,6 @@ from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatW
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
-
 
 # Helpers
 from  .chat_info.topicHelpers   import get_topics
@@ -111,12 +107,15 @@ class ChatService:
     @transaction.atomic
     def prepare_session_for_analysis(user_id, session_id):
         # Get user and session objects with their IDs
-        user    = User       .objects.get(id=   user_id)
-        session = ChatSession.objects.get(id=session_id)
+        try:
+            user    = User       .objects.get(id=   user_id)
+            session = ChatSession.objects.get(id=session_id)
+        except (User.DoesNotExist, ChatSession.DoesNotExist):
+            return None, None, False, []
 
-        # Set session to inactive & add the end timestamp
+        # Set session to inactive without replacing an earlier disconnect timestamp
         session.is_active = False
-        session.end_ts = timezone.now()
+        if session.end_ts is None: session.end_ts = timezone.now()
 
         # Retrieve messages for the session (includes user & assistant; reuse this so we only need one DB query)
         qs       = ChatMessage.objects.filter(session=session).order_by("ts", "id")
@@ -202,20 +201,37 @@ class ChatService:
         return topics, sentiment
 
 
-
-
-
-
     # --------------------------------------------------------------------------------
     # Manually close an active chat session
     # --------------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
-    def close_any_active_session(user):
+    def close_any_active_session(user) -> list[dict[str, object]]:
         profile = get_profile(user)
-        qs = ChatSession.objects.select_for_update().filter(profile=profile, is_active=True)
-        for s in qs:
-            ChatService.close_session(user, s, source=s.source)
+        sessions = list(ChatSession.objects.select_for_update().filter(profile=profile, is_active=True))
+        closed   = []
+        end_ts   = timezone.now()
+
+        # Release the one-active-session constraint before scheduling slow analysis
+        for session in sessions:
+            session.is_active = False
+            session.end_ts    = session.end_ts or end_ts
+            session.save(update_fields=["is_active", "end_ts"])
+            closed.append({"id": session.id, "source": session.source})
+
+        return closed
+
+    # Mark one session inactive before its slower post-chat analysis starts
+    @staticmethod
+    @transaction.atomic
+    def deactivate_session(session_id: int) -> bool:
+        session = ChatSession.objects.select_for_update().filter(id=session_id).first()
+        if session is None: return False
+
+        session.is_active = False
+        session.end_ts    = session.end_ts or timezone.now()
+        session.save(update_fields=["is_active", "end_ts"])
+        return True
         
     # ================================================================================
     # Message & Biomarker Score Helpers
@@ -225,6 +241,15 @@ class ChatService:
     def add_message(session_id, role, text, *, start_ts=None, end_ts=None):
         session = ChatSession.objects.get(id=session_id)
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
+
+    # Save the matching user/assistant turn together so a failed second write cannot split it
+    @staticmethod
+    @transaction.atomic
+    def add_exchange(session_id: int, user_text: str, assistant_text: str) -> tuple[ChatMessage, ChatMessage]:
+        session       = ChatSession.objects.get   (id=session_id)
+        user_message  = ChatMessage.objects.create(session=session, role="user",      content=user_text     )
+        assistant_msg = ChatMessage.objects.create(session=session, role="assistant", content=assistant_text)
+        return user_message, assistant_msg
     
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
     # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
@@ -300,5 +325,3 @@ class ChatService:
         message_ts   = session.messages        .aggregate(min_ts=Min("ts"))["min_ts"]
         timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
         return min(timestamps) if timestamps else None
-
-

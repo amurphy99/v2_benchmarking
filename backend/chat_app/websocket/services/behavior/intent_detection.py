@@ -3,9 +3,9 @@ Regex-based intent detection for user-initiated end-chat and pauses.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.behavior.intent_detection`
 
-Called from ChatHandler._handle_intent inside _execute_response, before the LLM
-call. Returns a scripted response (and whether to close the connection after) so
-the rest of the response code runs normally.
+Called before every standard and activity-chat LLM attempt. Returns a scripted
+response (and whether to close the connection after) so the rest of the response
+code runs normally.
 
 TODO: Pause needs to communicate with the frontend chat page and the listener page
 
@@ -16,8 +16,9 @@ import logging, re
 logger = logging.getLogger(__name__)
 
 # From this project
-from ....services import logging_utils as lu 
-from ....services.logging_utils import RESET, BOLD, UNBOLD, ORANGE
+from ....services                   import logging_utils as lu 
+from ....services.logging_utils     import RESET, BOLD, UNBOLD, ORANGE
+from ...consumers.processing.stream import set_streaming_active
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
@@ -162,9 +163,8 @@ async def handle_user_intent(consumer: ChatConsumer, text: str) -> tuple[str | N
     # Case B: User indicates they want to PAUSE the chat
     if _check_pause_intent(text):
         logger.info(f"{ORANGE}[Intent] User indicates they wish to {BOLD}PAUSE{UNBOLD} the chat.{RESET}")
-        await consumer.toggle_stream("stop")   # stops STT + notifies frontend client and ChatListener
+        await set_streaming_active(consumer, active=False)  # stops STT + notifies frontend client and ChatListener
         return MSG_PAUSE, False
 
     # Return default response if none of our pre-programmed intents were detected
     return None, False
-

@@ -14,9 +14,8 @@ How it works:
 
 
 Frontend sends commands such as:
-- Tell backend to stop/resume using STT "utterance ends" to respond with the LLM
-    { "type": "command", "data": { "cmd": "pause_auto" } }
-    { "type": "command", "data": { "cmd": "resume_auto" } }
+- Tell backend whether to pause automatic responses after STT finalizes an utterance
+    { "type": "command", "data": { "name": "pause_responses", "data": true } }
 
 - Tell LLM to respond immediately with whatever context it has heard recently (e.g. button control)
     { "type": "command", "data": { "name": "reply_now" } }
@@ -48,10 +47,10 @@ import logging, time
 logger = logging.getLogger(__name__)
 
 # Django 
-from django.core.exceptions     import ObjectDoesNotExist
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 from django.apps                import apps
+from uuid                       import uuid4
 
 # Imports from this project
 from ...services.db_services import ChatService
@@ -88,12 +87,17 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Connect
     # --------------------------------------------------------------------------------
     async def connect(self):
+        self.user          = self.scope.get("user")
+        self.session       = None
+        self.session_id    = None
+        self.room_group    = None
+        self.monitor_group = None
+        self.control_group = None
+
         # 1) Authenticate before accepting connection
-        if not self.scope["user"].is_authenticated:
+        if not self.user.is_authenticated:
             logger.info(f"{lu.CL_MAIN} Not authenticated (stage 1) {lu.RESET}")
             await self.close(code=4001); return
-        
-        self.user = self.scope["user"]
         
         # 2) Identify which ChatSession this listener is observing
         # Session ID is passed via URL:  "ws/chat/<session_id>/listen/"
@@ -116,7 +120,6 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         self.room_group    = f"chat_{sid}"       # all listeners + primary (message events)
         self.monitor_group = f"chat_{sid}_mon"   # listeners (biomarker events)
         self.control_group = f"chat_{sid}_ctl"   # primaries only (commands)
-        self.ack_group     = f"chat_{sid}_ack"   # for relaying command acks to frontend
 
         # 6) Accept the websocket (must be done before send_json / receiving messages)
         await self.accept()
@@ -130,18 +133,23 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # 7) Join groups
         await self.channel_layer.group_add(self.   room_group, self.channel_name)
         await self.channel_layer.group_add(self.monitor_group, self.channel_name)
-        await self.channel_layer.group_add(self.    ack_group, self.channel_name)
 
         # 8) Collect and send all data required on-connection by the frontend
         num_messages, num_biomarkers = await send_initial_data(self.session_info, self)
+
+        # Ask the primary connection for its live control state after joining its groups
+        await self.channel_layer.group_send(
+            self.control_group,
+            {"type": "ws.command", "payload": {"id": str(uuid4()), "name": "get_control_state"}, "reply_channel": self.channel_name},
+        )
         log.log_connect_done(num_messages, num_biomarkers)
 
     # --------------------------------------------------------------------------------
     # Disconnect (listener does NOT close the session in DB)
     # --------------------------------------------------------------------------------
     async def disconnect(self, code):      
-        leave_all_groups(self, log)
-        log.log_disconnect(self.user.username, self.session_id, code)
+        await leave_all_groups(self, log)
+        log.log_disconnect(getattr(self.user, "username", "unknown"), self.session_id, code)
 
     # ================================================================================
     # Group Event Handlers | Handle all messages send from consumer-to-consumer
@@ -177,6 +185,10 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Receives recording toggle state from the primary consumer and relays to the admin frontend
     async def ws_recording_status(self, event):
         await self.send_json({"type": "recording_status", "data": event.get("data", {})})
+
+    # Receives complete control state after any accepted command
+    async def ws_control_state(self, event: dict) -> None:
+        await self.send_json({"type": "control_state", "data": event.get("data", {})})
 
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
@@ -214,5 +226,5 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # Unknown message type received from the client
         # --------------------------------------------------------------------------------
         else:
-            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN}{payload}{lu.RESET}")
+            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN}{data}{lu.RESET}")
             return

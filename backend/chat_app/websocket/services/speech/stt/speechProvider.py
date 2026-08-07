@@ -12,12 +12,13 @@ New chat-response flow:
 TODO: Really need to test it out without KEEP_ALIVE_SEC
 
 """
-import logging, threading, base64, weakref
+import logging, threading, weakref
 logger = logging.getLogger(__name__)
 
-from datetime import datetime
+from datetime import datetime, timezone
 from queue    import Empty
 from time     import monotonic as now_ts
+from time     import time      as wall_ts
 from typing   import Any, Iterable
 
 # Google imports
@@ -33,13 +34,13 @@ from  .audio_queue  import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
 from  .stream_state import InterimProgressTracker
 
 # Constants
-SAMPLE_RATE   = 16_000
-CHUNK_SIZE    =  2_048  # 64ms of 16-bit PCM audio = 2048 bytes
-LANGUAGE_CODE = "en-US"
+SAMPLE_RATE   = 16_000   # Required input sample rate for the Google recognition stream
+CHUNK_SIZE    =  2_048   # Bytes in 64 ms of 16-bit mono PCM audio
+LANGUAGE_CODE = "en-US"  # Recognition language supplied to Google STT
 
 # Config
-KEEP_ALIVE_SEC = 0.1     # Keep streaming alive during short pauses
-SILENCE        = b"\x00" * CHUNK_SIZE
+KEEP_ALIVE_SEC = 0.100                 # Seconds between silence frames while waiting for audio
+SILENCE        = b"\x00" * CHUNK_SIZE  # Silent PCM frame used to keep Google streaming
 
 # ================================================================================
 # Streaming STT via audio bytes received from the ChatConsumer client
@@ -50,6 +51,8 @@ class SpeechToTextProvider:
         self._streaming_config    = None
         self._audio_buffer        = AudioInputQueue()
         self._streaming           = False
+        self._accepting_audio     = True    # Desired listening state independent of thread shutdown timing
+        self._closed              = False   # Terminal provider state after its consumer disconnects
         self._thread              = None    # The thread we use for streaming
         self._stream_start_dt     = None    # Wall-clock anchor for word-time offsets
 
@@ -62,24 +65,39 @@ class SpeechToTextProvider:
         self._consumer_ref = weakref.ref(consumer)   # Keep a weakref to avoid keeping a disconnected consumer alive
         self._loop         = loop                    # Loop from the consumer
     
-
+    # Grab a reference to the consumer that owns this
+    def _consumer(self):
+        return self._consumer_ref()
+    
     # --------------------------------------------------------------------------------
     # Utilities
     # --------------------------------------------------------------------------------
-    def _consumer(self):
-        return self._consumer_ref()
-
     # Generates StreamingRecognizeRequest objects from the audio Queue
-    def _audio_generator(self):
-        while self._streaming:
+    def _audio_generator(self) -> Iterable[speech.StreamingRecognizeRequest]:
+        """
+        Previously, we used a simple `Queue` object to store the incoming audio
+        audio chunks. Now, our audio buffer is a custom object that can take
+        different types of input.
+
+        When in "manual response mode" we insert an `AudioBarrier` at the time
+        a response is requested, and we only begin the response process with the
+        LLM once all other `AudioChunk` objects in the queue have been pulled 
+        already. So if a response is requested immediately after the user
+        finishes speaking, we leave time for ASR to finish processing the end
+        of their utterance before sending their text to the LLM. 
+        """
+        while True:
             # Keep streaming alive during short pauses
-            try:          item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
-            except Empty: yield speech.StreamingRecognizeRequest(audio_content=SILENCE); continue
+            try: item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
+            except Empty:
+                if not self._streaming: break
+                yield speech.StreamingRecognizeRequest(audio_content=SILENCE)
+                continue
 
             # Process the different possible types of queue entries
             if     isinstance(item, AudioBarrier): continue  # Pass over the AudioBarriers
             if     isinstance(item, StopSignal  ): break     # Break the audio processing loop if stop command is given
-            if not isinstance(item, AudioChunk  ):
+            if not isinstance(item, AudioChunk  ):           # These three objects should be the only things in the Queue
                 logger.warning(f"{STT_MAIN} Ignoring unknown audio queue item: {type(item).__name__}.{RESET}")
                 continue
 
@@ -89,7 +107,7 @@ class SpeechToTextProvider:
             yield speech.StreamingRecognizeRequest(audio_content=item.data)
 
     # Validate transcripts from the STT results
-    def _check_transcript(self, transcript):
+    def _check_transcript(self, transcript: str) -> tuple[bool, str]:
         # Check length
         if len(transcript) < 1: return False, ""
 
@@ -106,11 +124,16 @@ class SpeechToTextProvider:
     # Start the stream
     # --------------------------------------------------------------------------------
     # Initializes the configs and starts a new thread to handle the streaming without blocking.
-    def start(self):
-        # Guard to make sure we aren't already streaming
+    def start(self) -> None:
+        # Enable audio immediately, then let a thread already shutting down finish
+        if self._closed: return
+        self._accepting_audio = True
         if getattr(self, "_thread", None) and self._thread.is_alive(): return
+
+        # Remove the previous stream's stop marker without dropping resumed audio
+        self._audio_buffer.prepare_for_restart()
         self._streaming       = True
-        self._stream_start_dt = datetime.now()  # Anchors Google's stream-relative word offsets to wall-clock
+        self._stream_start_dt = datetime.now(timezone.utc)  # Anchors Google's word offsets to wall-clock
         self._interim_progress.reset()
 
         # Configure the stream
@@ -135,7 +158,7 @@ class SpeechToTextProvider:
         
     # Main streaming thread
     # The generator yields streaming recognition requests, and we send them to the Google Cloud STT API. 
-    def _start_streaming_thread(self):
+    def _start_streaming_thread(self) -> None:
         try:
             responses = self._client.streaming_recognize(config=self._streaming_config, requests=self._audio_generator())
             self._listen_responses(responses)
@@ -145,27 +168,40 @@ class SpeechToTextProvider:
         finally: self._streaming = False  
 
     # --------------------------------------------------------------------------------
-    # Stop the stream
+    # Stop the stream (empties the queue and discards the contents)
     # --------------------------------------------------------------------------------
-    # TODO: Maybe change to keep recognizing the drained content?
     # TODO: Should this just enque a `StopSignal`?
     # Discards old audio, releases pending barriers, and wakes the generator
-    def stop(self):
-        self._streaming = False
+    def stop(self) -> None:
+        """
+        When this is called, the audio buffer continues to remove every queued item,
+        discards any of the `AudioChunk` objects (no more recognition after this is
+        called), fails any pending `AudioBarriers`, and enqueues a `StopSignal`.
+        """
+        self._accepting_audio = False
+        self._streaming       = False
         self._audio_buffer.stop()  
+
+    # Permanently stop callbacks when the owning WebSocket disconnects
+    def shutdown(self) -> None:
+        self._closed = True
+        self.stop()
 
     # --------------------------------------------------------------------------------
     # Sends audio data to the audio buffer
     # --------------------------------------------------------------------------------
-    def send_audio(self, data):
-        audio_bytes = base64.b64decode(data["data"])
-        self._audio_buffer.put_audio(received_at=now_ts(), data=audio_bytes)
+    def send_audio(self, audio_bytes: bytes) -> bool:
+        # Paused streams deliberately drop frontend audio instead of silently restarting
+        if not self._accepting_audio: return False
 
-        # Restart if not streaming OR thread is dead
-        # TODO: This might make pausing not work
-        if (not self._streaming) or (not getattr(self, "_thread", None)) or (not self._thread.is_alive()): 
+        # Start the provider before enqueueing so a fresh stream receives this chunk
+        thread = getattr(self, "_thread", None)
+        if (not self._streaming) or (thread is None) or (not thread.is_alive()):
             logger.info(f"{STT_MAIN} Restarting streaming. {RESET}")
             self.start()
+
+        self._audio_buffer.put_audio(received_at=now_ts(), data=audio_bytes)
+        return True
 
     # Enqueue a boundary after all audio received so far (resolves once the generator reaches it)
     def create_audio_barrier(self) -> AudioBarrier:
@@ -191,6 +227,7 @@ class SpeechToTextProvider:
         TODO: Need to double check the logic on the repeated-text thing...
         """
         for response in responses:
+            if self._closed: return
             for result in response.results:
 
                 # --------------------------------------------------------------------------------
@@ -236,11 +273,10 @@ class SpeechToTextProvider:
                 # Log the resulting transcription
                 logger.info(f"{STT_MAIN} Final transcription: \"{transcript}\" ({BOLD}{len(words)} words{UNBOLD}) {RESET}")
 
-                # 4) Send the transcript results to the ChatConsumer
-                data    = {"type": "user_utt", "data": transcript, "time": now_ts()}
+                # 4) Schedule the finalized utterance on the ChatConsumer event loop
                 t_sched = now_ts()
                 fut = thread_FL(
-                    self._loop, ChatHandler.stage_and_schedule(data, consumer, words),
+                    self._loop, ChatHandler.stage_and_schedule(consumer, transcript, wall_ts(), words),
                     name="stt::stage_and_schedule"
                 )
                 def _done(_, _ts=t_sched): logger.info(f"{STT_MAIN} Handler latency={BOLD}{now_ts()-_ts:.3f}s{UNBOLD}.{RESET}")
@@ -251,7 +287,7 @@ class SpeechToTextProvider:
     # Format STT results with timestamps
     # ================================================================================
     @staticmethod
-    def _get_word_timestamps(stream_start: datetime, words):
+    def _get_word_timestamps(stream_start: datetime, words: Iterable[Any]) -> list[dict[str, object]]:
         """
         Stream start allows us to get the real, wall-clock time for each word. 
         """

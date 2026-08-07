@@ -24,6 +24,8 @@ from   .speech.tts.tts_streaming          import synthesize_and_stream_tts
 from   .speech.stt.audio_queue            import AudioBarrier
 from   .bg_helpers                        import fire_and_log, trace_await
 from ..services.behavior.intent_detection import handle_user_intent
+from ..biomarkers.callbacks               import process_audio_biomarkers, process_text_biomarkers
+from ..consumers.processing.messages      import commit_chat_exchange, commit_chat_message
 from ...services                          import logging_utils as lu
 from ...services.logging_utils            import RESET, BOLD, UNBOLD, ORANGE
 from ...services.db_services              import ChatService
@@ -45,22 +47,20 @@ class ChatHandler:
     """
     Static class with methods for handling chat interactions between the user and system.
 
-    User utterances arrive via two paths:
-      (1) Text sent directly from the chat client => `handle_transcription` (wrapper method)
-      (2) Backend STT final result                => `stage_and_schedule`   (with word timestamps)
-
-    Both paths go through `stage_and_schedule`, which stages the utterance and creates
-    a cancellable asyncio Task (`_execute_response`). Interim STT results cancel that
-    task so the user's continued speech can be accumulated before responding.
+    Direct frontend transcriptions and backend STT final results both enter through
+    `stage_and_schedule`. It stages the utterance and creates a cancellable response
+    task. Meaningful interim STT progress cancels that task so continued speech can be
+    accumulated before responding.
     """
     # ================================================================================
     # Stage utterance + schedule a cancellable response task
     # ================================================================================
     @staticmethod
     async def stage_and_schedule(
-        data     : dict,                                   # Frontend or backend-STT transcription payload
-        consumer : ChatConsumer,                           # Chat session receiving the final transcript
-        words    : list[dict[str, object]] | None = None,  # Google word-level timestamp records (see speechProvider.py)
+        consumer  : ChatConsumer,                    # Active chat that owns staging and response state
+        text      : str,                             # Finalized utterance text to stage
+        timestamp : float,                           # Source timestamp echoed to the primary frontend
+        words     : list[dict[str, object]] | None,  # Google word timing data, absent for direct text
     ) -> None:
         """
         Stage one finalized utterance atomically and choose the response-task owner.
@@ -68,38 +68,43 @@ class ChatHandler:
         is active. Otherwise (or if we are in automatic mode), we start the normal
         cancellable response task.
         """
-        # 1) Stage text and word metadata atomically, before the first await
-        user_text = data["data"]
-        consumer._staged_utterances.append(text=user_text, words=words, timestamp=now_ts())
+        async with consumer._stage_lock:
+            if getattr(consumer, "_close_scheduled", False): return
 
-        # A final result is always meaningful STT progress. It must invalidate any
-        # response attempt whose snapshot did not contain this utterance
-        ChatHandler.note_stt_progress(consumer)
+            # 1) Stage text and word metadata atomically, before the first await
+            consumer._staged_utterances.append(text=text, words=words, timestamp=now_ts())
 
-        # 2) If this is using STT from the backend, also send the utterance back to the frontend
-        if consumer.use_backend_STT:
-            await consumer.send(json.dumps({"type": "user_utt", "data": user_text, "time": data.get("time", now_ts())}))
+            # A final result is always meaningful STT progress. It must invalidate any
+            # response attempt whose snapshot did not contain this utterance
+            ChatHandler.note_stt_progress(consumer)
 
-        # Log an update 
-        # TODO: Might want to do this somewhere else with the text content included ?
-        logger.info((f"{ORANGE}[ChatHandler] " 
-                     f"auto_reply={BOLD}{consumer.reply_on_user_utt}{UNBOLD}, " 
-                     f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
+            # 2) If this is using STT from the backend, also send the utterance back to the frontend
+            if consumer.use_backend_STT:
+                await consumer.send(json.dumps({"type": "user_utt", "data": text, "time": timestamp}))
 
-        # Finish cancelling any response invalidated above before deciding who owns the next attempt
-        task = consumer._pending_response_task
-        if (task is not None) and (not task.done()):
-            await asyncio.gather(task, return_exceptions=True)
+            # Log an update
+            # TODO: Might want to do this somewhere else with the text content included ?
+            logger.info((f"{ORANGE}[ChatHandler] "
+                         f"auto_reply={BOLD}{consumer.reply_on_user_utt}{UNBOLD}, "
+                         f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
 
-        # Forced-reply coordinator handles retries while it is active (including when in pause-and-listen mode)
-        coordinator = getattr(consumer, "_reply_now_task", None)
-        if (coordinator is not None) and (not coordinator.done()): return
+            # Finish cancelling any response invalidated above before deciding who owns the next attempt
+            task = consumer._pending_response_task
+            if (task is not None) and (not task.done()):
+                await asyncio.gather(task, return_exceptions=True)
 
-        # When in "Pause & Listen" mode, we still stage and echo user text, but we don't auto-respond
-        if not consumer.reply_on_user_utt: return
+            # Disconnect flush owns anything staged while the frontend send was pending
+            if getattr(consumer, "_close_scheduled", False): return
 
-        # Create a new cancellable automatic response task
-        consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
+            # Forced-reply coordinator handles retries while it is active (including when in pause-and-listen mode)
+            coordinator = getattr(consumer, "_reply_now_task", None)
+            if (coordinator is not None) and (not coordinator.done()): return
+
+            # When in "Pause & Listen" mode, we still stage and echo user text, but we don't auto-respond
+            if not consumer.reply_on_user_utt: return
+
+            # Create a new cancellable automatic response task
+            consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
 
     # --------------------------------------------------------------------------------
     # STT progress (invalidate outdated response snapshots when we get new speech)
@@ -127,6 +132,9 @@ class ChatHandler:
         pending = getattr(consumer, "_pending_response_task", None)
         if (pending is not None) and (not pending.done()): pending.cancel()
 
+        manual = getattr(consumer, "_manual_response_task", None)
+        if (manual is not None) and (not manual.done()): manual.cancel()
+
         task = fire_and_log(
             ChatHandler._coordinate_reply_now(consumer, barrier, generation),
             name=f"chat::reply_now::{generation}",
@@ -147,7 +155,7 @@ class ChatHandler:
         # Request versioning is used to supersede any rapid duplicate commands we get
         if generation != consumer._reply_now_generation: return None
 
-        # Dea
+        # Define how long an empty request may wait for its first finalized text
         empty_deadline = asyncio.get_running_loop().time() + REPLY_EMPTY_WAIT_SEC
         while generation == consumer._reply_now_generation:
             # Debounce from the latest meaningful interim/final progress. Repeated or
@@ -180,50 +188,52 @@ class ChatHandler:
         return None
 
     # --------------------------------------------------------------------------------
-    # Wrapper for the text-input path (ws_events.py calls handle_transcription directly)
+    # Flush staged utterances before disconnect finishes
     # --------------------------------------------------------------------------------
     @staticmethod
-    async def handle_transcription(data, consumer: ChatConsumer):
-        await ChatHandler.stage_and_schedule(data, consumer, words=None)
-
-    # --------------------------------------------------------------------------------
-    # Flush staged utterances before any admin-triggered or manual response
-    # --------------------------------------------------------------------------------
-    @staticmethod
-    async def flush_staged_utterances(consumer : ChatConsumer) -> object | None:
+    async def flush_staged_utterances(consumer: ChatConsumer) -> object | None:
         """
         Combine any accumulated staged utterances into a single user message and commit
-        it to DB + context buffer. Called before admin-triggered responses and at disconnect.
+        it to DB + context buffer before disconnect analysis begins.
 
         TODO: I feel like there are a lot of places where we need to look at if the words
               are getting saved before they are cleared...
         """
-        snapshot = consumer._staged_utterances.snapshot()
-        if not snapshot: return None
-        
-        # Concatenate text from all of the users turns
-        combined_text  = " ".join(item.text for item in snapshot)
-        combined_words = [word for item in snapshot for word in item.words]
-        combined_ts    = now_ts()
-        
-        # Update the DB and context buffer
-        _, msg = await consumer.handle_chat_messages(role="user", text=combined_text, ts=combined_ts)
-        consumer._staged_utterances.consume(snapshot)
+        async with consumer._stage_lock:
+            async with consumer._response_lock:
+                snapshot = consumer._staged_utterances.snapshot()
+                if not snapshot: return None
 
-        if (combined_words) and (msg):
-            fire_and_log(
-                db_s2a(ChatService.add_words_bulk)(msg.id, combined_words),
-                name="flush_staged_utterances::add_words_bulk",
-            )
-        return msg
+                # Concatenate text from all of the users turns
+                combined_text  = " ".join(item.text for item in snapshot)
+                combined_words = [word for item in snapshot for word in item.words]
+                combined_ts    = now_ts()
+
+                # Update the DB and context buffer
+                msg = await commit_chat_message(consumer, role="user", text=combined_text, timestamp=combined_ts)
+                consumer._staged_utterances.consume(snapshot)
+
+                if (combined_words) and (msg):
+                    fire_and_log(
+                        db_s2a(ChatService.add_words_bulk)(msg.id, combined_words),
+                        name="flush_staged_utterances::add_words_bulk",
+                    )
+                return msg
 
     # ================================================================================
     # Cancellable Response Task (body)
     # ================================================================================
     @staticmethod
-    async def _execute_response(
-        consumer : ChatConsumer,  # Chat session owning this cancellable response attempt
-    ) -> str | None:
+    async def _execute_response(consumer: ChatConsumer) -> str | None:
+        """
+        Serialize all response attempts so only one task can own a staged snapshot.
+        """
+        async with consumer._response_lock:
+            return await ChatHandler._execute_response_locked(consumer)
+
+    # Run one response attempt while the caller holds the response lock
+    @staticmethod
+    async def _execute_response_locked(consumer: ChatConsumer) -> str | None:
         """
         Generate and commit a response from one immutable staged-utterance snapshot.
 
@@ -258,36 +268,23 @@ class ChatHandler:
             system_resp = ChatHandler._extract_text(system_resp)  # Extract text if the response is a dict (e.g. from RAG); otherwise use as-is
             system_ts = now_ts()
 
-            # Not cancelled: commit everything to DB + context buffer
-            _, user_msg = await consumer.handle_chat_messages(role="user", text=combined_text, ts=combined_ts)  # User message
-            
-            # Remove only the snapshot used by this response
-            # (any final result appended while the LLM was running remains staged)
-            consumer._staged_utterances.consume(staged_snapshot)
-            consumer.last_response = system_resp
-
-            # Immediately send the response back through the websocket & update the DB + chat context
-            await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
-            _, _ = await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts) # LLM message
-
-            # Save word timestamps for the committed user message
-            if (combined_words) and (user_msg):
-                fire_and_log(
-                    db_s2a(ChatService.add_words_bulk)(user_msg.id, combined_words),
-                    name="_execute_response::add_words_bulk",
-                )
-
-            # On-utterance Biomarkers: fire-and-forget so long jobs don't block the next turn
-            # We wait until after the LLM is done to avoid causing any more delays.
-            # Pass user_msg + words directly to avoid racing with the add_words_bulk fire above.
-            fire_and_log(
-                consumer.on_utterance_biomarkers(user_msg, combined_text, combined_words),
-                name="_execute_response::bio_callback",
+            # Once commit starts, finish it even if later speech cancels this response task
+            commit_task = asyncio.create_task(
+                ChatHandler._commit_response(
+                    consumer,
+                    staged_snapshot,
+                    combined_text,
+                    combined_words,
+                    combined_ts,
+                    system_resp,
+                    system_ts,
+                ),
+                name="chat::commit_response",
             )
-            fire_and_log(
-                consumer.on_audio_biomarkers(user_msg, combined_words),
-                name="_execute_response::audio_bio_callback",
-            )
+            try: await asyncio.shield(commit_task)
+            except asyncio.CancelledError:
+                await commit_task
+                raise
 
             # --------------------------------------------------------------------------------
             # 3) Text-to-speech call that guards for cancelations
@@ -320,36 +317,68 @@ class ChatHandler:
         # Staged utterances are intentionally NOT cleared; they accumulate for the next response attempt
         except asyncio.CancelledError: raise
 
+    # --------------------------------------------------------------------------------
+    # Commit one completed response without leaving a partially persisted exchange
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    async def _commit_response(
+        consumer        : ChatConsumer,
+        staged_snapshot : tuple,
+        combined_text   : str,
+        combined_words  : list[dict[str, object]],
+        combined_ts     : float,
+        system_resp     : str,
+        system_ts       : float,
+    ) -> None:
+        # Save the matching turn atomically, then publish it before consuming its staged prefix
+        user_msg, _ = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
+        consumer._staged_utterances.consume(staged_snapshot)
+        consumer.last_response = system_resp
+
+        # Send the already-persisted assistant response to the primary frontend
+        await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
+
+        # Save word timestamps and derive biomarkers in supervised session tasks
+        if (combined_words) and (user_msg):
+            fire_and_log(db_s2a(ChatService.add_words_bulk)(user_msg.id, combined_words), name="_execute_response::add_words_bulk")
+
+        # Text & audio biomarkers
+        fire_and_log(process_text_biomarkers (consumer, user_msg, combined_text, combined_words), name="_execute_response::bio_callback")
+        fire_and_log(process_audio_biomarkers(consumer, user_msg,                combined_words), name="_execute_response::audio_bio_callback")
+
 
     # ================================================================================
     # Manually Respond (bypasses response staging; used by ch_events.py)
     # ================================================================================
     @staticmethod
-    async def respond_to_user(context_buffer, consumer: ChatConsumer, *, use_response=None):
+    async def respond_to_user(context_buffer: list, consumer: ChatConsumer, *, use_response: str | dict[str, object] | None = None) -> str:
         """
-        Not called by handle_transcription anymore.
-        Response generation method is defined inside the ChatConsumer instance.
-        
-        TODO: If kwargs are required, could probably add that in
+        Serialize a manually supplied or generated assistant response with the normal
+        staged-response pipeline so their writes and TTS streams cannot overlap.
         """
-        # Get the LLMs response if we weren't passed a default response to use
-        if use_response is None: system_resp = await consumer.response_method(context_buffer)
-        else:                    system_resp = use_response
+        async with consumer._response_lock:
+            # Get the LLM response if a default response was not supplied
+            if use_response is None: system_resp = await consumer.response_method(context_buffer)
+            else:                    system_resp = use_response
+            system_resp = ChatHandler._extract_text(system_resp)
 
-        system_ts = now_ts()
-        consumer.last_response = system_resp
+            # Save and send the assistant response before starting its TTS stream
+            system_ts             = now_ts()
+            consumer.last_response = system_resp
+            await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
+            await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
 
-        # Immediately send the response back through the websocket & update the DB + chat context
-        await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
-        await consumer.handle_chat_messages(role="assistant", text=system_resp, ts=system_ts)
+            # Let cancellation stop both backend synthesis and already-buffered frontend audio
+            if consumer.use_backend_TTS:
+                consumer._tts_streaming = True
+                try: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
+                except asyncio.CancelledError:
+                    try: await consumer.send(json.dumps({"type": "cancel_audio"}))
+                    except Exception: pass
+                    raise
+                finally: consumer._tts_streaming = False
 
-        # Admin-triggered path has no STT word timestamps -- text/audio biomarkers
-        # are skipped here; the on_*_biomarkers callbacks early-return on empty words.
-
-        # Synthesize speech with TTS if specified (pass the consumer to store the audio bytes)
-        if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
-
-        return system_resp
+            return system_resp
 
     # --------------------------------------------------------------------------------
     # Helper: extract plain text from a response that may be a dict
@@ -361,6 +390,5 @@ class ChatHandler:
         If it's a dict (e.g. from rag_response_fn), extract the 'text' field.
         If it's a plain string, return as-is.
         """
-        if isinstance(response, dict):
-            return response.get("text", "")
-        return response
+        if isinstance(response, dict): return response.get("text", "")
+        else:                          return response

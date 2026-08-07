@@ -3,8 +3,8 @@ Ordered audio and control-marker queue for streaming STT.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.speech.stt.audio_queue`
 
-Keep cross-thread chunk ordering, barrier completion, and stream-stop signaling in
-one place so the STT request generator sees a consistent queue lifecycle.
+Keep cross-thread chunk ordering, barrier completion, and stream-stop signaling
+in one place so the STT request generator sees a consistent queue lifecycle.
 
 """
 from __future__         import annotations
@@ -41,7 +41,7 @@ class AudioBarrier:
         if not self._future.done(): self._future.set_exception(RuntimeError(message))
 
     # Await the thread-safe future from the consumer's asyncio event loop
-    async def wait(self, *, timeout : float | None = None) -> None:
+    async def wait(self, *, timeout: float | None = None) -> None:
         wrapped = asyncio.wrap_future(self._future)
         if timeout is None: await wrapped  # Timeout is the maximum seconds to wait for the queue boundary
         else:               await asyncio.wait_for(wrapped, timeout=timeout)
@@ -77,7 +77,7 @@ class AudioInputQueue:
         self._items.put(AudioChunk(received_at, data))
 
     # Insert (or reuse an existing) a boundary marker after all of the items currently queued
-    def put_barrier(self, barrier : AudioBarrier | None = None) -> AudioBarrier:
+    def put_barrier(self, barrier: AudioBarrier | None = None) -> AudioBarrier:
         barrier = barrier or AudioBarrier()
         self._items.put(barrier)
         return barrier
@@ -91,6 +91,18 @@ class AudioInputQueue:
     # Return an approximate queue depth for delay diagnostics
     def qsize(self) -> int:
         return self._items.qsize()
+
+    # Remove consumed stream-stop markers while preserving audio queued for a resume
+    def prepare_for_restart(self) -> None:
+        retained: list[AudioQueueItem] = []
+        while True:
+            try: item = self._items.get_nowait()
+            except Empty: break
+
+            if isinstance(item, StopSignal): continue
+            retained.append(item)
+
+        for item in retained: self._items.put(item)
 
     # Drop stale audio, fail pending barriers, and wake the blocking generator
     def stop(self) -> None:

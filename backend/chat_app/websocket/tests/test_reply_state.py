@@ -11,10 +11,10 @@ import unittest
 
 from datetime      import timedelta
 from types         import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 # From this project
-from chat_app.websocket.consumers.handlers.command_dispatch import dispatch_command
+from chat_app.websocket.consumers.processing.commands        import dispatch_command
 from chat_app.websocket.services.chat_state                 import StagedUtteranceBuffer
 from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
 from chat_app.websocket.services.speech.stt.stream_state    import InterimProgressTracker
@@ -68,9 +68,7 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fourth.data, b"c")
 
     # Propagate both successful and failed one-shot barrier outcomes
-    async def test_barrier_resolves_and_fails_without_external_services(
-        self,
-    ) -> None:
+    async def test_barrier_resolves_and_fails_without_external_services(self) -> None:
         reached = AudioBarrier()
         reached.resolve()
         await reached.wait(timeout=0.05)
@@ -91,6 +89,18 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "stopped"):
             await barrier.wait(timeout=0.05)
         self.assertIsInstance(audio_queue.get(timeout=0.01), StopSignal)
+
+    # Preserve resumed audio while removing the previous stream's stop marker
+    async def test_restart_keeps_audio_queued_after_stop_marker(self) -> None:
+        audio_queue = AudioInputQueue()
+        audio_queue.stop()
+        audio_queue.put_audio(received_at=1.0, data=b"resumed")
+
+        audio_queue.prepare_for_restart()
+
+        item = audio_queue.get(timeout=0.01)
+        self.assertIsInstance(item, AudioChunk)
+        self.assertEqual(item.data, b"resumed")
 
 
 # ================================================================================
@@ -136,22 +146,70 @@ class InterimProgressTrackerTests(unittest.TestCase):
 # ================================================================================
 # Command Dispatch Tests
 # ================================================================================
-class CommandDispatchTests(unittest.TestCase):
+class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
     """
     Verify immediate, correlated acknowledgement of a canonical `reply_now` request.
     """
     # Dispatch one request and preserve its caller-provided correlation ID
-    def test_reply_now_is_accepted_and_correlated(self) -> None:
-        consumer           = SimpleNamespace(reply_on_user_utt=False)
+    async def test_reply_now_is_accepted_and_correlated(self) -> None:
+        consumer           = SimpleNamespace(reply_on_user_utt=False, streaming_active=True, save_audio=False)
         consumer.reply_now = Mock()
 
-        ack = dispatch_command(consumer, {"id": "request-1", "name": "reply_now"})
+        ack = await dispatch_command(consumer, {"id": "request-1", "name": "reply_now"})
 
         consumer.reply_now.assert_called_once_with()
         self.assertEqual(ack["id"              ], "request-1")
         self.assertEqual(ack["name"            ], "reply_now")
         self.assertTrue (ack["ok"              ])
         self.assertTrue (ack["state"]["manualMode"])
+
+    # Set automatic-response state directly instead of relying on transport-specific aliases
+    async def test_pause_responses_uses_desired_boolean_state(self) -> None:
+        consumer = SimpleNamespace(
+            reply_on_user_utt      = True,
+            streaming_active       = True,
+            save_audio             = False,
+            _pending_response_task = None,
+            _manual_response_task = None,
+        )
+
+        ack = await dispatch_command(consumer, {"id": "request-2", "name": "pause_responses", "data": True})
+
+        self.assertTrue(ack["ok"])
+        self.assertFalse(consumer.reply_on_user_utt)
+        self.assertTrue(ack["state"]["responsesPaused"])
+
+    # Apply listening state through the shared stream operation
+    async def test_pause_listening_stops_stt_and_notifies_clients(self) -> None:
+        consumer = SimpleNamespace(
+            reply_on_user_utt        = True,
+            streaming_active         = True,
+            save_audio               = False,
+            stt_provider             = SimpleNamespace(start=Mock(), stop=Mock()),
+            send                     = AsyncMock(),
+            _broadcast_stream_status = AsyncMock(),
+        )
+
+        ack = await dispatch_command(consumer, {"id": "request-3", "name": "pause_listening", "data": True})
+
+        self.assertTrue(ack["ok"])
+        self.assertFalse(consumer.streaming_active)
+        consumer.stt_provider.stop.assert_called_once_with()
+        consumer._broadcast_stream_status.assert_awaited_once_with("paused")
+
+    # Read custom response text from the same data envelope sent by the admin frontend
+    async def test_send_custom_uses_canonical_data_envelope(self) -> None:
+        consumer                = SimpleNamespace(reply_on_user_utt=False, streaming_active=True, save_audio=False)
+        consumer.speak_response = Mock()
+
+        ack = await dispatch_command(
+            consumer,
+            {"id": "request-4", "name": "send_custom", "data": {"message": "  hello  "}},
+        )
+
+        self.assertTrue(ack["ok"])
+        self.assertTrue(consumer.reply_on_user_utt)
+        consumer.speak_response.assert_called_once_with("hello")
 
 
 if __name__ == "__main__":
