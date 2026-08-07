@@ -61,37 +61,15 @@ def _cancel_response_tasks(consumer: ChatConsumer, *, include_forced: bool = Fal
 # ================================================================================
 # Command Handlers
 # ================================================================================
+# Return current state to a new listener without changing the chat
+async def _get_control_state(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    return None
+
+# --------------------------------------------------------------------------------
+# Assistant response controls
+# --------------------------------------------------------------------------------
 # Request a response at the audio queue boundary that exists right now
 async def _reply_now(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_now()
-
-# Apply the caller's desired listening state
-async def _pause_listening(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    paused = _desired_paused(payload, current=not consumer.streaming_active)
-    await set_streaming_active(consumer, active=not paused)
-
-# Apply the caller's desired automatic-response state
-async def _pause_responses(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    paused = _desired_paused(payload, current=not consumer.reply_on_user_utt)
-    consumer.reply_on_user_utt = not paused
-    if paused: _cancel_response_tasks(consumer)
-
-# Forward an avatar action without blocking later audio or commands
-async def _robot_action(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    value = payload.get("data")
-    if not isinstance(value, dict): raise CommandRejected("Robot action data is required")
-    if not any(isinstance(value.get(key), str) and value.get(key) for key in ("emotion", "animation", "action")):
-        raise CommandRejected("A robot emotion, animation, or action is required")
-    fire_and_log(format_send_actions_command(consumer, payload), name="command::robot_action")
-
-# Enter manual response mode and cancel any response already in progress
-async def _pause_and_listen(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_on_user_utt = False
-    _cancel_response_tasks(consumer, include_forced=True)
-
-# Respond to staged speech and restore automatic response mode
-async def _resume_and_respond(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_on_user_utt = True
     consumer.reply_now()
 
 # Repeat the latest assistant response through the serialized speech path
@@ -104,9 +82,42 @@ async def _send_custom(consumer: ChatConsumer, payload: dict[str, object]) -> No
     value   = payload.get("data")
     message = value.get("message") if isinstance(value, dict) else None
     if (not isinstance(message, str)) or (not message.strip()): raise CommandRejected("Custom response text is required")
-
-    consumer.reply_on_user_utt = True
     consumer.speak_response(message.strip())
+
+# --------------------------------------------------------------------------------
+# High level controls (i.e., simple pause, resume)
+# --------------------------------------------------------------------------------
+# Apply the caller's desired listening state
+async def _pause_listening(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    paused = _desired_paused(payload, current=not consumer.streaming_active)
+    await set_streaming_active(consumer, active=not paused)
+
+# Apply the caller's desired automatic-response state
+async def _pause_responses(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    paused = _desired_paused(payload, current=not consumer.reply_on_user_utt)
+    consumer.reply_on_user_utt = not paused
+    if paused: _cancel_response_tasks(consumer)
+
+# Enter manual response mode and cancel any response already in progress
+async def _pause_and_listen(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    consumer.reply_on_user_utt = False
+    _cancel_response_tasks(consumer, include_forced=True)
+
+# Respond to staged speech and restore automatic response mode
+async def _resume_and_respond(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    consumer.reply_on_user_utt = True
+    consumer.reply_now()
+
+# --------------------------------------------------------------------------------
+# Misc. command types
+# --------------------------------------------------------------------------------
+# Forward an avatar action without blocking later audio or commands
+async def _robot_action(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    value = payload.get("data")
+    if not isinstance(value, dict): raise CommandRejected("Robot action data is required")
+    if not any(isinstance(value.get(key), str) and value.get(key) for key in ("emotion", "animation", "action")):
+        raise CommandRejected("A robot emotion, animation, or action is required")
+    fire_and_log(format_send_actions_command(consumer, payload), name="command::robot_action")
 
 # Change whether the completed session recording is persisted
 async def _toggle_recording(consumer: ChatConsumer, payload: dict[str, object]) -> None:
@@ -115,12 +126,9 @@ async def _toggle_recording(consumer: ChatConsumer, payload: dict[str, object]) 
 
     consumer.save_audio = bool(value.get("enabled", False))
     await consumer._broadcast_recording_state(consumer.save_audio)
+
     try: await consumer.send_json({"type": "recording_status", "data": {"enabled": consumer.save_audio}})
     except Exception: pass
-
-# Return current state to a new listener without changing the chat
-async def _get_control_state(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    return None
 
 # --------------------------------------------------------------------------------
 # Map the given command name to it's designated "handler" function defined above
