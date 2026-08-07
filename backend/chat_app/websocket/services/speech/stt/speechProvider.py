@@ -49,12 +49,15 @@ class SpeechToTextProvider:
     def __init__(self, *, consumer, loop):
         self._client              = speech.SpeechClient()
         self._streaming_config    = None
-        self._audio_buffer        = AudioInputQueue()
-        self._streaming           = False
-        self._accepting_audio     = True    # Desired listening state independent of thread shutdown timing
-        self._closed              = False   # Terminal provider state after its consumer disconnects
-        self._thread              = None    # The thread we use for streaming
-        self._stream_start_dt     = None    # Wall-clock anchor for word-time offsets
+        self._audio_buffer        = AudioInputQueue()   # Custom class that takes "action" objects in addition to audio chunks
+        self._accepting_audio     = True                # Desired listening state independent of thread shutdown timing
+        self._closed              = False               # Terminal provider state after its consumer disconnects
+        self._state_lock          = threading.Lock()    # Protects lifecycle state shared with the Google worker thread
+        self._thread              = None                # The thread we use for streaming
+        self._pause_barrier       = None                # Boundary after audio accepted before the latest listening pause
+        self._stop_signal         = None                # Cancelable end marker for a quick-resume handoff
+        self._stream_reached_stop = False               # True when the current generator exits through its stop marker
+        self._stream_start_dt     = None                # Wall-clock anchor for word-time offsets
 
         # Used to avoid processing duplicate STT results
         self._recent_transcript    = ""
@@ -90,14 +93,21 @@ class SpeechToTextProvider:
             # Keep streaming alive during short pauses
             try: item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
             except Empty:
-                if not self._streaming: break
+                if self._closed: break
                 yield speech.StreamingRecognizeRequest(audio_content=SILENCE)
                 continue
 
             # Process the different possible types of queue entries
-            if     isinstance(item, AudioBarrier): continue  # Pass over the AudioBarriers
-            if     isinstance(item, StopSignal  ): break     # Break the audio processing loop if stop command is given
-            if not isinstance(item, AudioChunk  ):           # These three objects should be the only things in the Queue
+            if isinstance(item, AudioBarrier): continue  # Pass over the AudioBarriers
+
+            # There are different stages to stopping
+            if isinstance(item, StopSignal):
+                if item.is_cancelled(): continue
+                self._stream_reached_stop = True
+                break
+
+            # Only the three defined objects should be in the Queue
+            if not isinstance(item, AudioChunk):
                 logger.warning(f"{STT_MAIN} Ignoring unknown audio queue item: {type(item).__name__}.{RESET}")
                 continue
 
@@ -123,17 +133,10 @@ class SpeechToTextProvider:
     # --------------------------------------------------------------------------------
     # Start the stream
     # --------------------------------------------------------------------------------
-    # Initializes the configs and starts a new thread to handle the streaming without blocking.
-    def start(self) -> None:
-        # Enable audio immediately, then let a thread already shutting down finish
-        if self._closed: return
-        self._accepting_audio = True
-        if getattr(self, "_thread", None) and self._thread.is_alive(): return
-
-        # Remove the previous stream's stop marker without dropping resumed audio
-        self._audio_buffer.prepare_for_restart()
-        self._streaming       = True
-        self._stream_start_dt = datetime.now(timezone.utc)  # Anchors Google's word offsets to wall-clock
+    # Prepare one Google stream while the caller owns the lifecycle lock
+    def _prepare_stream(self) -> threading.Thread:
+        self._stream_reached_stop = False
+        self._stream_start_dt     = datetime.now(timezone.utc)  # Anchors Google's word offsets to wall-clock
         self._interim_progress.reset()
 
         # Configure the stream
@@ -152,9 +155,27 @@ class SpeechToTextProvider:
             interim_results = True,
         )
 
-        # Track the thread
-        self._thread = threading.Thread(target=self._start_streaming_thread, daemon=True)
-        self._thread.start()
+        # Reserve the worker before releasing the lock so state changes cannot start a duplicate
+        thread       = threading.Thread(target=self._start_streaming_thread, daemon=True)
+        self._thread = thread
+        return thread
+
+    # Initialize a stream or cancel a graceful stop that has not been reached yet
+    def start(self) -> None:
+        thread = None
+        with self._state_lock:
+            if self._closed: return
+
+            # Resume acceptance immediately and cancel a stop marker still waiting in the queue
+            self._accepting_audio = True
+            if self._stop_signal is not None: self._stop_signal.cancel()
+            self._stop_signal   = None
+            self._pause_barrier = None
+
+            # A reserved/running worker will either continue or hand off in its finally block
+            if self._thread is None: thread = self._prepare_stream()
+
+        if thread is not None: thread.start()
         
     # Main streaming thread
     # The generator yields streaming recognition requests, and we send them to the Google Cloud STT API. 
@@ -163,55 +184,93 @@ class SpeechToTextProvider:
             responses = self._client.streaming_recognize(config=self._streaming_config, requests=self._audio_generator())
             self._listen_responses(responses)
         
-        # Make sure the streaming attribute gets reset when the thread exits
+        # Retire this worker, then hand queued resume data to one successor if necessary
         except Exception as e: logger.exception(f"{STT_MAIN} STT streaming connection {BOLD}{lu.RED}FAILED{UNBOLD}{lu.BRIGHT_BLUE}: {e} {RESET}")
-        finally: self._streaming = False  
+        finally:
+            next_thread = None
+            with self._state_lock:
+                if self._thread is threading.current_thread():
+                    self._thread = None
+
+                    # A crossed stop may have resumed audio or another pause marker after it
+                    if self._stream_reached_stop and (not self._closed) and (self._accepting_audio or self._audio_buffer.qsize()):
+                        next_thread = self._prepare_stream()
+
+            if next_thread is not None: next_thread.start()
 
     # --------------------------------------------------------------------------------
-    # Stop the stream (empties the queue and discards the contents)
+    # Pause the stream after draining audio that was already accepted
     # --------------------------------------------------------------------------------
-    # TODO: Should this just enque a `StopSignal`?
-    # Discards old audio, releases pending barriers, and wakes the generator
     def stop(self) -> None:
         """
-        When this is called, the audio buffer continues to remove every queued item,
-        discards any of the `AudioChunk` objects (no more recognition after this is
-        called), fails any pending `AudioBarriers`, and enqueues a `StopSignal`.
+        Reject new audio immediately, but keep the already accepted queue prefix. The
+        barrier remains usable by `reply_now`, and the following stop marker ends the
+        Google request stream once that prefix has been sent.
         """
-        self._accepting_audio = False
-        self._streaming       = False
-        self._audio_buffer.stop()  
+        with self._state_lock:
+            if (self._closed) or (not self._accepting_audio): return
+            self._accepting_audio = False
+
+            # With no worker, there cannot be an accepted prefix still waiting to drain
+            if self._thread is None:
+                self._pause_barrier = AudioBarrier()
+                self._pause_barrier.resolve()
+                self._stop_signal = None
+                return
+
+            # Keep both markers ordered after every chunk accepted before this pause
+            self._pause_barrier = self._audio_buffer.put_barrier()
+            self._stop_signal   = self._audio_buffer.request_stop()
 
     # Permanently stop callbacks when the owning WebSocket disconnects
     def shutdown(self) -> None:
-        self._closed = True
-        self.stop()
+        with self._state_lock:
+            if self._closed: return
+            self._closed          = True
+            self._accepting_audio = False
+            self._stop_signal     = None
+            self._audio_buffer.abort()
 
     # --------------------------------------------------------------------------------
     # Sends audio data to the audio buffer
     # --------------------------------------------------------------------------------
     def send_audio(self, audio_bytes: bytes) -> bool:
-        # Paused streams deliberately drop frontend audio instead of silently restarting
-        if not self._accepting_audio: return False
+        thread = None
+        with self._state_lock:
+            # Paused streams deliberately drop frontend audio instead of silently restarting
+            if not self._accepting_audio: return False
 
-        # Start the provider before enqueueing so a fresh stream receives this chunk
-        thread = getattr(self, "_thread", None)
-        if (not self._streaming) or (thread is None) or (not thread.is_alive()):
-            logger.info(f"{STT_MAIN} Restarting streaming. {RESET}")
-            self.start()
+            # Reserve a replacement worker before adding the chunk it will consume
+            if self._thread is None:
+                logger.info(f"{STT_MAIN} Restarting streaming. {RESET}")
+                thread = self._prepare_stream()
 
-        self._audio_buffer.put_audio(received_at=now_ts(), data=audio_bytes)
+            self._audio_buffer.put_audio(received_at=now_ts(), data=audio_bytes)
+
+        if thread is not None: thread.start()
         return True
 
     # Enqueue a boundary after all audio received so far (resolves once the generator reaches it)
     def create_audio_barrier(self) -> AudioBarrier:
         barrier = AudioBarrier()
-        thread  = getattr(self, "_thread", None)
-        if (not self._streaming) or (thread is None) or (not thread.is_alive()):
-            barrier.fail("STT stream is not active")
-            return barrier
+        thread  = None
+        with self._state_lock:
+            if self._closed:
+                barrier.fail("STT provider is closed")
+                return barrier
 
-        self._audio_buffer.put_barrier(barrier)
+            # While paused, reuse the boundary already ordered before the stop marker
+            if not self._accepting_audio:
+                if self._pause_barrier is not None: return self._pause_barrier
+                barrier.resolve()
+                return barrier
+
+            # Recover queued input after an unexpected stream exit before adding the boundary
+            if (self._thread is None) and self._audio_buffer.qsize(): thread = self._prepare_stream()
+            if self._thread is None:                                  barrier.resolve()
+            else:                                                     self._audio_buffer.put_barrier(barrier)
+
+        if thread is not None: thread.start()
         return barrier
     
 
@@ -296,4 +355,3 @@ class SpeechToTextProvider:
             "start" : stream_start + word.start_time, 
             "end"   : stream_start + word.end_time
         } for word in words]
-

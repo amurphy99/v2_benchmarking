@@ -190,6 +190,14 @@ The barrier guarantees that pre-command audio has been removed from the local qu
 sent into the Google request stream. It does not claim that Google has already returned
 the corresponding final transcript; settling and cancellation/retry cover that delay.
 
+Pausing listening rejects new audio chunks immediately but does not discard chunks that
+the backend already accepted. The provider queues a reusable pause barrier followed by a
+graceful stop marker, so `reply_now` can still wait on the accepted audio while listening
+is paused. A quick resume cancels that marker when the generator has not reached it; if
+the old Google stream has already stopped, its worker hands any newer queued audio to one
+successor stream. Disconnect shutdown remains intentionally destructive: it aborts queued
+audio and fails boundaries that can no longer be reached.
+
 
 ## Canonical Commands and Acknowledgements
 

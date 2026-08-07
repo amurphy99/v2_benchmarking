@@ -11,6 +11,7 @@ from __future__         import annotations
 from concurrent.futures import Future
 from dataclasses        import dataclass, field
 from queue              import Empty, Queue
+from threading          import Event
 from typing             import TypeAlias
 import asyncio
 
@@ -49,13 +50,23 @@ class AudioBarrier:
 # --------------------------------------------------------------------------------
 # Stop Signal
 # --------------------------------------------------------------------------------
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class StopSignal:
     """
-    This is just a signature -- used to wake and stop the blocking audio generator.
-    Having this class allows us to make sure we finish processing all user audio
-    chunks before the chat actually ends.
+    End one Google request stream after every older queue item has been consumed.
+
+    A quick resume can cancel a signal that the generator has not crossed yet. This
+    keeps newly accepted audio on the existing stream without moving queue entries.
     """
+    _cancelled : Event = field(default_factory=Event)
+
+    # Keep the current stream alive when listening resumes before this marker is reached
+    def cancel(self) -> None:
+        self._cancelled.set()
+
+    # Report whether the generator should pass over this marker
+    def is_cancelled(self) -> bool:
+        return self._cancelled.is_set()
 
 # ================================================================================
 # Ordered Audio Input Queue
@@ -92,25 +103,19 @@ class AudioInputQueue:
     def qsize(self) -> int:
         return self._items.qsize()
 
-    # Remove consumed stream-stop markers while preserving audio queued for a resume
-    def prepare_for_restart(self) -> None:
-        retained: list[AudioQueueItem] = []
-        while True:
-            try: item = self._items.get_nowait()
-            except Empty: break
+    # End the current stream after all queue entries that were accepted before this call
+    def request_stop(self) -> StopSignal:
+        signal = StopSignal()
+        self._items.put(signal)
+        return signal
 
-            if isinstance(item, StopSignal): continue
-            retained.append(item)
-
-        for item in retained: self._items.put(item)
-
-    # Drop stale audio, fail pending barriers, and wake the blocking generator
-    def stop(self) -> None:
+    # Drop queued audio, fail pending barriers, and wake the generator during shutdown
+    def abort(self) -> None:
         while True:
             try:
                 item = self._items.get_nowait()
-                if isinstance(item, AudioBarrier): 
-                    item.fail("STT stream stopped before the audio barrier was reached")
+                if isinstance(item, AudioBarrier):
+                    item.fail("STT stream aborted before the audio barrier was reached")
             except Empty: break
-        
+
         self._items.put(StopSignal())

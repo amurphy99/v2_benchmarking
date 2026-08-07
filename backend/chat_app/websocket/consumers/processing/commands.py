@@ -77,7 +77,7 @@ async def _repeat_last(consumer: ChatConsumer, payload: dict[str, object]) -> No
     if not consumer.last_response: raise CommandRejected("There is no prior response to repeat")
     consumer.speak_response(consumer.last_response)
 
-# Speak an admin-supplied response and return to automatic mode
+# Speak an admin-supplied response through the serialized speech path
 async def _send_custom(consumer: ChatConsumer, payload: dict[str, object]) -> None:
     value   = payload.get("data")
     message = value.get("message") if isinstance(value, dict) else None
@@ -202,4 +202,3 @@ async def dispatch_command(consumer: ChatConsumer, payload: dict[str, object]) -
             "message" : f"Command failed: {type(exc).__name__}",
             "state"   : get_control_state(consumer),
         }
-

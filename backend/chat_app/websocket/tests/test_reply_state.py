@@ -78,29 +78,44 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "stopped"):
             await stopped.wait(timeout=0.05)
 
-    # Fail an unreached boundary instead of leaving its coordinator blocked
-    async def test_stopping_queue_releases_an_unreached_barrier(self) -> None:
+    # Preserve accepted audio and barriers ahead of an ordinary stream-stop marker
+    async def test_graceful_stop_drains_the_accepted_queue_prefix(self) -> None:
+        audio_queue = AudioInputQueue()
+        audio_queue.put_audio(received_at=1.0, data=b"old")
+        barrier = audio_queue.put_barrier()
+        signal  = audio_queue.request_stop()
+
+        audio = audio_queue.get(timeout=0.01)
+        marker = audio_queue.get(timeout=0.01)
+        await barrier.wait(timeout=0.05)
+        stopped = audio_queue.get(timeout=0.01)
+
+        self.assertEqual(audio.data, b"old")
+        self.assertIs(marker, barrier)
+        self.assertIs(stopped, signal)
+
+    # Let a quick resume pass over a stop marker without reordering newer audio
+    async def test_cancelled_stop_keeps_the_current_queue_streaming(self) -> None:
+        audio_queue = AudioInputQueue()
+        signal = audio_queue.request_stop()
+        audio_queue.put_audio(received_at=1.0, data=b"resumed")
+        signal.cancel()
+
+        self.assertTrue(audio_queue.get(timeout=0.01).is_cancelled())
+        audio = audio_queue.get(timeout=0.01)
+        self.assertEqual(audio.data, b"resumed")
+
+    # Fail an unreached boundary instead of leaving its coordinator blocked on shutdown
+    async def test_aborting_queue_releases_an_unreached_barrier(self) -> None:
         audio_queue = AudioInputQueue()
         audio_queue.put_audio(received_at=1.0, data=b"old")
         barrier = audio_queue.put_barrier()
 
-        audio_queue.stop()
+        audio_queue.abort()
 
-        with self.assertRaisesRegex(RuntimeError, "stopped"):
+        with self.assertRaisesRegex(RuntimeError, "aborted"):
             await barrier.wait(timeout=0.05)
         self.assertIsInstance(audio_queue.get(timeout=0.01), StopSignal)
-
-    # Preserve resumed audio while removing the previous stream's stop marker
-    async def test_restart_keeps_audio_queued_after_stop_marker(self) -> None:
-        audio_queue = AudioInputQueue()
-        audio_queue.stop()
-        audio_queue.put_audio(received_at=1.0, data=b"resumed")
-
-        audio_queue.prepare_for_restart()
-
-        item = audio_queue.get(timeout=0.01)
-        self.assertIsInstance(item, AudioChunk)
-        self.assertEqual(item.data, b"resumed")
 
 
 # ================================================================================
@@ -208,7 +223,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(ack["ok"])
-        self.assertTrue(consumer.reply_on_user_utt)
+        self.assertFalse(consumer.reply_on_user_utt)
         consumer.speak_response.assert_called_once_with("hello")
 
 
