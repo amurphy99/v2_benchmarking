@@ -14,7 +14,7 @@ export function useCommandAcks({
     controlState,              // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
     setControlState,           // Apply state updates to the AdminControlPanel (listening or paused)
     registerAckHandler,        // Method that allows us to register something from here as the handler for an ack
-    defaultTimeoutMs = 10_000, // Timeout until we "give up" on receiving an ack from the backend (5s)
+    defaultTimeoutMs = 10_000, // Timeout until we give up on receiving an acknowledgement
 }: {
     connected          : boolean; 
     send               : SendFn;
@@ -39,7 +39,7 @@ export function useCommandAcks({
         // Manual Response Controls
         pause_and_listen   : false,
         resume_and_respond : false,
-        paraphrase_last    : false,
+        repeat_last        : false,
         send_custom        : false,
 
         // Save the audio recording on chat completion
@@ -75,6 +75,14 @@ export function useCommandAcks({
         });
     }, [registerAckHandler, setControlState]);
 
+    // Clear command timeouts if the control panel unmounts before their acknowledgements
+    useEffect(() => {
+        return () => {
+            for (const record of pendingByIdRef.current.values()) window.clearTimeout(record.timeout);
+            pendingByIdRef.current.clear();
+        };
+    }, []);
+
     // --------------------------------------------------------------------------------
     // Send commands to the backend
     // --------------------------------------------------------------------------------
@@ -98,7 +106,7 @@ export function useCommandAcks({
             // Send the command through the WebSocket 
             send({type: "command", data: {id, name, ...(data !== undefined ? { data } : {}),},});
         },
-        [connected, send]
+        [connected, send, defaultTimeoutMs]
     );
 
     // --------------------------------------------------------------------------------
@@ -119,7 +127,7 @@ export function useCommandAcks({
         // Could add that here too, but I think it's fine...
         pauseAndListen   : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
         resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
-        paraphraseLast   : () => {sendCommand("paraphrase_last",    "paraphrase_last"   )},
+        repeatLast       : () => {sendCommand("repeat_last",        "repeat_last"       )},
         sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { message: text })},
 
         // Toggle session audio recording on/off

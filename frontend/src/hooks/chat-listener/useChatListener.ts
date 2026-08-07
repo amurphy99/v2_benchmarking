@@ -6,6 +6,8 @@ import { createWsRouter         } from "./ws/createWsRouter";
 import { useWsLatencyPing       } from "./ws/useWsLatencyPing";
 import { noopAny                } from "./ws/types";
 
+const RECONNECT_DELAY_MS = 1_000; // Delay before reconnecting an interrupted listener socket
+
 // ================================================================================
 // Handle the WebSocket Connection to the Backend
 // ================================================================================
@@ -90,13 +92,43 @@ export default function useChatListener({
     useEffect(() => {
         if (!enabled || !wsUrl) {wsRef.current?.close(); wsRef.current = null; setConnected(false); return;}
 
-        const ws = new WebSocket(wsUrl); wsRef.current = ws;
-        ws.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",              wsUrl);};
-        ws.onclose   = (event) => {setConnected(false); console.log  ("WebSocket closed:",                    event);};
-        ws.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:",  error);};
-        ws.onmessage = onMessage;
-        
-        return () => {wsRef.current?.close(); wsRef.current = null;} // clean up on unmount
+        // This effect owns every socket and retry timer created for the current URL
+        let disposed       = false;
+        let reconnectTimer : number | null = null;
+
+        const connect = () => {
+            // Effect cleanup permanently stops this connection generation from reopening
+            if (disposed) return;
+
+            const ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
+            ws.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",             wsUrl);};
+            ws.onclose   = (event) => {
+                // A stale socket must not clear a newer socket installed by a retry
+                if (wsRef.current === ws) wsRef.current = null;
+                setConnected(false);
+                console.log("WebSocket closed:", event);
+
+                // Retry network/server interruptions, but not normal closure, authentication
+                // failures, authorization failures, or a listener session that does not exist
+                if ((!disposed) && ![1_000, 4_001, 4_003, 4_404].includes(event.code)) {
+                    reconnectTimer = window.setTimeout(connect, RECONNECT_DELAY_MS);
+                }
+            };
+
+            // onclose owns retry scheduling because browsers generally emit error then close
+            ws.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:", error);};
+            ws.onmessage = onMessage;
+        };
+
+        connect();
+        return () => {
+            // Prevent a queued retry from reopening the listener after unmount/URL change
+            disposed = true;
+            if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+            wsRef.current?.close();
+            wsRef.current = null;
+        };
     }, [enabled, wsUrl, onMessage]);
 
     // ================================================================================

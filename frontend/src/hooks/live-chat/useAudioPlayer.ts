@@ -18,9 +18,10 @@ import   useLatencyLogger   from "@/hooks/useLatencyLogger";
  */
 export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSample = 16, bufferAhead = 0.2} ) {
     const [systemSpeaking, setSystemSpeaking] = useState(false);
-    const audioContextRef = useRef<AudioContext>(null);
-    const scheduleTimeRef = useRef<number>(0);
-    const firstAudio      = useRef<boolean>(false);
+    const audioContextRef       = useRef<AudioContext>(null);
+    const scheduleTimeRef       = useRef<number>(0);
+    const firstAudio            = useRef<boolean>(false);
+    const playbackGenerationRef = useRef<number>(0);
 
     const { ttsStart, ttsEnd } = useLatencyLogger();
 
@@ -29,7 +30,7 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
             audioContextRef.current = new AudioContext({ sampleRate });
             scheduleTimeRef.current = audioContextRef.current.currentTime + bufferAhead;
         }
-    }, [bufferAhead]);
+    }, [sampleRate, bufferAhead]);
 
     // --------------------------------------------------------------------------------
     // Passed the "data" field of the LLMs response
@@ -58,9 +59,10 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
                 const audioBuffer = pcmToAudioBuffer(bufferToDecode, sampleRate, numChannels, bitsPerSample, ctx);
 
                 // Start speaking
-                const startTime = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead);
-                const source    = ctx.createBufferSource();
-                source.buffer   = audioBuffer;
+                const startTime  = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead);
+                const source     = ctx.createBufferSource();
+                const generation = playbackGenerationRef.current;
+                source.buffer    = audioBuffer;
                 source.connect(ctx.destination);
 
                 // Difference between the first chunk of audio and the "middle" chunks of audio (I think that's what this is for..?)
@@ -70,6 +72,7 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
 
                 // When the last scheduled chunk ends, mark systemSpeaking false and log end of tts
                 source.onended = () => {
+                    if (generation !== playbackGenerationRef.current) return;
                     if (scheduleTimeRef.current <= ctx.currentTime + 0.01) { 
                         setSystemSpeaking(false); firstAudio.current = false; ttsEnd(); 
                     }
@@ -81,9 +84,15 @@ export function useAudioPlayer( {sampleRate = 24_000, numChannels = 1, bitsPerSa
 
     // Stop speaking
     const stopPlayer = useCallback(() => {
+        playbackGenerationRef.current += 1;
         if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
         scheduleTimeRef.current = 0;
+        firstAudio.current      = false;
+        setSystemSpeaking(false);
     }, []);
 
-    return { startPlayer, sendAudio, stopPlayer, systemSpeaking };
+    // Drop every buffered chunk from a cancelled response and prepare for later TTS
+    const cancelAudio = useCallback(() => {stopPlayer(); startPlayer();}, [stopPlayer, startPlayer]);
+
+    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking };
 }

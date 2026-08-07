@@ -7,7 +7,7 @@ import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-liste
 type Pending = Partial<{
     pause_and_listen   : boolean;
     resume_and_respond : boolean;
-    paraphrase_last    : boolean;
+    repeat_last        : boolean;
     send_custom        : boolean;
 }>;
 
@@ -22,7 +22,7 @@ type Props = {
     // Commands (send to backend; parent flips manualMode only on ACK)
     onPauseAndListen   : () => void;
     onResumeAndRespond : () => void;
-    onParaphraseLast   : () => void;
+    onRepeatLast       : () => void;
     onSendCustom       : (text: string) => void;
 
     // If I decide to have the backend ever do "suggested drafts" where the admin can edit it before approving
@@ -39,7 +39,7 @@ export default memo(function ResponseControlGroup({
     pending,
     onPauseAndListen,
     onResumeAndRespond,
-    onParaphraseLast,
+    onRepeatLast,
     onSendCustom,
     suggestedDraft = null,
 }: Props) {
@@ -47,7 +47,7 @@ export default memo(function ResponseControlGroup({
     const p = useMemo(() => ({
         pause_and_listen   : false,
         resume_and_respond : false,
-        paraphrase_last    : false,
+        repeat_last        : false,
         send_custom        : false,
     ...pending,}), [pending]);
 
@@ -89,7 +89,7 @@ export default memo(function ResponseControlGroup({
         {/* First Button Row */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="mt-2 grid grid-cols-2 gap-2">
-            {/* Paraphrase Last Question (changes to listening when in manual mode) */}
+            {/* Pause controls change to a listening indicator in manual mode */}
             {!manualMode ? (
                 <button
                     className = {btnClass(disabled(p.pause_and_listen), "secondary")}
@@ -117,12 +117,12 @@ export default memo(function ResponseControlGroup({
         {/* Second Button Row */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="mt-2 grid grid-cols-2 gap-2">
-            {/* Paraphrase Last Question */}
+            {/* Repeat the last assistant response */}
             <button
-                className = {btnClass(disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast, "secondary")}
-                disabled  = {disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast}
-                onClick   = {() => onParaphraseLast?.()}
-            >{p.paraphrase_last ? "Working..." : "Repeat Last Response"}</button>
+                className = {btnClass(disabled(p.repeat_last) || !manualMode || !onRepeatLast, "secondary")}
+                disabled  = {         disabled(p.repeat_last) || !manualMode || !onRepeatLast}
+                onClick   = {() => onRepeatLast?.()}
+            >{p.repeat_last ? "Working..." : "Repeat Last Response"}</button>
 
             {/* Enable Text Box */}
             <button

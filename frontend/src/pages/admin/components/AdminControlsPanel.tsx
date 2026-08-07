@@ -57,6 +57,20 @@ export function AdminControlsPanel({
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
+            {/* Listening and automatic-response controls */}
+            <ChatControlsGroup
+                connected    = {connected}
+                controlState = {controlState}
+                pending      = {{
+                    pause_listening : pending.pause_listening,
+                    pause_responses : pending.pause_responses,
+                    reply_now       : pending.reply_now,
+                }}
+                onToggleListening = {actions.toggleListening}
+                onToggleResponses = {actions.toggleResponses}
+                onRespondNow      = {actions.respondNow     }
+            />
+
             {/* Manually Control How the Robot Responds */}
             <ResponseControlGroup
                 connected          = {connected}
@@ -64,12 +78,12 @@ export function AdminControlsPanel({
                 pending={{
                     pause_and_listen   : pending.pause_and_listen,
                     resume_and_respond : pending.resume_and_respond,
-                    paraphrase_last    : pending.paraphrase_last,
+                    repeat_last        : pending.repeat_last,
                     send_custom        : pending.send_custom,
                 }}
                 onPauseAndListen   = {actions.pauseAndListen  }
                 onResumeAndRespond = {actions.resumeAndRespond}
-                onParaphraseLast   = {actions.paraphraseLast  }
+                onRepeatLast       = {actions.repeatLast      }
                 onSendCustom       = {actions.sendCustom      }
                 suggestedDraft     = {null                    }
             />

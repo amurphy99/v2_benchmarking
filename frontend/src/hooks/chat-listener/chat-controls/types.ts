@@ -11,6 +11,7 @@ export type ControlState = {
 };
 export type CommandAck = {
     id        : string;
+    name      : string;
     ok        : boolean;
     message ? : string;
     state   ? : Partial<ControlState>;
@@ -25,7 +26,7 @@ export type PendingKey =
     | "robot_animation"
     | "pause_and_listen"
     | "resume_and_respond"
-    | "paraphrase_last"
+    | "repeat_last"
     | "send_custom"
     | "toggle_recording";
 
