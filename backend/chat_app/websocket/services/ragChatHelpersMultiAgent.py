@@ -435,9 +435,10 @@ async def rag_response_fn(
         tail_history.append(HumanMessage(content=user_text))
         tail_history.append(AIMessage(content=assistant_text))
 
-        # keep only last 10 messages (5 turns)
-        if len(tail_history) > 10:
-            rag_state["_tail_history"] = tail_history[-10:]
+        # number of messages to keep in tail_history for context
+        max_tail_history_len = 20
+        if len(tail_history) > max_tail_history_len:
+            rag_state["_tail_history"] = tail_history[-max_tail_history_len:]
             tail_history = rag_state["_tail_history"]
         else:
             rag_state["_tail_history"] = tail_history # ensure it's saved back to rag_state

@@ -59,9 +59,10 @@ async def _generate_farewell_with_summary_offer(chat_state, *, trace_id: str) ->
 
     system_prompt = (
         "You are a warm, friendly conversational companion wrapping up a chat session. "
-        "Based on the brief conversation context below, write a single short response (1-2 sentences) that:\n"
-        "1. Expresses that you genuinely enjoyed the conversation and feel closer to the user.\n"
-        "2. Asks if they would like a short summary of what you talked about.\n\n"
+        "Based on the brief conversation context below, write a single short response (2-3 sentences) that:\n"
+        "1. Acknowledge anything the user said in the most recent part of the conversation.\n"
+        "2. Expresses that you genuinely enjoyed the conversation and feel closer to the user.\n"
+        "3. Asks if they would like a short summary of what you talked about.\n\n"
         "Rules:\n"
         "- Keep it concise and warm.\n"
         "- Do not use emojis or emoticons.\n"
