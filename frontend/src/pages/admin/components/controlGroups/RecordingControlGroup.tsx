@@ -2,8 +2,9 @@
 --------------------------------------------------------------------------------
 `frontend/src/pages/admin/components/controlGroups/RecordingControlGroup.tsx`
 
-Audio is ALWAYS accumulated during a session; this toggle only controls whether
-save_stereo_wav() is called at disconnect (i.e., whether the file is persisted).
+Incoming user audio is ALWAYS written incrementally to a temporary WAV during a
+session. This toggle only controls whether that complete WAV is persisted at
+disconnect.
 
 In other words, by the end of a chat we should always have the full audio for a
 ChatSession, we just discard it if the property on the ChatConsumer is stell set
@@ -69,9 +70,8 @@ export default function RecordingControlGroup({
             <p className="mt-2 text-[11px] text-admin-subtext leading-snug">
                 {recordingEnabled
                     ? "Audio will be saved when the session ends."
-                    : "Audio is buffered but not saved. Toggle on to persist the full recording."}
+                    : "Audio is temporary and will be discarded. Toggle on to persist the full recording."}
             </p>
         </div>
     );
 }
-

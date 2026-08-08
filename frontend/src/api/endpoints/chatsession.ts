@@ -7,6 +7,8 @@ export const listChatSessions = (active: number = 0, demo: number = 2) => reques
 
 export const getChatSession = (id: string) => request<ChatSession>(`/chatsession/${id}/`);
 
+export const getSessionAudioPlayback = (id: string) => request<{url: string}>(`/chatsession/${id}/audio-playback/`);
+
 export const listAllChatSessions = () => request<ChatSession[]>("/allchatsessions/");
 
 export const listActiveChatSessions = () => request<ChatSession[]>("/activechatsessions/");

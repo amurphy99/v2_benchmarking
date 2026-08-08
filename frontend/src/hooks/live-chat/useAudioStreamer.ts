@@ -4,11 +4,14 @@ import   toBase64            from "@/utils/toBase64";
 
 // Typing for the WebSocket message
 interface AudioChunkMessage {
-    type        : "audio_data";
-    timestamp   : number;
-    sampleRate  : number;
-    data        : string;  // base64 payload
-    duration    : number;
+    type          : "audio_data";
+    timestamp     : number;
+    sampleRate    : number;
+    channels      : 1;
+    bitsPerSample : 16;
+    encoding      : "pcm_s16le";
+    data          : string;  // base64 payload
+    duration      : number;
 }
 type WSMessage = AudioChunkMessage;
 
@@ -21,10 +24,10 @@ export default function useAudioStreamer({
     dataType   = "audio_data",
     sendToServer,
 }: {
-    sampleRate? : number;
-    chunkMs?    : number;
-    dataType?   : AudioChunkMessage["type"];
-    sendToServer: (msg: WSMessage) => void;
+    sampleRate ? : number;
+    chunkMs    ? : number;
+    dataType   ? : AudioChunkMessage["type"];
+    sendToServer : (msg: WSMessage) => void;
 }) {
     // Setup AudioStreamer reference with the sendToServer function
     const audioRef = useRef<AudioStreamer | null>(null);
@@ -35,11 +38,14 @@ export default function useAudioStreamer({
             onError    : (err: unknown) => console.error("Audio error:", err),
             onChunk    : (int16: Int16Array, timestamp: number) => {
                 sendToServer({
-                    type       : dataType, 
-                    timestamp  : timestamp, 
-                    data       : toBase64(int16), 
-                    sampleRate : sampleRate,
-                    duration   : chunkMs,
+                    type          : dataType,
+                    timestamp     : timestamp,
+                    data          : toBase64(int16),
+                    sampleRate    : sampleRate,
+                    channels      : 1,
+                    bitsPerSample : 16,
+                    encoding      : "pcm_s16le",
+                    duration      : chunkMs,
                 });
             },
         });

@@ -1,4 +1,4 @@
-import { ChatSession, getChatSession, listActiveChatSessions, listAllChatSessions, getLatestSession, listChatSessions } from "@/api";
+import { ChatSession, getChatSession, getSessionAudioPlayback, listActiveChatSessions, listAllChatSessions, getLatestSession, listChatSessions } from "@/api";
 import { useModelQuery } from "@/hooks/queries/common";
 
 // Hook to wrap useQuery for retrieving ChatSession objects
@@ -16,6 +16,15 @@ export const useChatSession = (id: string) =>
         queryFn   : () => getChatSession(id),
         empty     : {} as ChatSession,
         staleTime : 10_000, // 10 seconds
+    });
+
+export const useSessionAudioPlayback = (id: string, enabled: boolean) =>
+    useModelQuery<{url: string}>({
+        queryKey  : `sessionAudioPlayback:${id}`,
+        queryFn   : () => getSessionAudioPlayback(id),
+        empty     : {url: ""},
+        staleTime : 0,
+        enabled,
     });
 
 

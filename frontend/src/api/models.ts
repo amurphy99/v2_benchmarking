@@ -77,13 +77,14 @@ export interface Account {
 }
 
 export interface Profile {
-  id        : number;
-  account   : Account;
-  zipcode   : string;
-  birthDate : string;
-  locationStatus : string;
-  settings  : UserSettings;
-  goal      : Goal;
+  id                    : number;
+  account               : Account;
+  zipcode               : string;
+  birthDate             : string;
+  locationStatus        : string;
+  save_audio_by_default : boolean;
+  settings              : UserSettings;
+  goal                  : Goal;
 }
 
 export interface Access {
@@ -114,13 +115,15 @@ export interface ChatWord {
 }
 
 export interface ChatMessage {
-  id        : number;
-  role      : ChatRole;
-  content   : string;
-  ts        : string;
-  start_ts? : string | null;
-  end_ts?   : string | null;
-  words?    : ChatWord[];
+  id                  : number;
+  role                : ChatRole;
+  content             : string;
+  ts                  : string;
+  start_ts          ? : string | null;
+  end_ts            ? : string | null;
+  playback_start_ts ? : string | null;
+  playback_end_ts   ? : string | null;
+  words             ? : ChatWord[];
 }
 
 // Biomarkers (string fallback for unknown score types)
@@ -151,6 +154,18 @@ export interface AlbumImage {
     photographer_url: string;
 }
 
+export interface SessionAudio {
+  storage_backend  : "local" | "gcs";
+  started_at       : string | null;
+  sample_rate      : number | null;
+  channels         : number | null;
+  bits_per_sample  : number | null;
+  duration_seconds : number | null;
+  size_bytes       : number | null;
+  sha256           : string | null;
+  created_at       : string;
+}
+
 // ChatSessions
 export interface ChatSession {
   id        : number;
@@ -162,8 +177,7 @@ export interface ChatSession {
   start_ts       : string;
   end_ts         : string | null;
   duration       : number;         // in seconds
-  audio_file     : string | null;
-  audio_start_ts : string | null;  // wall-clock ISO when first byte of audio was received
+  audio          : SessionAudio | null;
 
   topics    : string[] | null;
   image     : AlbumImage;

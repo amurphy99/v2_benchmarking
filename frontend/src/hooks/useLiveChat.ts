@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef     } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient                  } from "@tanstack/react-query";
 import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
 import { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
@@ -66,8 +66,21 @@ export default function useLiveChat({
     const [recording,   setRecording  ] = useState(false);  // When we need to pause/unpause
     const [chatEnding,  setChatEnding ] = useState(false);  // True after backend sends "chat_ended"
 
+    // Playback events use the same socket but the audio player is initialized first
+    const socketSendRef = useRef<(message: object) => void>(() => {});
+    const reportPlaybackState = useCallback((responseId: number, state: "started" | "finished") => {
+        socketSendRef.current({type: "tts_playback", data: {responseId, state}});
+    }, []);
+
+    // TODO: Maybe these values should be pulled from a config file somewhere...
     // Instantiate the audio player for backend-sent TTS
-    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking } = useAudioPlayer({sampleRate: 24_000, numChannels: 1, bitsPerSample: 16, bufferAhead: 0.2})
+    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking } = useAudioPlayer({
+        sampleRate      : 24_000,
+        numChannels     : 1,
+        bitsPerSample   : 16,
+        bufferAhead     : 0.2,
+        onPlaybackState : reportPlaybackState,
+    });
 
     // Wrap user utterances
     const onUserUttWrapped = (text: string) => { onUserUtterance(text); onDebugTurn?.({ role: "user", text }); };
@@ -113,8 +126,9 @@ export default function useLiveChat({
         },
         onExpression      : onExpression,
         onRecordingStatus : (enabled) => onRecordingStatus?.(enabled),
-        onCancelAudio      : cancelAudio,
+        onCancelAudio     : cancelAudio,
 	});
+    socketSendRef.current = send;
 	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
     startAudRef.current = startAud;
     stopAudRef .current = stopAud;

@@ -20,10 +20,8 @@ certain biomarker scores in much more precise detail.
 
 NOTE: Admin users navigate here from AdminChatInactive with: 
   `state: { sessionId: number }`
-We pass the session ID rather than the session object so that we can re-fetch 
-the session here, which helps make sure `audio_file` is the newest value saved
-by the backend (there could be cases where it takes a second to save it but we
-already navigated to the post-chat analysis page).
+We pass the session ID rather than the session object so that we can re-fetch
+the latest `SessionAudio` metadata after the backend finishes saving it.
 
 */
 import { useRef, useState, useEffect } from "react";
@@ -31,10 +29,8 @@ import { useLocation, useNavigate    } from "react-router-dom";
 import { LuArrowLeft                 } from "react-icons/lu";
 
 // From this project
-import { API_URL        } from "@/utils/constants";
 import { dateFormatLong } from "@/utils/styling/numFormatting";
-import { useChatSession } from "@/hooks/queries/useChatSessions";
-import { getAccess      } from "@/context/AuthProvider";
+import { useChatSession, useSessionAudioPlayback } from "@/hooks/queries/useChatSessions";
 
 // Components
 import AudioPlayer         from "./components/AudioPlayer";
@@ -61,11 +57,12 @@ export function TranscriptPlayback() {
     const { state } = useLocation() as { state?: { sessionId?: number; chatSession?: any } };
     const sessionId = state?.sessionId ?? state?.chatSession?.id;
 
-    // Always fetch fresh from DB so audio_file is the most recent copy
-    const { data: session, isLoading } = useChatSession(sessionId ? String(sessionId) : "");
+    // Always fetch fresh from DB so recording metadata is the most recent copy
+    const { data: session, isLoading } = useChatSession         (sessionId ? String(sessionId) : "");
+    const { data: playback           } = useSessionAudioPlayback(sessionId ? String(sessionId) : "", Boolean(session?.audio));
 
-    // If no ID was passed at all, send the user back to the last page
-    if (!sessionId) { navigate("/history"); return null; }
+    // If no ID was passed at all, send the user back without navigating during render
+    useEffect(() => { if (!sessionId) navigate("/history"); }, [sessionId, navigate]);
 
     // --------------------------------------------------------------------------------
     // Biomarker Selection (score info + modal with explanation)
@@ -90,31 +87,11 @@ export function TranscriptPlayback() {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [currentTime,       setCurrentTime      ] = useState(0);
 
-    // 2) Derive audio URL from the fetched session
-    // Append the JWT access token as a query param so the backend can
-    // authenticate the request (the <audio> element cannot send headers).
-    const MEDIA_BASE = API_URL.replace(/\/api\/?$/, "");
-    const audioUrl   = session.audio_file
-        ? `${MEDIA_BASE}/media/${session.audio_file}?token=${getAccess()}`
-        : undefined;
-    
-    // 3) Get the timestamps for seeking
-    // We set zero-time to the wall-clock time when the first chunk of audio was
-    // received from the user. So word.start_ts - audio_start_ts should give the
-    // correct byte offset into the audio file for seeking. For sessions recorded
-    // before this field existed, we just use the old 'start_ts' field.
-    const sessionStartMs = new Date(session.audio_start_ts ?? session.start_ts).getTime();
-
-    // Utility function that seeks through the audio file to wherever the word we clicked on was
-    const onSeek = (sec: number) => {
-        if (audioRef.current) audioRef.current.currentTime = sec;
-    };
-
     // --------------------------------------------------------------------------------
     // Final Page Setup
     // --------------------------------------------------------------------------------
     // Loading & error states
-    if (isLoading || !session?.id) {
+    if ((!sessionId) || isLoading || !session?.id) {
         return (
             <AdminPage>
                 <div className="flex items-center justify-center h-[40vh] text-admin-subtext">
@@ -123,6 +100,18 @@ export function TranscriptPlayback() {
             </AdminPage>
         );
     }
+
+    // Use a short-lived URL issued only after the REST API authorizes this user
+    const audioUrl = playback.url || undefined;
+
+    // The audio row owns the recording's wall-clock anchor. Legacy rows without an
+    // anchor fall back to the earliest transcript/biomarker timestamp.
+    const sessionStartMs = new Date(session.audio?.started_at ?? session.start_ts).getTime();
+
+    // Seek the recording to the transcript-relative offset selected by the user
+    const onSeek = (sec: number) => {
+        if (audioRef.current) audioRef.current.currentTime = sec;
+    };
 
     // Patient name comes from the session's profile
     const patientName = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
@@ -288,4 +277,3 @@ export function TranscriptPlayback() {
         </BiomarkerInfoContext.Provider>
     );
 }
-
