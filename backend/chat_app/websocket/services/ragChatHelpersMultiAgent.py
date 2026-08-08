@@ -29,9 +29,9 @@ _available_scenarios_logged = False
 
 CLOSE_SESSION_STATE = "close_session"
 CLOSE_SESSION_DESCRIPTION = (
-    "- close_session: TERMINAL — **transition here only after end_conversation**, once you have said goodbye, conversation "
-    "is fully complete and the user has been properly farewelled. "
-    "This triggers automatic session termination. Never skip directly to this from other states."
+    "- close_session: CLOSING — **transition here when the conversation nears its end**. "
+    "This triggers the closing interactions where the assistant says goodbye with an optional summary. "
+    "The session terminates after the closing flow completes. Never skip directly to this from other states."
 )
 
 MAX_SAME_STATE_TURNS = 5 # Maximum number of turns allowed in the same state before forcing a transition
@@ -393,6 +393,7 @@ async def rag_response_fn(
         logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] same_state_turn_count={same_count} for scenario={current}{lu.RESET}")
         if same_count >= MAX_SAME_STATE_TURNS:
             scenario_names = [s["name"] for s in scenarios]  # already ordered by instruction_order
+            scenario_names.append(CLOSE_SESSION_STATE)  # Add close_session
             try:
                 idx = scenario_names.index(current)
                 if idx + 1 < len(scenario_names):

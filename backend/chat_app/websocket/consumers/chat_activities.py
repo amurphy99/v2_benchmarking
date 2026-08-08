@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 # From this project
 from  .consumers                   import ChatConsumer
 from ..services.ragChatHelpersMultiAgent import rag_response_fn, START_SCENARIO
+from ..services.behavior.activity_chat_close            import handle_closing_turn
+from chat_app.services import logging_utils as lu
 
 # ================================================================================ 
 # ActivityChatConsumer
@@ -33,12 +35,46 @@ class ActivityChatConsumer(ChatConsumer):
 
         self.rag_state = {"current_scenario": START_SCENARIO}
 
-        # The lambda is evaluated at call-time so rag_state mutations are captured.
-        self.response_method = lambda context: rag_response_fn(
-            context,
-            user_text=context[-1][1],  # Get the text of the latest user message from the context
-            **self._rag_kwargs()
+    # ================================================================================
+    # Modified response method
+    # ================================================================================
+    async def response_method(self, context_buffer) -> dict:
+        """
+        Wraps rag_response_fn with the closing flow.
+
+        Returns a dict that always has at minimum:
+          {"text": str, "close_after": bool}
+        chatHelpers._execute_response reads "close_after" before calling _extract_text.
+        """
+        # Closing Phase: closing flow is active (close_session was already predicted)
+        if self.rag_state.get("_closing_flow_active"):
+            # Retrieve the user's most recent staged text directly
+            # (context_buffer[-1] is the staged user message we added in _execute_response)
+            user_text = context_buffer[-1][1] if context_buffer else ""
+            logger.info(f"{lu.ORANGE}[ActivityChat] Closing flow active — routing to handle_closing_turn.{lu.RESET}")
+            response_text, close_after = await handle_closing_turn(
+                consumer=self,
+                user_text=user_text,
+                rag_state=self.rag_state,
             )
+            return {"text": response_text, "close_after": close_after}
+
+        # --- Normal phase: run the multi-agent pipeline ---
+        user_text = context_buffer[-1][1] if context_buffer else ""
+        result = await rag_response_fn(
+            context_buffer,
+            user_text=user_text,
+            user=self.user,
+            activity_name=self.ACTIVITY_NAME,
+            rag_state=self.rag_state,
+        )
+
+        # If close_session was just predicted, activate closing flow for the next turn
+        if result.get("close_session"):
+            self.rag_state["_closing_flow_active"] = True
+            logger.info(f"{lu.ORANGE}[ActivityChat] close_session predicted — closing flow will activate next turn.{lu.RESET}")
+
+        return result  # includes "text", chatHelpers will strip it via _extract_text
 
     # RAG kwargs helper
     def _rag_kwargs(self):

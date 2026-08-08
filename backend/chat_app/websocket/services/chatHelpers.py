@@ -148,9 +148,19 @@ class ChatHandler:
             # 2) Get response from the LLM (this is the primary cancellation window)
             # --------------------------------------------------------------------------------
             # Intent detection (may skip the LLM call with a scripted response)
-            scripted_resp, close_after = await handle_user_intent(consumer, combined_text)           # 'close_after' checked at method end
+            if getattr(consumer, "CHAT_TYPE") == "activity":
+                # disabling intent detection for activity chat to avoid accidental triggering of end or pause commands, closing is handled differently in activity chat
+                scripted_resp, close_after = None, False 
+            else:
+                scripted_resp, close_after = await handle_user_intent(consumer, combined_text)           # 'close_after' checked at method end
+
             if scripted_resp is not None: system_resp = scripted_resp                                # Scripted response
-            else:                         system_resp = await consumer.response_method(temp_context) # LLM call
+            else:                         
+                system_resp = await consumer.response_method(temp_context) # LLM call
+                # The custom response_method in ActivityChatConsumer can set close_after for closing the session
+                if isinstance(system_resp, dict) and system_resp.get("close_after"):
+                    close_after = True
+                    
             system_resp = ChatHandler._extract_text(system_resp)  # Extract text if the response is a dict (e.g. from RAG); otherwise use as-is
             system_ts = now_ts()
 
@@ -257,6 +267,7 @@ class ChatHandler:
         If it's a dict (e.g. from rag_response_fn), extract the 'text' field.
         If it's a plain string, return as-is.
         """
+        # TODO: Maybe I should return the dict as-well as raw_response then store it to the DB for future analysis? or handle the DB call here?
         if isinstance(response, dict):
             return response.get("text", "")
         return response

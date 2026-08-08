@@ -60,7 +60,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # TODO: TEMPORARILY PLACING HERE
     # --------------------------------------------------------------------------------
     # Send emotion command to the client & return the string response
-    async def response_method(self, context_buffer) -> str:
+    async def response_method(self, context_buffer) -> str | dict:
         # Get structured response
         response: CognibotResponse = await get_LLM_response(context_buffer)
 
