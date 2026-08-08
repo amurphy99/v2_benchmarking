@@ -117,7 +117,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     words = ChatWordSerializer(many=True, read_only=True)
     class Meta:
         model  = ChatMessage
-        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "playback_start_ts", "playback_end_ts", "words")
+        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "words")
         read_only_fields = fields
 
 class SessionAudioSerializer(serializers.ModelSerializer):

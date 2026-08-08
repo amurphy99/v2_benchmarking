@@ -191,8 +191,11 @@ class SessionAudio(models.Model):
 # ================================================================================
 class ChatMessage(models.Model):
     """
-    Once start/end timestamps are implemented, add a duration property.
-    More may have to change later if word-level timestamps are added.
+    `ts` records when the database message was created. `start_ts` and `end_ts`
+    describe when the message was "audibly spoken" whenever that information is
+    available. 
+    * For user messages, those come from the min/max values of associated word timestamps
+    * For assistant messages, we depend on the frontends to report when TTS started/finished
     """
     # Speaker
     ROLE_CHOICES   = [("user", "User"), ("assistant", "Assistant")]
@@ -206,14 +209,9 @@ class ChatMessage(models.Model):
     ts        = models.DateTimeField(auto_now_add=True)
     source    = models.CharField(max_length=128, default="") # TODO: For now, not going to constrain this by a choice
 
-    # TODO: We don't realy have anything implemented yet that could get these here. 
-    # TODO: Temporarily adding the auto thing for end_ts, but should be set with the actual timestamp
-    start_ts  = models.DateTimeField(**init_args)
-    end_ts    = models.DateTimeField(**init_args) 
-
-    # Optional timestamps reported by a frontend that plays an assistant response
-    playback_start_ts = models.DateTimeField(**init_args)
-    playback_end_ts   = models.DateTimeField(**init_args)
+    # Utterance start and end timestamps (see docstring for more)
+    start_ts = models.DateTimeField(**init_args)
+    end_ts   = models.DateTimeField(**init_args)
 
     class Meta:
         ordering = ["ts", "id"]

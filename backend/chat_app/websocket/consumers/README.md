@@ -175,7 +175,9 @@ may optionally report actual playback boundaries:
 ```
 
 The accepted states are `started` and `finished`. Missing events are valid, which keeps
-text-only robot frontends compatible.
+text-only robot frontends compatible. Accepted events fill the assistant message's
+normal `start_ts` and `end_ts` audible interval. For messages with word timing, those
+same fields are derived from the earliest and latest associated `ChatWord` rows.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Staged Text and Automatic Responses                                              -->

@@ -3,7 +3,8 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-TODO: Later on may need to specifically add start/end timestamps to chats/messages...
+Centralizes transactional writes for sessions, messages, word timing, biomarkers,
+recording metadata, and optional assistant playback boundaries.
 
 """
 import logging, time
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Django imports
 from channels.db         import database_sync_to_async
 from django.db           import transaction
-from django.db.models    import Min
+from django.db.models    import Min, Max
 from django.utils        import timezone
 from django.contrib.auth import get_user_model
 
@@ -182,14 +183,14 @@ class ChatService:
         if message is None: return False
 
         # Add a timestamp for the `start_ts` field
-        if (state == "started") and (message.playback_start_ts is None):
-            message.playback_start_ts = timezone.now()
-            message.save(update_fields=["playback_start_ts"])
+        if (state == "started") and (message.start_ts is None):
+            message.start_ts = timezone.now()
+            message.save(update_fields=["start_ts"])
 
         # Add a timestamp for the `end_ts` field
-        elif (state == "finished") and (message.playback_end_ts is None):
-            message.playback_end_ts = timezone.now()
-            message.save(update_fields=["playback_end_ts"])
+        elif (state == "finished") and (message.end_ts is None):
+            message.end_ts = timezone.now()
+            message.save(update_fields=["end_ts"])
 
         return True
 
@@ -301,18 +302,30 @@ class ChatService:
             ) for s in spans
         ])
 
+    # --------------------------------------------------------------------------------
     # Word-level STT timestamps for a confirmed user message
+    # --------------------------------------------------------------------------------
     @staticmethod
-    def add_words_bulk(message_id: int, words: list):
+    @transaction.atomic
+    def add_words_bulk(message_id: int, words: list[dict[str, object]]) -> None:
         """
         Bulk-insert ChatWord records for a committed user message (confidence is optional).
         words: [{"word": str, "start": datetime, "end": datetime, "confidence": float}, ...]
+        Also sets the parent `ChatMessage` object's utterance-level start and end timestamps.
         """
-        message = ChatMessage.objects.get(id=message_id)
+        if not words: return
+
+        message = ChatMessage.objects.select_for_update().get(id=message_id)
         ChatWord.objects.bulk_create([
             ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i, confidence=w.get("confidence"))
             for i, w in enumerate(words)
         ])
+
+        # Derive the utterance's start and end timestamps from the associated words
+        bounds = message.words.aggregate(start_ts=Min("start_ts"), end_ts=Max("end_ts"))
+        message.start_ts = bounds["start_ts"]
+        message.end_ts   = bounds[  "end_ts"]
+        message.save(update_fields=["start_ts", "end_ts"])
 
 
 

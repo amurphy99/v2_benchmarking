@@ -115,15 +115,13 @@ export interface ChatWord {
 }
 
 export interface ChatMessage {
-  id                  : number;
-  role                : ChatRole;
-  content             : string;
-  ts                  : string;
-  start_ts          ? : string | null;
-  end_ts            ? : string | null;
-  playback_start_ts ? : string | null;
-  playback_end_ts   ? : string | null;
-  words             ? : ChatWord[];
+  id         : number;
+  role       : ChatRole;
+  content    : string;
+  ts         : string;
+  start_ts ? : string | null;
+  end_ts   ? : string | null;
+  words    ? : ChatWord[];
 }
 
 // Biomarkers (string fallback for unknown score types)

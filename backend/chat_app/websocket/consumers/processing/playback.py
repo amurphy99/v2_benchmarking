@@ -22,7 +22,8 @@ Example format for the JSON:
                 a message with "finished" when TTS playback completes.
 
 NOTE: You don't need to send a timestamp with the message -- all timestamps are
-      marked from the backend to keep a single relative timeframe.
+      marked from the backend to keep a single relative timeframe. These events
+      fill the assistant ChatMessage's normal `start_ts` and `end_ts` fields.
 
 """
 from __future__  import annotations
