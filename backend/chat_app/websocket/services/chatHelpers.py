@@ -241,6 +241,12 @@ class ChatHandler:
         if use_response is None: system_resp = await consumer.response_method(context_buffer)
         else:                    system_resp = use_response
 
+        # need to set close_after for the ActivityChatConsumer, since robot uses the the reply_now() method to send a response
+        close_after = False
+        if isinstance(system_resp, dict) and system_resp.get("close_after"):
+            close_after = True
+        # TODO: We should probably add the intent detection here as well for "standard" chat. Since our robots will likely be using this method to send responses.    
+
         system_ts = now_ts()
         system_text = ChatHandler._extract_text(system_resp)  # Extract text if the response is a dict (e.g. from RAG); otherwise use as-is
         consumer.last_response = system_resp
@@ -254,6 +260,11 @@ class ChatHandler:
 
         # Synthesize speech with TTS if specified (pass the consumer to store the audio bytes)
         if consumer.use_backend_TTS: await synthesize_and_stream_tts(system_text, consumer.send, consumer)
+
+        if close_after:
+            try: await consumer.send(json.dumps({"type": "chat_ended"}))
+            except Exception: pass
+            await consumer.close()
 
         return system_resp
 

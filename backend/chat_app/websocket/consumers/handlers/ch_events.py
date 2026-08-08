@@ -159,7 +159,8 @@ def log_command(command_type):
 # ================================================================================
 # TODO: No need to separately send things to the client, just forward it from here after broadcasting
 async def forward_payload_to_client(consumer: ChatConsumer, event):
-    await consumer.send_json(event["payload"])
+    try: await consumer.send_json(event["payload"])
+    except Exception: pass
 
 
 

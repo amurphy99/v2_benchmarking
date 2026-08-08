@@ -34,7 +34,7 @@ CLOSE_SESSION_DESCRIPTION = (
     "The session terminates after the closing flow completes. Never skip directly to this from other states."
 )
 
-MAX_SAME_STATE_TURNS = 5 # Maximum number of turns allowed in the same state before forcing a transition
+MAX_SAME_STATE_TURNS = 3 # Maximum number of turns allowed in the same state before forcing a transition
 
 # =============================================================================
 # Agent-2 structured output schema

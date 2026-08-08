@@ -49,7 +49,6 @@ class ActivityChatConsumer(ChatConsumer):
         # Closing Phase: closing flow is active (close_session was already predicted)
         if self.rag_state.get("_closing_flow_active"):
             # Retrieve the user's most recent staged text directly
-            # (context_buffer[-1] is the staged user message we added in _execute_response)
             user_text = context_buffer[-1][1] if context_buffer else ""
             logger.info(f"{lu.ORANGE}[ActivityChat] Closing flow active — routing to handle_closing_turn.{lu.RESET}")
             response_text, close_after = await handle_closing_turn(
@@ -59,7 +58,7 @@ class ActivityChatConsumer(ChatConsumer):
             )
             return {"text": response_text, "close_after": close_after}
 
-        # --- Normal phase: run the multi-agent pipeline ---
+        # Normal phase: run the multi-agent pipeline
         user_text = context_buffer[-1][1] if context_buffer else ""
         result = await rag_response_fn(
             context_buffer,
