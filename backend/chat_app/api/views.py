@@ -1,16 +1,21 @@
 # Django Rest Framework imports
-from rest_framework import viewsets, generics, permissions
-from django.contrib.auth import get_user_model
+from rest_framework                       import viewsets, generics, permissions
+from rest_framework.response              import Response
+from rest_framework.views                 import APIView
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
-from rest_framework_simplejwt.state import token_backend
-from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.state       import token_backend
+from rest_framework.exceptions            import PermissionDenied
+
+from django.contrib.auth import get_user_model
+from django.shortcuts    import get_object_or_404
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
 from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
-from  .mixins      import ProfileMixin
-from ..helpers.downloadHelpers     import get_download_data
+from  .mixins      import ProfileMixin, accessible_chat_sessions
+from ..helpers.downloadHelpers             import get_download_data
+from ..services.session_audio_storage      import create_recording_playback_url
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
 # ======================================================================= ===================================
@@ -77,13 +82,24 @@ class ChatSessionView(generics.RetrieveAPIView):
 
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
-        try:
-            return (ChatSession.objects
-                    .select_related("profile", "image")
-                    .prefetch_related("messages__words", "biomarker_scores")
-                    .get(id=sessionid))
-        except:
-            raise (f"ChatSession with id {sessionid} does not exist.")
+        sessions = (accessible_chat_sessions(self.request.user)
+                    .select_related  ("profile", "image", "audio")
+                    .prefetch_related("messages__words", "biomarker_scores"))
+        return get_object_or_404(sessions, id=sessionid)
+
+class SessionAudioPlaybackView(APIView):
+    """Issue a short-lived playback URL for an authorized session recording."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, sessionid: int) -> Response:
+        sessions = accessible_chat_sessions(request.user).select_related("audio")
+        session  = get_object_or_404(sessions, id=sessionid)
+        audio    = getattr(session, "audio", None)
+        if audio is None: return Response({"detail": "This session has no saved recording."}, status=404)
+
+        response = Response({"url": create_recording_playback_url(audio, request)})
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 # ======================================================================= ===================================
 # List + Create
@@ -179,14 +195,9 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         demo    = self.kwargs["demo"  ]
         
         # Start with the base query (unfiltered by profile)
-        objs = (ChatSession.objects
-                .select_related("profile", "image")
+        objs = (accessible_chat_sessions(self.request.user)
+                .select_related("profile", "image", "audio")
                 .prefetch_related("messages__words", "biomarker_scores"))
-
-        # Restrict to the user's own profile ONLY if they are not staff
-        if not self.request.user.is_staff:
-            profile = self.get_profile()
-            objs = objs.filter(profile=profile)
 
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)
@@ -210,7 +221,7 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
         profile = self.get_profile()
         return (ChatSession.objects
                 .filter(profile=profile)
-                .select_related("profile", "image")
+                .select_related("profile", "image", "audio")
                 .prefetch_related("messages__words", "biomarker_scores")
                 .order_by("-end_ts")
                 .first())

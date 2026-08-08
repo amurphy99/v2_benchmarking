@@ -70,6 +70,7 @@ keyboard
 google-genai
 google-cloud-texttospeech
 google-cloud-speech
+google-cloud-storage
 pydantic==2.12.5
 pgvector
 langchain-core==1.1.3

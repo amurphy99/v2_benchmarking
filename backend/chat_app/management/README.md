@@ -110,7 +110,7 @@ Metadata for the session. Filenames must match the actual files in the folder.
 }
 ```
 - `speaker_map` - maps each `speaker_id` value in the transcript CSV to `"user"` or `"assistant"`.
-- `chat_datetime` - wall-clock time the chat occurred. Used as the session's `date` and `audio_start_ts` (the anchor the frontend uses to compute audio file offsets).
+- `chat_datetime` - wall-clock time the chat occurred. Used as the session date and the `SessionAudio.started_at` playback anchor.
 - `date_offset_days` - fallback if `chat_datetime` is omitted; places the chat that many days before today.
 
 <hr>
@@ -238,8 +238,8 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
     - If `REMAKE_TRANSCRIPT_DATA`, deletes any existing `source="transcript"` sessions for the demo profile and calls `seed_transcript_chat(profile, care_account)`.
     - `seed_transcript_chat` in turn:
       1. Reads `transcript_config.json` and parses the CSV into utterances grouped by `uttID`.
-      2. Copies the audio file to `media/recordings/<name>.wav`.
-      3. Creates the `ChatSession` with `audio_file`, `audio_start_ts`, `date`, `end_ts`.
+      2. Persists the audio through the configured local/GCS recording store.
+      3. Creates the `ChatSession` and a separate `SessionAudio` metadata row for the copied WAV.
       4. Creates one `ChatMessage` per utterance + bulk-inserts `ChatWord` rows (word-level timestamps).
       5. Auto-discovers `biomarker_*.csv` files, parses each, and bulk-inserts `ChatBiomarkerScore` rows anchored at `started_at`.
       6. Runs `post_chat_analysis()` on the messages and saves the summary / sentiment / topics / risk fields.

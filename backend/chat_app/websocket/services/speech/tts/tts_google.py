@@ -97,8 +97,8 @@ class TextToSpeechProvider:
         """
         Returns (pcm_bytes, sample_rate, num_channels, bits_per_sample). 
         Stripping the WAV header here so the frontend receives raw PCM, while
-        preserving the actual format metadata so the recorder can resample
-        correctly regardless of what the voice/API actually returns.
+        preserving the actual format metadata so the frontend can decode it
+        correctly regardless of what the voice/API returns.
 
         TODO: I don't think we are TRULY streaming yet... We wait until we have 
               the full audio from Google, and then we send it to the client in

@@ -1,17 +1,14 @@
 # Speech System // Backend
 Django based backend. Provides database access via an API and provides the chat function via WebSocket.
 
+
+<!-- ================================================================================ -->
+<!-- To do list (probably super outdated...)                                          -->
+<!-- ================================================================================ -->
 <details closed> <summary>To Do:</summary>
 
 * This will be a big task, and needs to be done across a lot of files... Change "plwd" references to just "patient." (database, views, etc.)
     - Don't want patients to be referenced as PLwD
-
-* In `db_services.py` add functionality to calculate topics and analysis and save them when the session is closed. 
-    - Also get/create the user's goal and add 1 to it. --- **probably dont need this, just check how many inactive ChatSessions come after the goal start date**
-
-* Biomarker calculations need to be looked over. Specific inputs like time ranges, single words, full conversation, etc.
-
-* Django secret key moved to `.env` file or config. Turn debug mode on and off via environment variables as well.
 
 * Make sure `requirements-web.txt` actually covers everything, no extra unused pacakges.
 
@@ -27,7 +24,9 @@ Django based backend. Provides database access via an API and provides the chat 
 </details>
 
 
-
+<!-- ================================================================================ -->
+<!-- Running the project (locally and/or on the cloud)                                -->
+<!-- ================================================================================ -->
 ### To run the project locally:
 1. `cd` into the `backend` directory
 2. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines
@@ -180,6 +179,10 @@ networks:
 </details>
 
 
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Running it on the cloud ("deployed")                                             -->
+<!-- -------------------------------------------------------------------------------- -->
 <details closed> <summary>Deployed (original) version of `docker-compose.backend.yaml` to switch back to for merging:</summary>
 
 ```yaml
@@ -230,18 +233,13 @@ networks:
 </details>
 
 
-
-
-
-
-
-
-
-
-
 <br>
 
 
+
+<!-- ================================================================================ -->
+<!-- Backend Architecture                                                             -->
+<!-- ================================================================================ -->
 # Backend System Architecture
 
 <details closed> <summary> <b>Database Models Overview</b> </summary>
@@ -259,7 +257,66 @@ networks:
 <hr>
 </details>
 
-<details closed> <summary> <b>WebSocket Flow</b> </summary>
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Session audio storage                                                            -->
+<!-- -------------------------------------------------------------------------------- -->
+<details closed> <summary> <b>Chat Session Audio Storage</b> </summary>
+
+## Session audio storage
+
+Live chats always write accepted incoming user PCM to an incremental temporary
+mono WAV file. The user's `Profile.save_audio_by_default` value initializes the
+save state (default setting for either saving or discarding audio at the end of
+a chat), and an admin listener may still change that state during the chat. At
+disconnect, the complete temporary WAV is persisted only when the final state
+for saving the audio is set to `True`.
+
+Assistant TTS is not included in the WAV. In previous iterations, it was saved
+for frontends that used TTS sourced from the backend -- we would combine the raw
+TTS output with the audio bytes that we received from the user. However, this
+added a lot of complexity and unreliability, so it was removed (for now...).
+
+`SessionAudio` stores metadata and an opaque object key separately from
+`ChatSession`; audio bytes are kept outside PostgreSQL. Local development uses:
+
+```env
+SESSION_AUDIO_STORAGE       = local
+SESSION_AUDIO_LOCAL_ROOT    = /app/media
+SESSION_AUDIO_TEMP_ROOT     = /tmp/cognibot_recordings
+SESSION_AUDIO_OBJECT_PREFIX = recordings
+```
+
+The deployed backend can use a private GCS bucket instead:
+
+```env
+SESSION_AUDIO_STORAGE              = gcs
+SESSION_AUDIO_GCS_BUCKET           = private-bucket-name
+SESSION_AUDIO_OBJECT_PREFIX        = recordings
+SESSION_AUDIO_PLAYBACK_URL_TTL_SEC = 3600
+DJANGO_DEBUG                       = false
+DJANGO_SECRET_KEY                  = long-random-secret-key
+```
+
+GCS mode will not start while the local fallback signing key is active. Keep the
+production key out of the repository; changing it also invalidates existing JWTs and
+local playback URLs.
+
+Authorized staff, the patient owner, and accounts linked to the patient through
+`Access` can request a short-lived playback URL from
+`GET /api/chatsession/<session_id>/audio-playback/`. Durable object keys are not
+returned by the session serializer.
+
+<hr>
+</details>
+
+
+
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- WebSocket flow                                                                   -->
+<!-- -------------------------------------------------------------------------------- -->
+<details closed> <summary> <b>WebSocket Flow (maybe outdated -- check `consumers/README.md`)</b> </summary>
 
 1. **Client connects:** 
     * ```wss://<host>/ws/chat/?token=<JWT_ACCESS>&source=robot```
@@ -285,18 +342,13 @@ networks:
 <hr>
 </details>
 
-<details closed> <summary> <b>Default/Demo Data</b> </summary>
-
-| User      | Username          | Password  |
-| --------- | ----------------- | --------- |
-| User      | `demo_patient`    | `1`    |
-| Caregiver | `demo_caregiver`  | `1`    |
-<hr>
-</details>
 
 
 
-## Java Access
+<!-- ================================================================================ -->
+<!-- Accessing the WebSocket-based chat from other coding languages                   -->
+<!-- ================================================================================ -->
+## Java Access (connecting to the chat WebSocket)
 
 <details closed> <summary> Send username and password to get an access token </summary>
 
@@ -346,5 +398,4 @@ WebSocket webSocket = client.newWebSocketBuilder()
 ```
 </details>
 <br>
-
 

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
+from ..models import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
@@ -54,8 +54,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     goal      = GoalSerializer        (read_only=True)
     class Meta:
         model  = Profile
-        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = ("id",) # Not sure...
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "settings", "goal")
+        read_only_fields = ("id", "save_audio_by_default")
         
 class AccessSerializer(serializers.ModelSerializer):
     account     = AccountSerializer(read_only=True)
@@ -117,7 +117,13 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     words = ChatWordSerializer(many=True, read_only=True)
     class Meta:
         model  = ChatMessage
-        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "words")
+        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "playback_start_ts", "playback_end_ts", "words")
+        read_only_fields = fields
+
+class SessionAudioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = SessionAudio
+        fields = ("storage_backend", "started_at", "sample_rate", "channels", "bits_per_sample", "duration_seconds", "size_bytes", "sha256", "created_at")
         read_only_fields = fields
 
 class BiomarkerSerializer(serializers.ModelSerializer):
@@ -134,10 +140,11 @@ class ChatSessionSerializer(serializers.ModelSerializer):
     start_ts       = serializers.SerializerMethodField()
     duration       = serializers.SerializerMethodField()
     average_scores = serializers.SerializerMethodField()
+    audio          = SessionAudioSerializer(read_only=True)
 
     class Meta:
         model  = ChatSession
-        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio_file", "audio_start_ts", "duration", "topics",
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio", "duration", "topics",
                   "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
                   "image", "risk_level", "risk_quotes", "risk_reason")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...

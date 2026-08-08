@@ -23,8 +23,8 @@ from  ..services.chatHelpers               import ChatHandler
 from  ..services.chat_state                import StagedUtteranceBuffer
 from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 
-# Proper import paths...
-from chat_app.websocket.services.speech.audio_recorder import save_stereo_wav
+from chat_app.websocket.services.speech.audio_recorder import SessionAudioRecorder
+from chat_app.services.session_audio_storage             import delete_recording
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
@@ -140,13 +140,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Contains: (datetime_received, raw_pcm_bytes). Pruned by processing.audio
         self._audio_chunks = collections.deque()
 
-        # Session recording buffers (NOT in _init_response_state -- must survive until disconnect saves them)
-        self.save_audio        = False             # Should we save the audio bytes on chat end?
-        self._rec_user         = bytearray()       # Continuous user mic PCM (16 kHz, 16-bit, mono)
-        self._rec_tts          = bytearray()       # TTS right-channel PCM (silence-padded, 16 kHz)
-        self._session_start_ts = time.monotonic()  # Legacy monotonic reference (kept for fallback)
-        self._audio_start_mono = None              # Monotonic time when user first clicked "Start Chat"
-        self._audio_start_dt   = None              # Wall-clock equivalent (saved to DB for frontend seeking)
+        # Always records audio; the user's preference/admin toggle decides if we save on disconnection
+        self.save_audio     = await db_s2a(ChatService.get_audio_recording_default)(self.session_id)
+        self.audio_recorder = SessionAudioRecorder(self.session_id)
 
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, 
@@ -201,18 +197,21 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             except Exception: logger.exception(f"{lu.CC_MAIN} Failed to save staged utterances during disconnect.{lu.RESET}")
 
         # --------------------------------------------------------------------------------
-        # Save session audio recording (stereo WAV: left = user mic, right = TTS)
+        # Finalize the user-only recording or discard its temporary WAV
         # --------------------------------------------------------------------------------
-        audio_path = None
-        if getattr(self, "save_audio", False) and session_id and (getattr(self, "_rec_user", None) or getattr(self, "_rec_tts", None)):
-            try:
-                audio_path = await asyncio.to_thread(
-                    save_stereo_wav, session_id,
-                    bytes(getattr(self, "_rec_user", b"")),
-                    bytes(getattr(self, "_rec_tts",  b"")),
-                )
+        audio_artifact = None
+        recorder = getattr(self, "audio_recorder", None)
+        if recorder is not None:
+            try: audio_artifact = await asyncio.to_thread(recorder.finalize, persist=getattr(self, "save_audio", False))
+            except Exception: logger.exception(f"{lu.CC_MAIN} {lu.RED}Warning:{lu.CC_R} Failed to save session recording.{lu.RESET}")
+
+        # Attach stored-object metadata before slower background session analysis
+        if audio_artifact and session_id:
+            try: await db_s2a(ChatService.attach_session_audio)(session_id, audio_artifact.as_dict())
             except Exception:
-                logger.exception(f"{lu.CC_MAIN} {lu.RED}Warning:{lu.CC_R} Failed to save session recording.{lu.RESET}")
+                logger.exception(f"{lu.CC_MAIN} {lu.RED}Warning:{lu.CC_R} Failed to attach session recording metadata.{lu.RESET}")
+                try: await asyncio.to_thread(delete_recording, audio_artifact.storage_backend, audio_artifact.object_key)
+                except Exception: logger.exception(f"{lu.CC_MAIN} Failed to clean up the unattached recording object.{lu.RESET}")
 
         # --------------------------------------------------------------------------------
         # Close the ChatSession in the DB
@@ -221,10 +220,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await db_s2a(ChatService.deactivate_session)(session_id)
             fire_and_log(ChatService.close_session(
                 user_id, session_id,
-                username        = username,
-                source          = getattr(self, "source", "unknown"),
-                audio_path      = audio_path,
-                audio_start_ts  = getattr(self, "_audio_start_dt", None),
+                username = username,
+                source   = getattr(self, "source", "unknown"),
             ), name=f"disconnect::close-session-{session_id}")
 
         # Leave groups while connection attributes are still available
@@ -314,11 +311,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Response task state
         self._staged_utterances       = StagedUtteranceBuffer()
-        self._pending_response_task   = None   # Current 'asyncio.Task' for '_execute_response'
-        self._manual_response_task    = None   # Current admin-supplied or repeated response task
-        self._reply_now_task          = None   # Coordinator retaining a forced-reply request across retries
-        self._reply_now_generation    = 0      # Newer reply requests supersede older queue boundaries
-        self._stt_progress_revision   = 0      # Meaningful interim/final progress used by settling logic
+        self._pending_response_task   = None            # Current 'asyncio.Task' for '_execute_response'
+        self._manual_response_task    = None            # Current admin-supplied or repeated response task
+        self._reply_now_task          = None            # Coordinator retaining a forced-reply request across retries
+        self._reply_now_generation    = 0               # Newer reply requests supersede older queue boundaries
+        self._stt_progress_revision   = 0               # Meaningful interim/final progress used by settling logic
         self._stage_lock              = asyncio.Lock()  # Serializes final-transcript scheduling decisions
         self._response_lock           = asyncio.Lock()  # Gives one response task ownership of staged text
 
@@ -326,4 +323,3 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.streaming_active         = False  # True while STT stream is active (paused state)
         self._tts_streaming           = False  # True while audio chunks are actively being sent to the frontend
         self._pending_action          = None   # Tracks pending user-initiated action ("end_chat" | None)
-

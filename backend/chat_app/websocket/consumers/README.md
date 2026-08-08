@@ -4,7 +4,9 @@ Code in the `consumers/` directory handles all live WebSocket connections used b
 
 This `README` covers the standard and activity chat consumers plus the admin listener. The internal RAG implementation code is outside of scope for this; the activity consumer only provides a different `response_method` to the otherwise shared response flow.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- WebSocket Endpoints                                                              -->
+<!-- -------------------------------------------------------------------------------- -->
 ## WebSocket Endpoints
 
 The routes are defined in `backend/chat_app/websocket/routing.py`:
@@ -18,7 +20,9 @@ The routes are defined in `backend/chat_app/websocket/routing.py`:
 The primary consumer owns the live chat session. Listener consumers observe that
 session through Channels groups and can relay canonical commands to the primary.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Directory Responsibilities                                                       -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Directory Responsibilities
 
 ```diff
@@ -45,6 +49,8 @@ session through Channels groups and can relay canonical commands to the primary.
  │   │   Validates and ingests small audio chunk payloads.
 +│   ├── messages.py
  │   │   Commits messages to the database, updates LLM context, and broadcasts them.
++│   ├── playback.py
+ │   │   Validates optional assistant playback timestamps from primary frontends.
 +│   ├── commands.py
  │   │   Defines canonical commands, applies their behavior, and builds ack bodies.
 +│   └── stream.py
@@ -63,11 +69,14 @@ Related code outside this directory:
 - `services/speech/stt/` owns the ordered audio queue, Google stream, audio barriers,
   and interim-progress tracking.
 - `services/speech/tts/` synthesizes and streams assistant speech.
+- `services/session_audio_storage.py` owns local/GCS persistence and playback URLs.
 - `biomarkers/callbacks.py` runs biomarker follow-up work after a user message commits.
 - `services/db_services.py` contains synchronous transactional database operations and
   asynchronous session-closing analysis.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Primary Connection Lifecycle                                                     -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Primary Connection Lifecycle
 
 `ChatConsumer.connect()` performs the following sequence:
@@ -78,12 +87,14 @@ Related code outside this directory:
 4. Close stale active sessions, then create the new active `ChatSession`.
 5. Build the bounded in-memory `context_buffer` used for LLM calls.
 6. Join the session room and control Channels groups.
-7. Create the `SpeechToTextProvider` and the recording/biomarker audio buffers.
+7. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer.
 
 The consumer instance is the owner of per-connection mutable state. Processing modules
 operate on that state but do not create a parallel session object.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Primary WebSocket Message Routing                                                -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Primary WebSocket Message Routing
 
 Every decoded primary-client message follows this entry path:
@@ -101,13 +112,16 @@ Frontend JSON
 | `audio_data` | `processing.audio.ingest_audio_payload` | Ingest one small PCM audio chunk |
 | `transcription` | `ChatHandler.stage_and_schedule` | Stage direct frontend text |
 | `command` | `processing.commands.dispatch_command` | Execute a canonical control command |
+| `tts_playback` | `processing.playback.handle_playback_event` | Store optional assistant playback timing |
 | `overlapped_speech` | `ws_events.handle_overlap` | Track a frontend overlap notification |
 | `end_chat` | `ChatConsumer.close` | Close the primary socket and session |
 
 The router handles transport validation. Downstream processing functions receive
 normalized values or a validated payload rather than owning WebSocket dispatch.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Audio and STT Flow                                                               -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Audio and STT Flow
 
 An `audio_data` payload represents one small chunk, not a complete spoken message:
@@ -118,7 +132,7 @@ Primary frontend
     -> processing.audio.ingest_audio_payload()
        ├── validate sample rate and base64 data
        ├── append bytes to the ordered STT audio queue
-       ├── append bytes to the optional full-session recording
+       ├── write accepted user bytes to the incremental temporary WAV
        └── append a timestamped copy to the rolling biomarker buffer
     -> SpeechToTextProvider
     -> Google streaming STT
@@ -134,7 +148,38 @@ Google results have two paths:
 A direct frontend `transcription` reaches the same staging method without Google word
 timestamps. Both paths therefore share response accumulation and cancellation behavior.
 
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Session Recording                                                                -->
+<!-- -------------------------------------------------------------------------------- -->
+## Session Recording
 
+`SessionAudioRecorder` writes every accepted user PCM chunk directly to a temporary
+16 kHz, signed 16-bit little-endian mono WAV file. The web frontend advertises this 
+format on every chunk; older robot payloads that omit format fields should still use
+those defaults. It does this even while the final save state is disabled, so an admin
+user can enable recording partway through a chat and still retain the whole session. 
+Explicit listening pauses are represented as silence when audio resumes (e.g., when a
+user pauses the chat and we stop streaming audio from them while we wait).
+
+On disconnect, the final recording toggle determines the outcome:
+- Disabled: close and delete the temporary WAV file.
+- Enabled: finalize the WAV file, move it to local storage or upload it to GCS, then 
+           attach a one-to-one `SessionAudio` metadata row to the `ChatSession`.
+
+Assistant TTS bytes are not added to this WAV. Instead, each outbound `llm_response`
+and `audio_chunk` includes the persisted assistant message's `responseId`. A frontend
+may optionally report actual playback boundaries:
+
+```json
+{"type": "tts_playback", "data": {"responseId": 123, "state": "started"}}
+```
+
+The accepted states are `started` and `finished`. Missing events are valid, which keeps
+text-only robot frontends compatible.
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Staged Text and Automatic Responses                                              -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Staged Text and Automatic Responses
 
 `ChatHandler.stage_and_schedule()` appends each finalized utterance to the consumer's
@@ -158,7 +203,9 @@ so a later retry includes both the earlier text and the continuation. Once respo
 generation succeeds, the commit is shielded from cancellation so database and in-memory
 state cannot be left half-updated.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Current Intent Detection                                                         -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Current Intent Detection
 
 `services/behavior/intent_detection.py` currently runs before every normal response LLM
@@ -170,7 +217,9 @@ Its pause action calls the shared `processing.stream.set_streaming_active()` ope
 so disabling, moving, or replacing regex intent detection later does not require another
 stream-control implementation.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- `reply_now` Audio Barrier                                                        -->
+<!-- -------------------------------------------------------------------------------- -->
 ## `reply_now` Audio Barrier
 
 The `reply_now` command is accepted immediately, but response generation is coordinated
@@ -198,7 +247,9 @@ the old Google stream has already stopped, its worker hands any newer queued aud
 successor stream. Disconnect shutdown remains intentionally destructive: it aborts queued
 audio and fails boundaries that can no longer be reached.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Canonical Commands and Acknowledgements                                          -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Canonical Commands and Acknowledgements
 
 Both primary and listener clients use the same command envelope:
@@ -245,7 +296,9 @@ Current canonical names are:
 - `toggle_recording`
 - `get_control_state` (internal listener synchronization)
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Direct and Listener Command Paths                                                -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Direct and Listener Command Paths
 
 A primary client command stays on its own socket:
@@ -275,7 +328,9 @@ Listener frontend
 return acknowledgements differently. They share all command behavior through the same
 dispatcher.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Channels Groups and Event Methods                                                -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Channels Groups and Event Methods
 
 Groups are scoped by `ChatSession.id`:
@@ -298,7 +353,9 @@ These `ws_*` methods must remain methods on the consumer classes even when their
 delegate to handler modules. Ordinary processing functions do not need consumer-method
 passthroughs.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Message Persistence and Database State                                           -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Message Persistence and Database State
 
 `processing.messages` keeps database, context, and listener publication ordered:
@@ -314,7 +371,9 @@ Word timestamps and biomarker work run after the associated user message commits
 Biomarker callbacks await their own database write before broadcasting scores, while the
 whole callback task remains background work relative to response delivery.
 
-
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Disconnect and Session Closing                                                   -->
+<!-- -------------------------------------------------------------------------------- -->
 ## Disconnect and Session Closing
 
 `ChatConsumer.disconnect()` performs shutdown in dependency order:
@@ -323,8 +382,8 @@ whole callback task remains background work relative to response delivery.
 2. Broadcast the ended stream state.
 3. Cancel and await connection-owned response coordinator tasks.
 4. Flush any staged user text that never received a response.
-5. Save the optional stereo user/TTS recording.
-6. Mark the session inactive, then schedule slower post-chat analysis and final saving.
+5. Finalize or discard the temporary user-only WAV according to the recording toggle.
+6. Attach `SessionAudio` metadata, mark the session inactive, then schedule slower analysis.
 7. Leave every Channels group.
 8. Clear model/session references and reset per-session response state.
 
@@ -332,6 +391,9 @@ whole callback task remains background work relative to response delivery.
 closes the underlying chat session.
 
 
+<!-- -------------------------------------------------------------------------------- -->
+<!-- How to Add New Functionality                                                     -->
+<!-- -------------------------------------------------------------------------------- -->
 ## How to Add New Functionality
 
 - Add a new primary-client JSON type to `handlers/ws_events.py`.

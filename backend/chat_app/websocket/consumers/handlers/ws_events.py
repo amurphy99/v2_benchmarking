@@ -24,6 +24,7 @@ from ....services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
 from ...services.chatHelpers import ChatHandler
 from  ..processing.audio     import ingest_audio_payload
 from  ..processing.commands  import dispatch_command
+from  ..processing.playback  import handle_playback_event
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
@@ -47,6 +48,7 @@ async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
     elif msg_type == "audio_data"        : await ingest_audio_payload        (consumer, data)
     elif msg_type == "transcription"     : await handle_transcription_message(consumer, data)
     elif msg_type == "command"           : await handle_client_command       (consumer, data)
+    elif msg_type == "tts_playback"      : await handle_playback_event       (consumer, data)
     elif msg_type == "end_chat"          : await consumer.close(code=1000)
 
     # Unknown JSON

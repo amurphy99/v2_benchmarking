@@ -6,7 +6,7 @@ Service for working with chat data
 TODO: Later on may need to specifically add start/end timestamps to chats/messages...
 
 """
-import os, logging, time
+import logging, time
 logger = logging.getLogger(__name__)
 
 # Django imports
@@ -14,13 +14,12 @@ from channels.db         import database_sync_to_async
 from django.db           import transaction
 from django.db.models    import Min
 from django.utils        import timezone
-from django.conf         import settings as django_settings
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
+from ..models         import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -50,11 +49,16 @@ class ChatService:
         session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
 
+    # Load the patient's initial recording preference for a newly connected session
+    @staticmethod
+    def get_audio_recording_default(session_id: int) -> bool:
+        return bool(ChatSession.objects.values_list("profile__save_audio_by_default", flat=True).get(id=session_id))
+
     # ===============================================================================
     # Close Session
     # ================================================================================
     @staticmethod
-    async def close_session(user_id, session_id, *, username="unknown", source="webapp", audio_path=None, audio_start_ts=None):
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp"):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -67,16 +71,7 @@ class ChatService:
 
         # Get messages for the session & make sure it is valid
         user, session, valid, messages = await database_sync_to_async(ChatService.prepare_session_for_analysis)(user_id, session_id)
-        if not valid:
-            # Session was deleted (empty chat) - clean up any saved audio file
-            if audio_path:
-                try:
-                    full = os.path.join(django_settings.MEDIA_ROOT, audio_path)
-                    if os.path.exists(full): os.unlink(full)
-                except Exception: pass
-            
-            # Return nothing
-            return None
+        if not valid: return None
         logger.info(f"{RED}[DB] ChatSession {BOLD}{session.id}{UNBOLD}: valid={BOLD}{valid}{UNBOLD}, num messages={BOLD}{len(messages)}{UNBOLD}. {RESET}")
 
         # Run a post-chat analysis to fill out the rest of the fields
@@ -92,8 +87,6 @@ class ChatService:
             risk_level     = analysis.get("risk_rating", None),
             risk_reason    = analysis.get("risk_reason", None),
             risk_quotes    = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
-            audio_path     = audio_path,
-            audio_start_ts = audio_start_ts,
         )
 
         # Done
@@ -139,7 +132,7 @@ class ChatService:
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None, audio_path=None, audio_start_ts=None):
+    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
         # Set the analysis fields 
         topics, sentiment = ChatService.set_analysis_fields(
             session, messages,
@@ -161,19 +154,44 @@ class ChatService:
             session.taskType    = settings.taskType
             session.taskSubtype = settings.taskSubtype
 
-        # Save the audio file path if provided
-        if audio_path:
-            session.audio_file = audio_path
-            update_fields.append("audio_file")
-
-        # Save the audio recording start time (used by frontend for accurate seeking)
-        if audio_start_ts:
-            session.audio_start_ts = audio_start_ts
-            update_fields.append("audio_start_ts")
-
         # Save & return the session
         session.save(update_fields=update_fields)
         return session
+
+    # Persist metadata for an object that has already reached durable storage
+    @staticmethod
+    @transaction.atomic
+    def attach_session_audio(session_id: int, artifact: dict[str, object]) -> SessionAudio:
+        return SessionAudio.objects.create(session_id=session_id, **artifact)
+
+    # --------------------------------------------------------------------------------
+    # Store an idempotent playback boundary for one assistant message in this session
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    @transaction.atomic
+    def mark_assistant_playback(session_id: int, message_id: int, state: str) -> bool:
+        """
+        We can't actually track when TTS playback starts or ends on any of the frontend
+        clients from the backend, but they have the option of sending us messages to
+        inform us when playback has started and/or ended. When we get those messages,
+        we add the timestamp to the associated assistant ChatMessage entry in the DB.
+        """
+        # Grab the associated ChatMessage object (we are supplied with the ID)
+        message = (ChatMessage.objects.select_for_update()
+                   .filter(id=message_id, session_id=session_id, role="assistant").first())
+        if message is None: return False
+
+        # Add a timestamp for the `start_ts` field
+        if (state == "started") and (message.playback_start_ts is None):
+            message.playback_start_ts = timezone.now()
+            message.save(update_fields=["playback_start_ts"])
+
+        # Add a timestamp for the `end_ts` field
+        elif (state == "finished") and (message.playback_end_ts is None):
+            message.playback_end_ts = timezone.now()
+            message.save(update_fields=["playback_end_ts"])
+
+        return True
 
     # --------------------------------------------------------------------------------
     # Set post-chat analysis fields for the session (summary, topics, sentiment)

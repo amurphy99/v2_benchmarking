@@ -21,27 +21,37 @@ on individual rows -- missing word timestamps are interpolated, and `full_text`
 falls back to the joined words.  
 
 """
-import csv, json as json_lib, shutil, zoneinfo, asyncio, logging
+import csv, hashlib, json as json_lib, shutil, tempfile, wave, zoneinfo, asyncio, logging
 logger = logging.getLogger(__name__)
 
 from collections import OrderedDict
 from datetime    import timedelta, datetime
 from pathlib     import Path
 
-from django.conf  import settings as django_settings
+from django.conf  import settings
 from django.utils import timezone
 
 # From this project
-from chat_app.models               import ChatSession, ChatMessage, ChatBiomarkerScore
-from chat_app.services.db_services import ChatService
-from ...services.logging_utils     import RESET, SEED_DATA, SD_H, SD_R
-from .csv_processing               import to_float, fill_utterance_bounds, interpolate_word_times
+from chat_app.models                         import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore
+from chat_app.services.db_services           import ChatService
+from chat_app.services.session_audio_storage import build_recording_object_key, store_recording
+from ...services.logging_utils               import RESET, SEED_DATA, SD_H, SD_R
+from .csv_processing                         import to_float, fill_utterance_bounds, interpolate_word_times
 
 # For the post-chat analysis fields
 from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
 
 # Valid biomarker keys (matches ChatBiomarkerScore.BIOMARKER_CHOICES)
 VALID_BIOMARKER_TYPES = {k for k, _ in ChatBiomarkerScore.BIOMARKER_CHOICES}
+
+
+# Hash a potentially large seeded WAV without loading the whole recording into RAM
+def _file_sha256(file_path: Path) -> str:
+    digest = hashlib.sha256()
+    with file_path.open("rb") as recording:
+        for block in iter(lambda: recording.read(1_048_576), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 # ================================================================================
@@ -104,14 +114,9 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     speaker_map = config["speaker_map"]
 
     # --------------------------------------------------------------------------------
-    # Copy audio file into Django media storage 
+    # Locate the source WAV; persistence happens after the ChatSession has an ID
     # --------------------------------------------------------------------------------
-    # (`recordings/` gives the admin/owner-only access protection like live recordings)
-    audio_src  = data_dir / config["audio_filename"]
-    audio_rel  = f"recordings/{audio_src.name}"
-    audio_dest = Path(django_settings.MEDIA_ROOT) / "recordings"
-    audio_dest.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(audio_src, audio_dest / audio_src.name)
+    audio_src = data_dir / config["audio_filename"]
 
     # --------------------------------------------------------------------------------
     # Parse CSV -- group words by uttID (utterance ID); also preserves CSV order
@@ -171,18 +176,49 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     # Add the transcript to the DB (session, messages, words)
     # --------------------------------------------------------------------------------
     # Create session (source="transcript" tag allows us to filter for this type of demo data).
-    # `audio_start_ts` is the wall-clock anchor the frontend uses to calculate audio
-    # file offsets; for seeded data it equals the session start.
     session = ChatSession.objects.create(
-        profile        = profile,
-        source         = "transcript",
-        is_active      = False,
-        end_ts         = ended_at,
-        audio_file     = audio_rel,
-        audio_start_ts = started_at,
+        profile   = profile,
+        source    = "transcript",
+        is_active = False,
+        end_ts    = ended_at,
     )
     session.date = started_at
     session.save(update_fields=["date"])
+
+    # Store the source WAV through the same local/GCS adapter used by live recordings
+    with wave.open(str(audio_src), "rb") as recording:
+        sample_rate      = recording.getframerate()
+        channels         = recording.getnchannels()
+        bits_per_sample  = recording.getsampwidth() * 8
+        duration_seconds = recording.getnframes() / sample_rate
+    checksum   = _file_sha256(audio_src)
+    object_key = build_recording_object_key(session.id)
+
+    temp_root = Path(settings.SESSION_AUDIO_TEMP_ROOT)
+    temp_root.mkdir(parents=True, exist_ok=True)
+    temp_file = tempfile.NamedTemporaryFile(
+        prefix = f"seed_session_{session.id}_",
+        suffix = ".wav",
+        dir    = temp_root,
+        delete = False,
+    )
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+    shutil.copy2(audio_src, temp_path)
+    storage_backend = store_recording(temp_path, object_key)
+
+    SessionAudio.objects.create(
+        session          = session,
+        storage_backend  = storage_backend,
+        object_key       = object_key,
+        started_at       = started_at,
+        sample_rate      = sample_rate,
+        channels         = channels,
+        bits_per_sample  = bits_per_sample,
+        duration_seconds = duration_seconds,
+        size_bytes       = audio_src.stat().st_size,
+        sha256           = checksum,
+    )
 
     # Create messages and words (utt_metas is in CSV order; each meta carries its rows)
     messages = []

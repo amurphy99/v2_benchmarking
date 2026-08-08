@@ -3,12 +3,19 @@ Utilities for processing chat messages & getting LLM responses.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.chatHelpers`
 
-Process the users message & reply with the LLM ASAP.
+Process the users message & reply with the LLM ASAP. This file handles various
+methods for doing so -- I should probably update the documentation here a little
+bit...
 
-TODO: Rejoining a chat needs to be handled differently...
-TODO: I'll delete everything we had here for it and then add it back in from a separate branch later
+NOTE: Message ID is included so frontends can respond letting us know when 
+      playback starts and ends (and we can save timestamps for the message).
 
-TODO: We still might commit stuff to the DB even if it barely said most of the response...?
+TODO: What happens if we implement a way for assistant responses to be canceled
+      midway through? Currently, they can only be canceled before audio TTS
+      playback begins -- but if they were canceled let's say after only 1-5
+      words, we would need a way to know which words were said and which weren't
+      so that we could adjust what was saved into the DB (and context/message 
+      history).
 
 """
 from __future__ import annotations
@@ -33,7 +40,9 @@ from ...services.db_services              import ChatService
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
-if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
+if TYPE_CHECKING:
+    from ...models              import ChatMessage
+    from ..consumers.consumers  import ChatConsumer
 
 REPLY_BARRIER_TIMEOUT_SEC = 2.0  # Maximum wait for pre-command audio to reach the STT request generator
 REPLY_SETTLE_SEC          = 0.2  # Quiet period required after meaningful STT progress
@@ -281,7 +290,7 @@ class ChatHandler:
                 ),
                 name="chat::commit_response",
             )
-            try: await asyncio.shield(commit_task)
+            try: assistant_message = await asyncio.shield(commit_task)
             except asyncio.CancelledError:
                 await commit_task
                 raise
@@ -293,7 +302,7 @@ class ChatHandler:
 
                 # Update the consumer state & start streaming TTS
                 consumer._tts_streaming = True
-                try: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
+                try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id)
 
                 # Send "cancel_audio" to frontend if interrupted mid TTS stream
                 # TODO: I don't know if we want this to work (idea is frontend cancels speaking)
@@ -329,14 +338,14 @@ class ChatHandler:
         combined_ts     : float,
         system_resp     : str,
         system_ts       : float,
-    ) -> None:
+    ) -> ChatMessage:
         # Save the matching turn atomically, then publish it before consuming its staged prefix
-        user_msg, _ = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
+        user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
         consumer._staged_utterances.consume(staged_snapshot)
         consumer.last_response = system_resp
 
         # Send the already-persisted assistant response to the primary frontend
-        await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
+        await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_msg.id}))
 
         # Save word timestamps and derive biomarkers in supervised session tasks
         if (combined_words) and (user_msg):
@@ -345,6 +354,7 @@ class ChatHandler:
         # Text & audio biomarkers
         fire_and_log(process_text_biomarkers (consumer, user_msg, combined_text, combined_words), name="_execute_response::bio_callback")
         fire_and_log(process_audio_biomarkers(consumer, user_msg,                combined_words), name="_execute_response::audio_bio_callback")
+        return assistant_msg
 
 
     # ================================================================================
@@ -363,15 +373,15 @@ class ChatHandler:
             system_resp = ChatHandler._extract_text(system_resp)
 
             # Save and send the assistant response before starting its TTS stream
-            system_ts             = now_ts()
+            system_ts              = now_ts()
             consumer.last_response = system_resp
-            await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
-            await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts}))
+            assistant_message = await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
+            await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_message.id}))
 
             # Let cancellation stop both backend synthesis and already-buffered frontend audio
             if consumer.use_backend_TTS:
                 consumer._tts_streaming = True
-                try: await synthesize_and_stream_tts(system_resp, consumer.send, consumer)
+                try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id)
                 except asyncio.CancelledError:
                     try: await consumer.send(json.dumps({"type": "cancel_audio"}))
                     except Exception: pass

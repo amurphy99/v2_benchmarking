@@ -1,101 +1,64 @@
 """
-Stream media files to authenticated users.
+Stream one locally stored session recording through a scoped, expiring URL.
 --------------------------------------------------------------------------------
 `backend.backend.media_view`
 
-The `<audio>` element cannot attach an Authorization header, so auth is handled 
-via a short-lived JWT access token passed as a query parameter. This is the same 
-method the WebSocket consumers use in `services/middleware.py`.
-
-URL format:
-    GET /media/<path>?token=<access_token>
-
-Range requests (for audio seeking) are handled by RangedFileResponse from the
-`ranged-response` package, which issues `206 Partial Content` and sets the
-appropriate `Content-Range` / `Accept-Ranges` headers.  This is required for the
-browser's <audio> seek bar to work and scales to arbitrarily large files because
-it never loads the full file into memory.
+The REST API first authorizes the requesting user and signs a token containing
+only that user and session. This endpoint validates the token and authorization
+again, then serves the WAV with HTTP Range support for browser seeking.
 
 """
-import os, mimetypes
-from django.conf                             import settings
-from django.http                             import Http404, HttpResponse
-from django.contrib.auth.models              import AnonymousUser
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from ranged_response                         import RangedFileResponse
+import mimetypes
+
+from django.conf         import settings
+from django.contrib.auth import get_user_model
+from django.core         import signing
+from django.http         import Http404, HttpRequest, HttpResponse
+from ranged_response     import RangedFileResponse
 
 # From this project
-from chat_app.models import ChatSession
-
-_jwt_auth = JWTAuthentication()
-
-
-# --------------------------------------------------------------------------------
-# Get the user from the given token
-# --------------------------------------------------------------------------------
-def _user_from_token(token_str: str | None):
-    """
-    Validate a simplejwt access token string -> User or None.
-    """
-    if not token_str: return None
-    try:              return _jwt_auth.get_user(_jwt_auth.get_validated_token(token_str))
-    except Exception: return None
-
+from chat_app.api.mixins import can_access_chat_session
+from chat_app.models     import SessionAudio
+from chat_app.services.session_audio_storage import (
+    LOCAL_STORAGE_BACKEND,
+    PLAYBACK_TOKEN_SALT,
+    local_recording_path,
+)
 
 # ================================================================================
-# Stream the audio file
+# Stream a single authorized local recording without accepting a caller-supplied path
 # ================================================================================
-def stream_media(request, path):
-    """
-    Serve a media file after validating the JWT token supplied in the
-    `?token=` query parameter.  Supports HTTP Range requests so the browser
-    audio player can seek without downloading the full file first.
-    """
-    # --------------------------------------------------------------------------------
-    # Authentication
-    # --------------------------------------------------------------------------------
-    token = request.GET.get("token")
-    user  = _user_from_token(token)
-    if not user or isinstance(user, AnonymousUser) or not getattr(user, "is_active", False):
+def stream_session_audio(request: HttpRequest, session_id: int) -> HttpResponse:
+    # 1) Decode and validate the temporary playback token
+    token = request.GET.get("token", "")
+    try:
+        claims  = signing.loads(token, salt=PLAYBACK_TOKEN_SALT, max_age=settings.SESSION_AUDIO_PLAYBACK_URL_TTL_SEC)
+        user_id = int(claims["user_id"])
+        if int(claims["session_id"]) != session_id: raise signing.BadSignature("Session does not match token")
+    except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError, ValueError):
         return HttpResponse("Unauthorized", status=401)
 
-    # --------------------------------------------------------------------------------
-    # Resolve file
-    # --------------------------------------------------------------------------------
-    # Prevent directory traversal
-    safe_path = os.path.normpath(path).lstrip("/")
-    file_path = os.path.join(settings.MEDIA_ROOT, safe_path)
-    if not os.path.exists(file_path) or not os.path.isfile(file_path):
-        raise Http404(f"Media file not found: {safe_path}")
+    # 2) Verify the user is active and authorized to access this session
+    user = get_user_model().objects.filter(id=user_id, is_active=True).first()
+    if (user is None) or (not can_access_chat_session(user, session_id)):
+        return HttpResponse("Forbidden", status=403)
 
-    # --------------------------------------------------------------------------------
-    # Access control for chat session recordings
-    # --------------------------------------------------------------------------------
-    # Audio recordings under `recordings/` are restricted to:
-    #   - admins (is_staff = True), or
-    #   - the user who owns the ChatSession that this audio_file belongs to.
-    # Other media (album images, etc.) keep the existing is_active check.
-    if safe_path.startswith("recordings/") and (not user.is_staff):
-        # Check if this user "owns" the related ChatSession object
-        owns = ChatSession.objects.filter(
-            audio_file                = safe_path,
-            profile__account__user_id = user.id,
-        ).exists()
+    # 3) Locate the database record for this local audio file
+    try: audio = SessionAudio.objects.get(session_id=session_id, storage_backend=LOCAL_STORAGE_BACKEND)
+    except SessionAudio.DoesNotExist: raise Http404("Session recording not found")
 
-        if not owns:
-            return HttpResponse("Forbidden", status=403)
+    # 4) Safely resolve the physical file path and ensure it exists
+    try: file_path = local_recording_path(audio.object_key)
+    except ValueError: raise Http404("Session recording not found")
+    
+    if not file_path.is_file(): raise Http404("Session recording not found")
 
-    # --------------------------------------------------------------------------------
-    # Content-Type
-    # --------------------------------------------------------------------------------
-    content_type, _ = mimetypes.guess_type(file_path)
-    content_type    = content_type or "application/octet-stream"
+    # 5) Stream the file back with HTTP range support and secure headers
+    content_type = mimetypes.guess_type(file_path.name)[0] or "audio/wav"
+    response     = RangedFileResponse(request, file_path.open("rb"), content_type=content_type)
+    
+    response["Content-Disposition"   ] = f'inline; filename="session_{session_id}.wav"'
+    response["Cache-Control"         ] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
 
-    # --------------------------------------------------------------------------------
-    # Stream with Range Support
-    # --------------------------------------------------------------------------------
-    # RangedFileResponse handles Content-Range / Accept-Ranges headers and reads the 
-    # file in chunks, so even a 200 MB recording is served without loading it into 
-    # memory.
-    return RangedFileResponse(request, open(file_path, "rb"), content_type=content_type)
-
+    return response

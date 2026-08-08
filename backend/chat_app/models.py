@@ -32,10 +32,11 @@ class Account(models.Model):
     def __str__(self): return f"Account for {self.user.username}"
 
 class Profile(models.Model):
-    account     = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="profile_account")
-    zipcode     = models.CharField(max_length=10, **init_args)
-    birthDate   = models.DateField(**init_args)
-    locationStatus = models.CharField(max_length=100, **init_args)
+    account               = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="profile_account")
+    zipcode               = models.CharField(max_length=10, **init_args)
+    birthDate             = models.DateField(**init_args)
+    locationStatus        = models.CharField(max_length=100, **init_args)
+    save_audio_by_default = models.BooleanField(default=False)
     
     def __str__(self): return f"Profile for {self.account.user.username}"
     
@@ -110,9 +111,6 @@ class ChatSession(models.Model):
     #       end, or as properties...
     is_active  = models.BooleanField (default=True)
     end_ts          = models.DateTimeField(**init_args)                  # `start_ts` is a property defined elsewhere
-    audio_file      = models.CharField    (**init_args, max_length=255)  # Relative path to the saved WAV (e.g. "recordings/session_1.wav")
-    audio_start_ts  = models.DateTimeField(**init_args)                  # Wall-clock time when audio recording started (first "Start Chat" click) 
-
     # These are filled out based on the user's current settings at the time the chat ends
     taskType    = models.CharField(**init_args, max_length=255, default="chat")
     taskSubtype = models.CharField(**init_args, max_length=255, default="N/A")
@@ -169,6 +167,26 @@ class ChatSession(models.Model):
     def __str__(self): return self.date
 
 # ================================================================================
+# SessionAudio -- storage metadata for one ChatSession recording
+# ================================================================================
+class SessionAudio(models.Model):
+    STORAGE_CHOICES = [("local", "Local"), ("gcs", "Google Cloud Storage")]  # Supported recording object stores
+
+    session          = models.OneToOneField(ChatSession, on_delete=models.CASCADE, related_name="audio")
+    storage_backend  = models.CharField(max_length=16, choices=STORAGE_CHOICES)
+    object_key       = models.CharField(max_length=500)
+    started_at       = models.DateTimeField            (**init_args)
+    sample_rate      = models.PositiveIntegerField     (**init_args)
+    channels         = models.PositiveSmallIntegerField(**init_args)
+    bits_per_sample  = models.PositiveSmallIntegerField(**init_args)
+    duration_seconds = models.FloatField               (**init_args)
+    size_bytes       = models.BigIntegerField          (**init_args)
+    sha256           = models.CharField(max_length=64,  **init_args)
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self): return f"Audio for ChatSession {self.session_id}"
+
+# ================================================================================
 # ChatMessage -- an array of these is assigned to each ChatSession
 # ================================================================================
 class ChatMessage(models.Model):
@@ -192,6 +210,10 @@ class ChatMessage(models.Model):
     # TODO: Temporarily adding the auto thing for end_ts, but should be set with the actual timestamp
     start_ts  = models.DateTimeField(**init_args)
     end_ts    = models.DateTimeField(**init_args) 
+
+    # Optional timestamps reported by a frontend that plays an assistant response
+    playback_start_ts = models.DateTimeField(**init_args)
+    playback_end_ts   = models.DateTimeField(**init_args)
 
     class Meta:
         ordering = ["ts", "id"]

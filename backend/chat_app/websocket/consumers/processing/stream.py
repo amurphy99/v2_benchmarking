@@ -14,7 +14,7 @@ NOTE: It has "active" in the name, but this is the same function we use to start
 from __future__ import annotations
 from typing     import TYPE_CHECKING
 
-import json, logging
+import json, logging, time
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -39,8 +39,12 @@ async def set_streaming_active(consumer: ChatConsumer, active: bool) -> None:
     if active == consumer.streaming_active: return
 
     # Apply the provider transition before publishing the resulting state
-    if active: consumer.stt_provider.start()
-    else:      consumer.stt_provider.stop()
+    if active:
+        consumer.stt_provider  .start()
+        consumer.audio_recorder.resume()
+    else:
+        consumer.stt_provider  .stop()
+        consumer.audio_recorder.pause(time.monotonic())
     consumer.streaming_active = active
 
     # Notify the primary client directly, then broadcast to every listener
