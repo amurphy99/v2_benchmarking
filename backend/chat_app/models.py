@@ -89,7 +89,7 @@ class ChatSession(models.Model):
     ]
 
     # Levels of risk evaluated in the post-chat analysis
-    RISK_LEVEL_CHOICES = [(1, 'Low'), (2, 'Medium'), (3, 'High'), (4, 'Critical')]
+    RISK_LEVEL_CHOICES = [(0, "None"), (1, 'Low'), (2, 'Medium'), (3, 'High'), (4, 'Critical')]
 
     # --------------------------------------------------------------------------------
     # Initialized on chat creation
