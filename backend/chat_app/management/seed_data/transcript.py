@@ -8,7 +8,7 @@ file via Django media, and loads pre-computed biomarker scores from one CSV
 per biomarker type. Used for the TranscriptPlayback demo.
 
 Required files in `seed_data/transcript_data/test_transcripts/<test_dir>/`:
-  - transcript_config.json : speaker_map, trans_filename, audio_filename, chat_datetime, date_offset_days (only used as a backup)
+  - transcript_config.json : speaker/file/time settings and optional cached post-chat analysis
   - audio.wav              : the corresponding audio recording
   - transcript.csv         : speaker_id, word, start_time, end_time, confidence, uttID (utterance ID), full_text (full utterance with punctuation)
 
@@ -44,6 +44,10 @@ from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
 # Valid biomarker keys (matches ChatBiomarkerScore.BIOMARKER_CHOICES)
 VALID_BIOMARKER_TYPES = {k for k, _ in ChatBiomarkerScore.BIOMARKER_CHOICES}
 
+POST_CHAT_ANALYSIS_FIELDS = (
+    "summary", "topics", "sentiment", "emotion", "risk_rating", "risk_quotes", "risk_reason",
+)  # Fields required when transcript_config.json provides cached post-chat analysis
+
 
 # Hash a potentially large seeded WAV without loading the whole recording into RAM
 def _file_sha256(file_path: Path) -> str:
@@ -52,6 +56,58 @@ def _file_sha256(file_path: Path) -> str:
         for block in iter(lambda: recording.read(1_048_576), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+# Validate a cached analysis object before writing any of it to the database
+def _validate_post_chat_analysis(analysis: object, config_path: Path) -> dict[str, object]:
+    """
+    Require the complete output shape returned by `post_chat_analysis`. Failing
+    loudly during seeding is preferable to silently creating partially analyzed
+    reference sessions because of a misspelled JSON key.
+    """
+    if not isinstance(analysis, dict):
+        raise ValueError(f"{config_path}: post_chat_analysis must be a JSON object")
+
+    missing = [field for field in POST_CHAT_ANALYSIS_FIELDS if field not in analysis]
+    if missing:
+        raise ValueError(f"{config_path}: post_chat_analysis is missing: {', '.join(missing)}")
+
+    # Validate scalar text fields
+    text_fields = ("summary", "sentiment", "emotion", "risk_reason")
+    invalid_text = [field for field in text_fields if not isinstance(analysis[field], str)]
+    if invalid_text:
+        raise ValueError(f"{config_path}: post_chat_analysis fields must be strings: {', '.join(invalid_text)}")
+
+    # Validate the string-list fields independently so empty risk quotes remain valid
+    topics      = analysis["topics"     ]
+    risk_quotes = analysis["risk_quotes"]
+    if (not isinstance(topics, list)) or (not all(isinstance(topic, str) for topic in topics)):
+        raise ValueError(f"{config_path}: post_chat_analysis.topics must be a JSON string array")
+    if (not isinstance(risk_quotes, list)) or (not all(isinstance(quote, str) for quote in risk_quotes)):
+        raise ValueError(f"{config_path}: post_chat_analysis.risk_quotes must be a JSON string array")
+
+    # Match ChatSession.RISK_LEVEL_CHOICES without accepting bool as an integer
+    risk_rating = analysis["risk_rating"]
+    if (isinstance(risk_rating, bool)) or (not isinstance(risk_rating, int)) or (risk_rating not in range(1, 5)):
+        raise ValueError(f"{config_path}: post_chat_analysis.risk_rating must be an integer from 1 through 4")
+
+    return analysis
+
+
+# Use cached reference data when present and retain live analysis as a fallback
+def _resolve_post_chat_analysis(config: dict[str, object], messages: list[ChatMessage], config_path: Path) -> dict[str, object]:
+    """
+    Skip all post-chat LLM requests when `transcript_config.json` contains a
+    `post_chat_analysis` object. Older or unfinished configs still run the normal
+    analysis path until their cached result is added.
+    """
+    cached = config.get("post_chat_analysis")
+    if cached is not None:
+        logger.info(f"{SEED_DATA} Using cached post-chat analysis from {SD_H}{config_path}{SD_R}.{RESET}")
+        return _validate_post_chat_analysis(cached, config_path)
+
+    logger.info(f"{SEED_DATA} No cached post-chat analysis in {SD_H}{config_path}{SD_R}; running analysis.{RESET}")
+    return asyncio.run(post_chat_analysis(messages))
 
 
 # ================================================================================
@@ -107,8 +163,13 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     
     """
     # Load in the transcript and config
-    data_dir = Path(__file__).parent / "transcript_data" / "test_transcripts" / test_dir
-    config   = json_lib.loads((data_dir / "transcript_config.json").read_text())
+    data_dir    = Path(__file__).parent / "transcript_data" / "test_transcripts" / test_dir
+    config_path = data_dir / "transcript_config.json"
+    config      = json_lib.loads(config_path.read_text(encoding="utf-8"))
+
+    # Reject invalid cached data before copying a potentially large recording
+    cached_analysis = config.get("post_chat_analysis")
+    if cached_analysis is not None: _validate_post_chat_analysis(cached_analysis, config_path)
 
     # Speaker map for the speaker_id column in the transcript tells us who is the "user"
     speaker_map = config["speaker_map"]
@@ -257,8 +318,8 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     # --------------------------------------------------------------------------------
     # Fill out post-chat analysis fields
     # --------------------------------------------------------------------------------
-    # Run post-chat analysis (same as in close_session)
-    analysis = asyncio.run(post_chat_analysis(messages))
+    # Prefer checked-in analysis; fall back to the normal LLM workflow until added
+    analysis = _resolve_post_chat_analysis(config, messages, config_path)
 
     # Save all analysis fields via the same helper used by close_session
     ChatService.save_session_fields(
@@ -271,4 +332,3 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         risk_reason = analysis.get("risk_reason", None),
         risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
     )
-

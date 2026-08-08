@@ -106,12 +106,25 @@ Metadata for the session. Filenames must match the actual files in the folder.
   "trans_filename"   : "me_test_01.csv",
   "audio_filename"   : "me_test_01.wav",
   "chat_datetime"    : "March 27, 2026 2:56 PM",
-  "date_offset_days" : 5
+  "date_offset_days" : 5,
+  "post_chat_analysis": {
+    "summary"     : "Summary of the conversation...",
+    "topics"      : ["Family", "Gardening"],
+    "sentiment"   : "Positive",
+    "emotion"     : "Joy",
+    "risk_rating" : 1,
+    "risk_quotes" : [],
+    "risk_reason" : "No concerning statements were identified."
+  }
 }
 ```
 - `speaker_map` - maps each `speaker_id` value in the transcript CSV to `"user"` or `"assistant"`.
 - `chat_datetime` - wall-clock time the chat occurred. Used as the session date and the `SessionAudio.started_at` playback anchor.
 - `date_offset_days` - fallback if `chat_datetime` is omitted; places the chat that many days before today.
+- `post_chat_analysis` - optional saved output from the post-chat analysis workflow.
+  When supplied, all seven fields are required and seeding skips the post-chat LLM
+  calls. When omitted, seeding runs the analysis normally so a new transcript can
+  still be loaded before its result is copied into the config.
 
 <hr>
 </details>
@@ -242,7 +255,9 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
       3. Creates the `ChatSession` and a separate `SessionAudio` metadata row for the copied WAV.
       4. Creates one `ChatMessage` per utterance + bulk-inserts `ChatWord` rows (word-level timestamps).
       5. Auto-discovers `biomarker_*.csv` files, parses each, and bulk-inserts `ChatBiomarkerScore` rows anchored at `started_at`.
-      6. Runs `post_chat_analysis()` on the messages and saves the summary / sentiment / topics / risk fields.
+      6. Loads `post_chat_analysis` from `transcript_config.json` when present;
+         otherwise runs `post_chat_analysis()` normally. It then saves the summary,
+         sentiment, topics, and risk fields through the standard session helper.
 
 4. **`setup_dummy_chats()`** — creates `demo_patient` + `demo_caregiver` users with their profile; if `REMAKE_SAMPLE_DATA`, calls `seed_chats()` and `seed_reminders()` to fill the user-facing UI with random data.
 
