@@ -1,4 +1,8 @@
+/* Main hook for handling an admin user's "ChatListener" WebSocket session.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/chat-listener/useChatListener`
 
+*/
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 
 import { buildChatListenerWsUrl } from "./ws/buildWsUrl";

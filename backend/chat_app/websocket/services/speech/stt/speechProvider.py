@@ -28,10 +28,10 @@ from google.cloud import speech
 from .....services import logging_utils as lu
 from .....services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
-from ...chatHelpers import ChatHandler
-from ...bg_helpers  import threadsafe_fire_and_log as thread_FL
-from  .audio_queue  import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
-from  .stream_state import InterimProgressTracker
+from ...chatHelpers  import ChatHandler
+from ...bg_helpers   import threadsafe_fire_and_log as thread_FL
+from   .audio_queue  import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
+from   .stream_state import InterimProgressTracker
 
 # Constants
 SAMPLE_RATE   = 16_000   # Required input sample rate for the Google recognition stream

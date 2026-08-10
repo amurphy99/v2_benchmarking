@@ -1,6 +1,6 @@
 /* Modal explaining what a biomarker measures and how its score is calculated.
 --------------------------------------------------------------------------------
-`frontend/src/pages/admin/components/biomarkers/BiomarkerInfoModal.tsx`
+`@frontend/src/pages/admin/components/biomarkers/BiomarkerInfoModal`
 
 UI components for displaying more detailed information about each biomarker. The
 data used to fill in the components is pulled from other files in the project.
@@ -9,7 +9,7 @@ import { useEffect } from "react";
 import { LuX       } from "react-icons/lu";
 
 // From this project
-import { AdminButton    } from "../ui/AdminButton";
+import { AdminButton      } from "../ui/AdminButton";
 import { getBiomarkerInfo } from "./biomarkerInfo";
 
 interface Props {

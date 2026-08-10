@@ -1,14 +1,14 @@
 /* ChatSessionCard view for the Admin chat lists page.
 --------------------------------------------------------------------------------
-`frontend/src/pages/admin/components/chat_lists/ChatSessionCard.tsx`
+`@frontend/src/pages/admin/components/chat_lists/ChatSessionCard`
 
 */
 import { memo, useMemo } from "react";
 
 // From this project
-import { ChatSession } from "@/api";
+import { ChatSession                       } from "@/api";
 import { dateFormatLong, formatElapsedTime } from "@/utils/styling/numFormatting";
-import { formatTimeAgo } from "./timeGrouping";
+import { formatTimeAgo                     } from "./timeGrouping";
 
 // Components
 import { deriveSessionAnalysis } from "../analysis/deriveSessionAnalysis";
@@ -28,10 +28,10 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
     }, [session, isActive]);
 
     // Header values
-    const startDate = session.start_ts ? new Date(session.start_ts) : null;
-    const dateText  = startDate ? dateFormatLong.format(startDate) : "—";
-    const agoText   = formatTimeAgo(startDate);
-    const title     = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
+    const startDate    = session.start_ts ? new Date(session.start_ts) : null;
+    const dateText     = startDate ? dateFormatLong.format(startDate) : "—";
+    const agoText      = formatTimeAgo(startDate);
+    const title        = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
     const sessionLabel = `Session #${session.id ?? "—"}`;
 
     // Active vs completed accent on the left edge.
