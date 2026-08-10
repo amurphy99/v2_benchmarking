@@ -88,8 +88,8 @@ def _validate_post_chat_analysis(analysis: object, config_path: Path) -> dict[st
 
     # Match ChatSession.RISK_LEVEL_CHOICES without accepting bool as an integer
     risk_rating = analysis["risk_rating"]
-    if (isinstance(risk_rating, bool)) or (not isinstance(risk_rating, int)) or (risk_rating not in range(1, 5)):
-        raise ValueError(f"{config_path}: post_chat_analysis.risk_rating must be an integer from 1 through 4")
+    if (isinstance(risk_rating, bool)) or (not isinstance(risk_rating, int)) or (risk_rating not in range(0, 5)):
+        raise ValueError(f"{config_path}: post_chat_analysis.risk_rating must be an integer from 0 through 4")
 
     return analysis
 
