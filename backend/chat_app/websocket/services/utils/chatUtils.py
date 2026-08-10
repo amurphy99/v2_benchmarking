@@ -141,16 +141,15 @@ def organize_full_conversation(state: ChatState, exclude_states: Optional[List[s
 
 
 def clean_llm_response(text: str) -> str:
-    # Pattern explanation:
-    # (.*[.!?])  -> Captures any character (including newlines via re.DOTALL) 
-    #               until the LAST occurrence of ., !, or ?
-    # ["']?      -> Optionally matches a closing quote if the sentence ended in one
-    match = re.search(r'(.*[.!?]["\']?)', text, re.DOTALL)
-    
-    if match:
-        return match.group(1)
-    return "" # Return empty if no complete sentence exists
-
+    """
+    Cleans up the LLM response by removing any system metadata lines that may have been included.
+    """
+    # Adding this specifically for the hallucination issue we observed with the Gemma-4-31B-it model. But could help with other models too if they start including metadata lines like this in their responses.
+    metadata_pattern = re.compile(
+            r"\s*Context length:\s*[^;]+;\s*Quantization:\s*[^;]+;\s*Supported Modalities:\s*[^;]+;\s*Thinking:\s*[^;]+;\s*Thinking Levels:\s*\S+",
+            re.IGNORECASE
+        )
+    return re.sub(metadata_pattern, "", text).strip()
 
 def parse_yes_no(text: str) -> Optional[bool]:
     t = (text or "").strip().lower()

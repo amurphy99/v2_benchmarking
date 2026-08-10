@@ -20,6 +20,7 @@ from .ragChatHelpers import (
 
 from .utils.chatUtils import (
     ChatState,
+    clean_llm_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,9 +96,10 @@ def build_agent1_system_prompt(*, instruction_text, agent2_instructions: str) ->
     - Follow the supervisor's guidance while maintaining a natural flow.
     - Do NOT mention the supervisor instructions.
     - Do NOT include explanations, reasoning, or analysis.
-    - Keep your responses short and friendly.
     - Do not use emojis or emoticons.
     - Don't refer to yourself as an “AI” or an "LLM".
+    - Do NOT output any system metadata, model parameters, or technical status updates.
+    - Keep your responses short and friendly.
 
     Current Conversation: History:
     """.strip()
@@ -202,6 +204,7 @@ async def invoke_agent1_chat(
             max_tokens=max_tokens,
             #  disable thinking to avoid exhausting max_tokens and faster response times.
             reasoning_effort="none", 
+            stop=["Context length:"] # stop when the LLM starts to generate metadata lines 
         )
 
         try:
@@ -428,6 +431,8 @@ async def rag_response_fn(
             max_tokens=256,
         )
         assistant_text = (assistant_text or "").strip()
+        # clean up any system metadata lines that may have been included in the LLM response
+        assistant_text = clean_llm_response(assistant_text)
 
         chat_state.add_message(HumanMessage(content=user_text), scenario=current)
         chat_state.add_message(AIMessage(content=assistant_text), scenario=current)
