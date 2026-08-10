@@ -7,6 +7,15 @@ One asynchronous client is reused by the stateless response engine. This module
 only performs requests when a stage method is awaited; importing or constructing
 the client does not contact the configured endpoint.
 
+TODO: How/where to add the extra arguments for disabling "thinking"?
+    ```
+    extra_body={
+        "chat_template_kwargs": {
+            "enable_thinking": False,
+        },
+    }
+    ```
+
 """
 from __future__ import annotations
 from openai     import AsyncOpenAI
@@ -62,7 +71,7 @@ class ActiveListeningAPI:
         self.retry_delay_sec = retry_delay_sec
         self.client          = instructor.from_openai(
             AsyncOpenAI(base_url=LLM_URL, api_key=API_KEY, timeout=timeout_sec),
-            mode=instructor.Mode.JSON,
+            mode=instructor.Mode.JSON_SCHEMA, # mode=instructor.Mode.JSON,
         )
         logger.info(f"{LLM_MAIN}[LLM] {BOLD}ActiveListeningAPI{UNBOLD} initialized. URL: {LLM_URL}, model: {BOLD}{self.model}{RESET}")
 
