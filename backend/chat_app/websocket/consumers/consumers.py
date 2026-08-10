@@ -1,5 +1,5 @@
 """
-Main controller for a live chat session. 
+Main WebSocket controller for a live chat session. 
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.consumers.consumers`
 
@@ -26,6 +26,11 @@ from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 from chat_app.websocket.services.speech.audio_recorder import SessionAudioRecorder
 from chat_app.services.session_audio_storage             import delete_recording
 
+# For if we are using the "active-listening" respons emode
+from ...config import LIVE_CHAT_RESPONSE_MODE
+from ...services.llm.live_chat.active_listening.response_engine import get_active_listening_engine
+from ...services.llm.live_chat.cognibot_api                     import CognibotResponse
+
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
 from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_send_actions_command
@@ -33,10 +38,6 @@ from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 
 
-# --------------------------------------------------------------------------------
-# TODO: TEMPORARILY PLACING HERE
-# --------------------------------------------------------------------------------
-from ...services.llm.live_chat.cognibot_api import CognibotResponse
 # ================================================================================
 # ChatConsumer 
 # ================================================================================
@@ -49,18 +50,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     MAX_CONTEXT = 30  
 
     # --------------------------------------------------------------------------------
-    # TODO: TEMPORARILY PLACING HERE
+    # Helpers for responding to the user
     # --------------------------------------------------------------------------------
-    # Send emotion command to the client & return the string response
-    async def response_method(self, context_buffer) -> str:
-        # Get structured response
-        response: CognibotResponse = await get_LLM_response(context_buffer)
-
-        # Send emotion command to client
-        payload = {"data": {"action": response.response_mood.upper()}}
+    # Send a "mood" response to the frontend client (so the robots can emote)
+    async def send_response_mood(self, mood: str) -> None:
+        payload = {"data": {"action": mood.upper()}}
         await format_send_actions_command(self, payload)
-        
-        # Return just the string message value
+
+    # Generate a spoken response using the standard method 
+    async def response_method(self, context_buffer: list[tuple[str, str, float]]) -> str:
+        # Send the resulting emotion to the client & return just the message text
+        response: CognibotResponse = await get_LLM_response(context_buffer)
+        await self.send_response_mood(response.response_mood)
         return response.message
 
     # ================================================================================
@@ -88,6 +89,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4001); return
         if self.source == "unknown":
             await self.close(code=4002); return
+
+        # Standard chats opt into the alternate engine only through startup configuration
+        if (self.CHAT_TYPE == "standard") and (LIVE_CHAT_RESPONSE_MODE == "active_listening"):
+            self._turn_response_engine = get_active_listening_engine()
         
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
         # Configuration based on the source platform for the chat
@@ -140,7 +145,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Contains: (datetime_received, raw_pcm_bytes). Pruned by processing.audio
         self._audio_chunks = collections.deque()
 
-        # Always records audio; the user's preference/admin toggle decides if we save on disconnection
+        # Setup the audio recorded and toggle control for audio saving1
+        # NOTE: Audio is always recorded for an entire chat, it is either saved or discarded when the
+        #       chat ends based on the default setting the user has + whether or not an admin user
+        #       changed that toggle mid-chat.
         self.save_audio     = await db_s2a(ChatService.get_audio_recording_default)(self.session_id)
         self.audio_recorder = SessionAudioRecorder(self.session_id)
 
@@ -319,7 +327,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._stage_lock              = asyncio.Lock()  # Serializes final-transcript scheduling decisions
         self._response_lock           = asyncio.Lock()  # Gives one response task ownership of staged text
 
-        # Chat status tracking
-        self.streaming_active         = False  # True while STT stream is active (paused state)
-        self._tts_streaming           = False  # True while audio chunks are actively being sent to the frontend
-        self._pending_action          = None   # Tracks pending user-initiated action ("end_chat" | None)
+        # Chat status tracking (not always used)
+        self.streaming_active      = False     # True while STT stream is active (paused state)
+        self._tts_streaming        = False     # True while audio chunks are actively being sent to the frontend
+        self._pending_action       = None      # Tracks pending user-initiated action ("end_chat" | None)
+        self._turn_response_engine = None      # Optional standard-chat response strategy selected at startup
+        self._dialogue_state       = "normal"  # Active-listening state ("normal" | "awaiting_end_confirmation")

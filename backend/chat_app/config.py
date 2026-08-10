@@ -17,6 +17,22 @@ USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actual
 THIS_LANGUAGE = "en-US"
 INSTRUCTOR_MODEL_NAME = os.getenv("LLM_NAME", "gemma-4-31B-it")  # model name for the Instructor client
 
+# --------------------------------------------------------------------------------
+# Live-Chat Response Generation
+# --------------------------------------------------------------------------------
+LIVE_CHAT_RESPONSE_MODES          = ("single_stage", "active_listening")                    # Supported standard-chat response pipelines
+LIVE_CHAT_RESPONSE_MODE           = os.getenv("LIVE_CHAT_RESPONSE_MODE", "single_stage")    # Response pipeline selected once during backend startup
+ACTIVE_LISTENING_GRACE_SEC        = 0.8                                                     # Extra silence allowed after an incomplete-turn assessment
+ACTIVE_LISTENING_TIMEOUT_SEC      = 15.0                                                    # Maximum duration of each active-listening LLM request
+ACTIVE_LISTENING_MAX_RETRIES      = 1                                                       # Additional attempts allowed after a failed structured response
+ACTIVE_LISTENING_RETRY_DELAY_SEC  = 0.5                                                     # Delay between active-listening request attempts
+ACTIVE_LISTENING_ASSESSMENT_TEMP  = 0.1                                                     # Low-variance temperature used for turn assessment
+ACTIVE_LISTENING_RESPONSE_TEMP    = 0.5                                                     # Temperature used to generate the spoken response
+
+# Reject invalid response modes during startup instead of waiting for a chat connection
+if LIVE_CHAT_RESPONSE_MODE not in LIVE_CHAT_RESPONSE_MODES:
+    raise ValueError(f"Unsupported LIVE_CHAT_RESPONSE_MODE: {LIVE_CHAT_RESPONSE_MODE!r}")
+
 # LLM Parameters
 MAX_LENGTH = 128 # 256
 #PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."

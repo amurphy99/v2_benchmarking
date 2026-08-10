@@ -193,8 +193,7 @@ When automatic responses are enabled, ChatHandler starts a cancellable response 
 ```text
 Finalized utterance
     -> staged snapshot
-    -> optional regex intent detection
-    -> consumer.response_method() / LLM
+    -> configured standard pipeline or activity response method
     -> atomic message exchange commit
     -> primary and listener text delivery
     -> optional TTS
@@ -210,14 +209,22 @@ state cannot be left half-updated.
 <!-- -------------------------------------------------------------------------------- -->
 ## Current Intent Detection
 
-`services/behavior/intent_detection.py` currently runs before every normal response LLM
-call. This applies to both `ChatConsumer` and `ActivityChatConsumer`; there is no current
-per-chat enable/disable flag.
+`services/behavior/intent_detection.py` runs before normal response calls in the default
+`single_stage` mode. Activity/RAG chats retain this path regardless of the standard-chat
+mode setting.
 
 It can return scripted pause/end-chat responses instead of invoking `response_method`.
 Its pause action calls the shared `processing.stream.set_streaming_active()` operation,
 so disabling, moving, or replacing regex intent detection later does not require another
 stream-control implementation.
+
+Standard chats can be set to use the `active_listening` response generation method via
+the `.env` file. In this mode, we respond with two calls, the first one performing a
+structured turn assessment, whcih is where we check for "user intent" regarding things
+such as pausing or ending the chat. After the first stage model finishes, we use it to
+add additional context for a second model call which generates the actual spoken
+response to the user. See `services/llm/live_chat/active_listening/README.md` for more
+information.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- `reply_now` Audio Barrier                                                        -->
