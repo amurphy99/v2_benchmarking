@@ -43,7 +43,7 @@ REMAKE_SAMPLE_DATA = False # False # not LOCAL_MODE
 REMAKE_ANALYZED_DATA = False # False # not LOCAL_MODE
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
-REMAKE_TRANSCRIPT_DATA = True # False # not LOCAL_MODE
+REMAKE_TRANSCRIPT_DATA = False # False # not LOCAL_MODE
 
 
 # ================================================================================
