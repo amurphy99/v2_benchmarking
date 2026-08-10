@@ -274,6 +274,14 @@ class SpeechToTextProvider:
         return barrier
     
 
+    # --------------------------------------------------------------------------------
+    # Handle meaningful interim progress on the consumer event loop
+    # --------------------------------------------------------------------------------
+    def _note_interim_progress(self, consumer: Any) -> None:
+        # Invalidates the current response snapshot and logs *only* if there was an actual cancellation
+        if ChatHandler.note_stt_progress(consumer):
+            logger.info(f"{STT_MAIN} Interim speech progress: cancelling pending response. {RESET}")
+
     # ================================================================================
     # Handles responses from the Google Cloud STT API
     # ================================================================================
@@ -303,8 +311,7 @@ class SpeechToTextProvider:
                     # response; only meaningful timing/transcript progress does
                     consumer = self._consumer()
                     if (consumer is not None) and self._interim_progress.has_new_speech(result, transcript):
-                        self._loop.call_soon_threadsafe(ChatHandler.note_stt_progress, consumer)
-                        logger.info(f"{STT_MAIN} Interim speech progress: cancelling pending response. {RESET}")
+                        self._loop.call_soon_threadsafe(self._note_interim_progress, consumer)
                     
                     # Never actually process interim results as a transcription
                     continue  

@@ -119,11 +119,13 @@ class ChatHandler:
     # STT progress (invalidate outdated response snapshots when we get new speech)
     # --------------------------------------------------------------------------------
     @staticmethod
-    def note_stt_progress(consumer: ChatConsumer) -> None:
+    def note_stt_progress(consumer: ChatConsumer) -> bool:
+        # Advance the STT revision and report whether a live response task was cancelled
         consumer._stt_progress_revision += 1
         task = getattr(consumer, "_pending_response_task", None)
-        if (task is not None) and (not task.done()):
-            task.cancel()
+        if (task is not None) and (not task.done()) and (not task.cancelling()):
+            task.cancel(); return True
+        else:              return False
 
     # --------------------------------------------------------------------------------
     # Forced reply coordination
