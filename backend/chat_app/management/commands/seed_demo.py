@@ -37,9 +37,9 @@ LOCAL_MODE      = (APP_ENVIRONMENT == "local")
 REMAKE_SAMPLE_DATA   = not LOCAL_MODE
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = True
+REMAKE_ANALYZED_DATA = not LOCAL_MODE
 # Set to True to run the mood analysis on the demo chats using the LLM. Set to False to set manually.
-ANALYZE_MOOD = False
+ANALYZE_MOOD = not LOCAL_MODE
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
 REMAKE_TRANSCRIPT_DATA =  not LOCAL_MODE
