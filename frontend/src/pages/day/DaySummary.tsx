@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { useAuth } from "@/context/AuthProvider";
 import { TopicsCard } from "../common/TopicsCard";
-import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
 import DropdownModal from "@/components/modals/DropdownModal";
 import ChatSummaryCard from "@/components/graphics/ChatSummaryCard";
 import ChatLengthCard from "@/components/graphics/ChatLengthCard";
@@ -30,7 +30,7 @@ export function DaySummary() {
                 ← {chatDate.toLocaleDateString("en-US", dateFormatOptions)}
             </div>
             <div className={colStyle}>
-                <div className={`${blockStyle}`}>
+                <div className={`${blockStyleFull}`}>
                     <div className="flex flex-row justify-between items-center">
                         <h2 className={`${role}-text`}>Mood</h2>
                         <Icon icon={getMoodIcon(chatSession.sentiment)} width={"3rem"}/>
@@ -40,7 +40,7 @@ export function DaySummary() {
                 <ChatLengthCard role={role} sessions={[chatSession]} type="" />
                 <ChatSummaryCard role={role} sessions={[chatSession]} type="Daily" />
                 <DropdownModal title="Speech Analysis" content={getDailyAnalysis(chatSession)} />
-                <button className={`${role}-button p-[1rem] text-xl rounded-md sm:w-3/4 ${widthStyle}`}>
+                <button className={`${role}-button p-[1rem] text-xl rounded-md sm:w-3/4 w-full`}>
                     Download as PDF
                 </button>
             </div>

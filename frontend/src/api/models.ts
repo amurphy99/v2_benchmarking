@@ -171,7 +171,7 @@ export interface ChatSession {
   notes?     : string | null;
   summary?   : string | null;
 
-  risk_level?    : number | null;
+  risk_level?    : 1 | 2 | 3 | 4 | 0 | null;   // 0-4, with 4 being the highest risk
   risk_quotes?   : string[] | null;
   risk_reason?   : string | null;
 

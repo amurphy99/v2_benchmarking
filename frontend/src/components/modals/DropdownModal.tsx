@@ -1,4 +1,3 @@
-import { widthStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 import { IoIosArrowDown, IoIosArrowForward } from "react-icons/io";
 
@@ -6,7 +5,7 @@ export default function DropdownModal( {title, content} : {title: string, conten
     const [show, setShow] = useState<boolean>(false);
 
     return (
-        <div className={`${widthStyle} flex flex-col`}>
+        <div className={`w-full flex flex-col`}>
             <button className={`px-[1rem] py-[0.5rem] bg-gray-200 border-1 border-solid border-gray-300 
             rounded-t-sm ${show ? "" : "rounded-b-sm"} hover:bg-gray-300 hover:shadow-md items-center`}
             onClick={() => setShow(!show)}>

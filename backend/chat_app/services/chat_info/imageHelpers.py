@@ -98,7 +98,7 @@ def _fetch_pexels_image_for_topics(topics):
 
     # Loop through topics until we find an image
     for topic in topics:
-        if not topic: continue
+        if not topic or topic.lower() == "n/a" or topic.lower() == "na": continue
         image = _get_images(topic, "pexels", 1)
         if image: return image
 

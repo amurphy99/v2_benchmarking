@@ -16,7 +16,7 @@ from .....services import logging_utils as lu
 from .....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 
 # Define types
-RiskLevel = Literal[0, 1, 2] # [0, 1, 2, 3, 4] 
+RiskLevel = Literal[0, 1, 2, 3, 4]
 
 # --------------------------------------------------------------------------------
 # Define the Pydantic response Model
@@ -37,11 +37,14 @@ class ChatRiskAssessment(BaseModel):
     ),)
 
     # Overall risk level (0-2 inclusive)
+    # TODO: Maybe update instructions for risk levels 3 and 4
     risk_level: RiskLevel = Field(..., description = (
-        "Overall user distress risk level (0, 1, or 2) for caregiver awareness, using context (not keywords), and considering intensity + repetition + tense.\n"
+        "Overall user distress risk level (0, 1, 2, 3, or 4) for caregiver awareness, using context (not keywords), and considering intensity + repetition + tense.\n"
         "0 = No meaningful distress signals in context.\n"
         "1 = Low risk (monitor): mild negative mood/stress/early anxiety (e.g., feeling off, drained, on edge).\n"
         "2 = Moderate distress (flag if repeated/escalating): clear suffering, loneliness/isolation, depression-like language, or panic symptoms.\n"
+        "3 = High risk (flag): repeated or escalating distress, hopelessness, self-harm ideation, or suicidal thoughts.\n"
+        "4 = Critical risk (flag): imminent danger, active suicidal intent, or self-harm plan. Escalate immediately.\n"
         "Do not escalate for quoted/media/hypothetical content; future-intent phrasing is more concerning than past/present."
     ),)
 

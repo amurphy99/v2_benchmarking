@@ -1,7 +1,7 @@
 import { BiomarkerType, ChatSession } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { getBiomarkerDefinition, getBiomarkerDescription, getBiomarkerName } from "@/utils/misc/descriptions";
-import { blockStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
@@ -30,7 +30,7 @@ export default function BiomarkerCard({
     const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "grid" } } )
 
     return (
-        <div className={`${blockStyle} flex flex-col`}>
+        <div className={`${blockStyleFull} flex flex-col`}>
             <h2 className={`${role}-text mb-0`}>{getBiomarkerDescription(biomarker)}</h2>
             <h5 className={`${role}-text font-normal text-lg mb-0`}>({getBiomarkerName(biomarker)})</h5>
             <p>{getBiomarkerDefinition(biomarker)}</p>

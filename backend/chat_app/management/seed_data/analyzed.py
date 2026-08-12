@@ -59,12 +59,7 @@ def seed_analyzed_chats(profile, user, analyze_mood=True):
                 s.ts = ts; s.save(update_fields=["ts"])
 
         # 4) Run post-chat analysis (same as in close_session) / get risk level from json file
-        if analyze_mood:
-            analysis = asyncio.run(post_chat_analysis(messages))
-        else:
-            risk_level = example.get("risk_level", 0)
-            risk_reason = example.get("risk_reason", "")
-            risk_quotes = example.get("risk_quotes", [])
+        analysis = asyncio.run(post_chat_analysis(messages))
 
         # 5) Save all analysis fields via the same helper used by close_session
         
@@ -75,11 +70,14 @@ def seed_analyzed_chats(profile, user, analyze_mood=True):
                 sentiment   = analysis.get("sentiment",   None),
                 emotion     = analysis.get("emotion",     None),
                 topics      = analysis.get("topics",      None),
-                risk_level  = analysis.get("risk_rating", None),
+                risk_level  = analysis.get("risk_level", None),
                 risk_reason = analysis.get("risk_reason", None),
                 risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
             )
         else:
+            risk_level = example["risk_level"]
+            risk_reason = example["risk_reason"]
+            risk_quotes = example["risk_quotes"]
             ChatService.save_session_fields(
                 user, session, messages,
                 summary     = analysis.get("summary",     None),

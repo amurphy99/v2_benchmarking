@@ -8,8 +8,9 @@ export const buttStyle = "bg-violet-600 rounded p-2 text-white";
 
 export const smallShadow = "shadow-[0px_0px_4px_4px_rgba(0,0,0,0.1)]"
 
-export const widthStyle = "w-full"
+export const widthStyle = `w-full md:w-4/5 lg:w-3/5`
 export const blockStyle = `rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow} ${widthStyle}`
+export const blockStyleFull = `rounded-lg p-[1rem] md:p-[2rem] bg-white ${smallShadow} w-full`
 export const colStyle = "flex flex-col gap-[2rem] items-center px-[2rem] pt-[2rem] bg-gray-100 min-h-[80vh] md:min-h-[95vh] pb-[15vh]"
 
 // --------------------------------------------------------------------

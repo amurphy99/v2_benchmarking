@@ -34,12 +34,12 @@ APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
 LOCAL_MODE      = (APP_ENVIRONMENT == "local")
 
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA   = True
+REMAKE_SAMPLE_DATA   = not LOCAL_MODE
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
 REMAKE_ANALYZED_DATA = True
 # Set to True to run the mood analysis on the demo chats using the LLM. Set to False to set manually.
-ANALYZE_MOOD = not LOCAL_MODE
+ANALYZE_MOOD = False
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
 REMAKE_TRANSCRIPT_DATA =  not LOCAL_MODE
@@ -107,8 +107,10 @@ class Command(BaseCommand):
             seed_rag_instructions()
 
         if REMAKE_ANALYZED_DATA:
+            print("Remaking analyzed chats for buddy_user and buddy_care")
             ChatSession.objects.filter(profile=profile_2, source="webapp").delete()
             seed_analyzed_chats(profile_2, plwd_2, ANALYZE_MOOD)
+            print("Finished remaking analyzed chats")
 
         if REMAKE_TRANSCRIPT_DATA:
             ChatSession.objects.filter(profile=profile_2, source="transcript").delete()

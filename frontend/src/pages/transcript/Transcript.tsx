@@ -1,7 +1,6 @@
-import { ChatSession } from "@/api";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import ChatTranscript from "../chatDetails/components/ChatTranscript";
-import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthProvider";
 import { getBiomarkerDefinition, getBiomarkerDescription, getBiomarkerName } from "@/utils/misc/descriptions";
@@ -71,7 +70,7 @@ export function Transcript() {
                     </div>
                     <h3 className={`${role}-text mx-auto`}>Play Audio</h3>
                 </button>
-                <div className={blockStyle}>
+                <div className={blockStyleFull}>
                     <ChatTranscript chatSession={chatSession} />
                 </div>
             </div>
@@ -131,7 +130,7 @@ export function Transcript() {
                         </div>
                         <h3 className={`${role}-text mx-auto`}>Play Audio</h3>
                     </button>
-                    <div className={`${blockStyle} h-full`}>
+                    <div className={`${blockStyleFull} h-full`}>
                         <ChatTranscript chatSession={chatSession} />
                     </div>
                 </div>

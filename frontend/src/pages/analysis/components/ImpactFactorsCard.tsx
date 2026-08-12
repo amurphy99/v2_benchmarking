@@ -1,8 +1,8 @@
-import { blockStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull } from "@/utils/styling/sharedStyles";
 
 export default function ImpactFactorsCard() {
     return (
-        <div className={blockStyle}>
+        <div className={blockStyleFull}>
             <h2 className={`text-orange-500`}>Correlation</h2>
             <li className="text-lg ml-[1rem] marker:text-orange-500">
                 Here would be an explanation of what factors we found to be correlated with each other.

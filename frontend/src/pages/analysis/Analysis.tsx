@@ -35,20 +35,20 @@ export function Analysis() {
         <div className={colStyle}>
             
             {window.isMobile ? 
-                <div>
+                <>
                     <div className="flex flex-row gap-4 w-full mb-4">
                         <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
                     </div>
                     <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
-                </div> : 
-                <div className="flex flex-row gap-4 w-full">
+                </> : 
+                <div className={`grid grid-cols-2 gap-4 w-full`}>
                     <GeneralStatusCard currentWeek={currentWeek} prevWeek={prevWeek} />
                     <TopicsCard topics={getTopics(currentWeek.sessions)} type="Weekly" role={role} />
                 </div>
             }
             <MoodCard week={currentWeek} />
             <p id="factors" className="h-0 w-0 p-0 m-0"/>
-            <h2 className={`flex ${widthStyle} mt-[-2rem]`}>Flagged Signs</h2>
+            <h2 className={`flex w-full mt-[-2rem]`}>Flagged Signs</h2>
             <BiomarkerCard biomarker={sorted[5][0]} week={currentWeek} flaggedDays={getFlaggedDays(currentWeek.sessions, sorted[5][0])} 
                 exemplarDays={getExemplarDays(currentWeek.sessions, sorted[5][0])} performance={getPerformance(sorted[5][1])} />
             <BiomarkerCard biomarker={sorted[4][0]} week={currentWeek} flaggedDays={getFlaggedDays(currentWeek.sessions, sorted[4][0])}
@@ -57,7 +57,7 @@ export function Analysis() {
             <NavLink to="/analysis/flagged">            
                 <button className={`${role}-button btn-basic`}>View All</button>
             </NavLink> : null}
-            <h2 className={`flex ${widthStyle}`}>Exemplar Signs</h2>
+            <h2 className={`flex w-full`}>Exemplar Signs</h2>
             {exemplarBiomarkers.map((biomarker, idx) => {
                 const flagged = getFlaggedDays(currentWeek.sessions, biomarker)
                 const exemplar = getExemplarDays(currentWeek.sessions, biomarker)
@@ -66,12 +66,12 @@ export function Analysis() {
                     <BiomarkerCard key={idx} biomarker={biomarker} week={currentWeek} flaggedDays={flagged} exemplarDays={exemplar} performance={performance} />
                 )
             })}
-            {exemplarBiomarkers.length == 0 ? <p className={`${widthStyle} text-center text-xl`}>
+            {exemplarBiomarkers.length == 0 ? <p className={`w-full text-center text-xl`}>
                 No exemplar signs this week. Try to keep a lookout for patterns in the flagged signs!
             </p> : null}
             {role == "patient" ? null : 
                 <>
-                    <h2 className={`flex ${widthStyle}`}>Impact Factors</h2>
+                    <h2 className={`flex w-full`}>Impact Factors</h2>
                     <ImpactFactorsCard />
                 </>
             }

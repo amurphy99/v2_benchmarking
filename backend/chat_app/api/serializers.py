@@ -156,7 +156,7 @@ class ChatSessionSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model  = ChatSession
         fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics",
-                  "sentiment", "emotion", "average_scores", "image")
+                  "sentiment", "emotion", "average_scores", "image", "risk_level", "risk_quotes", "risk_reason")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts

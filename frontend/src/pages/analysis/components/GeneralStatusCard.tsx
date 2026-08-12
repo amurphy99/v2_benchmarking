@@ -1,5 +1,5 @@
 import { ChatWeek } from "@/utils/functions/getChatWeeks";
-import { blockStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull } from "@/utils/styling/sharedStyles";
 import CircularProgress from "./CircularProgress";
 import { TbArrowBigDown, TbArrowBigUp } from "react-icons/tb";
 import { useAuth } from "@/context/AuthProvider";
@@ -13,12 +13,12 @@ export default function GeneralStatusCard( {currentWeek, prevWeek} : {currentWee
     const scoreDiff = prevScore ? curScore - prevScore : 0;
     
     return (
-        <div className={`${blockStyle} flex flex-col`}>
+        <div className={`${blockStyleFull} flex flex-col`}>
             <h2 className={`${role}-text`}>General Cognitive Status</h2>
             <p className="text-lg italic text-gray-600 mb-[0rem]">An average score calculated by adding up all signs.</p>
             <div className="flex flex-row h-full w-full mb-2">
                 <div className="w-1/2 flex self-center">
-                    <div className="flex mt-4 grid grid-cols-2 gap-2 text-lg w-full justify-center items-center">
+                    <div className="flex mt-4 grid grid-cols-2 gap-2 text-lg w-full">
                         <b className="text-xl col-span-full text-center">Fairly Good</b>
                         <p className="mb-0 text-center">2 signs</p>
                         <p className={`${role}-highlight mb-0 text-center p-2 rounded-full`}>Flagged</p>

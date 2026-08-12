@@ -248,7 +248,7 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
 # [Read-Only] Chat Alerts
 # ================================================================================ 
 class SessionAlertsViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
-    serializer_class   = ChatSessionSerializer
+    serializer_class   = ChatSessionSummarySerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
@@ -260,7 +260,7 @@ class SessionAlertsViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         
         objs = (ChatSession.objects
                 .filter(profile=profile)
-                .filter(risk_level__gt=0)
+                .filter(risk_level__gt=1)
                 .select_related  ("profile",  "image")
                 .prefetch_related("messages__words", "biomarker_scores"))
 

@@ -106,7 +106,7 @@ async def post_chat_analysis(chat_messages, model=MODEL_NAME):
         "emotion"   : sentiment_response.  emotion_label,
 
         # Risk Factors
-        "risk_rating" : risk_response.risk_level,
+        "risk_level" : risk_response.risk_level,
         "risk_quotes" : risk_response.quotes,
         "risk_reason" : risk_response.reason,
     }

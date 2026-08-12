@@ -1,5 +1,5 @@
 import { ChatSession } from "@/api";
-import { blockStyle } from "@/utils/styling/sharedStyles";
+import { blockStyleFull } from "@/utils/styling/sharedStyles";
 import { useNavigate } from "react-router-dom";
 
 export default function ChatSummaryCard( {role, sessions, type} : {role: string, sessions: ChatSession[], type: string} ) {
@@ -7,7 +7,7 @@ export default function ChatSummaryCard( {role, sessions, type} : {role: string,
     
     const toTranscript = () => navigate(`/transcript/${sessions[0].id}`, {state: {chatSession: sessions[0]}});
     return (
-        <div className={blockStyle}>
+        <div className={blockStyleFull}>
             <h2 className={`${role}-text`}>{type} Chat Summary</h2>
             <div className="text-lg pb-4">
                 {sessions[0].summary ?? "No summary available."}
