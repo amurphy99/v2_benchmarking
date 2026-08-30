@@ -14,6 +14,10 @@ from ..services.ragChatHelpersMultiAgent import rag_response_fn, START_SCENARIO
 from ..services.behavior.activity_chat_close            import handle_closing_turn
 from chat_app.services import logging_utils as lu
 
+from channels.db import database_sync_to_async as db_s2a
+from chat_app.services.db_services import ChatService
+from ..services.bg_helpers import fire_and_log
+
 # ================================================================================ 
 # ActivityChatConsumer
 # ================================================================================ 
@@ -68,6 +72,18 @@ class ActivityChatConsumer(ChatConsumer):
             rag_state=self.rag_state,
         )
 
+        llm_log = result.pop("_llm_log", None)
+
+        if llm_log:
+            fire_and_log(
+                db_s2a(ChatService.log_llm_turn)(
+                    session_id              = self.session_id,
+                    user_id                 = self.user.id,
+                    activity_name           = self.ACTIVITY_NAME,
+                    **llm_log,
+                ),
+                name=f"llm-turn-log-session-{self.session_id}",
+            )
         # If close_session was just predicted, activate closing flow for the next turn
         if result.get("close_session"):
             self.rag_state["_closing_flow_active"] = True

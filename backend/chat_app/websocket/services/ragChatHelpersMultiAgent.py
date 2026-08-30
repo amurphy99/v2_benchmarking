@@ -37,6 +37,10 @@ CLOSE_SESSION_DESCRIPTION = (
 
 MAX_SAME_STATE_TURNS = 3 # Maximum number of turns allowed in the same state before forcing a transition
 
+# Agent name prefixes — used as keys in LLMTurnLog.agents_data
+AGENT1_PREFIX = "agent1_response"   # the response/generation agent
+AGENT2_PREFIX = "agent2_planner"    # the planning/state-transition agent
+
 # =============================================================================
 # Agent-2 structured output schema
 # =============================================================================
@@ -70,6 +74,35 @@ def _get_rag_lock(rag_state: dict) -> asyncio.Lock:
         rag_state["_scenario_lock"] = lock
     return lock
 
+
+def _build_agent_logs(agent1_usage, t_start_agent1, t_end_agent1, agent2_log: dict) -> dict:
+    """
+    Builds the agents_data dict for LLMTurnLog using the defined agent prefixes.
+    Token count fields are included only if the API returned them (not None).
+    """
+    data = {}
+
+    # Agent 1 (response agent)
+    data[f"{AGENT1_PREFIX}_latency_ms"] = int((t_end_agent1 - t_start_agent1) * 1000)
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        val = getattr(agent1_usage, key, None)
+        if val is not None:
+            data[f"{AGENT1_PREFIX}_{key}"] = val
+
+    # Agent 2 (planner agent)
+    data[f"{AGENT2_PREFIX}_error"]   = agent2_log.get("error", False)
+    if agent2_log.get("latency_ms") is not None:
+        data[f"{AGENT2_PREFIX}_latency_ms"] = agent2_log["latency_ms"]
+    if agent2_log.get("output") is not None:
+        data[f"{AGENT2_PREFIX}_output"]     = agent2_log["output"]
+    if agent2_log.get("error_msg") is not None:
+        data[f"{AGENT2_PREFIX}_error_msg"]  = agent2_log["error_msg"]
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        val = agent2_log.get(key)
+        if val is not None:
+            data[f"{AGENT2_PREFIX}_{key}"] = val
+
+    return data
 
 # =============================================================================
 # Prompt builders 
@@ -190,7 +223,7 @@ async def invoke_agent1_chat(
     temperature: float = 0.6,
     max_tokens: int = 256,
     max_retries: int = 2,
-) -> str:
+) -> tuple[str, dict | None]:
     if cf.openai_client is None:
         raise RuntimeError("cf.openai_client is None.")
 
@@ -219,7 +252,8 @@ async def invoke_agent1_chat(
             )
 
             if text:
-                return text
+                usage = getattr(resp, "usage", None)
+                return text, usage
 
             logger.warning(
                 f"{lu.RED}[Multi-Agent][{trace_id}] Agent-1 returned empty content "
@@ -231,7 +265,7 @@ async def invoke_agent1_chat(
             logger.exception(f"{lu.BG_RED}[Multi-Agent][{trace_id}] Agent-1 response parse error (attempt={attempt}){lu.RESET}")
 
     # All retries exhausted — return empty; caller decides what to do
-    return ""
+    return "", None
 
 # =============================================================================
 # Background task for predicting next scenario
@@ -245,7 +279,7 @@ async def _predict_and_update_next_scenario(
     current: str,
     instructions_text: str,
     rag_state: dict,
-) -> None:
+) -> dict:
     lock = _get_rag_lock(rag_state)
     async with lock:
         try:
@@ -262,6 +296,8 @@ async def _predict_and_update_next_scenario(
             messages_2 = [SystemMessage(content=scenario_system_prompt)] + msg_history
 
             openai_messages = _lc_messages_to_openai(messages_2)
+
+            t_start_agent2 = time.time()
             resp = await cf.instructor_client.chat.completions.create(
                 model=cf.INSTRUCTOR_MODEL_NAME,
                 messages=openai_messages,
@@ -271,6 +307,7 @@ async def _predict_and_update_next_scenario(
                 #  disable thinking to avoid exhausting max_tokens and faster response times.
                 reasoning_effort="none",
             )
+            t_end_agent2 = time.time()
 
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 instructions for Assistant: {resp.assistant_instructions}{lu.RESET}")
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
@@ -286,6 +323,19 @@ async def _predict_and_update_next_scenario(
 
             rag_state["agent2_memory"]                 = resp.updated_memory
 
+            #  Build agent2 log (returned to rag_response_fn)
+            usage = getattr(getattr(resp, "_raw_response", None), "usage", None)
+            agent2_log = {
+                "model_name"             : cf.INSTRUCTOR_MODEL_NAME,   
+                "latency_ms"             : int((t_end_agent2 - t_start_agent2) * 1000),
+                "output"                 : resp.model_dump(),
+                "error"                  : False,
+                "prompt_tokens"          : getattr(usage, "prompt_tokens",     None),
+                "completion_tokens"      : getattr(usage, "completion_tokens", None),
+                "total_tokens"           : getattr(usage, "total_tokens",      None),
+            }
+            return agent2_log
+
 
         except Exception as e:
             # If classification fails, we *do not* crash the chat; we simply keep the same scenario.
@@ -297,6 +347,14 @@ async def _predict_and_update_next_scenario(
                 rag_state["agent2_instructions"] = (
                     "Respond warmly and briefly. Ask one gentle follow-up question."
                 )
+
+            # Return error log so rag_response_fn can still record what happened
+            return {
+                "latency_ms"   : None,
+                "output"       : None,
+                "error"        : True,
+                "error_msg"    : str(e),
+            }
 
 # =============================================================================
 # Main entrypoint, two agent call pipeline
@@ -380,7 +438,7 @@ async def rag_response_fn(
 
     logger.debug(f"{lu.MAGENTA}[Multi-Agent][{trace_id}] msg_history_len={len(msg_history)} user_text_len={len(user_text or '')}{lu.RESET}")
 
-    await _predict_and_update_next_scenario(
+    agent2_logs = await _predict_and_update_next_scenario(
         trace_id=trace_id,
         msg_history=list(tail_history) + [HumanMessage(content=user_text)],
         available_scenarios_text=available_scenarios_text,
@@ -406,6 +464,7 @@ async def rag_response_fn(
                         f"after {same_count} consecutive turns.{lu.RESET}"
                     )
                     # the state will be change in the next turn
+                    rag_state["_forced_transition_this_turn"] = True
                     rag_state["current_scenario"] = forced_next
                     rag_state["_same_state_turn_count"] = 0
             except ValueError:
@@ -424,12 +483,16 @@ async def rag_response_fn(
 
         logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] CALL#1 generating Agent-1 response...{lu.RESET}")
         
-        assistant_text = await invoke_agent1_chat(
+        t_start_agent1 = time.time()
+        assistant_text, agent1_usage = await invoke_agent1_chat(
             messages_1,
             trace_id=trace_id,
             temperature=0.6,
             max_tokens=256,
         )
+        t_end_agent1 = time.time()
+
+
         assistant_text = (assistant_text or "").strip()
         # clean up any system metadata lines that may have been included in the LLM response
         assistant_text = clean_llm_response(assistant_text)
@@ -455,10 +518,22 @@ async def rag_response_fn(
     # Return immediately
     t_end = time.time()
     logger.info(f"{lu.GREEN}[Multi-Agent][{trace_id}] End current turn={rag_state['current_scenario']} total={(t_end - t0):.3f}s{lu.RESET}")
+    rag_state["_turn_index"] = rag_state.get("_turn_index", 0) + 1 # increment turn index for next turn
 
     return {
         "text": assistant_text,
         "current_scenario": current,
         "next_scenario": "",  # frontend doesn’t need this at the moment
         "close_session": rag_state["current_scenario"] == CLOSE_SESSION_STATE, # frontend or robot can use this to trigger session closure
+        # LLM metadata for LLMTurnLog (used by ActivityChatConsumer, not the frontend) ---
+        "_llm_log": {
+            "turn_index"              : rag_state.get("_turn_index", 0),
+            "state_before"            : current,
+            "state_after"             : rag_state.get("current_scenario", current),
+            "same_state_turn_count"   : rag_state.get("_same_state_turn_count", 0),
+            "forced_state_transition" : rag_state.pop("_forced_transition_this_turn", False),
+            "total_latency_ms"        : int((t_end - t0) * 1000),
+            "user_text_length"        : len(user_text or ""),
+            "agents_data"             : _build_agent_logs(agent1_usage, t_start_agent1, t_end_agent1, agent2_logs),
+        },
     }

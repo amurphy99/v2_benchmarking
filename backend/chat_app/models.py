@@ -401,3 +401,37 @@ class RAGInstructions(models.Model):
     def __str__(self):
         activity_part = getattr(self.activity, "name", "NO_ACTIVITY")
         return f"GLOBAL / {activity_part} / {self.name}: {self.description}"
+
+# ================================================================================
+# LLMTurnLog -- logs raw LLM metadata per turn for the multi-agent activity chat
+# ================================================================================
+class LLMTurnLog(models.Model):
+    """
+    Stores per-turn LLM metadata for the multi-agent activity chat pipeline.
+    """
+    # Identifiers
+    session     = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="llm_turn_logs", **init_args)
+    user        = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="llm_turn_logs", **init_args)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    # Turn-level metadata 
+    activity_name               = models.CharField(max_length=100, **init_args)
+    turn_index                  = models.PositiveIntegerField(**init_args)        # index of the turn within the session (starts at 0)
+    user_text_length            = models.PositiveIntegerField(**init_args)        # character count of user input
+    state_before                = models.CharField(max_length=100, **init_args)   # state at start of turn
+    state_after                 = models.CharField(max_length=100, **init_args)   # state predicted at end of turn
+    same_state_turn_count       = models.PositiveSmallIntegerField(**init_args)   # consecutive turns in same state
+    forced_state_transition     = models.BooleanField(default=False)              # log if the state transition was forced (e.g., exceeded the max number of allowed turns in the same state)
+    total_latency_ms            = models.PositiveIntegerField(**init_args)        # total latency of the turn
+
+    # Per-agent data
+    # Stores per-agent data as a JSON object, where each key corresponds to an agent and its value is a dictionary of agent-specific metadata.
+    # This should allow for flexible logging, as we may need to change the data we log for each agent over time (e.g., adding new agents or changing the data we log for existing agents).
+    agents_data = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes  = [models.Index(fields=["session", "created_at"])]
+
+    def __str__(self):
+        return f"LLMTurnLog session={self.session_id} turn={self.turn_index} state={self.state_before}->{self.state_after}"
