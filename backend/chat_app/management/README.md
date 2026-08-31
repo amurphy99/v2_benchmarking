@@ -20,14 +20,14 @@ The seed command runs automatically when the backend container starts (via the e
 python manage.py seed_demo
 ```
 
-Three flags at the top of [`commands/seed_demo.py`](commands/seed_demo.py) control which paths re-seed on each run:
-```python
-REMAKE_SAMPLE_DATA     = True   # wipes & recreates the random sample chats
-REMAKE_ANALYZED_DATA   = True   # wipes & recreates the analyzed text transcripts
-REMAKE_TRANSCRIPT_DATA = True   # wipes & recreates the demo transcript + audio + biomarkers
+Three values in `backend/.env` control which paths re-seed on each run:
+```text
+REMAKE_SAMPLE_DATA     = true   # wipes & recreates the random sample chats
+REMAKE_ANALYZED_DATA   = true   # wipes & recreates the analyzed text transcripts
+REMAKE_TRANSCRIPT_DATA = true   # wipes & recreates the demo transcript + audio + biomarkers
 ```
 
-Flip a flag to `False` once you have the data you want and don't need it regenerated on every restart.
+Set a flag back to `false` once you have the data you want and don't need it regenerated on every restart.
 
 <br>
 
@@ -217,17 +217,23 @@ start_time,end_time,score
 
 ## Environment Variables
 
-The seed command provisions two protected users from `.env` (in [`backend/.env`](../../.env)):
+The seed command provisions four environment-controlled users from `.env` (in [`backend/.env`](../../.env)):
 
 ```
-ADMIN_USERNAME_0=...   # superuser; can view all transcripts including the demo
+ADMIN_USERNAME_0=...   # primary staff admin; can view all transcripts including the demo
 ADMIN_PASSWORD_0=...
+
+ADMIN_USERNAME_1=...   # secondary staff admin with the same workshop access
+ADMIN_PASSWORD_1=...
 
 DEMO_USERNAME_0=...    # owns the seeded transcript chat (workshop participant)
 DEMO_PASSWORD_0=...
+
+BUDDY_USERNAME=...     # owns an independent profile without seeded chat data
+BUDDY_PASSWORD=...
 ```
 
-The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. The **ADMIN_USERNAME_0** user gets `Access` to that profile via the caregiver link, so they can monitor / review the demo session from the admin pages.
+The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users get `Access` to that profile through caregiver links. The Buddy user gets a separate patient profile and no seeded chat sessions.
 
 Audio file access (see [`backend/media_view.py`](../../backend/media_view.py)) is restricted to:
 - Admins (`is_staff = True`), or
@@ -246,8 +252,8 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
 2. **Album images** — if `REMAKE_SAMPLE_DATA`, wipes and re-seeds the `AlbumImage` rows that conversation topics get matched against.
 
 3. **`set_environment_users()`** —
-    - Creates / refreshes the **primary admin** (`ADMIN_USERNAME_0`) and **workshop demo** (`DEMO_USERNAME_0`) accounts with values from `.env`.
-    - Builds the `Account` / `Profile` / `Access` / `UserSettings` / `Goal` rows linking the two.
+    - Creates / refreshes the two admins, workshop demo user, and Buddy user from `.env`.
+    - Links both admins to the workshop profile and gives Buddy a separate empty profile.
     - If `REMAKE_TRANSCRIPT_DATA`, deletes any existing `source="transcript"` sessions for the demo profile and calls `seed_transcript_chat(profile, care_account)`.
     - `seed_transcript_chat` in turn:
       1. Reads `transcript_config.json` and parses the CSV into utterances grouped by `uttID`.
@@ -274,4 +280,4 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
 1. Create a new folder under `seed_data/transcript_data/test_transcripts/` (e.g. `test_02/`).
 2. Drop in the four required files (config JSON, transcript CSV, audio WAV) and any `biomarker_<type>.csv` files you have.
 3. In [`seed_data/transcript.py`](seed_data/transcript.py), `seed_transcript_chat` takes a `test_dir` argument — if you want to load multiple folders, call it once per folder from `setup_dummy_chats` / `set_environment_users`.
-4. Set `REMAKE_TRANSCRIPT_DATA = True` in `seed_demo.py`, restart the backend, then flip it back to `False` once the data is in place.
+4. Set `REMAKE_TRANSCRIPT_DATA=true` in `backend/.env`, restart the backend, then set it back to `false` once the data is in place.

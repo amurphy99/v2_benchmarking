@@ -31,14 +31,9 @@ from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 # --------------------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------------------
-# Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA = False
-
-# Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = False
-
-# Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
-REMAKE_TRANSCRIPT_DATA = False
+REMAKE_SAMPLE_DATA     = django_settings.REMAKE_SAMPLE_DATA      # Rebuild random demo data
+REMAKE_ANALYZED_DATA   = django_settings.REMAKE_ANALYZED_DATA    # Rebuild fixed analyzed chats
+REMAKE_TRANSCRIPT_DATA = django_settings.REMAKE_TRANSCRIPT_DATA  # Rebuild transcript demo data
 
 
 # ================================================================================
@@ -93,7 +88,12 @@ class Command(BaseCommand):
     # ================================================================================
     # User Setup (handles remaking users)
     # ================================================================================
-    def get_or_create_demo_user(self, username, **kwargs):
+    def get_or_create_demo_user(
+        self,
+        username             : str,           # Username identifying the seeded account
+        preserve_linked_data : bool = False,  # Keep existing profile and chat records during regeneration
+        **kwargs,                             # Password and Django user fields to create or refresh
+    ):
         User     = get_user_model()
         password = kwargs.pop("password", "1")
 
@@ -107,7 +107,7 @@ class Command(BaseCommand):
         if changed: user.save()
 
         # Delete linked data when remaking (keeps the same user_id to avoid dangling vector DB entries)
-        if not created and REMAKE_SAMPLE_DATA: self.delete_user_data(user)
+        if not created and REMAKE_SAMPLE_DATA and not preserve_linked_data: self.delete_user_data(user)
 
         return user
 
@@ -236,6 +236,23 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Primary admin user {SD_H}{admin_username}{SD_R} set from env.{RESET}"))
 
         # --------------------------------------------------------------------------------
+        # Secondary admin user (same permissions and workshop access as the primary)
+        # --------------------------------------------------------------------------------
+        secondary_admin = None
+        admin_username_1 = django_settings.ADMIN_USERNAME_1
+        admin_password_1 = django_settings.ADMIN_PASSWORD_1
+        if (admin_username_1 and admin_password_1):
+            secondary_admin = self.get_or_create_demo_user(
+                username   = admin_username_1,
+                password   = admin_password_1,
+                first_name = "Secondary",
+                last_name  = "Admin",
+                is_staff   = True,
+            )
+
+            self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Secondary admin user {SD_H}{admin_username_1}{SD_R} set from env.{RESET}"))
+
+        # --------------------------------------------------------------------------------
         # Workshop demo data user (pre-loaded demo transcripts, audio, & biomarker scores)
         # --------------------------------------------------------------------------------
         demo_username = django_settings.DEMO_USERNAME_0
@@ -254,7 +271,25 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Workshop demo data user {SD_H}{demo_username}{SD_R} set from env.{RESET}"))
 
         # --------------------------------------------------------------------------------
-        # Setup account and profile objects
+        # Buddy robot user (independent profile without seeded chat data)
+        # --------------------------------------------------------------------------------
+        buddy_user     = None
+        buddy_username = django_settings.BUDDY_USERNAME
+        buddy_password = django_settings.BUDDY_PASSWORD
+        if (buddy_username and buddy_password):
+            buddy_user = self.get_or_create_demo_user(
+                username             = buddy_username,
+                password             = buddy_password,
+                first_name           = "Buddy",
+                last_name            = "Speaker",
+                is_staff             = False,
+                preserve_linked_data = True,
+            )
+
+            self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Buddy user {SD_H}{buddy_username}{SD_R} set from env.{RESET}"))
+
+        # --------------------------------------------------------------------------------
+        # Setup protected workshop account and profile objects
         # --------------------------------------------------------------------------------
         user_account, _ = Account.objects.get_or_create(user=workshop_user,   defaults={"role": "patient"  })
         care_account, _ = Account.objects.get_or_create(user=primary_admin,   defaults={"role": "caregiver"})
@@ -264,6 +299,21 @@ class Command(BaseCommand):
         Access      .objects.get_or_create(account=care_account, profile=profile)
         UserSettings.objects.get_or_create(profile=profile)
         Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": days_ago})
+
+        # Give the secondary admin the same caregiver link when it was configured
+        if secondary_admin:
+            secondary_care_account, _ = Account.objects.get_or_create(user=secondary_admin, defaults={"role": "caregiver"})
+            Access.objects.get_or_create(account=secondary_care_account, profile=profile)
+
+        # Give the Buddy login its own otherwise-empty patient profile
+        if buddy_user:
+            buddy_account, _ = Account.objects.get_or_create(user=buddy_user, defaults={"role": "patient"})
+            buddy_profile, _ = Profile.objects.get_or_create(
+                account  = buddy_account,
+                defaults = {"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone"},
+            )
+            UserSettings.objects.get_or_create(profile=buddy_profile)
+            Goal.objects.get_or_create(profile=buddy_profile, defaults={"target": 5, "start_date": days_ago})
 
         # Close any sessions left active by a previous crash/restart
         closed = ChatSession.objects.filter(is_active=True).update(is_active=False, end_ts=timezone.now())
@@ -283,4 +333,3 @@ class Command(BaseCommand):
 
         # Return both users
         return primary_admin, workshop_user
-

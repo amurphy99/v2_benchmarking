@@ -218,16 +218,28 @@ LOGIN_URL           = '/'
 
 
 # --------------------------------------------------------------------------------
-# Get admin user information directly from the .env file (no longer tracked)
+# Seeded user information from the private environment file
 # --------------------------------------------------------------------------------
 # Primary admin user
 ADMIN_USERNAME_0 = config("ADMIN_USERNAME_0", default="")
 ADMIN_PASSWORD_0 = config("ADMIN_PASSWORD_0", default="")
 
+# Secondary admin user
+ADMIN_USERNAME_1 = config("ADMIN_USERNAME_1", default="")
+ADMIN_PASSWORD_1 = config("ADMIN_PASSWORD_1", default="")
+
 # Protected demo data user
 DEMO_USERNAME_0 = config("DEMO_USERNAME_0", default="")
 DEMO_PASSWORD_0 = config("DEMO_PASSWORD_0", default="")
 
-# TODO: We can add other admin or demo users here if we want
+# Buddy robot user
+BUDDY_USERNAME = config("BUDDY_USERNAME", default="")
+BUDDY_PASSWORD = config("BUDDY_PASSWORD", default="")
 
 
+# --------------------------------------------------------------------------------
+# Seed-data regeneration
+# --------------------------------------------------------------------------------
+REMAKE_SAMPLE_DATA     = config("REMAKE_SAMPLE_DATA",     default=False, cast=bool)  # Rebuild random demo data
+REMAKE_ANALYZED_DATA   = config("REMAKE_ANALYZED_DATA",   default=False, cast=bool)  # Rebuild fixed analyzed chats
+REMAKE_TRANSCRIPT_DATA = config("REMAKE_TRANSCRIPT_DATA", default=False, cast=bool)  # Rebuild transcript demo data
