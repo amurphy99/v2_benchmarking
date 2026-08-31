@@ -23,7 +23,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
+from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings, LLMTurnLog
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -301,4 +301,36 @@ class ChatService:
         timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
         return min(timestamps) if timestamps else None
 
+    # LLM Turn Logs
+    @staticmethod
+    def log_llm_turn(*, session_id, user_id, activity_name, turn_index, user_text_length, state_before, state_after, same_state_turn_count, forced_state_transition, total_latency_ms, agents_data):
+        """
+        Saves one LLMTurnLog row for a completed multi-agent activity chat turn.
+        All fields are keyword-only. Missing FK IDs are handled gracefully.
+        """
+
+        session = None
+        user    = None
+        try:
+            if session_id: session = ChatSession.objects.get(id=session_id)
+        except ChatSession.DoesNotExist:
+            logger.warning(f"[DB] log_llm_turn: ChatSession id={session_id} not found.")
+        try:
+            if user_id: user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            logger.warning(f"[DB] log_llm_turn: User id={user_id} not found.")
+
+        LLMTurnLog.objects.create(
+            session                 = session,
+            user                    = user,
+            activity_name           = activity_name,
+            turn_index              = turn_index,
+            user_text_length        = user_text_length,
+            state_before            = state_before,
+            state_after             = state_after,
+            same_state_turn_count   = same_state_turn_count,
+            forced_state_transition = forced_state_transition,
+            total_latency_ms        = total_latency_ms,
+            agents_data             = agents_data,
+        )
 

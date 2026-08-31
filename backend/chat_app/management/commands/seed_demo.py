@@ -85,14 +85,14 @@ class Command(BaseCommand):
         if closed:
             self.stdout.write(self.style.WARNING(f"[seed_demo] Closed {closed} stale active session(s) on startup.{RESET}"))
         
-        # Grant is_staff to an existing user account
-        # This is just a temporary solution for testing the admin interface.
+        # demote the hardcoded admin account 
+        #TODO: Need to remove this code once the admin status is removed from the database. 
         User = get_user_model()
-        add_sup = User.objects.filter(username="AdnanSadi2").first()
-        if add_sup and (not add_sup.is_staff or not add_sup.is_superuser):
-            add_sup.is_staff = True
-            add_sup.is_superuser = True
-            add_sup.save(update_fields=["is_staff", "is_superuser"])
+        remove_sup = User.objects.filter(username="AdnanSadi2").first()
+        if remove_sup and (remove_sup.is_staff or remove_sup.is_superuser):
+            remove_sup.is_staff = False
+            remove_sup.is_superuser = False
+            remove_sup.save(update_fields=["is_staff", "is_superuser"])
 
 
     # ================================================================================
@@ -233,6 +233,7 @@ class Command(BaseCommand):
                 first_name = "Primary", 
                 last_name  = "Admin", 
                 is_staff   = True,
+                is_superuser = True, # making the primary admin user a superuser
             )
 
             # Logging

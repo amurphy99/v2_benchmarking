@@ -8,7 +8,7 @@ from django.urls import re_path
 from .media_view import stream_media
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("cognibot-admin-dashboard/", admin.site.urls), # using a slightly different URL for security purposes
     path("api/",   include("chat_app.api.router")),
 
     # Media views
