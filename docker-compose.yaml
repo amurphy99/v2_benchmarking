@@ -33,7 +33,6 @@ services:
   backend:
     extends: { file: ./backend/docker-compose.backend.yaml, service: backend }
     networks: [appnet]
-    env_file: [./.env]      # optional global override
 
   # --------------------------------------------------------------------------------
   # 3) Frontend (vite, react) 
@@ -41,7 +40,6 @@ services:
   frontend:
     extends: { file: ./frontend/docker-compose.frontend.yaml, service: frontend }
     networks: [appnet]
-    env_file: [./.env]
 
   # --------------------------------------------------------------------------------
   # 4) Proxy with Nginx & Certbot
@@ -49,5 +47,7 @@ services:
   nginx:
     extends: { file: ./nginx/docker-compose.proxy.yaml, service: nginx }
     networks: [appnet]
-    env_file: [./.env]
-
+    environment:
+      DOMAIN: ${DOMAIN}
+      DOMAIN_WWW: ${DOMAIN_WWW}
+      CERT_EMAIL: ${CERT_EMAIL}

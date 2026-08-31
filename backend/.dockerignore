@@ -3,6 +3,10 @@
 *.py[cod]
 **/.DS_Store
 
+# Runtime credentials are provided through the existing /app bind mount
+.env
+google-stt-key.json
+
 # Runtime-generated dirs (recreated at runtime; also provided via the .:/app bind mount)
 media/
 logs/
