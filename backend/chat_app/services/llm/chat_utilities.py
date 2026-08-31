@@ -14,7 +14,6 @@ from ...config         import llm as query_llm
 from  ..logging_utils  import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG
 
 from  ..chat_info.emotionHelpers import classify_emotion_with_vader
-from  .live_chat.cognibot_api    import CognibotAPI
 
 # Response to return upon LLM request errors
 ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your request."
@@ -24,8 +23,8 @@ ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your reque
 # - v2 is the version that just wants messages: list[dict] in the class __call__ method
 RESPONSE_VERSION = "v2"
 
-# Initialize the v2 client at module load (reused across calls)
-_cognibot = CognibotAPI() if RESPONSE_VERSION == "v2" else None
+# Reuse the hosted or dummy client selected once in config.py
+_live_chat_client = query_llm if RESPONSE_VERSION == "v2" else None
 
 
 # --------------------------------------------------------------------------------
@@ -48,9 +47,9 @@ async def generate_LLM_response(context_buffer):
     Wrap the response logic in a try-except block. If the model throws an error, return a default response.
     """
     if RESPONSE_VERSION == "v2":
-        # Prepare messages list and call CognibotAPI
+        # Prepare messages and call the configured hosted or dummy client
         messages = prepare_LLM_messages(context_buffer)
-        return await _cognibot(messages)
+        return await _live_chat_client(messages)
 
     # 1) Prepare a prompt for the LLM
     full_prompt = prepare_LLM_input(context_buffer)
@@ -100,35 +99,3 @@ def normalize_text(text):
     text = re.sub(r"[ \t]{2,}", " ", text)  # Collapse repeated whitespace
     return text
 
-
-
-
-
-
-# TODO: NOT INTEGRATED 
-# --------------------------------------------------------------------------------
-# Classify the LLM text using vader or zero-shot (not integrated right now)
-# --------------------------------------------------------------------------------
-async def classify_llm_text_emotion_async(text: str, emo_classifier_type: str="vader") -> str:
-    """
-    Asynchronously classify emotion using either Zero-Shot or VADER method.
-
-    Args:
-        text (str): The text to classify.
-        type (str): The type of classifier to use ("zero_shot" or "vader").
-
-    Returns:
-        str: The classified emotion label.
-    """
-    loop = asyncio.get_running_loop()
-    try:
-        if emo_classifier_type == "vader":
-            return await loop.run_in_executor(None, lambda: classify_emotion_with_vader(text))
-        else:
-            logger.warning(f"Unknown classifier_type: {emo_classifier_type}. Returning 'Neutral'.")
-            return "Neutral"
-
-    except Exception as e:
-        logger.exception(f"Emotion classification failed (returning 'Neutral'): {e}")
-        return "Neutral"
-    

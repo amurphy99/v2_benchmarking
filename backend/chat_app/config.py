@@ -11,9 +11,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # --------------------------------------------------------------------------------
 # Global Variables
 # --------------------------------------------------------------------------------
-# USE_LLM will still use "sandbox" or "production" but now sandbox=local development, production=any cloud VM
 USE_CLOUD     = False  # (return default values instead of using the cloud APIs while testing)
-USE_LLM       = os.getenv("APP_ENVIRONMENT", "cloud") != "local" # (don't actually need to load the LLM to test)
+USE_LLM       = os.getenv("USE_LLM", "true").lower() == "true"  # Whether to initialize the real LLM clients
 THIS_LANGUAGE = "en-US"
 INSTRUCTOR_MODEL_NAME = os.getenv("LLM_NAME", "gemma-4-31B-it")  # model name for the Instructor client
 
@@ -32,11 +31,16 @@ ACTIVE_LISTENING_RESPONSE_TEMP    = 0.5                                         
 # Reject invalid response modes during startup instead of waiting for a chat connection
 if LIVE_CHAT_RESPONSE_MODE not in LIVE_CHAT_RESPONSE_MODES:
     raise ValueError(f"Unsupported LIVE_CHAT_RESPONSE_MODE: {LIVE_CHAT_RESPONSE_MODE!r}")
+if (not USE_LLM) and (LIVE_CHAT_RESPONSE_MODE != "single_stage"):
+    raise ValueError("USE_LLM=false is supported only with LIVE_CHAT_RESPONSE_MODE=single_stage")
 
+# --------------------------------------------------------------------------------
 # LLM Parameters
+# --------------------------------------------------------------------------------
 MAX_LENGTH = 128 # 256
 #PROMPT = "You are an assistant for dementia patients. Provide any response as much short as possible."
 
+# Prompt
 DEVICE_CONTEXT = "You could be in the user's phone/laptop or on board a real life robot (when they are in the lab). This time you are on their laptop."
 PROMPT = f"""
 You are Buddy, a warm, calm conversational assistant for people living with memory problems or dementia.
@@ -70,8 +74,7 @@ When you answer:
 - Stay on topic with what the user just said.
 - NEVER add emojis or emoticons.
 - Always end with one short question that keeps the conversation going.
-
-"""
+""".strip()
 
 # ================================================================================
 # Logging Setup
@@ -109,13 +112,9 @@ try:
     pronunciation_model_path = current_path + f"{rf_model_path}/pronunciation_rf_v4.pkl"
     prosody_model_path       = current_path + f"{rf_model_path}/prosody_rf_v1.pkl"
 
-    # Load the saved LLM model OR use a testing object that just returns sample data
-    # TODO: Swapped this to the IU endpoint for now...
-    from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
-
-    # TODO: Make something here that actually changes based on an .env variable
-    #if USE_LLM:  from .services.llm.llama_api           import LlamaAPI as LLMClass
-    #else:        from .services.llm.live_chat.dummy_LLM import DummyLLM as LLMClass
+    # Use the hosted endpoint unless local testing explicitly selects the dummy
+    if USE_LLM:  from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
+    else:        from .services.llm.live_chat.dummy_LLM    import DummyLLM    as LLMClass
        
     # Setup the LLM
     llm = LLMClass(base_url="10.128.0.20", api_key="SAMPLE_TOKEN")

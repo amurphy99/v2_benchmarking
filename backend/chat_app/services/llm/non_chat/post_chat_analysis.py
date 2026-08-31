@@ -8,7 +8,7 @@ TODO: Maybe do some kind of thing here where if the thought fields are "FAILED",
       algorithm-based methods for topics and emotions...
 
 """
-import logging, os, time
+import logging, time
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -37,9 +37,9 @@ DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutr
 # Make all LLM queries for the post-chat analysis
 # ================================================================================
 async def post_chat_analysis(chat_messages, model=MODEL_NAME):
-    # Check if we are in local or deployed mode
-    if False: #not USE_LLM: 
-        logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted in local mode. {RESET}")
+    # Skip endpoint requests when local testing explicitly selects the dummy LLM
+    if not USE_LLM:
+        logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis skipped while USE_LLM is false. {RESET}")
         return DEF_ANALYSIS
 
     # Prepare the transcript & handle empty chats

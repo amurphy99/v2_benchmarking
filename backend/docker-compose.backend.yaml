@@ -12,7 +12,6 @@ services:
   db_vector:
     image: ankane/pgvector:latest
     container_name: db_vector
-    env_file: [.env]
     environment:
       POSTGRES_DB: ${VECTOR_DB_NAME}
       POSTGRES_USER: ${VECTOR_DB_USER}
@@ -31,7 +30,6 @@ services:
   db:
     image: postgres:17 #ankane/pgvector:latest
     container_name: db
-    env_file: [.env]
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -84,9 +82,9 @@ services:
 # Docker will also create them automatically if this file is run individually.
 volumes:
   db_data:
-    external: true
+    #external: true
   vector_db_data:
-    external: true
+    #external: true
 networks:
   appnet:
-    external: true
+    #external: true

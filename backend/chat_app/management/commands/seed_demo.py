@@ -11,7 +11,6 @@ Three seeding modes are controlled by the constants below:
 TODO: Should also make it just check to see if the demo data types exist and add them if not
 
 """
-import os
 from datetime import timedelta
 
 # Django imports
@@ -30,20 +29,16 @@ from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 
 
 # --------------------------------------------------------------------------------
-# Config (don't remake locally since I already have this stuff)
+# Config
 # --------------------------------------------------------------------------------
-# If we are local or deployed (based on the .env file)
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "sandbox")
-LOCAL_MODE      = (APP_ENVIRONMENT == "local")
-
 # Set to True to wipe and recreate all existing random demo data on each run.
-REMAKE_SAMPLE_DATA = False # False # not LOCAL_MODE
+REMAKE_SAMPLE_DATA = False
 
 # Set to True to wipe and recreate the analyzed demo chats (fixed-transcript chats under buddy_user).
-REMAKE_ANALYZED_DATA = False # False # not LOCAL_MODE
+REMAKE_ANALYZED_DATA = False
 
 # Set to True to wipe and recreate the CSV-imported transcript chat with real word-level timestamps.
-REMAKE_TRANSCRIPT_DATA = False # False # not LOCAL_MODE
+REMAKE_TRANSCRIPT_DATA = False
 
 
 # ================================================================================
