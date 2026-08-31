@@ -166,7 +166,7 @@ class ChatSession(models.Model):
         constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile
         ordering    = ["-date", "id"]
 
-    def __str__(self): return str(self.date)
+    def __str__(self): return f"Session {self.id} ({self.profile} | {self.date.strftime('%Y-%m-%d')})"
 
 # ================================================================================
 # ChatMessage -- an array of these is assigned to each ChatSession

@@ -36,6 +36,12 @@ class ChatSessionAdmin(admin.ModelAdmin):
     inlines         = [ChatMessageInline]
     actions         = ["export_sessions_as_json"]
 
+    def has_add_permission(self, request):
+        return False  # sessions can not be manually created via admin
+
+    def has_change_permission(self, request, obj=None):
+        return False  # sessions can not be edited via admin
+
     @admin.action(description="Export selected sessions as JSON (transcript + metadata)")
     def export_sessions_as_json(self, request, queryset):
         data = []
@@ -108,8 +114,19 @@ class LLMTurnLogAdmin(admin.ModelAdmin):
     list_display    = ("id", "session", "user", "activity_name", "turn_index", "state_before", "state_after", "total_latency_ms", "forced_state_transition", "created_at")
     list_filter = ("activity_name", "forced_state_transition", "session") # filtering based on speific fields
     search_fields   = ("user__username", "session__id", "state_before", "state_after")
-    readonly_fields = ("created_at",)
-    actions         = ["export_llm_logs_as_json"]
+    readonly_fields = (
+        "session", "user", "created_at",
+        "activity_name", "turn_index", "user_text_length",
+        "state_before", "state_after", "same_state_turn_count",
+        "forced_state_transition", "total_latency_ms", "agents_data",
+    ) # admin should not be able to edit these fields, only view them
+    actions = ["export_llm_logs_as_json"]
+
+    def has_add_permission(self, request):
+        return False  # logs should not be manually created via admin
+
+    def has_change_permission(self, request, obj=None):
+        return False  # logs should not be edited via admin
 
     @admin.action(description="Export selected LLM turn logs as JSON")
     def export_llm_logs_as_json(self, request, queryset):
