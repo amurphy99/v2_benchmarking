@@ -64,6 +64,7 @@ services:
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py seed_demo &&
+        mkdir -p chat_app/static &&
         python manage.py collectstatic --noinput &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
