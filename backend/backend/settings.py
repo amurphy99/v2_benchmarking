@@ -156,16 +156,16 @@ DATABASES = {
         'NAME'     : config('POSTGRES_DB'),
         'USER'     : config('POSTGRES_USER'),
         'PASSWORD' : config('POSTGRES_PASSWORD'),
-        'HOST'     : config('POSTGRES_HOST', default='db'),
-        'PORT'     : config('POSTGRES_PORT', default='5432'),
+        'HOST'     : config('POSTGRES_HOST', default='db').strip() or 'db',
+        'PORT'     : config('POSTGRES_PORT', default='5432').strip() or '5432',
     },
     'vector': {
         'ENGINE'   : 'django.db.backends.postgresql',
         'NAME'     : config('VECTOR_DB_NAME'),
         'USER'     : config('VECTOR_DB_USER'),
         'PASSWORD' : config('VECTOR_DB_PASSWORD'),
-        'HOST'     : config('VECTOR_DB_HOST', default='db_vector'),
-        'PORT'     : config('VECTOR_DB_PORT', default='5432'),
+        'HOST'     : config('VECTOR_DB_HOST', default='db_vector').strip() or 'db_vector',
+        'PORT'     : config('VECTOR_DB_PORT', default='5432').strip() or '5432',
     }
 }
 
