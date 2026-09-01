@@ -74,6 +74,7 @@ services:
         python manage.py makemigrations --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
+        python manage.py close_stale_sessions &&
         python manage.py seed_demo &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
@@ -151,6 +152,7 @@ services:
         python manage.py makemigrations --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
+        python manage.py close_stale_sessions &&
         python manage.py seed_demo &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
@@ -208,6 +210,7 @@ services:
         python manage.py makemigrations --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
+        python manage.py close_stale_sessions &&
         python manage.py seed_demo &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
@@ -398,4 +401,3 @@ WebSocket webSocket = client.newWebSocketBuilder()
 ```
 </details>
 <br>
-

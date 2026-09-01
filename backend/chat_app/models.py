@@ -82,10 +82,14 @@ class ChatSession(models.Model):
     """
     # Sources are given on connection to the chat
     SOURCE_CHOICES = [
+        # Real chat data
         ("webapp",  "WebApp" ), ("mobile",     "Mobile"    ),  # Web app frontend UI
         ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"),  # Access via physical robots
-        ("demo",       "Demo"),                                # Random demo data (hidden from admin views)
-        ("transcript", "Transcript"),                          # Real CSV/imported transcript with word-level timestamps
+
+        # Seeded chat data
+        ("demo",       "Demo"         ),  # Random demo data (hidden from admin views)
+        ("analyzed",   "Analyzed Demo"),  # Fixed text-only fixtures with post-chat analysis
+        ("transcript", "Transcript"   ),  # Real CSV/imported transcript with word-level timestamps
     ]
 
     # Levels of risk evaluated in the post-chat analysis

@@ -238,8 +238,8 @@ BUDDY_PASSWORD = config("BUDDY_PASSWORD", default="")
 
 
 # --------------------------------------------------------------------------------
-# Seed-data regeneration
+# Optional seed datasets (safe create-if-missing behavior)
 # --------------------------------------------------------------------------------
-REMAKE_SAMPLE_DATA     = config("REMAKE_SAMPLE_DATA",     default=False, cast=bool)  # Rebuild random demo data
-REMAKE_ANALYZED_DATA   = config("REMAKE_ANALYZED_DATA",   default=False, cast=bool)  # Rebuild fixed analyzed chats
-REMAKE_TRANSCRIPT_DATA = config("REMAKE_TRANSCRIPT_DATA", default=False, cast=bool)  # Rebuild transcript demo data
+SEED_UI_SAMPLE_DATA       = config("SEED_UI_SAMPLE_DATA",       default=False, cast=bool)  # Random DB objects to demo the UI -- chats, reminders, activities, and RAG fixtures
+SEED_ANALYZED_CHAT_DATA   = config("SEED_ANALYZED_CHAT_DATA",   default=False, cast=bool)  # Fixed text-only analyzed chat fixtures (used for testing `post_chat_analysis`)
+SEED_TRANSCRIPT_CHAT_DATA = config("SEED_TRANSCRIPT_CHAT_DATA", default=False, cast=bool)  # Imported transcript, audio, and biomarker fixtures (from real recorded conversations)

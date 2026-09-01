@@ -1,12 +1,12 @@
 # Speech System // Data Seeding <br> `backend/chat_app/management/..`
 
-On startup, Django runs the `seed_demo` management command to set up the database with three different categories of demo data:
+On startup, Django runs `close_stale_sessions` and then `seed_demo`. The first command marks sessions orphaned by the earlier backend process inactive. The seed command safely ensures configured accounts and three optional categories of demo data exist:
 
 |     | Path           | Source tag    | Used for                                                                  |
 |-----|----------------|---------------|---------------------------------------------------------------------------|
 | 1   | **transcript** | `transcript`  | A real, pre-recorded chat with audio + word-level timestamps + biomarker scores. Used as the **demo/reference data** for workshops and the Transcript Playback page. |
 | 2   | sample         | `demo`        | Random sentences inserted as chats to fill the user-facing UI. Hidden from admin views. |
-| 3   | analyzed       | `webapp`      | Fixed text-only transcripts with post-chat analysis fields filled out. Copied from real test conversations. |
+| 3   | analyzed       | `analyzed`    | Fixed text-only transcripts with post-chat analysis fields filled out. Copied from real test conversations. |
 
 This README focuses on the **transcript** path, since that's the one we actually have to add source data files for. The other two run entirely from tracked data in the repo by default.
 
@@ -20,14 +20,32 @@ The seed command runs automatically when the backend container starts (via the e
 python manage.py seed_demo
 ```
 
-Three values in `backend/.env` control which paths re-seed on each run:
+Three values in `backend/.env` control which optional fixture datasets are ensured:
 ```text
-REMAKE_SAMPLE_DATA     = true   # wipes & recreates the random sample chats
-REMAKE_ANALYZED_DATA   = true   # wipes & recreates the analyzed text transcripts
-REMAKE_TRANSCRIPT_DATA = true   # wipes & recreates the demo transcript + audio + biomarkers
+SEED_UI_SAMPLE_DATA       = true   # creates missing random UI chats/reminders/RAG fixtures
+SEED_ANALYZED_CHAT_DATA   = true   # creates the fixed analyzed chats when absent
+SEED_TRANSCRIPT_CHAT_DATA = true   # creates each missing transcript/audio fixture
 ```
 
-Set a flag back to `false` once you have the data you want and don't need it regenerated on every restart.
+These are create-if-missing settings, not replacement switches. They are safe to leave enabled across restarts: existing profiles, chats, reminders, and recording objects are preserved. Set one to `false` when that environment should not contain the corresponding fixture dataset at all.
+
+`seed_demo` does not provide an automatic deletion or replacement mode. During disposable development, deliberately reset the database if the entire fixture set needs to be rebuilt. Once real data matters, make any fixture replacement a separate, explicitly reviewed maintenance operation.
+
+<br>
+
+## Persistence and Reset Rules
+
+| Data category | What startup may create or refresh | What startup never resets |
+|---------------|------------------------------------|---------------------------|
+| Primary and secondary admins | Missing Django users, configured names/permissions/passwords, and workshop caregiver access | Accounts, profiles they own or can access, chats, settings, and recordings |
+| Workshop demo login | Missing user/account/profile and individually missing transcript fixtures | Existing webapp chats, transcript chats, and recording objects |
+| Buddy robot login | Missing user/account/profile and configured credentials | Every chat, setting, and recording linked to Buddy |
+| Random UI fixture owners | Missing user/account/profile, complete random-chat set when absent, and individually missing reminders/RAG rows | Existing sessions and later edits to reminders/RAG instructions |
+| Analyzed fixture owner | Missing user/account/profile and complete analyzed-chat set when absent | Real `source="webapp"` chats and existing `source="analyzed"` fixtures |
+
+The only automatic startup state transition outside this table is `close_stale_sessions`: it marks `is_active=True` sessions from the previous backend process inactive because their WebSockets no longer exist. It does not delete those sessions or their messages/audio.
+
+To deliberately rebuild everything while the database is still disposable, use the separately reviewed database-reset workflow. Do not add deletion back to `seed_demo`; a fixture flag is intentionally incapable of deleting production data.
 
 <br>
 
@@ -63,8 +81,9 @@ backend/chat_app/management/
 
 | File | Responsibility |
 |------|----------------|
-| `commands/seed_demo.py` | Django management command. Sets up users (`set_environment_users`, `setup_dummy_chats`, `setup_analyzed_data`), calls into the three `seed_data/` modules based on the REMAKE flags. |
-| `seed_data/transcript.py` | Reads a folder under `test_transcripts/` and creates one `ChatSession` with attached `ChatMessage`s, `ChatWord`s, `ChatBiomarkerScore`s, and a copy of the audio file under `media/recordings/`. |
+| `commands/close_stale_sessions.py` | Startup recovery command. Marks sessions from the previous backend process inactive without mixing that behavior into data seeding. |
+| `commands/seed_demo.py` | Non-destructive Django management command. Ensures persistent environment accounts, fixture owners, and any enabled create-if-missing datasets. |
+| `seed_data/transcript.py` | Reads a folder under `test_transcripts/`, creates one `ChatSession` with messages/words/biomarkers, and persists its WAV through the configured local or GCS recording store. |
 | `seed_data/analyzed.py` | Reads `examples.json`, creates one `ChatSession` per entry with messages, dummy biomarker scores, and runs `post_chat_analysis()` to fill summary / sentiment / risk fields. |
 | `seed_data/sample.py` | Exports `seed_chats`, `seed_images`, `seed_reminders`, `seed_activities`, `seed_rag_instructions`. Random demo data populated from constants in `data.py`. |
 | `seed_data/transcript_data/data.py` | Shared constants. `BIOMARKERS`, `USERNAMES`, `DEMO_MESSAGES`, `DEMO_IMAGES`, `DEMO_RAG_*`. |
@@ -217,7 +236,7 @@ start_time,end_time,score
 
 ## Environment Variables
 
-The seed command provisions four environment-controlled users from `.env` (in [`backend/.env`](../../.env)):
+The seed command provisions four persistent, environment-controlled users from `.env` (in [`backend/.env`](../../.env)):
 
 ```
 ADMIN_USERNAME_0=...   # primary staff admin; can view all transcripts including the demo
@@ -233,11 +252,14 @@ BUDDY_USERNAME=...     # owns an independent profile without seeded chat data
 BUDDY_PASSWORD=...
 ```
 
-The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users get `Access` to that profile through caregiver links. The Buddy user gets a separate patient profile and no seeded chat sessions.
+The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users get `Access` to that profile through caregiver links. The Buddy user gets a separate patient profile and no seeded chat sessions. Re-running `seed_demo` can refresh the configured identity fields and environment-managed passwords, but it never deletes data linked to any of these accounts.
+
+The hardcoded `demo_patient` / `demo_caregiver` and `sample_user` / `sample_care` pairs own repository fixture data. Their fixture passwords are only assigned when the users are first created. Seeding does not reset their profiles or any conversations they later accumulate.
 
 Audio file access (see [`backend/media_view.py`](../../backend/media_view.py)) is restricted to:
 - Admins (`is_staff = True`), or
-- The user who owns the `ChatSession` the audio file belongs to.
+- The user who owns the `ChatSession`, or
+- A caregiver linked to that profile through `Access`.
 
 Any other authenticated user requesting `/media/recordings/<file>.wav?token=...` gets a `403`.
 
@@ -245,16 +267,16 @@ Any other authenticated user requesting `/media/recordings/<file>.wav?token=...`
 
 ## What Happens Under the Hood
 
-When `python manage.py seed_demo` runs (or the container starts), the `Command.handle()` method executes the following steps in order:
+When the backend container starts, the management commands execute the following steps in order:
 
-1. **Reference dates** — computes `two_days_ago`, `seven_days_ago`, `thirty_days_ago` for the `Goal.start_date` fields and demo chat ages.
+1. **`close_stale_sessions`** — marks any `is_active=True` sessions left by the earlier backend process inactive. A restarted process cannot retain the WebSockets that owned them.
 
-2. **Album images** — if `REMAKE_SAMPLE_DATA`, wipes and re-seeds the `AlbumImage` rows that conversation topics get matched against.
+2. **Reference images** — `seed_demo` uses `update_or_create()` for only the known fixture topics. Unrelated `AlbumImage` rows are untouched.
 
-3. **`set_environment_users()`** —
-    - Creates / refreshes the two admins, workshop demo user, and Buddy user from `.env`.
+3. **`setup_environment_accounts()`** —
+    - Creates or refreshes the two admins, workshop demo user, and Buddy user from `.env` without deleting linked records.
     - Links both admins to the workshop profile and gives Buddy a separate empty profile.
-    - If `REMAKE_TRANSCRIPT_DATA`, deletes any existing `source="transcript"` sessions for the demo profile and calls `seed_transcript_chat(profile, care_account)`.
+    - If `SEED_TRANSCRIPT_CHAT_DATA`, calls `seed_transcript_chat()` for every configured source folder. Each importer hashes its WAV and skips that individual fixture when the same recording is already attached to the workshop profile.
     - `seed_transcript_chat` in turn:
       1. Reads `transcript_config.json` and parses the CSV into utterances grouped by `uttID`.
       2. Persists the audio through the configured local/GCS recording store.
@@ -265,13 +287,11 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
          otherwise runs `post_chat_analysis()` normally. It then saves the summary,
          sentiment, topics, and risk fields through the standard session helper.
 
-4. **`setup_dummy_chats()`** — creates `demo_patient` + `demo_caregiver` users with their profile; if `REMAKE_SAMPLE_DATA`, calls `seed_chats()` and `seed_reminders()` to fill the user-facing UI with random data.
+4. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity, and creates missing RAG instructions without overwriting later edits.
 
-5. **`setup_analyzed_data()`** — creates `sample_user` + `sample_care` users; if `REMAKE_ANALYZED_DATA`, deletes prior `source="webapp"` sessions and calls `seed_analyzed_chats()` to load fixed transcripts from `examples.json` and run post-chat analysis on them.
+5. **`setup_analyzed_data()`** — ensures `sample_user` + `sample_care` and their profile. If `SEED_ANALYZED_CHAT_DATA`, it creates the complete `source="analyzed"` fixture set only when that set is absent. Real `source="webapp"` sessions are never selected or deleted.
 
-6. **Stale-session cleanup** — closes any `ChatSession` rows left `is_active=True` by a crashed previous run.
-
-7. **Legacy admin grant** — promotes the `AdnanSadi2` user to `is_staff` / `is_superuser` if it exists (kept in parallel with the env-driven admin during the migration period).
+No user, Account, Profile, Access, ChatSession, SessionAudio, recording object, or unrelated image is deleted by this workflow.
 
 <br>
 
@@ -279,5 +299,5 @@ When `python manage.py seed_demo` runs (or the container starts), the `Command.h
 
 1. Create a new folder under `seed_data/transcript_data/test_transcripts/` (e.g. `test_02/`).
 2. Drop in the four required files (config JSON, transcript CSV, audio WAV) and any `biomarker_<type>.csv` files you have.
-3. In [`seed_data/transcript.py`](seed_data/transcript.py), `seed_transcript_chat` takes a `test_dir` argument — if you want to load multiple folders, call it once per folder from `setup_dummy_chats` / `set_environment_users`.
-4. Set `REMAKE_TRANSCRIPT_DATA=true` in `backend/.env`, restart the backend, then set it back to `false` once the data is in place.
+3. In [`commands/seed_demo.py`](commands/seed_demo.py), add the folder name to `TRANSCRIPT_FIXTURE_DIRS`. `seed_transcript_chat` receives each folder through its `test_dir` argument.
+4. Set `SEED_TRANSCRIPT_CHAT_DATA=true` in `backend/.env` and restart the backend. It is safe to leave enabled: previously imported recordings are recognized by checksum and skipped.

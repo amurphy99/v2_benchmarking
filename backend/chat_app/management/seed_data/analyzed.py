@@ -1,35 +1,43 @@
 """
-Seed chats with real messages & run post-chat analysis for them.
+Create idempotent fixed chat fixtures with post-chat analysis.
 --------------------------------------------------------------------------------
 `backend.chat_app.management.seed_data.analyzed`
 
 Creates ChatSessions from the fixed transcripts in examples.json, then runs the
 same post_chat_analysis() process as close_session() to fill out the summary,
-sentiment, topics, and risk fields. 
-
-source="webapp" so admin views include these.
+sentiment, topics, and risk fields. The dedicated `source="analyzed"` value
+keeps these fixtures distinguishable from real webapp conversations.
 
 """
 import asyncio, json as json_lib
 
-from datetime     import timedelta
-from pathlib      import Path
-from random       import random
-from django.utils import timezone
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.utils                  import timezone
+from datetime                      import timedelta
+from pathlib                       import Path
+from random                        import random
 
 # From this project
-from chat_app.models                                   import ChatSession, ChatMessage, ChatBiomarkerScore
+from chat_app.models                                   import ChatBiomarkerScore, ChatMessage, ChatSession, Profile
 from chat_app.services.llm.non_chat.post_chat_analysis import post_chat_analysis
 from chat_app.services.db_services                     import ChatService
 
 # Constant with list of biomarker names
 from .transcript_data.data import BIOMARKERS
 
+ANALYZED_SOURCE = "analyzed"  # Source tag reserved for fixed analyzed chat fixtures
+
 
 # ================================================================================
 # Seed chats with post-chat analysis results
 # ================================================================================
-def seed_analyzed_chats(profile, user):
+def seed_analyzed_chats(profile: Profile, user: AbstractBaseUser) -> int:
+    """
+    Create the complete fixed fixture set only when this profile has no analyzed
+    sessions. This keeps repeated startup commands from duplicating the dataset.
+    """
+    if ChatSession.objects.filter(profile=profile, source=ANALYZED_SOURCE).exists(): return 0
+
     # Load the real examples from JSON and pick an arbitrary time
     examples = json_lib.loads((Path(__file__).parent / "transcript_data" / "examples.json").read_text())
     now_utc  = timezone.now()
@@ -39,7 +47,7 @@ def seed_analyzed_chats(profile, user):
         ended_at   =  started_at + timedelta(minutes=8)
 
         # 1) Create a ChatSession
-        session      = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, end_ts=ended_at)
+        session      = ChatSession.objects.create(profile=profile, source=ANALYZED_SOURCE, is_active=False, end_ts=ended_at)
         session.date = started_at
         session.save(update_fields=["date"])
 
@@ -72,3 +80,5 @@ def seed_analyzed_chats(profile, user):
             risk_reason = analysis.get("risk_reason", None),
             risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
         )
+
+    return len(examples)

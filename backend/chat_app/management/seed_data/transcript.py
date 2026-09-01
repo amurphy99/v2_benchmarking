@@ -28,11 +28,12 @@ from collections import OrderedDict
 from datetime    import timedelta, datetime
 from pathlib     import Path
 
-from django.conf  import settings
-from django.utils import timezone
+from django.conf                   import settings
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.utils                  import timezone
 
 # From this project
-from chat_app.models                         import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore
+from chat_app.models                         import ChatBiomarkerScore, ChatMessage, ChatSession, Profile, SessionAudio
 from chat_app.services.db_services           import ChatService
 from chat_app.services.session_audio_storage import build_recording_object_key, store_recording
 from ...services.logging_utils               import RESET, SEED_DATA, SD_H, SD_R
@@ -49,6 +50,9 @@ POST_CHAT_ANALYSIS_FIELDS = (
 )  # Fields required when transcript_config.json provides cached post-chat analysis
 
 
+# --------------------------------------------------------------------------------
+# Validation helpers
+# --------------------------------------------------------------------------------
 # Hash a potentially large seeded WAV without loading the whole recording into RAM
 def _file_sha256(file_path: Path) -> str:
     digest = hashlib.sha256()
@@ -113,7 +117,7 @@ def _resolve_post_chat_analysis(config: dict[str, object], messages: list[ChatMe
 # ================================================================================
 # Load pre-calculated biomarker scores from biomarker_<type>.csv files
 # ================================================================================
-def _process_biomarker_csvs(data_dir: Path, session: ChatSession, started_at: datetime):
+def _process_biomarker_csvs(data_dir: Path, session: ChatSession, started_at: datetime) -> None:
     """
     Finds every `biomarker_<type>.csv` in `data_dir`, validates the type against 
     the model's choices, parse the rows (start_time, end_time, score), and 
@@ -158,9 +162,10 @@ def _process_biomarker_csvs(data_dir: Path, session: ChatSession, started_at: da
 # ================================================================================
 # Seed a chat from a real transcript
 # ================================================================================
-def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
+def seed_transcript_chat(profile: Profile, user: AbstractBaseUser, test_dir: str = "test_01") -> ChatSession | None:
     """
-    
+    Import one transcript fixture unless this profile already has a transcript
+    recording with the same audio checksum.
     """
     # Load in the transcript and config
     data_dir    = Path(__file__).parent / "transcript_data" / "test_transcripts" / test_dir
@@ -178,6 +183,17 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
     # Locate the source WAV; persistence happens after the ChatSession has an ID
     # --------------------------------------------------------------------------------
     audio_src = data_dir / config["audio_filename"]
+    checksum  = _file_sha256(audio_src)
+
+    # Treat the source recording checksum as this fixture's stable identity
+    fixture_exists = SessionAudio.objects.filter(
+        session__profile = profile,
+        session__source  = "transcript",
+        sha256            = checksum,
+    ).exists()
+    if fixture_exists:
+        logger.info(f"{SEED_DATA} Transcript fixture {SD_H}{test_dir}{SD_R} already exists; skipping.{RESET}")
+        return None
 
     # --------------------------------------------------------------------------------
     # Parse CSV -- group words by uttID (utterance ID); also preserves CSV order
@@ -252,7 +268,6 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         channels         = recording.getnchannels()
         bits_per_sample  = recording.getsampwidth() * 8
         duration_seconds = recording.getnframes() / sample_rate
-    checksum   = _file_sha256(audio_src)
     object_key = build_recording_object_key(session.id)
 
     temp_root = Path(settings.SESSION_AUDIO_TEMP_ROOT)
@@ -332,3 +347,4 @@ def seed_transcript_chat(profile, user, test_dir: str = "test_01"):
         risk_reason = analysis.get("risk_reason", None),
         risk_quotes = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
     )
+    return session
