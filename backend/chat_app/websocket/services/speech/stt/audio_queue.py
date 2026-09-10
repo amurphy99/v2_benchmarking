@@ -93,9 +93,16 @@ class AudioInputQueue:
         self._items.put(barrier)
         return barrier
 
+    # NOTE: This is the old version of this function with the silence
     # Remove the next queue item and acknowledge it when it is a barrier
-    def get(self, *, timeout: float) -> AudioQueueItem:
-        item = self._items.get(timeout=timeout)  # Timeout is the maximum seconds to block waiting for an item
+    #def get(self, *, timeout: float) -> AudioQueueItem:
+    #    item = self._items.get(timeout=timeout)  # Timeout is the maximum seconds to block waiting for an item
+    #    if isinstance(item, AudioBarrier): item.resolve()
+    #    return item
+    
+    # Wait for the next queue item and acknowledge it when it is a barrier
+    def get(self) -> AudioQueueItem:
+        item = self._items.get()
         if isinstance(item, AudioBarrier): item.resolve()
         return item
 

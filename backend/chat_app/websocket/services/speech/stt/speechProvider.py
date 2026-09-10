@@ -9,8 +9,6 @@ New chat-response flow:
 - If they start speaking again before our response is ready however, then we cancel the response task
 - Then we go back to our "listening" state again
 
-TODO: Really need to test it out without KEEP_ALIVE_SEC
-
 """
 import logging, threading, weakref
 logger = logging.getLogger(__name__)
@@ -35,12 +33,13 @@ from   .stream_state import InterimProgressTracker
 
 # Constants
 SAMPLE_RATE   = 16_000   # Required input sample rate for the Google recognition stream
-CHUNK_SIZE    =  2_048   # Bytes in 64 ms of 16-bit mono PCM audio
 LANGUAGE_CODE = "en-US"  # Recognition language supplied to Google STT
 
 # Config
 KEEP_ALIVE_SEC = 0.100                 # Seconds between silence frames while waiting for audio
+CHUNK_SIZE     =  2_048                # Bytes in 64 ms of 16-bit mono PCM audio
 SILENCE        = b"\x00" * CHUNK_SIZE  # Silent PCM frame used to keep Google streaming
+
 
 # ================================================================================
 # Streaming STT via audio bytes received from the ChatConsumer client
@@ -88,14 +87,23 @@ class SpeechToTextProvider:
         already. So if a response is requested immediately after the user
         finishes speaking, we leave time for ASR to finish processing the end
         of their utterance before sending their text to the LLM. 
+
+        NOTE: Previously, we added artificial "silence" periods just to keep the stram alive,
+              but that ended up misaligning the word-timestamps because Google's timeline was
+              continuously adding 64ms chunks for the silence periods. **We could still make
+              this work if we also kept track of how many of these chunks we have added and
+              then subtract that from the timestamps we got from STT.**
         """
         while True:
             # Keep streaming alive during short pauses
-            try: item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
-            except Empty:
-                if self._closed: break
-                yield speech.StreamingRecognizeRequest(audio_content=SILENCE)
-                continue
+            #try: item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
+            #except Empty:
+            #    if self._closed: break
+            #    yield speech.StreamingRecognizeRequest(audio_content=SILENCE)
+            #    continue
+
+            # Wait for actual frontend audio or an ordered lifecycle marker
+            item = self._audio_buffer.get()
 
             # Process the different possible types of queue entries
             if isinstance(item, AudioBarrier): continue  # Pass over the AudioBarriers
