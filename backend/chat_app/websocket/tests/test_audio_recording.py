@@ -60,7 +60,8 @@ class SessionAudioRecorderTests(unittest.TestCase):
 
     # Reject caller-controlled object keys that escape the configured local root
     def test_local_storage_rejects_path_traversal(self) -> None:
-        with self.assertRaises(ValueError): local_recording_path("../outside.wav")
+        with self.assertRaises(ValueError):
+            local_recording_path("../outside.wav")
 
     # Accept the canonical format and reject mismatched or partial PCM samples
     def test_audio_payload_format_validation(self) -> None:

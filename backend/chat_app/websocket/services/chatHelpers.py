@@ -94,7 +94,7 @@ class ChatHandler:
             # Log an update
             # TODO: Might want to do this somewhere else with the text content included ?
             logger.info((f"{ORANGE}[ChatHandler] "
-                         f"auto_reply={BOLD}{consumer.reply_on_user_utt}{UNBOLD}, "
+                         f"response_mode={BOLD}{consumer.response_mode}{UNBOLD}, "
                          f"backend_TTS={BOLD}{consumer.use_backend_TTS}{UNBOLD}. {RESET}"))
 
             # Finish cancelling any response invalidated above before deciding who owns the next attempt
@@ -110,7 +110,7 @@ class ChatHandler:
             if (coordinator is not None) and (not coordinator.done()): return
 
             # When in "Pause & Listen" mode, we still stage and echo user text, but we don't auto-respond
-            if not consumer.reply_on_user_utt: return
+            if consumer.response_mode == "manual": return
 
             # Create a new cancellable automatic response task
             consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")

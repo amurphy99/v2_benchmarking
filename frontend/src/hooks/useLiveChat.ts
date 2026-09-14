@@ -12,12 +12,9 @@ export default function useLiveChat({
     onUserUtterance,
     onSystemUtterance = (_: string) => {},
     onScores          = (         ) => {},
-    onEmotion         = (         ) => {},
-    onExpression      = (         ) => {},
+    onRobotAction     = (         ) => {},
     wsPath = "/ws/chat/",
     onDebugTurn,
-    onRagParseError,
-    onChatError,
     onChatClosed,
     onChatPaused,      // Backend sent message telling us that the chat is paused
     onRecordingStatus, // Backend updates the recording status (if we are saving the audio on chat end)
@@ -25,12 +22,9 @@ export default function useLiveChat({
     onUserUtterance   : (text    : string) => void;
     onSystemUtterance : (text    : string) => void;
     onScores          : (                ) => void;
-    onEmotion         : (emotion : string) => void;
-    onExpression      : (data    : any   ) => void;
+    onRobotAction     : (data    : any   ) => void;
     wsPath            ?: string;
     onDebugTurn       ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
-    onRagParseError   ?: () => void;
-    onChatError       ?: () => void;
     onChatClosed      ?: () => void;
     onChatPaused      ?: () => void;
     onRecordingStatus ?: (enabled: boolean) => void;
@@ -50,16 +44,6 @@ export default function useLiveChat({
         // Maybe there is extra data
         const state = typeof payload === "object" ? payload.current_scenario || payload.next_scenario : undefined;
         onDebugTurn?.({role: "assistant", text, state, });
-
-        if (typeof response.data === "object" && response.data?.emotion) { onEmotion(response.data.emotion); }
-
-        // if (state === "close_chat") {
-        //     setTimeout(() => {
-        //         setRecording(false);
-        //         send({ type: "end_chat", data: Date.now() });
-        //         onChatClosed?.();
-        //     }, 500);
-        // }
 	};
 
     // Chat status trackers
@@ -93,9 +77,10 @@ export default function useLiveChat({
     const startAudRef = useRef<() => void>(() => {});
     const stopAudRef  = useRef<() => void>(() => {});
 
-    // Backend-initiated stream status change ("paused" | "active")
-    // Apply backend status without sending another pause_listening command back
-    const onStreamStatus = (status: string) => {
+    // Backend-initiated stream status change ({status: "paused" | "active"})
+    // Apply backend status without sending another set_listening command back
+    const onStreamStatus = (data: any) => {
+        const status = data?.status;
         if (status === "paused") { stopAudRef.current (); onChatPaused?.(); }
         if (status === "active") { startAudRef.current();                   }
         // TODO: Depends on how we want this behavior to work. Should we stop talking on pause always?
@@ -120,11 +105,7 @@ export default function useLiveChat({
 		onAudio           : sendAudio,
         onStreamStatus,
         onChatClosed      : handleChatEnded,
-        onError           : (msg) => {
-            if (msg?.type === "rag_parse_error") { onRagParseError?.(); return; }
-            if (msg?.type ===      "chat_error") { onChatError    ?.(); return; }
-        },
-        onExpression      : onExpression,
+        onRobotAction,
         onRecordingStatus : (enabled) => onRecordingStatus?.(enabled),
         onCancelAudio     : cancelAudio,
 	});
@@ -136,8 +117,11 @@ export default function useLiveChat({
     // --------------------------------------------------------------------------------
     // Start, Stop, & Save 
     // --------------------------------------------------------------------------------
-    const start = () => { prepareConnection(); setRecording(true); startAud(); startPlayer(); send({type: "command", data: {id: crypto.randomUUID(), name: "pause_listening", data: false}}); };
-	const stop  = () => {                                           stopAud();  stopPlayer(); send({type: "command", data: {id: crypto.randomUUID(), name: "pause_listening", data: true }}); };
+    const setListening = (state: "active" | "paused") =>
+        send({type: "command", data: {id: crypto.randomUUID(), name: "set_listening", data: {state}}});
+
+    const start = () => { prepareConnection(); setRecording(true); startAud(); startPlayer(); setListening("active"); };
+	const stop  = () => {                                           stopAud();  stopPlayer(); setListening("paused"); };
     const  save = () => {                      setRecording(false);                           send({type: "end_chat", data: Date.now() }); 
         qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Save invalidates chatSessions queries to force a DB refresh
     };

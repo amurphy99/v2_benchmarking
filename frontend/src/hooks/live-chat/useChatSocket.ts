@@ -11,13 +11,12 @@ const MAX_PENDING_MESSAGES =   500; // Maximum messages retained while the socke
 export default function useChatSocket({
     recording,
     wsPath            = "/ws/chat/", 
-    onLLMResponse     = (unknown            ) => {}, 
+    onLLMResponse     = (unknown            ) => {},
     onScores          = (WSMessage : any    ) => {},
     onUserUtt         = (text      : string ) => {},
     onAudio           = (data               ) => {},
-    onError           = (_                  ) => {},
-    onExpression      = (data               ) => {},
-    onStreamStatus    = (status    : string ) => {},
+    onRobotAction     = (data               ) => {},
+    onStreamStatus    = (data      : any    ) => {},
     onChatClosed      = (                   ) => {},
     onRecordingStatus = (enabled   : boolean) => {},
     onCancelAudio     = (                   ) => {},
@@ -37,10 +36,10 @@ export default function useChatSocket({
     // --------------------------------------------------------------------------------
     // Callback props often receive a new identity on every parent render. Keep the WebSocket
     // message handler stable while still invoking the newest callback implementations.
-    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onError, onExpression, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio});
+    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio});
     useEffect(() => {
-        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onError, onExpression, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio};
-    }, [onLLMResponse, onScores, onUserUtt, onAudio, onError, onExpression, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio]);
+        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio};
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio]);
 
     const onMessage = useCallback((event: MessageEvent) => {
         // One malformed backend frame should not break handling of later socket messages
@@ -55,15 +54,10 @@ export default function useChatSocket({
         if      (type === "llm_response"    ) { handlers.onLLMResponse(response); }
         else if (type === "user_utt"        ) { console.log("User utterance received"     ); handlers.onUserUtt(data); }
         else if (type === "audio_chunk"     ) { handlers.onAudio(data); }
-        
-        // Old biomarker-score-specific message types
         else if (type === "biomarker_scores") { console.log("On-Utterance scores received"); handlers.onScores({ type, data }); }
-        else if (type === "audio_scores"    ) { console.log("On-Audio scores received"    ); handlers.onScores({ type, data }); }
-        else if (type === "periodic_scores" ) { console.log("Periodic scores received"    ); handlers.onScores({ type, data }); }
-        else if (type === "expression"      ) { console.log("Received expression:", data  ); handlers.onExpression(    data  ); }
 
-        // Canonical backend robot actions use the same frontend expression callback
-        else if (type === "robot_action"    ) { console.log("Received robot action:", data); handlers.onExpression(data); }
+        // Emotion or animation for the avatar to perform: {kind, value, duration_ms}
+        else if (type === "robot_action"    ) { console.log("Received robot action:", data); handlers.onRobotAction(data); }
 
         // Backend chat controls (chats can be paused or ended through the backend)
         else if (type === "stream_status"   ) { console.log("Backend changed stream status"); handlers.onStreamStatus(data); }
@@ -73,13 +67,11 @@ export default function useChatSocket({
         // Cancel audio already buffered by the browser when continued speech invalidates a response
         else if (type === "cancel_audio"    ) { console.log("Backend cancelled audio"      ); handlers.onCancelAudio(); }
 
-        // Primary-client acks are retained for robot/frontend use even though this UI only logs them
+        // Committed transcript echo (this UI renders from user_utt/llm_response instead) & command results
+        else if (type === "message"         ) { /* transcript echo; nothing to do here */ }
         else if (type === "command_ack"     ) { console.log("Backend accepted command:", data); }
 
-        // Miscellaneous 
-        else if (type === "lipsync_data"    ) { console.log("Received lipsync data"); } 
-        else if (type === "rag_parse_error" || type === "chat_error") { console.log("Json Parsing Error Occured"); handlers.onError(response); }
-
+        else { console.debug("Unhandled WS event type:", type, response); }
     }, []);
 
     // --------------------------------------------------------------------------------
@@ -120,7 +112,7 @@ export default function useChatSocket({
             console.log("WebSocket closed:", event);
 
             // Stop frontend microphone streaming when the backend connection disappears
-            handlersRef.current.onStreamStatus("paused");
+            handlersRef.current.onStreamStatus({ status: "paused" });
         };
         ws.onerror   = (error) => {console.error("WebSocket connection failed, error:", error);};
         ws.onmessage = onMessage;

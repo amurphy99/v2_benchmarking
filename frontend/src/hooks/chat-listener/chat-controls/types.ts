@@ -1,26 +1,30 @@
 // --------------------------------------------------------------------------------
 // Types
 // --------------------------------------------------------------------------------
-// Process backend "ack" responses
-// TODO: Shouldn't this also be 
+// Complete control state; the backend returns this in every ack and every control_state frame.
+// Mirrors `get_control_state()` in backend/.../consumers/processing/commands.py
+export type ListeningState = "active"    | "paused";
+export type ResponseMode   = "automatic" | "manual";
+
 export type ControlState = {
-    listeningPaused  : boolean;
-    responsesPaused  : boolean;
-    manualMode       : boolean;
-    recordingEnabled : boolean;
+    listening         : ListeningState;
+    response_mode     : ResponseMode;
+    recording_enabled : boolean;
 };
+
+// Process backend "ack" responses
 export type CommandAck = {
-    id        : string;
-    name      : string;
-    ok        : boolean;
-    message ? : string;
-    state   ? : Partial<ControlState>;
+    id      : string;
+    name    : string | null;
+    ok      : boolean;
+    message : string | null;
+    state   : ControlState;
 };
 
 // Key options for pending backend confirmations
 export type PendingKey =
-    | "pause_listening"
-    | "pause_responses"
+    | "set_listening"
+    | "set_response_mode"
     | "reply_now"
     | "robot_emotion"
     | "robot_animation"
@@ -28,7 +32,7 @@ export type PendingKey =
     | "resume_and_respond"
     | "repeat_last"
     | "send_custom"
-    | "toggle_recording";
+    | "set_recording";
 
 
 // For passing methods between files

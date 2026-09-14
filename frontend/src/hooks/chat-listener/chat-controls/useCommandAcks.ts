@@ -11,7 +11,7 @@ import { CommandAck, PendingKey, SendFn, ControlState, RegisterAckHandler } from
 export function useCommandAcks({
     connected,                 // Connection with the backend
     send,                      // Send data through the WebSocket
-    controlState,              // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
+    controlState,              // State of the control buttons (e.g. "listening", "response_mode")
     setControlState,           // Apply state updates to the AdminControlPanel (listening or paused)
     registerAckHandler,        // Method that allows us to register something from here as the handler for an ack
     defaultTimeoutMs = 10_000, // Timeout until we give up on receiving an acknowledgement
@@ -28,9 +28,9 @@ export function useCommandAcks({
     // --------------------------------------------------------------------------------
     const [pending, setPending] = useState<Record<PendingKey, boolean>>({
         // Responses
-        pause_listening : false,
-        pause_responses : false,
-        reply_now       : false,
+        set_listening     : false,
+        set_response_mode : false,
+        reply_now         : false,
 
         // Avatar or Robot controls
         robot_emotion      : false,
@@ -43,7 +43,7 @@ export function useCommandAcks({
         send_custom        : false,
 
         // Save the audio recording on chat completion
-        toggle_recording   : false,
+        set_recording      : false,
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
 
@@ -64,12 +64,11 @@ export function useCommandAcks({
             setPending((p) => ({ ...p, [rec.key]: false }));
 
             // Apply confirmed state updates (ONLY on success)
-            if (ack.ok && ack.state) {
+            if (ack.ok) {
                 setControlState((s) => ({
-                    listeningPaused  : ack.state!.listeningPaused  ?? s.listeningPaused,
-                    responsesPaused  : ack.state!.responsesPaused  ?? s.responsesPaused,
-                    manualMode       : ack.state!.manualMode       ?? s.manualMode,
-                    recordingEnabled : ack.state!.recordingEnabled ?? s.recordingEnabled,
+                    listening         : ack.state.listening         ?? s.listening,
+                    response_mode     : ack.state.response_mode     ?? s.response_mode,
+                    recording_enabled : ack.state.recording_enabled ?? s.recording_enabled,
                 }));
             }
         });
@@ -112,26 +111,27 @@ export function useCommandAcks({
     // --------------------------------------------------------------------------------
     // Button Actions (grouped so the components stay clean)
     // --------------------------------------------------------------------------------
+    // Commands always state the target value explicitly; the backend never infers a toggle
     const actions = {
         // Control system response behavior
-        toggleListening: () => {sendCommand("pause_listening", "pause_listening", !controlState.listeningPaused);},
-        toggleResponses: () => {sendCommand("pause_responses", "pause_responses", !controlState.responsesPaused);},
-        respondNow     : () => {sendCommand("reply_now",       "reply_now")},
-        
-        // Control avatar or robot emotions or animations
-        robotEmotion    : (emotion: string)     => {sendCommand("robot_emotion",    "robot_action", { emotion: emotion  })},
-        robotAnimation  : (animation: string)   => {sendCommand("robot_animation",  "robot_action", { action: animation })},
+        toggleListening: () => {sendCommand("set_listening", "set_listening",
+            { state: controlState.listening === "paused" ? "active" : "paused" });},
+        toggleResponses: () => {sendCommand("set_response_mode", "set_response_mode",
+            { mode:  controlState.response_mode === "manual" ? "automatic" : "manual" });},
+        respondNow     : () => {sendCommand("reply_now", "reply_now")},
+
+        // Control avatar or robot emotions or animations (values come from the capability profile)
+        robotEmotion    : (emotion  : string) => {sendCommand("robot_emotion",   "robot_action", { kind: "emotion",   value: emotion   })},
+        robotAnimation  : (animation: string) => {sendCommand("robot_animation", "robot_action", { kind: "animation", value: animation })},
 
         // Manual Response Controls
-        // The third field in the old ones is ("value": "True"). It would be for more of a toggle I think.
-        // Could add that here too, but I think it's fine...
         pauseAndListen   : () => {sendCommand("pause_and_listen",   "pause_and_listen"  )},
         resumeAndRespond : () => {sendCommand("resume_and_respond", "resume_and_respond")},
         repeatLast       : () => {sendCommand("repeat_last",        "repeat_last"       )},
         sendCustom       : (text: string) => {sendCommand("send_custom", "send_custom", { message: text })},
 
         // Toggle session audio recording on/off
-        toggleRecording  : (enabled: boolean) => {sendCommand("toggle_recording", "toggle_recording", { enabled })},
+        toggleRecording  : (enabled: boolean) => {sendCommand("set_recording", "set_recording", { enabled })},
     };
 
     return { pending, sendCommand, actions };

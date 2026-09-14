@@ -14,13 +14,15 @@ How it works:
 
 
 Frontend sends commands such as:
-- Tell backend whether to pause automatic responses after STT finalizes an utterance
-    { "type": "command", "data": { "name": "pause_responses", "data": true } }
+- Tell backend whether to reply automatically after STT finalizes an utterance
+    { "type": "command", "data": { "name": "set_response_mode", "data": { "mode": "manual" } } }
 
 - Tell LLM to respond immediately with whatever context it has heard recently (e.g. button control)
     { "type": "command", "data": { "name": "reply_now" } }
 
-    
+See `CLIENT_PROTOCOL.md` in this directory for the full command vocabulary and payloads.
+
+
 TODO: Future possibilities:
 * Manually trigger conversation state changes
 * Manually trigger messages from the LLM (e.g. the "puppet" system they already had at Indiana)
@@ -57,7 +59,7 @@ from ...services.db_services import ChatService
 from ...services             import logging_utils       as lu
 from   .utils.logging        import ChatListenerLogging as log
 from   .utils.db_data        import send_initial_data
-from   .utils.groups         import leave_all_groups, format_message_broadcast, format_biomarker_broadcast
+from   .utils.groups         import leave_all_groups, format_biomarker_broadcast
 
 # ================================================================================
 # ChatListenerConsumer
@@ -168,7 +170,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
     # Receives chat message updates (user/assistant) broadcast from the primary consumer.
     async def ws_broadcast(self, event):
-        await self.send_json(format_message_broadcast(event))
+        await self.send_json(event["payload"])
 
     # Receives biomarker updates broadcast from the primary consumer.
     async def ws_monitor(self, event):

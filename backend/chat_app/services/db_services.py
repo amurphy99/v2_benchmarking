@@ -334,18 +334,19 @@ class ChatService:
     # ================================================================================
     @staticmethod
     def get_session_info(session_id):
-        # Pull session + profile + account + user in one DB query
+        # Pull session + profile + account + user + settings in one DB query
         session = (
             ChatSession.objects
-                .select_related("profile", "profile__account", "profile__account__user")
+                .select_related("profile", "profile__account", "profile__account__user", "profile__settings_user")
                 .get(id=session_id)
         )
 
         return {
-            "session": session,
-            "profile": session.profile,
-            "account": session.profile.account,
-            "user"   : session.profile.account.user,
+            "session" : session,
+            "profile" : session.profile,
+            "account" : session.profile.account,
+            "user"    : session.profile.account.user,
+            "settings": getattr(session.profile, "settings_user", None),
         }
     
     # Get the starting timestamp of a session

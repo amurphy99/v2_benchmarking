@@ -17,14 +17,18 @@ export default function ChatControlsGroup({
     connected    : boolean;
     controlState : ControlState;
     pending      : {
-        pause_listening : boolean;
-        pause_responses : boolean;
-        reply_now       : boolean;
+        set_listening     : boolean;
+        set_response_mode : boolean;
+        reply_now         : boolean;
     };
     onToggleListening : () => void;
     onToggleResponses : () => void;
     onRespondNow      : () => void;
 }) {
+    // Derive the paused-ness the buttons and pills read from
+    const listeningPaused = controlState.listening     === "paused";
+    const responsesPaused = controlState.response_mode === "manual";
+
     // ================================================================================
     // UI Component Group
     // ================================================================================
@@ -38,12 +42,12 @@ export default function ChatControlsGroup({
                 <div className={buttonSectionHeader}>Chat Controls</div>
                 <div className="flex gap-2">
 
-                    <span className={pillClass(controlState.listeningPaused)}>
-                        Listening {controlState.listeningPaused ? "Paused" : "On"}
+                    <span className={pillClass(listeningPaused)}>
+                        Listening {listeningPaused ? "Paused" : "On"}
                     </span>
 
-                    <span className={pillClass(controlState.responsesPaused)}>
-                        Responses {controlState.responsesPaused ? "Paused" : "On"}
+                    <span className={pillClass(responsesPaused)}>
+                        Responses {responsesPaused ? "Paused" : "On"}
                     </span>
                     
                 </div>
@@ -58,28 +62,28 @@ export default function ChatControlsGroup({
                 {/* Pause ASR listening */}
                 {/* -------------------------------------------------------------------------------- */}
                 <button
-                    className = {btnClass(pending.pause_listening || !connected, "secondary")}
-                    disabled  = {pending.pause_listening || !connected}
+                    className = {btnClass(pending.set_listening || !connected, "secondary")}
+                    disabled  = {pending.set_listening || !connected}
                     onClick   = {onToggleListening}
                 >
-                {pending.pause_listening
+                {pending.set_listening
                     ? "Updating..."
-                    : controlState.listeningPaused
+                    : listeningPaused
                     ? "Resume listening"
                     : "Pause listening"}
-                </button>                    
+                </button>
                 
                 {/* -------------------------------------------------------------------------------- */}
                 {/* Pause Automatic Responses */}
                 {/* -------------------------------------------------------------------------------- */}
                 <button
-                    className = {btnClass(pending.pause_responses || !connected, "secondary")}
-                    disabled  = {pending.pause_responses || !connected}
+                    className = {btnClass(pending.set_response_mode || !connected, "secondary")}
+                    disabled  = {pending.set_response_mode || !connected}
                     onClick   = {onToggleResponses}
                 >
-                {pending.pause_responses
+                {pending.set_response_mode
                     ? "Updating..."
-                    : controlState.responsesPaused
+                    : responsesPaused
                     ? "Resume responses"
                     : "Pause responses"}
                 </button>

@@ -7,14 +7,18 @@ Exercise queue barriers, staged transcript snapshots, command acknowledgements, 
 interim STT comparison.
 
 """
-import unittest
+import json, unittest
 
 from datetime      import timedelta
 from types         import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 # From this project
+from chat_app.websocket.consumers.consumers                   import ChatConsumer
 from chat_app.websocket.consumers.processing.commands        import dispatch_command
+from chat_app.websocket.consumers.processing.messages        import _publish_chat_message
+from chat_app.websocket.consumers.processing.stream          import set_streaming_active
+from chat_app.websocket.consumers.utils.groups               import claim_primary_connection, format_send_actions_command
 from chat_app.websocket.services.chat_state                 import StagedUtteranceBuffer
 from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
 from chat_app.websocket.services.speech.stt.stream_state    import InterimProgressTracker
@@ -56,11 +60,11 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         barrier = audio_queue.put_barrier()
         audio_queue.put_audio(received_at=3.0, data=b"c")
 
-        first  = audio_queue.get(timeout=0.01)
-        second = audio_queue.get(timeout=0.01)
-        marker = audio_queue.get(timeout=0.01)
+        first  = audio_queue.get()
+        second = audio_queue.get()
+        marker = audio_queue.get()
         await barrier.wait(timeout=0.05)
-        fourth = audio_queue.get(timeout=0.01)
+        fourth = audio_queue.get()
 
         self.assertEqual([first.data, second.data], [b"a", b"b"])
         self.assertIs(marker, barrier)
@@ -85,10 +89,10 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         barrier = audio_queue.put_barrier()
         signal  = audio_queue.request_stop()
 
-        audio = audio_queue.get(timeout=0.01)
-        marker = audio_queue.get(timeout=0.01)
+        audio = audio_queue.get()
+        marker = audio_queue.get()
         await barrier.wait(timeout=0.05)
-        stopped = audio_queue.get(timeout=0.01)
+        stopped = audio_queue.get()
 
         self.assertEqual(audio.data, b"old")
         self.assertIs(marker, barrier)
@@ -101,8 +105,8 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         audio_queue.put_audio(received_at=1.0, data=b"resumed")
         signal.cancel()
 
-        self.assertTrue(audio_queue.get(timeout=0.01).is_cancelled())
-        audio = audio_queue.get(timeout=0.01)
+        self.assertTrue(audio_queue.get().is_cancelled())
+        audio = audio_queue.get()
         self.assertEqual(audio.data, b"resumed")
 
     # Fail an unreached boundary instead of leaving its coordinator blocked on shutdown
@@ -115,7 +119,7 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "aborted"):
             await barrier.wait(timeout=0.05)
-        self.assertIsInstance(audio_queue.get(timeout=0.01), StopSignal)
+        self.assertIsInstance(audio_queue.get(), StopSignal)
 
 
 # ================================================================================
@@ -163,68 +167,241 @@ class InterimProgressTrackerTests(unittest.TestCase):
 # ================================================================================
 class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
     """
-    Verify immediate, correlated acknowledgement of a canonical `reply_now` request.
+    Verify the ack contract every client depends on: the caller's correlation ID comes
+    back, and the complete control state rides along on success and on rejection alike.
     """
-    # Dispatch one request and preserve its caller-provided correlation ID
-    async def test_reply_now_is_accepted_and_correlated(self) -> None:
-        consumer           = SimpleNamespace(reply_on_user_utt=False, streaming_active=True, save_audio=False)
-        consumer.reply_now = Mock()
-
-        ack = await dispatch_command(consumer, {"id": "request-1", "name": "reply_now"})
-
-        consumer.reply_now.assert_called_once_with()
-        self.assertEqual(ack["id"              ], "request-1")
-        self.assertEqual(ack["name"            ], "reply_now")
-        self.assertTrue (ack["ok"              ])
-        self.assertTrue (ack["state"]["manualMode"])
-
-    # Set automatic-response state directly instead of relying on transport-specific aliases
-    async def test_pause_responses_uses_desired_boolean_state(self) -> None:
+    # Apply a state change and report the resulting control state in its acknowledgement
+    async def test_accepted_command_returns_correlated_state(self) -> None:
         consumer = SimpleNamespace(
-            reply_on_user_utt      = True,
-            streaming_active       = True,
-            save_audio             = False,
-            _pending_response_task = None,
-            _manual_response_task = None,
-        )
-
-        ack = await dispatch_command(consumer, {"id": "request-2", "name": "pause_responses", "data": True})
-
-        self.assertTrue(ack["ok"])
-        self.assertFalse(consumer.reply_on_user_utt)
-        self.assertTrue(ack["state"]["responsesPaused"])
-
-    # Apply listening state through the shared stream operation
-    async def test_pause_listening_stops_stt_and_notifies_clients(self) -> None:
-        consumer = SimpleNamespace(
-            reply_on_user_utt        = True,
+            response_mode            = "automatic",
             streaming_active         = True,
             save_audio               = False,
             stt_provider             = SimpleNamespace(start=Mock(), stop=Mock()),
+            audio_recorder           = SimpleNamespace(resume=Mock(), pause=Mock()),
             send                     = AsyncMock(),
             _broadcast_stream_status = AsyncMock(),
         )
 
-        ack = await dispatch_command(consumer, {"id": "request-3", "name": "pause_listening", "data": True})
+        ack = await dispatch_command(consumer, {"id": "request-1", "name": "set_listening", "data": {"state": "paused"}})
 
-        self.assertTrue(ack["ok"])
         self.assertFalse(consumer.streaming_active)
         consumer.stt_provider.stop.assert_called_once_with()
-        consumer._broadcast_stream_status.assert_awaited_once_with("paused")
+        self.assertEqual(ack["id"   ], "request-1")
+        self.assertEqual(ack["name" ], "set_listening")
+        self.assertTrue (ack["ok"   ])
+        self.assertEqual(ack["state"], {"listening": "paused", "response_mode": "automatic", "recording_enabled": False})
 
-    # Read custom response text from the same data envelope sent by the admin frontend
-    async def test_send_custom_uses_canonical_data_envelope(self) -> None:
-        consumer                = SimpleNamespace(reply_on_user_utt=False, streaming_active=True, save_audio=False)
-        consumer.speak_response = Mock()
+    # Reject an out-of-vocabulary value without changing state, and say why
+    async def test_rejected_command_explains_itself_and_changes_nothing(self) -> None:
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
 
-        ack = await dispatch_command(
-            consumer,
-            {"id": "request-4", "name": "send_custom", "data": {"message": "  hello  "}},
+        ack = await dispatch_command(consumer, {"id": "request-2", "name": "set_response_mode", "data": {"mode": "sometimes"}})
+
+        self.assertEqual(consumer.response_mode, "automatic")
+        self.assertFalse(ack["ok"])
+        self.assertIn   ("automatic", ack["message"])
+        self.assertEqual(ack["state"]["response_mode"], "automatic")
+
+    # Keep malformed caller data from escaping the documented acknowledgement schema
+    async def test_invalid_command_id_is_rejected_with_safe_ack_shape(self) -> None:
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
+
+        ack = await dispatch_command(consumer, {"id": 123, "name": "get_control_state"})
+
+        self.assertFalse(ack["ok"])
+        self.assertIsInstance(ack["id"], str)
+        self.assertEqual(ack["name"], "get_control_state")
+        self.assertIn("non-empty string", ack["message"])
+        self.assertEqual(set(ack), {"id", "name", "ok", "message", "state"})
+
+    # Preserve coverage for the response commands that share the canonical envelope
+    async def test_response_commands_use_their_canonical_bodies(self) -> None:
+        consumer = SimpleNamespace(
+            response_mode="manual",
+            streaming_active=True,
+            save_audio=False,
+            last_response="previous response",
+            reply_now=Mock(),
+            speak_response=Mock(),
+            _pending_response_task=None,
+            _manual_response_task=None,
+            _reply_now_task=None,
         )
 
+        reply_ack  = await dispatch_command(consumer, {"id": "reply",  "name": "reply_now"})
+        repeat_ack = await dispatch_command(consumer, {"id": "repeat", "name": "repeat_last"})
+        custom_ack = await dispatch_command(consumer, {"id": "custom", "name": "send_custom", "data": {"message": "  hello  "}})
+
+        self.assertTrue(reply_ack["ok"] and repeat_ack["ok"] and custom_ack["ok"])
+        consumer.reply_now.assert_called_once_with()
+        self.assertEqual(consumer.speak_response.call_args_list[0].args, ("previous response",))
+        self.assertEqual(consumer.speak_response.call_args_list[1].args, ("hello",))
+
+    # Verify the recording setter is explicit and publishes the resulting state
+    async def test_set_recording_requires_a_boolean_and_broadcasts(self) -> None:
+        consumer = SimpleNamespace(
+            response_mode="automatic",
+            streaming_active=True,
+            save_audio=False,
+            _broadcast_recording_state=AsyncMock(),
+            send_json=AsyncMock(),
+        )
+
+        rejected = await dispatch_command(consumer, {"id": "bad", "name": "set_recording", "data": {"enabled": 1}})
+        accepted = await dispatch_command(consumer, {"id": "good", "name": "set_recording", "data": {"enabled": True}})
+
+        self.assertFalse(rejected["ok"])
+        self.assertTrue(accepted["ok"])
+        self.assertTrue(consumer.save_audio)
+        consumer._broadcast_recording_state.assert_awaited_once_with(True)
+        consumer.send_json.assert_awaited_once_with({"type": "recording_status", "data": {"enabled": True}})
+
+    # Exercise both high-level manual-mode shortcuts and their task-cancellation semantics
+    async def test_manual_mode_shortcuts_apply_their_documented_state(self) -> None:
+        pending = Mock()
+        pending.done.return_value = False
+        manual = Mock()
+        manual.done.return_value = False
+        forced = Mock()
+        forced.done.return_value = False
+        consumer = SimpleNamespace(
+            response_mode="automatic",
+            streaming_active=True,
+            save_audio=False,
+            reply_now=Mock(),
+            _pending_response_task=pending,
+            _manual_response_task=manual,
+            _reply_now_task=forced,
+        )
+
+        paused = await dispatch_command(consumer, {"id": "pause", "name": "pause_and_listen"})
+        resumed = await dispatch_command(consumer, {"id": "resume", "name": "resume_and_respond"})
+
+        self.assertTrue(paused["ok"] and resumed["ok"])
+        pending.cancel.assert_called_once_with()
+        manual.cancel.assert_called_once_with()
+        forced.cancel.assert_called_once_with()
+        consumer.reply_now.assert_called_once_with()
+        self.assertEqual(consumer.response_mode, "automatic")
+
+    # Validate the robot-action command before handing its asynchronous relay to the task helper
+    async def test_robot_action_command_accepts_only_canonical_kind_and_value(self) -> None:
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
+
+        with patch("chat_app.websocket.consumers.processing.commands.fire_and_log") as fire_and_log:
+            accepted = await dispatch_command(
+                consumer,
+                {"id": "action", "name": "robot_action", "data": {"kind": "animation", "value": "Wave"}},
+            )
+            relay_coroutine = fire_and_log.call_args.args[0]
+            relay_coroutine.close()
+
+        rejected = await dispatch_command(
+            consumer,
+            {"id": "bad-action", "name": "robot_action", "data": {"kind": "gesture", "value": "Wave"}},
+        )
+
+        self.assertTrue(accepted["ok"])
+        self.assertFalse(rejected["ok"])
+        self.assertIn("emotion, animation", rejected["message"])
+
+    # The state probe is a real public command and must return a complete no-op acknowledgement
+    async def test_get_control_state_is_a_no_op_with_complete_state(self) -> None:
+        consumer = SimpleNamespace(response_mode="manual", streaming_active=False, save_audio=True)
+
+        ack = await dispatch_command(consumer, {"id": "state", "name": "get_control_state"})
+
         self.assertTrue(ack["ok"])
-        self.assertFalse(consumer.reply_on_user_utt)
-        consumer.speak_response.assert_called_once_with("hello")
+        self.assertIsNone(ack["message"])
+        self.assertEqual(ack["state"], {
+            "listening": "paused",
+            "response_mode": "manual",
+            "recording_enabled": True,
+        })
+
+
+# ================================================================================
+# Client Protocol Frame Tests
+# ================================================================================
+class ClientProtocolFrameTests(unittest.IsolatedAsyncioTestCase):
+    # Primary and listener consumers relay this already-final client frame unchanged
+    async def test_committed_message_uses_canonical_nested_data_shape(self) -> None:
+        consumer = SimpleNamespace(context_buffer=[], MAX_CONTEXT=30, _broadcast_room=AsyncMock())
+
+        await _publish_chat_message(consumer, "user", "hello", 123.5)
+
+        consumer._broadcast_room.assert_awaited_once_with({
+            "type": "message",
+            "data": {"role": "user", "content": "hello", "ts": 123.5},
+        })
+
+    # Robot actions always use kind/value/duration and normalize only surrounding whitespace
+    async def test_robot_action_uses_canonical_shape(self) -> None:
+        consumer = SimpleNamespace(send_json=AsyncMock())
+
+        await format_send_actions_command(
+            consumer,
+            {"data": {"kind": "emotion", "value": " Happy ", "duration_ms": 750}},
+        )
+
+        consumer.send_json.assert_awaited_once_with({
+            "type": "robot_action",
+            "data": {"kind": "emotion", "value": "Happy", "duration_ms": 750},
+        })
+
+    # Primary and listener stream frames share the same object body
+    async def test_stream_status_uses_canonical_object_body(self) -> None:
+        consumer = SimpleNamespace(
+            streaming_active=True,
+            stt_provider=SimpleNamespace(stop=Mock()),
+            audio_recorder=SimpleNamespace(pause=Mock()),
+            send=AsyncMock(),
+            _broadcast_stream_status=AsyncMock(),
+        )
+
+        await set_streaming_active(consumer, active=False)
+
+        sent = json.loads(consumer.send.await_args.args[0])
+        self.assertEqual(sent, {"type": "stream_status", "data": {"status": "paused"}})
+        consumer._broadcast_stream_status.assert_awaited_once_with("paused")
+
+    # Register only after notifying older channels so a connection cannot replace itself
+    async def test_primary_connection_claim_notifies_then_registers(self) -> None:
+        calls = []
+
+        async def group_send(group, event):
+            calls.append(("send", group, event))
+
+        async def group_add(group, channel):
+            calls.append(("add", group, channel))
+
+        consumer = SimpleNamespace(
+            user=SimpleNamespace(id=7),
+            channel_name="new-channel",
+            channel_layer=SimpleNamespace(group_send=group_send, group_add=group_add),
+        )
+
+        await claim_primary_connection(consumer)
+
+        self.assertEqual(calls[0][0], "send")
+        self.assertEqual(calls[1][0], "add")
+        self.assertEqual(calls[0][1], "chat_user_7_primary")
+        self.assertEqual(calls[0][2]["replacement_channel"], "new-channel")
+
+    # An older primary channel closes with the documented application close code
+    async def test_replaced_primary_connection_closes(self) -> None:
+        consumer = SimpleNamespace(
+            channel_name="old-channel",
+            user=SimpleNamespace(id=7),
+            close=AsyncMock(),
+        )
+
+        await ChatConsumer.ws_session_replaced(
+            consumer,
+            {"replacement_channel": "new-channel"},
+        )
+
+        consumer.close.assert_awaited_once_with(code=4004)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
+import type { ResponseMode } from "@/hooks/chat-listener/chat-controls/types";
 
 // --------------------------------------------------------------------------------
 // Define Types
@@ -11,15 +12,14 @@ type Pending = Partial<{
     send_custom        : boolean;
 }>;
 
-// manualMode is:
-//     TRUE only after backend ACK confirms pause/listen entered.
-//     FALSE when in normal automatic responses mode.
+// responseMode is the backend's own control state; it only becomes "manual" after an ACK
+// confirms the transition, never optimistically when a button is pressed.
 type Props = {
-    connected   : boolean;
-    manualMode  : boolean;
-    pending    ?: Pending;
+    connected    : boolean;
+    responseMode : ResponseMode;
+    pending     ?: Pending;
 
-    // Commands (send to backend; parent flips manualMode only on ACK)
+    // Commands (send to backend; parent flips responseMode only on ACK)
     onPauseAndListen   : () => void;
     onResumeAndRespond : () => void;
     onRepeatLast       : () => void;
@@ -35,7 +35,7 @@ type Props = {
 // ================================================================================
 export default memo(function ResponseControlGroup({
     connected,
-    manualMode,
+    responseMode,
     pending,
     onPauseAndListen,
     onResumeAndRespond,
@@ -43,6 +43,9 @@ export default memo(function ResponseControlGroup({
     onSendCustom,
     suggestedDraft = null,
 }: Props) {
+    // Every control in this group is only usable once the backend is in manual mode
+    const manualMode = responseMode === "manual";
+
     // Keep track of the different pending states (each command type waits for acks)
     const p = useMemo(() => ({
         pause_and_listen   : false,

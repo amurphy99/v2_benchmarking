@@ -33,7 +33,7 @@ from ...services.llm.live_chat.cognibot_api                     import CognibotR
 
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
-from .utils   .groups       import join_chat_consumer_groups, leave_all_groups, format_send_actions_command
+from .utils   .groups       import claim_primary_connection, join_chat_consumer_groups, leave_all_groups, format_send_actions_command, PRIMARY_REPLACED_CLOSE_CODE
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 
@@ -53,8 +53,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Helpers for responding to the user
     # --------------------------------------------------------------------------------
     # Send a "mood" response to the frontend client (so the robots can emote)
+    # The mood label is passed through untouched; frontends map it to their own capabilities
     async def send_response_mood(self, mood: str) -> None:
-        payload = {"data": {"action": mood.upper()}}
+        payload = {"data": {"kind": "emotion", "value": mood}}
         await format_send_actions_command(self, payload)
 
     # Generate a spoken response using the standard method 
@@ -77,6 +78,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.session_id       = None
         self.context_buffer   = []
         self.stt_provider     = None
+        self.primary_group    = None
 
         # Define the response generation method to be used in the chat
         self.response_method = self.response_method
@@ -96,9 +98,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
         # Configuration based on the source platform for the chat
-        self.use_backend_STT   = (self.source == "webapp" )  # Send the user text to the frontend so it can see it too
-        self.use_backend_TTS   = (self.source == "webapp" )  # Should the ChatHandler reply with audio bytes as well as text 
-        self.reply_on_user_utt = (self.source != "qtrobot")  # for qtrobot, we turn off auto-reply so that we can control from the robot when to reply
+        self.use_backend_STT = (self.source == "webapp")  # Send the user text to the frontend so it can see it too
+        self.use_backend_TTS = (self.source == "webapp")  # Should the ChatHandler reply with audio bytes as well as text
+
+        # "automatic" replies on every finalized utterance; "manual" waits for an explicit command
+        # qtrobot starts manual so the robot itself decides when to reply
+        self.response_mode = "manual" if (self.source == "qtrobot") else "automatic"
 
         # Accept the connection
         await self.accept()
@@ -152,9 +157,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.save_audio     = await db_s2a(ChatService.get_audio_recording_default)(self.session_id)
         self.audio_recorder = SessionAudioRecorder(self.session_id)
 
+        # A fully initialized connection takes ownership only after it is ready to receive
+        # traffic. Any older primary socket for this user is closed with a dedicated code.
+        await claim_primary_connection(self)
+
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id, 
-                             config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "auto_reply": self.reply_on_user_utt})
+                             config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode})
     
     # ================================================================================
     # Disconnect
@@ -260,6 +269,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def ws_monitor         (self, event): await forward_payload_to_client(self, event)
     async def ws_recording_status(self, event): pass  # Primary consumer echoes its own broadcast; no action needed
 
+    # A newer primary connection for this account has taken ownership of live chat traffic.
+    async def ws_session_replaced(self, event):
+        if event.get("replacement_channel") == self.channel_name: return
+        logger.info(f"{lu.CC_MAIN} Primary chat connection replaced for user {getattr(self.user, 'id', None)}.{lu.RESET}")
+        await self.close(code=PRIMARY_REPLACED_CLOSE_CODE)
+
     # --------------------------------------------------------------------------------
     # Broadcast Helpers
     # --------------------------------------------------------------------------------
@@ -280,7 +295,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.recording_status", "data": {"enabled": enabled}})
 
     # Broadcasts the complete canonical control state to every listener
-    async def _broadcast_control_state(self, state: dict[str, bool]) -> None:
+    async def _broadcast_control_state(self, state: dict[str, object]) -> None:
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.control_state", "data": state})
 
 

@@ -16,6 +16,10 @@ Broadcast rooms:
   - From `ChatListener` to `ChatConsumer`
   - Relays commands sent to the ChatListener (e.g. "reply_now")
 
+"primary_group"
+  - Between `ChatConsumer` connections belonging to the same account
+  - Lets a newly initialized primary connection replace an older one
+
 """
 from __future__ import annotations
 
@@ -28,6 +32,25 @@ from ....services.logging_utils import CC_MAIN, CC_H, CC_R, RESET
 # Import the class for type checking
 from typing import TYPE_CHECKING
 if TYPE_CHECKING: from ..consumers import ChatConsumer
+
+PRIMARY_REPLACED_CLOSE_CODE = 4004
+
+
+# --------------------------------------------------------------------------------
+# [ChatConsumer] Ensure one primary WebSocket owns a user's live chat
+# --------------------------------------------------------------------------------
+async def claim_primary_connection(consumer: ChatConsumer) -> None:
+    """
+    Notify any older primary connection for this account before registering the new
+    channel as the owner. The replacement channel is deliberately added after the
+    broadcast so it never receives its own takeover event.
+    """
+    consumer.primary_group = f"chat_user_{consumer.user.id}_primary"
+    await consumer.channel_layer.group_send(
+        consumer.primary_group,
+        {"type": "ws.session_replaced", "replacement_channel": consumer.channel_name},
+    )
+    await consumer.channel_layer.group_add(consumer.primary_group, consumer.channel_name)
 
 
 # --------------------------------------------------------------------------------
@@ -54,6 +77,7 @@ async def leave_all_groups(consumer, log_util):
         getattr(consumer,    "room_group", None), 
         getattr(consumer, "monitor_group", None),
         getattr(consumer, "control_group", None),
+        getattr(consumer, "primary_group", None),
     ]
     for group in consumer_groups:
         if group: 
@@ -64,15 +88,8 @@ async def leave_all_groups(consumer, log_util):
 # ================================================================================
 # [ChatListener] Help format the relay broadcasts
 # ================================================================================
-def format_message_broadcast(event):
-    return {
-        "type": "message", 
-        "data": {
-            "ts"      : event["payload"].get("ts"  ),
-            "role"    : event["payload"].get("role"),
-            "content" : event["payload"].get("text"),
-        }
-    }
+# NOTE: Chat messages no longer need a formatter here. `processing.messages` broadcasts the
+#       final client-facing frame, so the primary and the listeners both relay it unchanged.
 
 # TODO: Somehow include the timestamp with these a more official way?
 # TODO: That would be in the `biomarkers/biomarker_scores.py` file (i think)
@@ -89,42 +106,43 @@ def format_biomarker_broadcast(event):
 # ================================================================================
 # [ChatConsumer] Help format the relay broadcasts
 # ================================================================================
-async def format_send_actions_command(consumer: ChatConsumer, payload: dict):
+# Canonical robot action vocabulary (the only two shapes any frontend ever receives)
+ROBOT_ACTION_KINDS         = ("emotion", "animation")
+DEFAULT_ACTION_DURATION_MS = 3_000
+
+async def format_send_actions_command(consumer: ChatConsumer, payload: dict) -> None:
     """
-    Commands can look like:
-        {'id': '..', 'name': 'robot_action', 'data': {'emotion': 'Happy'}}
-    or
-        {'id': '..', 'name': 'robot_action', 'data': {'animation': 'Idle'}}
+    Relay one robot action to the primary frontend client.
 
     Two ways of getting an action command here: (1) we get it from structured generation
-    of the LLM, or (2) we get it from the admin page using a command button. In both
-    cases, we need to make sure the command we have selected matches the current chat's
-    "interface", so the web UI or the physical robots. Each one takes different options
-    for behaviors. 
-    """
-    # TODO: Use this to handle the command formatting stuff
-    # Check what source we are chatting with; this will tell us
-    chat_source = consumer.source
+    of the LLM, or (2) we get it from the admin page using a command button. Both arrive
+    in the same form, and both leave in the same form:
 
+        payload  {'id': '..', 'name': 'robot_action', 'data': {'kind': 'emotion', 'value': 'Happy'}}
+        relayed  {'type': 'robot_action', 'data': {'kind': 'emotion', 'value': 'Happy', 'duration_ms': 3000}}
+
+    NOTE: We deliberately do NOT branch on `consumer.source` here. The backend sends every
+          interface the same action vocabulary, and it is each frontend's job to map that
+          onto whatever it can actually do (see `frontend/src/pages/admin/FRONTEND_CAPABILITIES.md`).
+          A robot with no "Sick" face decides for itself what to show instead.
+    """
     # Get the command data
     value = payload.get("data", {})
+    if not isinstance(value, dict): value = {}
 
-    # Flexible; we can take an "emotion", "animation", or "expression" since different robots take different options
-    emotion    : str = value.get("emotion")
-    animation  : str = value.get("animation")
-    expression : str = value.get("action")
+    kind  = value.get("kind" )
+    label = value.get("value")
 
-    data = {}
-    if   emotion    : data = {"type":      "emotion",   "value": emotion  }
-    elif animation  : data = {"type":      "animation", "value": animation}
-    elif expression : data = {"emotion": expression.capitalize(), "duration_ms": 3_000}
-    else            : logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} No emotion or animation found in payload: {payload}. {RESET}")
-        
+    # Never relay an action the client has no way to act on
+    if (kind not in ROBOT_ACTION_KINDS) or (not isinstance(label, str)) or (not label.strip()):
+        logger.info(f"{CC_MAIN} {CC_H}WARNING{CC_R} Unusable robot action payload: {payload}. {RESET}")
+        return
+
+    # Duration is only ever a hint; frontends are free to ignore it
+    duration = value.get("duration_ms", DEFAULT_ACTION_DURATION_MS)
+    if (not isinstance(duration, int)) or (isinstance(duration, bool)): duration = DEFAULT_ACTION_DURATION_MS
+
     # Build & send the payload to the frontend client
-    relay_payload = {"type": "robot_action", "name": "robot_action", "data": data}
-    logger.info(f"{CC_MAIN} Command payload built: {CC_H}{relay_payload}{CC_R}, relaying now... {RESET}")
+    relay_payload = {"type": "robot_action", "data": {"kind": kind, "value": label.strip(), "duration_ms": duration}}
+    logger.info(f"{CC_MAIN} Robot action relayed: {CC_H}{relay_payload['data']}{CC_R}. {RESET}")
     await consumer.send_json(relay_payload)
-
-# TODO: Temporary helper; should be replaced by something that handles all UIs
-def map_action_to_webapp():
-    pass

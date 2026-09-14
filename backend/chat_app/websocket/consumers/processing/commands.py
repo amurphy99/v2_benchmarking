@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services           import logging_utils as lu
 from ...services.bg_helpers import fire_and_log
-from  ..utils.groups        import format_send_actions_command
+from  ..utils.groups        import format_send_actions_command, ROBOT_ACTION_KINDS
 from  .stream              import set_streaming_active
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
@@ -32,21 +32,30 @@ class CommandRejected(ValueError):
 # ================================================================================
 # Control State
 # ================================================================================
+# Canonical control vocabularies (the only values any client ever sends or receives)
+LISTENING_STATES     = ("active", "paused")
+RESPONSE_MODES       = ("automatic", "manual")
+MAX_COMMAND_ID_CHARS = 128
+
 # Return the complete frontend-facing state after every command
-def get_control_state(consumer: ChatConsumer) -> dict[str, bool]:
-    responses_paused = not getattr(consumer, "reply_on_user_utt", True)
+# NOTE: `streaming_active` stays an internal bool (the STT provider and recorder both want a
+#       boolean); it is mapped to its "active"/"paused" string only here, at the wire boundary.
+def get_control_state(consumer: ChatConsumer) -> dict[str, object]:
     return {
-        "listeningPaused"  : not getattr(consumer, "streaming_active", False),
-        "responsesPaused"  : responses_paused,
-        "manualMode"       : responses_paused,
-        "recordingEnabled" : getattr(consumer, "save_audio", False),
+        "listening"         : "active" if getattr(consumer, "streaming_active", False) else "paused",
+        "response_mode"     : getattr(consumer, "response_mode", "automatic"),
+        "recording_enabled" : getattr(consumer, "save_audio", False),
     }
 
-# Interpret a boolean body as desired paused state, or toggle when omitted
-def _desired_paused(payload: dict[str, object], current: bool) -> bool:
+# Pull one required value out of a command body and check it against its vocabulary
+# There is deliberately no "omit to toggle" fallback; callers always state what they want
+def _required_choice(payload: dict[str, object], key: str, allowed: tuple[str, ...]) -> str:
     value = payload.get("data")
-    if isinstance(value, bool): return value
-    else:                       return not current
+    if not isinstance(value, dict): raise CommandRejected(f"A '{key}' value is required")
+
+    choice = value.get(key)
+    if choice not in allowed: raise CommandRejected(f"'{key}' must be one of: {', '.join(allowed)}")
+    return choice
 
 # Cancel response work without delaying the command acknowledgement
 def _cancel_response_tasks(consumer: ChatConsumer, *, include_forced: bool = False) -> None:
@@ -87,25 +96,25 @@ async def _send_custom(consumer: ChatConsumer, payload: dict[str, object]) -> No
 # --------------------------------------------------------------------------------
 # High level controls (i.e., simple pause, resume)
 # --------------------------------------------------------------------------------
-# Apply the caller's desired listening state
-async def _pause_listening(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    paused = _desired_paused(payload, current=not consumer.streaming_active)
-    await set_streaming_active(consumer, active=not paused)
+# Apply the caller's requested listening state
+async def _set_listening(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    state = _required_choice(payload, "state", LISTENING_STATES)
+    await set_streaming_active(consumer, active=(state == "active"))
 
-# Apply the caller's desired automatic-response state
-async def _pause_responses(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    paused = _desired_paused(payload, current=not consumer.reply_on_user_utt)
-    consumer.reply_on_user_utt = not paused
-    if paused: _cancel_response_tasks(consumer)
+# Apply the caller's requested automatic-response mode
+async def _set_response_mode(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    mode = _required_choice(payload, "mode", RESPONSE_MODES)
+    consumer.response_mode = mode
+    if mode == "manual": _cancel_response_tasks(consumer)
 
 # Enter manual response mode and cancel any response already in progress
 async def _pause_and_listen(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_on_user_utt = False
+    consumer.response_mode = "manual"
     _cancel_response_tasks(consumer, include_forced=True)
 
 # Respond to staged speech and restore automatic response mode
 async def _resume_and_respond(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_on_user_utt = True
+    consumer.response_mode = "automatic"
     consumer.reply_now()
 
 # --------------------------------------------------------------------------------
@@ -115,16 +124,22 @@ async def _resume_and_respond(consumer: ChatConsumer, payload: dict[str, object]
 async def _robot_action(consumer: ChatConsumer, payload: dict[str, object]) -> None:
     value = payload.get("data")
     if not isinstance(value, dict): raise CommandRejected("Robot action data is required")
-    if not any(isinstance(value.get(key), str) and value.get(key) for key in ("emotion", "animation", "action")):
-        raise CommandRejected("A robot emotion, animation, or action is required")
+
+    kind  = value.get("kind" )
+    label = value.get("value")
+
+    if  kind not in ROBOT_ACTION_KINDS:                    raise CommandRejected(f"Robot action kind must be one of: {', '.join(ROBOT_ACTION_KINDS)}")
+    if (not isinstance(label, str)) or (not label.strip()): raise CommandRejected("A robot action value is required")
+
     fire_and_log(format_send_actions_command(consumer, payload), name="command::robot_action")
 
 # Change whether the completed session recording is persisted
-async def _toggle_recording(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+async def _set_recording(consumer: ChatConsumer, payload: dict[str, object]) -> None:
     value = payload.get("data")
-    if not isinstance(value, dict): raise CommandRejected("Recording command data is required")
+    if not isinstance(value, dict):            raise CommandRejected("An 'enabled' value is required")
+    if not isinstance(value.get("enabled"), bool): raise CommandRejected("'enabled' must be true or false")
 
-    consumer.save_audio = bool(value.get("enabled", False))
+    consumer.save_audio = value["enabled"]
     await consumer._broadcast_recording_state(consumer.save_audio)
 
     try: await consumer.send_json({"type": "recording_status", "data": {"enabled": consumer.save_audio}})
@@ -135,15 +150,21 @@ async def _toggle_recording(consumer: ChatConsumer, payload: dict[str, object]) 
 # --------------------------------------------------------------------------------
 # Canonical vocabulary shared by both WebSocket transports
 COMMAND_HANDLERS: dict[str, CommandHandler] = {
+
+    # Assistant response controls
     "reply_now"          : _reply_now,
-    "pause_listening"    : _pause_listening,
-    "pause_responses"    : _pause_responses,
-    "robot_action"       : _robot_action,
-    "pause_and_listen"   : _pause_and_listen,
-    "resume_and_respond" : _resume_and_respond,
     "repeat_last"        : _repeat_last,
     "send_custom"        : _send_custom,
-    "toggle_recording"   : _toggle_recording,
+
+    # High level controls (i.e., simple pause, resume)
+    "set_listening"      : _set_listening,
+    "set_response_mode"  : _set_response_mode,
+    "pause_and_listen"   : _pause_and_listen,
+    "resume_and_respond" : _resume_and_respond,
+
+    # Misc. command types
+    "robot_action"       : _robot_action,
+    "set_recording"      : _set_recording,
     "get_control_state"  : _get_control_state,
 }
 
@@ -157,9 +178,40 @@ async def dispatch_command(consumer: ChatConsumer, payload: dict[str, object]) -
     Execute one canonical command and return its immediate correlated result. The
     transport adapter decides where to deliver this acknowledgement.
     """
-    command_id = payload.get("id") or str(uuid4())
-    command    = payload.get("name")
-    handler    = COMMAND_HANDLERS.get(command) if isinstance(command, str) else None
+    raw_command_id = payload.get("id")
+    raw_command    = payload.get("name")
+
+    # Keep acknowledgement envelopes inside the documented schema even when the caller
+    # supplies malformed JSON. Invalid caller IDs cannot safely be echoed as correlation
+    # IDs, so give the rejection a fresh server-generated ID instead.
+    if raw_command_id is None:
+        command_id = str(uuid4())
+    elif (
+        (not isinstance(raw_command_id, str))
+        or (not raw_command_id.strip())
+        or (len(raw_command_id) > MAX_COMMAND_ID_CHARS)
+    ):
+        return {
+            "id"      : str(uuid4()),
+            "name"    : raw_command if isinstance(raw_command, str) else None,
+            "ok"      : False,
+            "message" : f"Command id must be a non-empty string no longer than {MAX_COMMAND_ID_CHARS} characters",
+            "state"   : get_control_state(consumer),
+        }
+    else:
+        command_id = raw_command_id
+
+    if not isinstance(raw_command, str):
+        return {
+            "id"      : command_id,
+            "name"    : None,
+            "ok"      : False,
+            "message" : "Command name must be a string",
+            "state"   : get_control_state(consumer),
+        }
+
+    command = raw_command
+    handler = COMMAND_HANDLERS.get(command)
 
     # Return a standard ack for unknown commands
     if handler is None:

@@ -43,16 +43,13 @@ export function Chat() {
     // System utterance received
     const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
 
-    // Happy, Sad, Surprised, Scared, Angry, Neutral
-    const onEmotion = (emotion: string) => {
-        if (avatarRef.current) { avatarRef.current.playEmotion(emotion); }
-    }
-
-    const onExpression = (data: any) => {
-        if (avatarRef.current) {
-            if      (data.type == "emotion"  ) { avatarRef.current.playEmotion  (data.value); } 
-            else if (data.type == "animation") { avatarRef.current.playAnimation(data.value); }
-        }
+    // Backend "robot_action" frames: {kind: "emotion" | "animation", value, duration_ms}
+    // "emotion" is the LLM's own vocabulary, which AvatarUtils maps onto this model's clips.
+    // "animation" is a literal clip name (the admin panel drives the avatar directly).
+    const onRobotAction = (data: any) => {
+        if (!avatarRef.current) return;
+        if      (data?.kind === "emotion"  ) { avatarRef.current.playEmotion  (data.value); }
+        else if (data?.kind === "animation") { avatarRef.current.playAnimation(data.value); }
     }
 
     // --------------------------------------------------------------------------------
@@ -80,13 +77,10 @@ export function Chat() {
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
-        onEmotion,
-        onExpression,
+        onRobotAction,
         wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
 
         onDebugTurn     : (t) => { setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]);                                 },
-        onRagParseError : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
-        onChatError     : ( ) => { setBotMessage(<>Sorry, I didn't quite catch that. Could you please repeat what you said?</>); },
 
         // Chat ended
         onChatClosed: () => {

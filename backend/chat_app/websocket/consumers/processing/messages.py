@@ -90,7 +90,8 @@ async def _publish_chat_message(
         f"{message_style}\"{text}\"{RESET}"
     ))
 
+    # Broadcast the final client-facing frame; both the primary and the listeners relay it as-is
     # A listener failure must not invalidate a message already saved to the database
-    try: await consumer._broadcast_room({"type": "message", "role": role, "text": text, "ts": timestamp})
+    try: await consumer._broadcast_room({"type": "message", "data": {"role": role, "content": text, "ts": timestamp}})
     except Exception: logger.exception(f"{CC_MAIN} Failed to broadcast saved {role} message.{RESET}")
 

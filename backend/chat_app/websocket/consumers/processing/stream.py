@@ -48,6 +48,7 @@ async def set_streaming_active(consumer: ChatConsumer, active: bool) -> None:
     consumer.streaming_active = active
 
     # Notify the primary client directly, then broadcast to every listener
-    try: await consumer.send(json.dumps({"type": "stream_status", "data": next_status}))
+    # Both transports get the same {"status": ...} body so client code can be shared
+    try: await consumer.send(json.dumps({"type": "stream_status", "data": {"status": next_status}}))
     except Exception: pass
     await consumer._broadcast_stream_status(next_status)

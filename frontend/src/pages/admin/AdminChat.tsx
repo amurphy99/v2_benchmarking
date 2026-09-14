@@ -33,6 +33,9 @@ import useChatListener from "@/hooks/chat-listener/useChatListener";
 import type { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
 import type { StreamStatus } from "./components/admin_header/StatusComponents";
 
+// Which robot actions the monitored frontend can perform
+import { getCapabilityProfile } from "./capabilities/profiles";
+
 // Data received from the backend
 import { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
 import { useLocalChatSession } from "@/hooks/live-chat";
@@ -81,14 +84,13 @@ export function AdminChat() {
         onStreamStatus    : (st)   => { setStreamStatus(st?.status ?? "active"); },
         onControlState    : (st)   => {
             setControlState((s) => ({
-                listeningPaused  : st?.listeningPaused  ?? s.listeningPaused,
-                responsesPaused  : st?.responsesPaused  ?? s.responsesPaused,
-                manualMode       : st?.manualMode       ?? s.manualMode,
-                recordingEnabled : st?.recordingEnabled ?? s.recordingEnabled,
+                listening         : st?.listening         ?? s.listening,
+                response_mode     : st?.response_mode     ?? s.response_mode,
+                recording_enabled : st?.recording_enabled ?? s.recording_enabled,
             }));
         },
         onRecordingStatus : (st)   => {
-            setControlState((s) => ({...s, recordingEnabled: st?.enabled ?? s.recordingEnabled}));
+            setControlState((s) => ({...s, recording_enabled: st?.enabled ?? s.recording_enabled}));
         },
     });
 
@@ -105,15 +107,18 @@ export function AdminChat() {
     // Control state (command success/failure confirmed by backend acks)
     // --------------------------------------------------------------------------------
     const [controlState, setControlState] = useState<ControlState>({
-        listeningPaused  : false,
-        responsesPaused  : false,
-        manualMode       : false,
-        recordingEnabled : false,
+        listening         : "active",
+        response_mode     : "automatic",
+        recording_enabled : false,
     });
 
     // Ack routing (AdminControlsPanel registers a handler; useChatListener calls it)
     const ackHandlerRef      = useRef<(ack: CommandAck) => void>(() => {});
     const registerAckHandler = (fn:   (ack: CommandAck) => void) => { ackHandlerRef.current = fn; };
+
+    // Which action buttons to offer, based on what the monitored frontend can actually do.
+    // `avatarModel` only matters for the webapp, where the avatar is a per-user setting.
+    const capabilities = getCapabilityProfile(sessionInfo?.source, sessionInfo?.avatarModel);
 
     // ================================================================================
     // UI Components
@@ -153,6 +158,7 @@ export function AdminChat() {
                         controlState         = {controlState}
                         setControlState      = {setControlState}
                         registerAckHandler   = {registerAckHandler}
+                        capabilities         = {capabilities}
                         onAddSampleMessage   = {addSampleMessage}
                         onAddSampleBiomarker = {addSampleBiomarkerScore}
                     />

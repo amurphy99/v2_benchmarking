@@ -9,6 +9,7 @@ send commands to the backend.
 // Utilities
 import { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
 import { useCommandAcks           } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
+import type { CapabilityProfile   } from "../capabilities/profiles";
 
 // Button Groups
 import    DevSamplesGroup       from "./controlGroups/DevSamplesGroup";
@@ -29,9 +30,10 @@ export function AdminControlsPanel({
 
     // All used by 'useCommandAcks' hook
     send,                 // Send data through the WebSocket
-    controlState,         // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
+    controlState,         // State of the control buttons (e.g. "listening", "response_mode")
     setControlState,      // Apply state updates to the AdminControlPanel (listening or paused)
     registerAckHandler,   // Method that allows us to register something from here as the handler for an ack
+    capabilities,         // Which robot actions the monitored frontend can actually perform
 }: {
     connected            : boolean;
     onAddSampleMessage   : () => void;
@@ -40,6 +42,7 @@ export function AdminControlsPanel({
     controlState         : ControlState;
     setControlState      : (fn: (prev: ControlState) => ControlState) => void;
     registerAckHandler   : (fn: (ack:  CommandAck  ) => void        ) => void;
+    capabilities         : CapabilityProfile;
 }) {
 
     // Use the prebuilt hook for handling commands & acks
@@ -62,9 +65,9 @@ export function AdminControlsPanel({
                 connected    = {connected}
                 controlState = {controlState}
                 pending      = {{
-                    pause_listening : pending.pause_listening,
-                    pause_responses : pending.pause_responses,
-                    reply_now       : pending.reply_now,
+                    set_listening     : pending.set_listening,
+                    set_response_mode : pending.set_response_mode,
+                    reply_now         : pending.reply_now,
                 }}
                 onToggleListening = {actions.toggleListening}
                 onToggleResponses = {actions.toggleResponses}
@@ -74,7 +77,7 @@ export function AdminControlsPanel({
             {/* Manually Control How the Robot Responds */}
             <ResponseControlGroup
                 connected          = {connected}
-                manualMode         = {controlState.manualMode}
+                responseMode       = {controlState.response_mode}
                 pending={{
                     pause_and_listen   : pending.pause_and_listen,
                     resume_and_respond : pending.resume_and_respond,
@@ -88,10 +91,11 @@ export function AdminControlsPanel({
                 suggestedDraft     = {null                    }
             />
 
-            {/* Avatar Actions */}
+            {/* Avatar Actions (buttons come from the monitored frontend's capability profile) */}
             <AvatarActionsGroup
-                connected = {connected}
-                pending   = {{
+                connected    = {connected}
+                capabilities = {capabilities}
+                pending      = {{
                     robot_emotion   : pending.robot_emotion,
                     robot_animation : pending.robot_animation,
                 }}
@@ -102,8 +106,8 @@ export function AdminControlsPanel({
             {/* Recording Toggle */}
             <RecordingControlGroup
                 connected        = {connected}
-                recordingEnabled = {controlState.recordingEnabled}
-                pending          = {pending.toggle_recording}
+                recordingEnabled = {controlState.recording_enabled}
+                pending          = {pending.set_recording}
                 onToggleRecording= {actions.toggleRecording}
             />
 
