@@ -4,6 +4,11 @@ Code in the `consumers/` directory handles all live WebSocket connections used b
 
 This `README` covers the standard and activity chat consumers plus the admin listener. The internal RAG implementation code is outside of scope for this; the activity consumer only provides a different `response_method` to the otherwise shared response flow.
 
+> **Looking for the primary-client wire format?** [`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md)
+> is the contract used by the web chat, mobile clients, and physical robots. It also defines
+> the command and acknowledgement shapes shared with the admin listener. Listener-only
+> initialization, history, biomarker, and ping/pong frames remain an internal admin-UI API.
+
 <!-- -------------------------------------------------------------------------------- -->
 <!-- WebSocket Endpoints                                                              -->
 <!-- -------------------------------------------------------------------------------- -->
@@ -167,17 +172,14 @@ On disconnect, the final recording toggle determines the outcome:
            attach a one-to-one `SessionAudio` metadata row to the `ChatSession`.
 
 Assistant TTS bytes are not added to this WAV. Instead, each outbound `llm_response`
-and `audio_chunk` includes the persisted assistant message's `responseId`. A frontend
-may optionally report actual playback boundaries:
+and `audio_chunk` includes the persisted assistant message's `responseId`, and a frontend may
+optionally report actual playback boundaries back with a `tts_playback` message (see
+[`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md) for its shape).
 
-```json
-{"type": "tts_playback", "data": {"responseId": 123, "state": "started"}}
-```
-
-The accepted states are `started` and `finished`. Missing events are valid, which keeps
-text-only robot frontends compatible. Accepted events fill the assistant message's
-normal `start_ts` and `end_ts` audible interval. For messages with word timing, those
-same fields are derived from the earliest and latest associated `ChatWord` rows.
+Missing playback events are valid, which keeps text-only robot frontends compatible. Accepted
+events fill the assistant message's normal `start_ts` and `end_ts` audible interval. For
+messages with word timing, those same fields are derived from the earliest and latest
+associated `ChatWord` rows.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Staged Text and Automatic Responses                                              -->
@@ -261,49 +263,14 @@ audio and fails boundaries that can no longer be reached.
 <!-- -------------------------------------------------------------------------------- -->
 ## Canonical Commands and Acknowledgements
 
-Both primary and listener clients use the same command envelope:
+Both primary and listener clients use the same command envelope, and
+`processing.commands.dispatch_command()` owns the vocabulary, the state transitions, and the
+acknowledgement body returned to both transports.
 
-```json
-{
-  "type": "command",
-  "data": {
-    "id": "optional-caller-correlation-id",
-    "name": "reply_now",
-    "data": null
-  }
-}
-```
-
-`processing.commands.dispatch_command()` owns the vocabulary and returns a common ack
-body:
-
-```json
-{
-  "id": "the-request-id",
-  "name": "reply_now",
-  "ok": true,
-  "message": null,
-  "state": {
-    "listeningPaused": false,
-    "responsesPaused": false,
-    "manualMode": false,
-    "recordingEnabled": false
-  }
-}
-```
-
-Current canonical names are:
-
-- `reply_now`
-- `pause_listening`
-- `pause_responses`
-- `pause_and_listen`
-- `resume_and_respond`
-- `repeat_last`
-- `send_custom`
-- `robot_action`
-- `toggle_recording`
-- `get_control_state` (internal listener synchronization)
+**The shared command wire format lives in [`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md)** --
+command names, payload shapes, the ack body, and the control-state fields are documented there.
+This README covers how the primary and listener transports carry that shared contract, along
+with the listener-only backend architecture.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Direct and Listener Command Paths                                                -->
