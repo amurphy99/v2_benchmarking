@@ -44,7 +44,7 @@ def get_control_state(consumer: ChatConsumer) -> dict[str, object]:
     return {
         "listening"         : "active" if getattr(consumer, "streaming_active", False) else "paused",
         "response_mode"     : getattr(consumer, "response_mode", "automatic"),
-        "recording_enabled" : getattr(consumer, "save_audio", False),
+        "recording_enabled" : getattr(consumer, "save_audio",    False      ),
     }
 
 # Pull one required value out of a command body and check it against its vocabulary
@@ -79,7 +79,8 @@ async def _get_control_state(consumer: ChatConsumer, payload: dict[str, object])
 # --------------------------------------------------------------------------------
 # Request a response at the audio queue boundary that exists right now
 async def _reply_now(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    consumer.reply_now()
+    metadata = payload.get("_reply_now_metadata")
+    await consumer.accept_reply_now(metadata if isinstance(metadata, dict) else {})
 
 # Repeat the latest assistant response through the serialized speech path
 async def _repeat_last(consumer: ChatConsumer, payload: dict[str, object]) -> None:
@@ -88,10 +89,11 @@ async def _repeat_last(consumer: ChatConsumer, payload: dict[str, object]) -> No
 
 # Speak an admin-supplied response through the serialized speech path
 async def _send_custom(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    value   = payload.get("data")
-    message = value.get("message") if isinstance(value, dict) else None
+    value   = payload.get("data"   )
+    message = value  .get("message") if isinstance(value, dict) else None
     if (not isinstance(message, str)) or (not message.strip()): raise CommandRejected("Custom response text is required")
     consumer.speak_response(message.strip())
+
 
 # --------------------------------------------------------------------------------
 # High level controls (i.e., simple pause, resume)
@@ -116,6 +118,7 @@ async def _pause_and_listen(consumer: ChatConsumer, payload: dict[str, object]) 
 async def _resume_and_respond(consumer: ChatConsumer, payload: dict[str, object]) -> None:
     consumer.response_mode = "automatic"
     consumer.reply_now()
+
 
 # --------------------------------------------------------------------------------
 # Misc. command types
@@ -173,58 +176,32 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
 # Dispatch Commands
 # ================================================================================
 # All commands always return an acknowledgement ("ack") response
-async def dispatch_command(consumer: ChatConsumer, payload: dict[str, object]) -> dict[str, object]:
+async def dispatch_command(
+    consumer : ChatConsumer, 
+    payload  : dict[str, object], 
+    *, 
+    reply_now_metadata: dict[str, object] | None = None,  # Extra metadata for `reply_now` commands
+) -> dict[str, object]:
     """
     Execute one canonical command and return its immediate correlated result. The
     transport adapter decides where to deliver this acknowledgement.
     """
     raw_command_id = payload.get("id")
-    raw_command    = payload.get("name")
+    raw_command    = payload.get("name")  # If validation passes, it guarantees this is a valid string
 
-    # Keep acknowledgement envelopes inside the documented schema even when the caller
-    # supplies malformed JSON. Invalid caller IDs cannot safely be echoed as correlation
-    # IDs, so give the rejection a fresh server-generated ID instead.
-    if raw_command_id is None:
-        command_id = str(uuid4())
-    elif (
-        (not isinstance(raw_command_id, str))
-        or (not raw_command_id.strip())
-        or (len(raw_command_id) > MAX_COMMAND_ID_CHARS)
-    ):
-        return {
-            "id"      : str(uuid4()),
-            "name"    : raw_command if isinstance(raw_command, str) else None,
-            "ok"      : False,
-            "message" : f"Command id must be a non-empty string no longer than {MAX_COMMAND_ID_CHARS} characters",
-            "state"   : get_control_state(consumer),
-        }
-    else:
-        command_id = raw_command_id
+    # Validate inputs and extract the handler
+    command_id, handler, error_response = _validate_command_metadata(consumer, raw_command_id, raw_command)
 
-    if not isinstance(raw_command, str):
-        return {
-            "id"      : command_id,
-            "name"    : None,
-            "ok"      : False,
-            "message" : "Command name must be a string",
-            "state"   : get_control_state(consumer),
-        }
-
-    command = raw_command
-    handler = COMMAND_HANDLERS.get(command)
-
-    # Return a standard ack for unknown commands
-    if handler is None:
-        return {
-            "id"      : command_id,
-            "name"    : command,
-            "ok"      : False,
-            "message" : f"Unknown command: {command}",
-            "state"   : get_control_state(consumer),
-        }
+    # If the helper returned an error dictionary, return it immediately
+    if error_response: return error_response
+    command = raw_command 
 
     # Successful execution
     try:
+        if command == "reply_now":
+            payload = dict(payload)
+            payload["_reply_now_metadata"] = {**(reply_now_metadata or {}), "command_id": command_id}
+
         message = await handler(consumer, payload)
         return {
             "id"      : command_id,
@@ -234,15 +211,12 @@ async def dispatch_command(consumer: ChatConsumer, payload: dict[str, object]) -
             "state"   : get_control_state(consumer),
         }
 
+    # --------------------------------------------------------------------------------
+    # Exception handling (always return acknowledgements to the caller)
+    # --------------------------------------------------------------------------------
     # Command did not succeed (format was determined to be invalid)
     except CommandRejected as exc:
-        return {
-            "id"      : command_id,
-            "name"    : command,
-            "ok"      : False,
-            "message" : str(exc),
-            "state"   : get_control_state(consumer),
-        }
+        return {"id": command_id, "name": command, "ok": False, "message": str(exc), "state": get_control_state(consumer)}
 
     # Command errored out
     except Exception as exc:
@@ -254,3 +228,51 @@ async def dispatch_command(consumer: ChatConsumer, payload: dict[str, object]) -
             "message" : f"Command failed: {type(exc).__name__}",
             "state"   : get_control_state(consumer),
         }
+
+
+# ================================================================================
+# Validate the provided command ID and name
+# ================================================================================
+def _validate_command_metadata(consumer: ChatConsumer, raw_command_id: object, raw_command: object) -> tuple[str, object, dict[str, object] | None]:
+    """
+    Returns a tuple of (finalized_command_id, handler, error_response_dict)
+    NOTE: If validation passes, error_response_dict will be None
+    """
+    # --------------------------------------------------------------------------------
+    # 1) Validate or create a command ID
+    # --------------------------------------------------------------------------------
+    # a) If no command ID is provided by the caller, we allow it, create one for them, and proceed
+    if raw_command_id is None: command_id = str(uuid4())
+
+    # b) If provided a malformed command ID, we stop the command here and return an error acknowledgement
+    elif (not isinstance(raw_command_id, str)) or (not raw_command_id.strip()) or (len(raw_command_id) > MAX_COMMAND_ID_CHARS):
+        error_response = {
+            "id"      : str(uuid4()),
+            "name"    : raw_command if isinstance(raw_command, str) else None,
+            "ok"      : False,
+            "message" : f"Command id must be a non-empty string no longer than {MAX_COMMAND_ID_CHARS} characters",
+            "state"   : get_control_state(consumer),
+        }
+        return "", None, error_response
+
+    # c) We can use the given command ID when it is properly formatted
+    else: command_id = raw_command_id
+
+    # --------------------------------------------------------------------------------
+    # 2) Validate the command name
+    # --------------------------------------------------------------------------------
+    # a) Make sure the provided command name is actually a string
+    if not isinstance(raw_command, str):
+        error_response = {"id": command_id, "name": None, "ok": False, "message": "Command name must be a string", "state": get_control_state(consumer)}
+        return command_id, None, error_response
+
+    # b) Check that the command has a handler registered for it
+    command = raw_command
+    handler = COMMAND_HANDLERS.get(command)
+    if handler is None:
+        error_response = {"id": command_id, "name": command, "ok": False, "message": f"Unknown command: {command}", "state": get_control_state(consumer)}
+        return command_id, None, error_response
+
+    # Success
+    return command_id, handler, None
+

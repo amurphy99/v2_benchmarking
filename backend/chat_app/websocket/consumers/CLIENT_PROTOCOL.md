@@ -150,9 +150,11 @@ Notes:
   `command` both put an object under `data`, but `transcription` does not.
 - Send only *finalized* text. There is no interim/partial transcription message type for
   direct-text clients; every `transcription` you send is treated as a complete utterance.
-- Consecutive utterances **accumulate**. If you send two `transcription` messages in quick
-  succession, the in-flight response for the first is cancelled and both are combined into
-  one user turn. This is intentional -- it lets a user pause mid-thought and continue.
+- Consecutive utterances **accumulate** during an automatically triggered response. If you
+  send two `transcription` messages in quick succession, the automatic in-flight response
+  for the first is cancelled and both are combined into one user turn. A response explicitly
+  accepted through `reply_now` is not cancelled by later speech; that speech stays staged for
+  a later turn.
 - Because Buddy starts in `response_mode: "automatic"`, sending this automatically starts a
   response. You do not need to follow it with `reply_now`.
 
@@ -191,7 +193,7 @@ from a primary client (the robot), not just from the admin page.
 | `robot_action` | `{"kind": "emotion"\|"animation", "value": "Happy", "duration_ms": 3000}` | Round-trips an avatar action back out as a `robot_action` message. `duration_ms` is optional. See the caveat below. |
 | `repeat_last` | *(none)* | Re-speaks the last assistant response. Rejected with `ok: false` if there is no prior response. |
 | `send_custom` | `{"message": "text to say"}` | Speaks supplied text as the assistant. Rejected if `message` is missing/blank. |
-| `reply_now` | *(none)* | Forces a response from whatever has been heard so far. Buddy does not need this (auto-reply is on). |
+| `reply_now` | *(none)* | Forces a response from whatever has been heard so far. Once generation starts, later speech does not cancel it. Buddy does not need this (auto-reply is on). |
 | `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. |
 | `set_response_mode` | `{"mode": "automatic"\|"manual"}` | Turns automatic replies on or off. |
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
@@ -477,6 +479,11 @@ Acks are **not** ordered relative to the work they describe. `reply_now` in part
 immediately while the actual response is still being coordinated in the background, so an
 `ok: true` means "accepted", not "finished".
 
+Each accepted `reply_now` is also persisted as a `ReplyNowEvent`, including its transport
+receipt time, database creation time, command ID, origin (`primary_client` or
+`admin_listener`), authenticated sender, response mode, and chat session. This includes
+back-to-back commands even when no new finalized text is available.
+
 ### 3.7 `chat_ended`
 
 ```json
@@ -596,8 +603,8 @@ Things most likely to trip up a new client:
 7. **A user can have only one primary chat connection.** Once a new primary connection is
    fully initialized, the server closes any older one with code `4004`. The replaced client
    must stop recording/speaking and treat that close as a session takeover, not a network retry.
-8. **Consecutive `transcription` messages merge into one turn** and cancel the in-flight
-   response. That is by design, not a dropped reply.
+8. **Consecutive `transcription` messages merge into one turn** and cancel an in-flight
+   automatic response. They do not cancel a response explicitly requested with `reply_now`.
 9. **`control_state` never reaches a primary client.** It broadcasts to admin listeners only.
    Read control state from the `state` field of your own `command_ack`s. (Section 3.6)
 10. **Only the primary chat socket is described here.** `ws/chat/activity/` uses this exact

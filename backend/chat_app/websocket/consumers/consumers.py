@@ -307,19 +307,47 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         barrier = self.stt_provider.create_audio_barrier()
         return ChatHandler.request_reply_now(self, barrier)
 
+    # --------------------------------------------------------------------------------
+    # Persist the literal command before scheduling the response it requested
+    # --------------------------------------------------------------------------------
+    async def accept_reply_now(self, metadata: dict[str, object]) -> asyncio.Task[str | None]:
+        # Add an audio barrier so STT can finish processing relevant user speech while the DB task runs
+        barrier = self.stt_provider.create_audio_barrier()
+        requested_by_id = metadata.get("requested_by_id")
+        if not isinstance(requested_by_id, int):
+            requested_by_id = getattr(getattr(self, "user", None), "id", None)
+
+        # Record a row for this `reply_now` command in the database
+        await db_s2a(ChatService.add_reply_now_event)(
+            self.session_id,
+            origin          = metadata.get("origin", "primary_client"),
+            received_at     = metadata.get("received_at"),
+            response_mode   = self.response_mode,
+            requested_by_id = requested_by_id,
+            command_id      = metadata.get("command_id"),
+        )
+        return ChatHandler.request_reply_now(self, barrier)
+
+    # --------------------------------------------------------------------------------
     # Speak supplied text independently of STT/staged-response coordination
+    # --------------------------------------------------------------------------------
     def speak_response(self, response: str | dict[str, object] | None) -> asyncio.Task:
+        # Cancel a pending (generic) response task if there is one
         pending = getattr(self, "_pending_response_task", None)
         if (pending is not None) and (not pending.done()): pending.cancel()
 
+        # Cancel a pending (manual) response task if there is one
         previous = getattr(self, "_manual_response_task", None)
         if (previous is not None) and (not previous.done()): previous.cancel()
 
+        # Begin the new response task 
         task = fire_and_log(ChatHandler.respond_to_user(self.context_buffer, self, use_response=response), name="chat::manual_response")
         self._manual_response_task = task
         return task
 
+    # --------------------------------------------------------------------------------
     # Session State Attributes
+    # --------------------------------------------------------------------------------
     def _init_response_state(self):
         """
         Initialize (or reset) all per-session state attributes. 
@@ -333,14 +361,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.overlapped_speech_events = []     # List of timestamps (TODO: Add this to the DB somehow?)
 
         # Response task state
-        self._staged_utterances       = StagedUtteranceBuffer()
-        self._pending_response_task   = None            # Current 'asyncio.Task' for '_execute_response'
-        self._manual_response_task    = None            # Current admin-supplied or repeated response task
-        self._reply_now_task          = None            # Coordinator retaining a forced-reply request across retries
-        self._reply_now_generation    = 0               # Newer reply requests supersede older queue boundaries
-        self._stt_progress_revision   = 0               # Meaningful interim/final progress used by settling logic
-        self._stage_lock              = asyncio.Lock()  # Serializes final-transcript scheduling decisions
-        self._response_lock           = asyncio.Lock()  # Gives one response task ownership of staged text
+        self._staged_utterances        = StagedUtteranceBuffer()    # Utterances received since the last successful assistant response 
+        self._pending_response_task    = None                       # Current 'asyncio.Task' for '_execute_response'
+        self._pending_response_trigger = None                       # "automatic" or "reply_now" for cancellation policy
+        self._manual_response_task     = None                       # Current admin-supplied or repeated response task
+        self._reply_now_task           = None                       # Coordinator retaining a forced-reply request across retries
+        self._reply_now_generation     = 0                          # Newer reply requests supersede older queue boundaries
+        self._stt_progress_revision    = 0                          # Meaningful interim/final progress used by settling logic
+        self._stage_lock               = asyncio.Lock()             # Serializes final-transcript scheduling decisions
+        self._response_lock            = asyncio.Lock()             # Gives one response task ownership of staged text
 
         # Chat status tracking (not always used)
         self.streaming_active      = False     # True while STT stream is active (paused state)

@@ -15,10 +15,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 # From this project
 from chat_app.websocket.consumers.consumers                   import ChatConsumer
+from chat_app.websocket.consumers.handlers.ch_events          import handle_ws_command
 from chat_app.websocket.consumers.processing.commands        import dispatch_command
 from chat_app.websocket.consumers.processing.messages        import _publish_chat_message
 from chat_app.websocket.consumers.processing.stream          import set_streaming_active
 from chat_app.websocket.consumers.utils.groups               import claim_primary_connection, format_send_actions_command
+from chat_app.websocket.services.chatHelpers                import ChatHandler
 from chat_app.websocket.services.chat_state                 import StagedUtteranceBuffer
 from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
 from chat_app.websocket.services.speech.stt.stream_state    import InterimProgressTracker
@@ -163,6 +165,41 @@ class InterimProgressTrackerTests(unittest.TestCase):
 
 
 # ================================================================================
+# Response Cancellation Policy Tests
+# ================================================================================
+class ResponseCancellationPolicyTests(unittest.TestCase):
+    # Continued speech invalidates an automatically scheduled response
+    def test_stt_progress_cancels_automatic_response(self) -> None:
+        task = Mock()
+        task.done.return_value       = False
+        task.cancelling.return_value = 0
+        consumer = SimpleNamespace(
+            _stt_progress_revision   = 4,
+            _pending_response_task   = task,
+            _pending_response_trigger = "automatic",
+        )
+
+        self.assertTrue(ChatHandler.note_stt_progress(consumer))
+        task.cancel.assert_called_once_with()
+        self.assertEqual(consumer._stt_progress_revision, 5)
+
+    # An explicit reply remains live while later speech is staged for another turn
+    def test_stt_progress_does_not_cancel_reply_now_response(self) -> None:
+        task = Mock()
+        task.done.return_value       = False
+        task.cancelling.return_value = 0
+        consumer = SimpleNamespace(
+            _stt_progress_revision   = 8,
+            _pending_response_task   = task,
+            _pending_response_trigger = "reply_now",
+        )
+
+        self.assertFalse(ChatHandler.note_stt_progress(consumer))
+        task.cancel.assert_not_called()
+        self.assertEqual(consumer._stt_progress_revision, 9)
+
+
+# ================================================================================
 # Command Dispatch Tests
 # ================================================================================
 class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
@@ -221,7 +258,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             streaming_active=True,
             save_audio=False,
             last_response="previous response",
-            reply_now=Mock(),
+            accept_reply_now=AsyncMock(),
             speak_response=Mock(),
             _pending_response_task=None,
             _manual_response_task=None,
@@ -233,7 +270,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
         custom_ack = await dispatch_command(consumer, {"id": "custom", "name": "send_custom", "data": {"message": "  hello  "}})
 
         self.assertTrue(reply_ack["ok"] and repeat_ack["ok"] and custom_ack["ok"])
-        consumer.reply_now.assert_called_once_with()
+        consumer.accept_reply_now.assert_awaited_once_with({"command_id": "reply"})
         self.assertEqual(consumer.speak_response.call_args_list[0].args, ("previous response",))
         self.assertEqual(consumer.speak_response.call_args_list[1].args, ("hello",))
 
@@ -364,6 +401,32 @@ class ClientProtocolFrameTests(unittest.IsolatedAsyncioTestCase):
         sent = json.loads(consumer.send.await_args.args[0])
         self.assertEqual(sent, {"type": "stream_status", "data": {"status": "paused"}})
         consumer._broadcast_stream_status.assert_awaited_once_with("paused")
+
+    # Listener relays retain their authenticated admin identity and receipt timestamp
+    async def test_listener_command_passes_server_owned_origin_metadata(self) -> None:
+        consumer = SimpleNamespace(
+            channel_layer=SimpleNamespace(send=AsyncMock()),
+            _broadcast_control_state=AsyncMock(),
+        )
+        event = {
+            "payload"         : {"id": "listener-reply", "name": "reply_now"},
+            "reply_channel"   : "listener-channel",
+            "requested_by_id" : 42,
+            "received_at"     : 1_789_500_000.25,
+        }
+        ack = {"ok": True, "state": {"response_mode": "manual"}}
+
+        with patch(
+            "chat_app.websocket.consumers.handlers.ch_events.dispatch_command",
+            new=AsyncMock(return_value=ack),
+        ) as dispatch:
+            await handle_ws_command(consumer, event)
+
+        self.assertEqual(dispatch.await_args.kwargs["reply_now_metadata"], {
+            "origin"          : "admin_listener",
+            "requested_by_id" : 42,
+            "received_at"     : 1_789_500_000.25,
+        })
 
     # Register only after notifying older channels so a connection cannot replace itself
     async def test_primary_connection_claim_notifies_then_registers(self) -> None:

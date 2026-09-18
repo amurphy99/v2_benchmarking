@@ -151,7 +151,8 @@ Google results have two paths:
   scheduled onto the main event loop through `ChatHandler.stage_and_schedule()`.
 
 A direct frontend `transcription` reaches the same staging method without Google word
-timestamps. Both paths therefore share response accumulation and cancellation behavior.
+timestamps. Both paths therefore share accumulation and trigger-aware cancellation behavior:
+continued speech cancels automatic responses, but not an accepted `reply_now` response.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Session Recording                                                                -->
@@ -241,14 +242,18 @@ in the background:
 2. The command adapter sends its correlated acknowledgement without waiting for Google.
 3. The STT request generator drains all earlier chunks and then resolves the barrier.
 4. ChatHandler waits for a short quiet period after the latest meaningful STT progress.
-5. Once finalized staged text is stable, ChatHandler runs the ordinary cancellable
-   response path.
-6. If continued speech invalidates that attempt, the forced-reply coordinator retries
-   with the expanded staged snapshot.
+5. Once finalized staged text is stable, ChatHandler takes an immutable snapshot and runs
+   a forced response attempt.
+6. Continued speech does not cancel that LLM/TTS attempt. It remains staged for a later
+   response (scheduled automatically when automatic mode is active).
+
+Every accepted `reply_now` has a `ReplyNowEvent` row. It records transport receipt and
+database creation times, origin and authenticated requester, command ID, response mode, and
+chat session. Automatic responses do not create these rows.
 
 The barrier guarantees that pre-command audio has been removed from the local queue and
 sent into the Google request stream. It does not claim that Google has already returned
-the corresponding final transcript; settling and cancellation/retry cover that delay.
+the corresponding final transcript; the post-barrier settling window covers that delay.
 
 Pausing listening rejects new audio chunks immediately but does not discard chunks that
 the backend already accepted. The provider queues a reusable pause barrier followed by a

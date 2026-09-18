@@ -224,6 +224,39 @@ class ChatMessage(models.Model):
     def __str__(self): return f"{self.role}: {self.content}"
 
 # ================================================================================
+# ReplyNowEvent -- one received `reply_now` WebSocket command
+# ================================================================================
+class ReplyNowEvent(models.Model):
+    """
+    Audit record created when the backend receives a `reply_now` command.
+
+    Timestamp handling:
+    * `received_at` is captured at the WebSocket boundary; 
+    * `created_at` records when the audit row reached the database.
+    """
+    ORIGIN_CHOICES = [
+        ("primary_client", "Primary Client"),
+        ("admin_listener", "Admin Listener"),
+    ]
+
+    # Fields
+    session       = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="reply_now_events")
+    origin        = models.CharField(max_length=32, choices=ORIGIN_CHOICES)
+    received_at   = models.DateTimeField(db_index=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    response_mode = models.CharField(max_length=16)
+
+    command_id   = models.CharField(max_length=128, **init_args)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="reply_now_events", **init_args)
+
+    class Meta:
+        ordering = ["received_at", "id"]
+        indexes  = [models.Index(fields=["session", "received_at"])]
+
+    def __str__(self):
+        return f"reply_now for ChatSession {self.session_id} at {self.received_at}"
+
+# ================================================================================
 # ChatWord -- word-level STT timestamps associated with a ChatMessage
 # ================================================================================
 class ChatWord(models.Model):

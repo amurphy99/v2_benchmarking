@@ -42,8 +42,8 @@ async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
         logger.info(f"{CC_MAIN} {lu.RED}Non-object JSON{CC_R} received: {type(data).__name__}.{RESET}")
         return
 
+    # Forward the message to the proper function
     msg_type = data.get("type")
-
     if   msg_type == "overlapped_speech" : await handle_overlap              (consumer, data)
     elif msg_type == "audio_data"        : await ingest_audio_payload        (consumer, data)
     elif msg_type == "transcription"     : await handle_transcription_message(consumer, data)
@@ -81,10 +81,18 @@ async def handle_transcription_message(consumer: ChatConsumer, data: dict[str, o
 # [CONTROL] Validate & handle incoming client commands (e.g., `reply_now`)
 # --------------------------------------------------------------------------------
 async def handle_client_command(consumer: ChatConsumer, data: dict[str, object]) -> None:
+    received_at = time.time()
+
     # Validate the command envelope & dispatch the command
     payload = data.get("data", {}) or {}
     if not isinstance(payload, dict): payload = {}
-    ack = await dispatch_command(consumer, payload)
+    ack = await dispatch_command(
+        consumer, payload, reply_now_metadata={
+            "origin"          : "primary_client",
+            "requested_by_id" : getattr(getattr(consumer, "user", None), "id", None),
+            "received_at"     : received_at,
+        },
+    )
 
     # Send an acknowledgement back through the same socket & broadcast the confirmed control state
     await consumer.send_json({"type": "command_ack", "data": ack})

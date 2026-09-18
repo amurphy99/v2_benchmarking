@@ -3,11 +3,12 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-Centralizes transactional writes for sessions, messages, word timing, biomarkers,
-recording metadata, and optional assistant playback boundaries.
+Centralizes transactional writes for sessions, messages, word timing,
+biomarkers, recording metadata, and optional assistant playback boundaries.
 
 """
 import logging, time
+from datetime import datetime, timezone as datetime_timezone
 logger = logging.getLogger(__name__)
 
 # Django imports
@@ -20,7 +21,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, UserSettings
+from ..models         import ChatSession, SessionAudio, ChatMessage, ReplyNowEvent, ChatBiomarkerScore, ChatWord, UserSettings
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -255,6 +256,28 @@ class ChatService:
     # ================================================================================
     # Message & Biomarker Score Helpers
     # ================================================================================
+    # `reply_now` command audit events
+    @staticmethod
+    def add_reply_now_event(
+        session_id: int,  # ChatSession the command is from
+        *,
+        origin          : str,                # Who sent it (client or consumer)
+        received_at,                          # Timestamp we received the control message at
+        response_mode   : str,                # Response mode the chat was in: "automatic" | "manual"
+        requested_by_id : int | None = None,  # ID of the user who requested it (could be the client or an admin)
+        command_id      : str | None = None,  # ID of the command
+    ) -> ReplyNowEvent:
+        if       isinstance(received_at, (int, float)): received_at = datetime.fromtimestamp(received_at, tz=datetime_timezone.utc)
+        elif not isinstance(received_at, datetime    ): received_at = timezone.now()
+        return ReplyNowEvent.objects.create(
+            session_id      = session_id,
+            origin          = origin,
+            received_at     = received_at,
+            response_mode   = response_mode,
+            requested_by_id = requested_by_id,
+            command_id      = command_id,
+        )
+
     # Messages
     @staticmethod
     def add_message(session_id, role, text, *, start_ts=None, end_ts=None):

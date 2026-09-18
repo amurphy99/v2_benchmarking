@@ -4,8 +4,8 @@ Handle events delivered to the primary chat consumer through Channels groups.
 `backend.chat_app.websocket.consumers.handlers.ch_events`
 
 Listener commands use the same dispatcher as commands received directly from a
-robot or web frontend. This module only adapts the Channels transport and targets
-its reply.
+robot or web frontend. This module only adapts the Channels transport and
+targets its reply.
 
 """
 from __future__ import annotations
@@ -33,17 +33,25 @@ async def handle_ws_command(consumer: ChatConsumer, event: dict) -> None:
 
     # Dispatch the command first
     if not isinstance(payload, dict): payload = {}
-    ack = await dispatch_command(consumer, payload)
+    ack = await dispatch_command(
+        consumer, payload, reply_now_metadata={
+            "origin"          : "admin_listener",
+            "requested_by_id" : event.get("requested_by_id"),
+            "received_at"     : event.get("received_at"),
+        },
+    )
 
     # Send the command acknowledgement back after execution is done (or was rejected/failed)
     if reply_channel: await send_command_ack(consumer, ack, reply_channel)
-    else:            logger.warning(f"{CC_MAIN} Command has no reply channel: {CC_H}{payload}{CC_R}.{RESET}")
+    else: logger.warning(f"{CC_MAIN} Command has no reply channel: {CC_H}{payload}{CC_R}.{RESET}")
 
     # Update **ALL** involved parties about the new control state (if it was changed by the command)
     if ack["ok"]: await consumer._broadcast_control_state(ack["state"])
 
 
+# --------------------------------------------------------------------------------
 # Send a command acknowledgement to the listener connection that originated it
+# --------------------------------------------------------------------------------
 async def send_command_ack(consumer: ChatConsumer, data: dict[str, object], reply_channel: str) -> None:
     payload = {"type": "ws.command_acks", "payload": {"type": "command_ack", "data": data}}
     await consumer.channel_layer.send(reply_channel, payload)

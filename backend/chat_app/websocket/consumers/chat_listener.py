@@ -8,43 +8,13 @@ Receives live updates about the current chat's status, including:
 - Biomarker scores
 - Structured chat elements (e.g. "conversation_state")
 
-How it works:
-* TODO: The admin user can then click on one of these sessions and it uses the "session_id" field to connect via this consumer.
-* Here they can receive updates about the chat, control pausing, etc. 
-
-
-Frontend sends commands such as:
-- Tell backend whether to reply automatically after STT finalizes an utterance
-    { "type": "command", "data": { "name": "set_response_mode", "data": { "mode": "manual" } } }
-
-- Tell LLM to respond immediately with whatever context it has heard recently (e.g. button control)
-    { "type": "command", "data": { "name": "reply_now" } }
-
 See `CLIENT_PROTOCOL.md` in this directory for the full command vocabulary and payloads.
 
-
-TODO: Future possibilities:
-* Manually trigger conversation state changes
-* Manually trigger messages from the LLM (e.g. the "puppet" system they already had at Indiana)
-* Manually trigger behaviors (animations, emotions)
-
---------------------------------------------------------------------------------
-TODO: To completely finish this on the backend
---------------------------------------------------------------------------------
-* Add functionality for the commands
-    - pause/resume automatic responses (STT based responding)
-        > this may require a bunch of logic for concatenating consecutive, uninterrupted user utterances
-    - manually trigger a response from the system
-        > may need a "cooldown" option in the case of rapid successive clicks
-
-* Re-enable the biomarker logging thing, but that might need to wait for until I finish updating the biomarker code...
-
-* Probably some other stuff... need to look back through each file again
-
-* Add the responding mode to the frontend UI
+TODO:
+* Manually trigger conversation state changes (if in that mode/type of chat)
+* Add the responding mode to the frontend UI (e.g., "automatic" vs. "manual")
 
 """
-
 import logging, time
 logger = logging.getLogger(__name__)
 
@@ -54,12 +24,13 @@ from channels.db                import database_sync_to_async as db_s2a
 from django.apps                import apps
 from uuid                       import uuid4
 
-# Imports from this project
+# From this project
 from ...services.db_services import ChatService
 from ...services             import logging_utils       as lu
 from   .utils.logging        import ChatListenerLogging as log
 from   .utils.db_data        import send_initial_data
 from   .utils.groups         import leave_all_groups, format_biomarker_broadcast
+
 
 # ================================================================================
 # ChatListenerConsumer
@@ -197,7 +168,8 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # ================================================================================
     # Handle messages sent from the 'listener' intended for the primary consumer
     async def receive_json(self, data, **kwargs):
-        msg_type = data.get("type")
+        received_at = time.time()
+        msg_type    = data.get("type")
 
         # --------------------------------------------------------------------------------
         # Allow ping/pong for latency measurement
@@ -218,7 +190,13 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
             # Route to the primary consumer through the control group
             await self.channel_layer.group_send(
-                self.control_group, {"type": "ws.command", "payload": payload, "reply_channel" : self.channel_name}
+                self.control_group, {
+                    "type"            : "ws.command",
+                    "payload"         : payload,
+                    "reply_channel"   : self.channel_name,
+                    "requested_by_id" : self.user.id,
+                    "received_at"     : received_at,
+                },
             )
 
             # Log update
