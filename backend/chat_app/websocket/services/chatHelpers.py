@@ -218,7 +218,8 @@ class ChatHandler:
             if isinstance(result, asyncio.CancelledError): continue
             if isinstance(result, BaseException         ): raise result
 
-            # 5) ...
+            # 5) Respond to new speech that arrived while the forced `reply_now` response was running
+            #    (the completed snapshot was already consumed, the one we grab here is new)
             if result:
                 if consumer.response_mode == "automatic" and consumer._staged_utterances.snapshot():
                     consumer._pending_response_trigger = "automatic"
