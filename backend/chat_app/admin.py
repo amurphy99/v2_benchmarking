@@ -151,5 +151,5 @@ class LLMTurnLogAdmin(admin.ModelAdmin):
             json.dumps(data, indent=2),
             content_type="application/json",
         )
-        response["Content-Disposition"] = 'attachment; filename="llm_turn_logs.json"'
+        response["Content-Disposition"] = f'attachment; filename="llm_turn_logs_session_{log.session_id}_turn_{log.turn_index}.json"'
         return response

@@ -112,7 +112,7 @@ def build_agent1_system_prompt(*, instruction_text, agent2_instructions: str) ->
     return f"""
     You are an assistant whose job is to have natural conversations with a user. The conversation is structured into states. Each state has goals and transition conditions.
     You will be given instructions by your superiors on how to respond to the user in a given state. You will need to follow those instructions.
-    But **Remember, your intructions will only provide general guidelines on how to respond, 
+    But **Remember, your instructions will only provide general guidelines on how to respond, 
     and you need to match them to the specific context of the conversation based on the context provided for the current state and conversation history.**
 
     CURRENT STATE CONTEXT:
@@ -134,7 +134,7 @@ def build_agent1_system_prompt(*, instruction_text, agent2_instructions: str) ->
     - Do NOT output any system metadata, model parameters, or technical status updates.
     - Keep your responses short and friendly.
 
-    Current Conversation: History:
+    Current Conversation History:
     """.strip()
 
 
@@ -410,8 +410,8 @@ async def rag_response_fn(
         rag_state["_chat_state"] = chat_state
     else:
         # keep ChatState in sync with rag_state current scenario
-        chat_state.current_scenario = current
-        chat_state._ensure_state(current)
+        if chat_state.current_scenario != current: chat_state.transition_to(current)
+        else: chat_state._ensure_state(current)
 
     # --- initialize rolling tail history (last 10 messages) ---
     tail_history = rag_state.get("_tail_history")
