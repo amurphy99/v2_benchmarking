@@ -298,14 +298,17 @@ async def _predict_and_update_next_scenario(
             openai_messages = _lc_messages_to_openai(messages_2)
 
             t_start_agent2 = time.time()
-            resp = await cf.instructor_client.chat.completions.create(
-                model=cf.INSTRUCTOR_MODEL_NAME,
-                messages=openai_messages,
-                response_model=Agent2Output,
-                temperature=0.2,
-                max_tokens=1024,
-                #  disable thinking to avoid exhausting max_tokens and faster response times.
-                reasoning_effort="none",
+            resp = await asyncio.wait_for(
+                cf.instructor_client.chat.completions.create(
+                    model=cf.INSTRUCTOR_MODEL_NAME,
+                    messages=openai_messages,
+                    response_model=Agent2Output,
+                    temperature=0.2,
+                    max_tokens=1024,
+                    #  disable thinking to avoid exhausting max_tokens and faster response times.
+                    reasoning_effort="none",
+                ),
+                timeout=6.0, # wait for a maximum of 6 seconds for the LLM to respond; if it takes longer, we fallback to current scenario
             )
             t_end_agent2 = time.time()
 
@@ -340,7 +343,15 @@ async def _predict_and_update_next_scenario(
         except Exception as e:
             # If classification fails, we *do not* crash the chat; we simply keep the same scenario.
             logger.exception(f"{lu.BG_RED}[Multi-Agent][{trace_id}] CALL#2 failed:{e} (fallback to current_scenario){lu.RESET}")
-            rag_state["current_scenario"] = current        
+            rag_state["current_scenario"] = current
+
+            # if the error is a timeout, we can set a default instruction for agent2 to ensure the assistant still responds appropriately
+            if isinstance(e, asyncio.TimeoutError):
+                rag_state["agent2_instructions"] = (
+                    "Respond warmly and briefly to the user's latest message. "
+                    "Follow the current state's instructions and ask at most "
+                    "one relevant follow-up question."
+                )        
 
             # If no previous instructions exist, set safe default
             if "agent2_instructions" not in rag_state:
@@ -353,7 +364,7 @@ async def _predict_and_update_next_scenario(
                 "latency_ms"   : None,
                 "output"       : None,
                 "error"        : True,
-                "error_msg"    : str(e),
+                "error_msg"    : f"{type(e).__name__}: {e}",
             }
 
 # =============================================================================
