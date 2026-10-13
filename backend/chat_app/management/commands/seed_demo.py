@@ -59,6 +59,10 @@ class Command(BaseCommand):
         self.setup_ui_sample_data      (days_ago=thirty_days_ago)
         self.setup_analyzed_data       (days_ago=seven_days_ago)
 
+        # TODO: Temporary -- an earlier version of this command promoted this hardcoded account.
+        #       Remove once every deployed database has started once with this demotion
+        get_user_model().objects.filter(username="AdnanSadi2").update(is_staff=False, is_superuser=False)
+
     # ================================================================================
     # User and Profile helpers
     # ================================================================================
@@ -131,7 +135,8 @@ class Command(BaseCommand):
         environment. These are persistent operational accounts, even when they also
         provide access to seeded transcript fixtures.
         """
-        primary_admin   = self.ensure_environment_user("ADMIN_USERNAME_0", "ADMIN_PASSWORD_0", "Primary",   "Admin", is_staff=True)
+        # Only the primary admin is a Django superuser (full access to the admin dashboard)
+        primary_admin   = self.ensure_environment_user("ADMIN_USERNAME_0", "ADMIN_PASSWORD_0", "Primary",   "Admin", is_staff=True, is_superuser=True)
         secondary_admin = self.ensure_environment_user("ADMIN_USERNAME_1", "ADMIN_PASSWORD_1", "Secondary", "Admin", is_staff=True)
         workshop_user   = self.ensure_environment_user("DEMO_USERNAME_0",  "DEMO_PASSWORD_0",  "Workshop",  "Participant")
         buddy_user      = self.ensure_environment_user("BUDDY_USERNAME",   "BUDDY_PASSWORD",   "Buddy",     "Speaker"    )
@@ -165,6 +170,7 @@ class Command(BaseCommand):
         last_name        : str,           # Configured display last name
         *,
         is_staff         : bool = False,  # Whether custom admin-only access is enabled
+        is_superuser     : bool = False,  # Whether the Django admin dashboard is fully accessible
     ) -> AbstractBaseUser | None:
         username = getattr(django_settings, username_setting)
         password = getattr(django_settings, password_setting)
@@ -177,6 +183,7 @@ class Command(BaseCommand):
             first_name       = first_name,
             last_name        = last_name,
             is_staff         = is_staff,
+            is_superuser     = is_superuser,
         )
         self.stdout.write(self.style.SUCCESS(
             f"{SEED_DATA} Account {SD_H}{username}{SD_R} ensured from the environment.{RESET}"
@@ -202,7 +209,7 @@ class Command(BaseCommand):
         seed_chats           (profile, days_back     = 10)
         seed_reminders       (profile, num_reminders =  5)
         seed_activities      ()
-        seed_rag_instructions(caregiver)
+        seed_rag_instructions()
 
     # ================================================================================
     # Fixed Analyzed Chat Fixtures

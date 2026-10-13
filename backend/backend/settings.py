@@ -70,7 +70,30 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'backend.urls'
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True  # For development only
+else:
+    CORS_ALLOW_ALL_ORIGINS = False  # For production
+    CORS_ALLOWED_ORIGINS = [
+        "https://sandbox.cognibot.org",
+        "https://sandbox2.cognibot.org",
+        "https://sandbox3.cognibot.org",
+        "https://cognibot.org",
+        "https://www.cognibot.org",
+    ]
+
+    # needed for making for admin page to work with CSRF protection.
+    CSRF_TRUSTED_ORIGINS = [
+        "https://sandbox.cognibot.org",
+        "https://sandbox2.cognibot.org",
+        "https://sandbox3.cognibot.org",
+        "https://cognibot.org",
+        "https://www.cognibot.org",
+    ]
+
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
 
 TEMPLATES = [
     {

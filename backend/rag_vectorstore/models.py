@@ -12,13 +12,12 @@ class RAGInstructionChunkEmbedding(models.Model):
     instruction_id = models.IntegerField(db_index=True)
 
     # db_index to create a non-unique index for faster lookups
-    user_id     = models.IntegerField(null=True, blank=True, db_index=True) 
     activity_id = models.IntegerField(null=True, blank=True, db_index=True)
     name        = models.CharField(max_length=100, db_index=True)
 
     # Chunk info
     chunk_index = models.IntegerField()       # 0, 1, 2, ...
-    content     = models.TextField()          # the origninal text of the chunk
+    content     = models.TextField()          # the original text of the chunk
 
     # The embedding dimension depends on the model used to generate it, it is 384 for minilm-l6-v2
     # we should probably read this from config or env variable later

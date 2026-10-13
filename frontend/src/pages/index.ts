@@ -21,4 +21,5 @@ export { Profile         } from "@/pages/profile/Profile";
 export { Admin           } from "@/pages/admin/Admin";
 export { AdminChat       } from "@/pages/admin/AdminChat";
 export { AdminChatInactive  } from "@/pages/admin/AdminChatInactive";
+export { AdminChatActivities } from "@/pages/admin/AdminChatActivities";
 export { TranscriptPlayback } from "@/pages/transcript_playback/TranscriptPlayback";

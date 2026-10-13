@@ -11,10 +11,9 @@ NOTE: Random ChatSessions use `source="demo"` so admin views can omit them.
 import logging
 logger = logging.getLogger(__name__)
 
-from django.contrib.auth.base_user import AbstractBaseUser
-from django.utils                  import timezone
-from datetime                      import time, timedelta
-from random                        import random
+from django.utils import timezone
+from datetime     import time, timedelta
+from random       import random
 
 # From this project
 from chat_app.models                       import Activity, AlbumImage, ChatBiomarkerScore, ChatMessage, ChatSession, Profile, RAGInstructions, Reminder
@@ -190,14 +189,13 @@ def seed_activities() -> Activity:
 
 
 # Ensure the checked-in instructions exist without overwriting later edits
-def seed_rag_instructions(user: AbstractBaseUser) -> int:
+def seed_rag_instructions() -> int:
     memory_activity = seed_activities()
     created_count   = 0
 
     for index, name in enumerate(DEMO_RAG_NAMES):
         instruction, created = RAGInstructions.objects.get_or_create(
             name     = name,
-            user     = user,
             activity = memory_activity,
             defaults = {
                 "description"       : DEMO_RAG_DESCRIPTIONS[index],

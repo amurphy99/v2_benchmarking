@@ -11,7 +11,6 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Base
 from ... import config as cf
 from chat_app.services import logging_utils as lu 
 from .ragChatHelpers import (
-    resolve_instruction_owner, 
     _lc_messages_to_openai,
     get_activity,
     get_available_scenarios,
@@ -21,6 +20,7 @@ from .ragChatHelpers import (
 
 from .utils.chatUtils import (
     ChatState,
+    clean_llm_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,10 +30,16 @@ _available_scenarios_logged = False
 
 CLOSE_SESSION_STATE = "close_session"
 CLOSE_SESSION_DESCRIPTION = (
-    "- close_session: TERMINAL — **transition here only after end_conversation**, once you have said goodbye, conversation "
-    "is fully complete and the user has been properly farewelled. "
-    "This triggers automatic session termination. Never skip directly to this from other states."
+    "- close_session: CLOSING — **transition here when the conversation nears its end**. "
+    "This triggers the closing interactions where the assistant says goodbye with an optional summary. "
+    "The session terminates after the closing flow completes. Never skip directly to this from other states."
 )
+
+MAX_SAME_STATE_TURNS = 3 # Maximum number of turns allowed in the same state before forcing a transition
+
+# Agent name prefixes — used as keys in LLMTurnLog.agents_data
+AGENT1_PREFIX = "agent1_response"   # the response/generation agent
+AGENT2_PREFIX = "agent2_planner"    # the planning/state-transition agent
 
 # =============================================================================
 # Agent-2 structured output schema
@@ -69,6 +75,35 @@ def _get_rag_lock(rag_state: dict) -> asyncio.Lock:
     return lock
 
 
+def _build_agent_logs(agent1_usage, t_start_agent1, t_end_agent1, agent2_log: dict) -> dict:
+    """
+    Builds the agents_data dict for LLMTurnLog using the defined agent prefixes.
+    Token count fields are included only if the API returned them (not None).
+    """
+    data = {}
+
+    # Agent 1 (response agent)
+    data[f"{AGENT1_PREFIX}_latency_ms"] = int((t_end_agent1 - t_start_agent1) * 1000)
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        val = getattr(agent1_usage, key, None)
+        if val is not None:
+            data[f"{AGENT1_PREFIX}_{key}"] = val
+
+    # Agent 2 (planner agent)
+    data[f"{AGENT2_PREFIX}_error"]   = agent2_log.get("error", False)
+    if agent2_log.get("latency_ms") is not None:
+        data[f"{AGENT2_PREFIX}_latency_ms"] = agent2_log["latency_ms"]
+    if agent2_log.get("output") is not None:
+        data[f"{AGENT2_PREFIX}_output"]     = agent2_log["output"]
+    if agent2_log.get("error_msg") is not None:
+        data[f"{AGENT2_PREFIX}_error_msg"]  = agent2_log["error_msg"]
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        val = agent2_log.get(key)
+        if val is not None:
+            data[f"{AGENT2_PREFIX}_{key}"] = val
+
+    return data
+
 # =============================================================================
 # Prompt builders 
 # =============================================================================
@@ -77,7 +112,7 @@ def build_agent1_system_prompt(*, instruction_text, agent2_instructions: str) ->
     return f"""
     You are an assistant whose job is to have natural conversations with a user. The conversation is structured into states. Each state has goals and transition conditions.
     You will be given instructions by your superiors on how to respond to the user in a given state. You will need to follow those instructions.
-    But **Remember, your intructions will only provide general guidelines on how to respond, 
+    But **Remember, your instructions will only provide general guidelines on how to respond, 
     and you need to match them to the specific context of the conversation based on the context provided for the current state and conversation history.**
 
     CURRENT STATE CONTEXT:
@@ -94,11 +129,12 @@ def build_agent1_system_prompt(*, instruction_text, agent2_instructions: str) ->
     - Follow the supervisor's guidance while maintaining a natural flow.
     - Do NOT mention the supervisor instructions.
     - Do NOT include explanations, reasoning, or analysis.
-    - Keep your responses short and friendly.
     - Do not use emojis or emoticons.
     - Don't refer to yourself as an “AI” or an "LLM".
+    - Do NOT output any system metadata, model parameters, or technical status updates.
+    - Keep your responses short and friendly.
 
-    Current Conversation: History:
+    Current Conversation History:
     """.strip()
 
 
@@ -134,6 +170,7 @@ def build_agent2_system_prompt(
     You will also determine whether to stay in the current state or transition to a new state.
     Here is an ordered list of AVAILABLE_STATES:
     {available_scenarios_text}
+    States marked [COMPLETED] have already been addressed. Do NOT return to them unless the user explicitly brings up that topic.
 
     CURRENT_STATE:
     "{current_scenario}"
@@ -186,7 +223,7 @@ async def invoke_agent1_chat(
     temperature: float = 0.6,
     max_tokens: int = 256,
     max_retries: int = 2,
-) -> str:
+) -> tuple[str, dict | None]:
     if cf.openai_client is None:
         raise RuntimeError("cf.openai_client is None.")
 
@@ -200,6 +237,7 @@ async def invoke_agent1_chat(
             max_tokens=max_tokens,
             #  disable thinking to avoid exhausting max_tokens and faster response times.
             reasoning_effort="none", 
+            stop=["Context length:"] # stop when the LLM starts to generate metadata lines 
         )
 
         try:
@@ -214,7 +252,8 @@ async def invoke_agent1_chat(
             )
 
             if text:
-                return text
+                usage = getattr(resp, "usage", None)
+                return text, usage
 
             logger.warning(
                 f"{lu.RED}[Multi-Agent][{trace_id}] Agent-1 returned empty content "
@@ -226,7 +265,7 @@ async def invoke_agent1_chat(
             logger.exception(f"{lu.BG_RED}[Multi-Agent][{trace_id}] Agent-1 response parse error (attempt={attempt}){lu.RESET}")
 
     # All retries exhausted — return empty; caller decides what to do
-    return ""
+    return "", None
 
 # =============================================================================
 # Background task for predicting next scenario
@@ -240,7 +279,7 @@ async def _predict_and_update_next_scenario(
     current: str,
     instructions_text: str,
     rag_state: dict,
-) -> None:
+) -> dict:
     lock = _get_rag_lock(rag_state)
     async with lock:
         try:
@@ -257,37 +296,76 @@ async def _predict_and_update_next_scenario(
             messages_2 = [SystemMessage(content=scenario_system_prompt)] + msg_history
 
             openai_messages = _lc_messages_to_openai(messages_2)
-            resp = await cf.instructor_client.chat.completions.create(
-                model=cf.INSTRUCTOR_MODEL_NAME,
-                messages=openai_messages,
-                response_model=Agent2Output,
-                temperature=0.2,
-                max_tokens=1024,
-                #  disable thinking to avoid exhausting max_tokens and faster response times.
-                reasoning_effort="none",
+
+            t_start_agent2 = time.time()
+            resp = await asyncio.wait_for(
+                cf.instructor_client.chat.completions.create(
+                    model=cf.INSTRUCTOR_MODEL_NAME,
+                    messages=openai_messages,
+                    response_model=Agent2Output,
+                    temperature=0.2,
+                    max_tokens=1024,
+                    #  disable thinking to avoid exhausting max_tokens and faster response times.
+                    reasoning_effort="none",
+                ),
+                timeout=6.0, # wait for a maximum of 6 seconds for the LLM to respond; if it takes longer, we fallback to current scenario
             )
+            t_end_agent2 = time.time()
 
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 instructions for Assistant: {resp.assistant_instructions}{lu.RESET}")
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 structured next_state={resp.next_state}{lu.RESET}")
             logger.info(f"{lu.BLUE}[Multi-Agent][{trace_id}] Agent-2 updated memory: {resp.updated_memory}{lu.RESET}")
 
-            # Update rag_state with new scenario and instructions for agent1
+            # Update rag_state with new scenario
             rag_state["agent2_instructions"] = resp.assistant_instructions
             rag_state["current_scenario"] = resp.next_state
-            rag_state["_last_predicted_next_scenario"] = resp.next_state
+
+            if resp.next_state != current:
+                completed: set[str] = rag_state.setdefault("_completed_states", set())
+                completed.add(current)
+
             rag_state["agent2_memory"]                 = resp.updated_memory
+
+            #  Build agent2 log (returned to rag_response_fn)
+            usage = getattr(getattr(resp, "_raw_response", None), "usage", None)
+            agent2_log = {
+                "model_name"             : cf.INSTRUCTOR_MODEL_NAME,   
+                "latency_ms"             : int((t_end_agent2 - t_start_agent2) * 1000),
+                "output"                 : resp.model_dump(),
+                "error"                  : False,
+                "prompt_tokens"          : getattr(usage, "prompt_tokens",     None),
+                "completion_tokens"      : getattr(usage, "completion_tokens", None),
+                "total_tokens"           : getattr(usage, "total_tokens",      None),
+            }
+            return agent2_log
 
 
         except Exception as e:
             # If classification fails, we *do not* crash the chat; we simply keep the same scenario.
             logger.exception(f"{lu.BG_RED}[Multi-Agent][{trace_id}] CALL#2 failed:{e} (fallback to current_scenario){lu.RESET}")
-            rag_state["current_scenario"] = current        
+            rag_state["current_scenario"] = current
+
+            # if the error is a timeout, we can set a default instruction for agent2 to ensure the assistant still responds appropriately
+            if isinstance(e, asyncio.TimeoutError):
+                rag_state["agent2_instructions"] = (
+                    "Respond warmly and briefly to the user's latest message. "
+                    "Follow the current state's instructions and ask at most "
+                    "one relevant follow-up question."
+                )        
 
             # If no previous instructions exist, set safe default
             if "agent2_instructions" not in rag_state:
                 rag_state["agent2_instructions"] = (
                     "Respond warmly and briefly. Ask one gentle follow-up question."
                 )
+
+            # Return error log so rag_response_fn can still record what happened
+            return {
+                "latency_ms"   : None,
+                "output"       : None,
+                "error"        : True,
+                "error_msg"    : f"{type(e).__name__}: {e}",
+            }
 
 # =============================================================================
 # Main entrypoint, two agent call pipeline
@@ -319,13 +397,14 @@ async def rag_response_fn(
 
     # --- Resolve activity + instruction owner ---
     activity = await get_activity(activity_name)
-    instruction_owner = await resolve_instruction_owner(user)
 
-    logger.info(f"{lu.CYAN}[Multi-Agent][{trace_id}] user={getattr(user, 'id', None)} instruction_owner={getattr(instruction_owner, 'id', None)} activity={activity_name}{lu.RESET}")
+    logger.info(f"{lu.CYAN}[Multi-Agent][{trace_id}] user={getattr(user, 'id', None)} activity={activity_name}{lu.RESET}")
 
-    # --- Load available scenarios (for validation/matching) ---
-    scenarios = await get_available_scenarios(instruction_owner.id, activity.id)
-    available_scenarios_text = format_available_scenarios(scenarios)
+    # --- Load available scenarios (globally) ---
+    scenarios = await get_available_scenarios(activity.id)
+
+    completed_states: set[str] = rag_state.get("_completed_states", set()) # initialize completed states with any previously completed ones, set to empty set if none exist
+    available_scenarios_text = format_available_scenarios(scenarios, completed_states=completed_states)
     available_scenarios_text = available_scenarios_text + f"\n{CLOSE_SESSION_DESCRIPTION}"
 
     if not _available_scenarios_logged:
@@ -342,8 +421,8 @@ async def rag_response_fn(
         rag_state["_chat_state"] = chat_state
     else:
         # keep ChatState in sync with rag_state current scenario
-        chat_state.current_scenario = current
-        chat_state._ensure_state(current)
+        if chat_state.current_scenario != current: chat_state.transition_to(current)
+        else: chat_state._ensure_state(current)
 
     # --- initialize rolling tail history (last 10 messages) ---
     tail_history = rag_state.get("_tail_history")
@@ -358,7 +437,6 @@ async def rag_response_fn(
 
     instructions_text_call_1 = await get_full_instruction_text(
         instruction_name=current,
-        user_id=instruction_owner.id,
         activity_id=activity.id,
     )
 
@@ -371,7 +449,7 @@ async def rag_response_fn(
 
     logger.debug(f"{lu.MAGENTA}[Multi-Agent][{trace_id}] msg_history_len={len(msg_history)} user_text_len={len(user_text or '')}{lu.RESET}")
 
-    await _predict_and_update_next_scenario(
+    agent2_logs = await _predict_and_update_next_scenario(
         trace_id=trace_id,
         msg_history=list(tail_history) + [HumanMessage(content=user_text)],
         available_scenarios_text=available_scenarios_text,
@@ -379,6 +457,31 @@ async def rag_response_fn(
         instructions_text=instructions_text_call_1,
         rag_state=rag_state,
     )
+
+    new_state = rag_state.get("current_scenario", current)
+    if new_state == current:
+        same_count = rag_state.get("_same_state_turn_count", 0) + 1 
+        rag_state["_same_state_turn_count"] = same_count
+        logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] same_state_turn_count={same_count} for scenario={current}{lu.RESET}")
+        if same_count >= MAX_SAME_STATE_TURNS:
+            scenario_names = [s["name"] for s in scenarios]  # already ordered by instruction_order
+            scenario_names.append(CLOSE_SESSION_STATE)  # Add close_session
+            try:
+                idx = scenario_names.index(current)
+                if idx + 1 < len(scenario_names):
+                    forced_next = scenario_names[idx + 1]
+                    logger.warning(
+                        f"{lu.RED}[Multi-Agent][{trace_id}] Forcing advance '{current}' → '{forced_next}' "
+                        f"after {same_count} consecutive turns.{lu.RESET}"
+                    )
+                    # the state will be change in the next turn
+                    rag_state["_forced_transition_this_turn"] = True
+                    rag_state["current_scenario"] = forced_next
+                    rag_state["_same_state_turn_count"] = 0
+            except ValueError:
+                pass
+    else:
+        rag_state["_same_state_turn_count"] = 0
 
     try:
         agent2_instructions = rag_state.get("agent2_instructions") or "Respond warmly and briefly. Ask one gentle follow-up question."
@@ -391,23 +494,30 @@ async def rag_response_fn(
 
         logger.info(f"{lu.YELLOW}[Multi-Agent][{trace_id}] CALL#1 generating Agent-1 response...{lu.RESET}")
         
-        assistant_text = await invoke_agent1_chat(
+        t_start_agent1 = time.time()
+        assistant_text, agent1_usage = await invoke_agent1_chat(
             messages_1,
             trace_id=trace_id,
             temperature=0.6,
             max_tokens=256,
         )
-        assistant_text = (assistant_text or "").strip()
+        t_end_agent1 = time.time()
 
-        chat_state.add_message(HumanMessage(content=user_text), scenario=rag_state["current_scenario"])
-        chat_state.add_message(AIMessage(content=assistant_text), scenario=rag_state["current_scenario"])
+
+        assistant_text = (assistant_text or "").strip()
+        # clean up any system metadata lines that may have been included in the LLM response
+        assistant_text = clean_llm_response(assistant_text)
+
+        chat_state.add_message(HumanMessage(content=user_text), scenario=current)
+        chat_state.add_message(AIMessage(content=assistant_text), scenario=current)
 
         tail_history.append(HumanMessage(content=user_text))
         tail_history.append(AIMessage(content=assistant_text))
 
-        # keep only last 10 messages (5 turns)
-        if len(tail_history) > 10:
-            rag_state["_tail_history"] = tail_history[-10:]
+        # number of messages to keep in tail_history for context
+        max_tail_history_len = 20
+        if len(tail_history) > max_tail_history_len:
+            rag_state["_tail_history"] = tail_history[-max_tail_history_len:]
             tail_history = rag_state["_tail_history"]
         else:
             rag_state["_tail_history"] = tail_history # ensure it's saved back to rag_state
@@ -419,10 +529,22 @@ async def rag_response_fn(
     # Return immediately
     t_end = time.time()
     logger.info(f"{lu.GREEN}[Multi-Agent][{trace_id}] End current turn={rag_state['current_scenario']} total={(t_end - t0):.3f}s{lu.RESET}")
+    rag_state["_turn_index"] = rag_state.get("_turn_index", 0) + 1 # increment turn index for next turn
 
     return {
         "text": assistant_text,
-        "current_scenario": rag_state["current_scenario"],
+        "current_scenario": current,
         "next_scenario": "",  # frontend doesn’t need this at the moment
         "close_session": rag_state["current_scenario"] == CLOSE_SESSION_STATE, # frontend or robot can use this to trigger session closure
+        # LLM metadata for LLMTurnLog (used by ActivityChatConsumer, not the frontend) ---
+        "_llm_log": {
+            "turn_index"              : rag_state.get("_turn_index", 0),
+            "state_before"            : current,
+            "state_after"             : rag_state.get("current_scenario", current),
+            "same_state_turn_count"   : rag_state.get("_same_state_turn_count", 0),
+            "forced_state_transition" : rag_state.pop("_forced_transition_this_turn", False),
+            "total_latency_ms"        : int((t_end - t0) * 1000),
+            "user_text_length"        : len(user_text or ""),
+            "agents_data"             : _build_agent_logs(agent1_usage, t_start_agent1, t_end_agent1, agent2_logs),
+        },
     }

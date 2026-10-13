@@ -6,7 +6,7 @@ from django.urls             import path, include
 from .media_view  import stream_session_audio
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("cognibot-manage-dashboard/", admin.site.urls), # using a slightly different URL for security purposes (helps avoid bots scanning for /admin)
     path("api/",   include("chat_app.api.router")),
 
     # Media views
