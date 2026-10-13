@@ -15,6 +15,10 @@ the implementation is authoritative.
 > `transcription` messages and receives `llm_response` + `robot_action` messages. The audio
 > sections (`audio_data`, `audio_chunk`, `tts_playback`) are documented for completeness but
 > Buddy does not need them.
+>
+> **Scope note for the QT robot:** QT is an *audio* client that starts in `manual` response
+> mode. It streams `audio_data` and asks for each reply with `reply_now`. Read section 4.1
+> first; it describes that loop and the rules the audio stream has to follow.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Connecting                                                                       -->
@@ -193,7 +197,7 @@ from a primary client (the robot), not just from the admin page.
 | `robot_action` | `{"kind": "emotion"\|"animation", "value": "Happy", "duration_ms": 3000}` | Round-trips an avatar action back out as a `robot_action` message. `duration_ms` is optional. See the caveat below. |
 | `repeat_last` | *(none)* | Re-speaks the last assistant response. Rejected with `ok: false` if there is no prior response. |
 | `send_custom` | `{"message": "text to say"}` | Speaks supplied text as the assistant. Rejected if `message` is missing/blank. |
-| `reply_now` | *(none)* | Forces a response from whatever has been heard so far. Once generation starts, later speech does not cancel it. Buddy does not need this (auto-reply is on). |
+| `reply_now` | *(none)* | Forces a response from whatever has been heard so far. Once generation starts, later speech does not cancel it. Buddy does not need this (auto-reply is on). Clients in `manual` mode use it for every turn; see section 4.1. |
 | `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. |
 | `set_response_mode` | `{"mode": "automatic"\|"manual"}` | Turns automatic replies on or off. |
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
@@ -255,6 +259,8 @@ long the robot actually spent speaking.
 validated in `processing/audio.py:68-106` and rejected outright on mismatch: 16,000 Hz, 1
 channel, 16 bits per sample, `"pcm_s16le"`, and at most 1,400,000 base64 characters per
 chunk.
+
+*When* these chunks are sent matters as much as their format. See section 4.1.
 
 ```json
 {
@@ -544,15 +550,21 @@ TTS is synthesized at a different rate.
 The complete set of behaviors a text-only robot client needs:
 
 ```text
-# ---- setup ----------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# Setup
+# --------------------------------------------------------------------------------
 POST https://<host>/api/token/ with username + password -> access token
 open wss://<host>/ws/chat/?token=<access>&source=buddyrobot
 
-# ---- when the user finishes speaking --------------------------------------
+# --------------------------------------------------------------------------------
+# When the user finishes speaking
+# --------------------------------------------------------------------------------
 send {"type": "transcription", "data": <asr text>, "time": <epoch seconds>}
      (no reply_now needed -- buddyrobot has auto-reply enabled)
 
-# ---- on every inbound message ---------------------------------------------
+# --------------------------------------------------------------------------------
+# On every inbound message
+# --------------------------------------------------------------------------------
 switch on msg["type"]:
 
     "robot_action"     -> if msg.data.kind == "emotion":
@@ -577,9 +589,77 @@ switch on msg["type"]:
 
     anything else      -> ignore safely
 
-# ---- shutdown -------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# Shutdown
+# --------------------------------------------------------------------------------
 send {"type": "end_chat"}   (or just close the socket)
 ```
+
+### 4.1 Audio client in manual mode (QT robot)
+
+The outline above is for a text-only client with automatic replies. A robot that sends
+microphone audio and decides for itself when the assistant should answer -- on QT, when
+the user presses the button -- uses the same messages in a different loop:
+
+```text
+# --------------------------------------------------------------------------------
+# Setup
+# --------------------------------------------------------------------------------
+open wss://<host>/ws/chat/?token=<access>&source=qtrobot
+     (qtrobot starts in response_mode "manual")
+
+# --------------------------------------------------------------------------------
+# The whole time the robot is listening
+# --------------------------------------------------------------------------------
+send {"type": "audio_data", "data": <base64 PCM chunk>}
+     one small chunk at a time, as it is captured -- silence included
+
+# --------------------------------------------------------------------------------
+# When the user presses the button
+# --------------------------------------------------------------------------------
+send {"type": "command", "data": {"id": <your id>, "name": "reply_now"}}
+     keep streaming audio; there is nothing to wait for first
+
+# --------------------------------------------------------------------------------
+# Afterwards
+# --------------------------------------------------------------------------------
+"command_ack"   -> the request was accepted (a reply does not exist yet)
+"llm_response"  -> speak msg.data, then go back to listening
+```
+
+Every other inbound message is handled exactly as in the outline above.
+
+**What `manual` means.** The backend keeps transcribing and staging everything it hears,
+but never answers on its own. Each `reply_now` turns all the speech staged since the last
+reply into one user turn and answers it. No other message is needed between turns.
+
+**What `reply_now` does** (`websocket/services/chatHelpers.py`, `_coordinate_reply_now`):
+
+1. It marks the end of the audio received so far and waits for speech recognition to catch
+   up with it (at most 2 seconds), then for the transcript to stop changing.
+2. It answers from everything finalized by then. Speech that arrives after generation
+   starts does not cancel the reply; it is kept for the next turn.
+3. If no speech has been finalized about a second later, it gives up **silently**. The ack
+   already said `ok: true`, and no `llm_response` follows. This is also what happens when
+   the user has said nothing since the last reply. Use a timeout of your own and return to
+   listening.
+
+A second `reply_now` sent before the first reply arrives replaces the first.
+
+**Rules for the audio stream.** Step 1 only works if these hold:
+
+- **Send audio as it is captured.** Use small chunks (the web app sends 64 ms at a time) for
+  the whole time the robot is listening. Do **not** buffer the user's speech and send it
+  all when the button is pressed. Speech recognition finalizes an utterance only after it
+  hears the pause that follows it, so a burst that ends on the user's last word leaves that
+  utterance unfinished, and every reply runs one turn behind.
+- **Do not simply stop sending.** Word timestamps and the session recording both assume the
+  audio is continuous while listening is `active`. If the robot has to stop for a while --
+  for example while it is speaking, so that it does not transcribe its own voice -- send
+  `set_listening` with `{"state": "paused"}` first, and `{"state": "active"}` when it
+  resumes.
+- **You will not receive `user_utt`.** The user's words arrive as a `message` frame once
+  the exchange is committed (section 3.2).
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Gotchas                                                                          -->
@@ -613,6 +693,11 @@ Things most likely to trip up a new client:
 10. **Only the primary chat socket is described here.** `ws/chat/activity/` uses this exact
     same protocol with a different response engine behind it, so a client written to this
     document works against both.
+11. **Audio must be streamed as it is captured, never sent in one burst.** Holding the
+    user's speech back until a reply is wanted makes every reply run one turn behind.
+    (Section 4.1)
+12. **`reply_now` can end in silence.** If nothing was heard, the ack is still `ok: true`
+    and no `llm_response` follows. Do not wait for one forever. (Section 4.1)
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Source map                                                                       -->
@@ -631,6 +716,7 @@ Things most likely to trip up a new client:
 | `robot_action` payload construction | `consumers/utils/groups.py` |
 | `message` broadcast shape | `consumers/processing/messages.py` |
 | `llm_response`, `cancel_audio`, `chat_ended`, `user_utt` | `websocket/services/chatHelpers.py` |
+| `reply_now` coordination and wait times | `websocket/services/chatHelpers.py` |
 | `stream_status` | `consumers/processing/stream.py` |
 | `tts_playback` validation | `consumers/processing/playback.py` |
 | `audio_data` validation | `consumers/processing/audio.py` |
