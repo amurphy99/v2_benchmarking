@@ -2,7 +2,7 @@
 
 Code in the `consumers/` directory handles all live WebSocket connections used by a chat. Here we connect frontend transports to shared audio, transcription, command, response, persistence, and biomarker behavior while keeping frontend-specific (webapp vs. robot vs. other) decisions out of those pipelines.
 
-This `README` covers the standard and activity chat consumers plus the admin listener. The internal RAG implementation code is outside of scope for this; the activity consumer only provides a different `response_method` to the otherwise shared response flow.
+This `README` covers the standard and activity chat consumers plus the admin listener. The internal RAG implementation code is outside of scope for this; the activity consumer only supplies a different response engine to the otherwise shared response flow.
 
 > **Looking for the primary-client wire format?** [`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md)
 > is the contract used by the web chat, mobile clients, and physical robots. It also defines
@@ -41,7 +41,7 @@ session through Channels groups and can relay canonical commands to the primary.
  │   command relay into the primary consumer's control group.
  │
 +├── chat_activities.py
- │   ChatConsumer specialization that replaces response_method for activity/RAG chats.
+ │   ChatConsumer specialization that supplies the response engine for activity/RAG chats.
  │
 +├── handlers/
 +│   ├── ws_events.py
@@ -196,7 +196,7 @@ When automatic responses are enabled, ChatHandler starts a cancellable response 
 ```text
 Finalized utterance
     -> staged snapshot
-    -> configured standard pipeline or activity response method
+    -> configured standard pipeline or activity response engine
     -> atomic message exchange commit
     -> primary and listener text delivery
     -> optional TTS
@@ -213,8 +213,9 @@ state cannot be left half-updated.
 ## Current Intent Detection
 
 `services/behavior/intent_detection.py` runs before normal response calls in the default
-`single_stage` mode. Activity/RAG chats retain this path regardless of the standard-chat
-mode setting.
+`single_stage` mode, which is the only path with no response engine. Activity/RAG chats
+supply their own engine (`services/llm/live_chat/activity_response_engine.py`), so they
+skip the regex intents and end through their own closing flow instead.
 
 It can return scripted pause/end-chat responses instead of invoking `response_method`.
 Its pause action calls the shared `processing.stream.set_streaming_active()` operation,
@@ -387,5 +388,6 @@ closes the underlying chat session.
 - Put STT/TTS provider internals under `services/speech/`.
 - Keep database transactions in `ChatService`, with consumer-side commit/publication
   coordination in `processing/messages.py`.
-- Keep activity/RAG differences behind `ActivityChatConsumer.response_method` unless a
-  change explicitly requires modifying that separate subsystem.
+- Keep activity/RAG differences behind `ActivityChatConsumer.response_method` and its
+  response-engine adapter unless a change explicitly requires modifying that separate
+  subsystem.

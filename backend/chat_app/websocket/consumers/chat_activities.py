@@ -26,9 +26,9 @@ class ActivityChatConsumer(ChatConsumer):
     """
     Extends ChatConsumer with a scenario-based RAG response pipeline.
 
-    The RAG function is injected by setting `self.response_method` in connect().
-    All utterance paths (text, STT, admin reply) automatically use it via
-    `ChatHandler._execute_response` → `consumer.response_method`.
+    `response_method` runs the pipeline. connect() wraps it in an
+    `ActivityResponseEngine`, so automatic and `reply_now` responses reach it
+    through the same engine hook `ChatHandler._execute_response` uses for every chat.
     """
     CHAT_TYPE     = "activity"
     ACTIVITY_NAME = "memory_activity"

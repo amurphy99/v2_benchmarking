@@ -275,6 +275,7 @@ When the backend container starts, the management commands execute the following
 
 3. **`setup_environment_accounts()`** —
     - Creates or refreshes the two admins, workshop demo user, and Buddy user from `.env` without deleting linked records.
+    - Makes the primary admin a Django superuser so it can use the `/cognibot-manage-dashboard/` admin site. Every other environment account is reset to non-superuser on each startup.
     - Links both admins to the workshop profile and gives Buddy a separate empty profile.
     - If `SEED_TRANSCRIPT_CHAT_DATA`, calls `seed_transcript_chat()` for every configured source folder. Each importer hashes its WAV and skips that individual fixture when the same recording is already attached to the workshop profile.
     - `seed_transcript_chat` in turn:
@@ -290,6 +291,8 @@ When the backend container starts, the management commands execute the following
 4. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity, and creates missing RAG instructions without overwriting later edits.
 
 5. **`setup_analyzed_data()`** — ensures `sample_user` + `sample_care` and their profile. If `SEED_ANALYZED_CHAT_DATA`, it creates the complete `source="analyzed"` fixture set only when that set is absent. Real `source="webapp"` sessions are never selected or deleted.
+
+6. **Temporary cleanup** — removes staff and superuser status from the hardcoded `AdnanSadi2` account, which an earlier version of `seed_demo` promoted. Delete this step once every deployed database has started once with it.
 
 No user, Account, Profile, Access, ChatSession, SessionAudio, recording object, or unrelated image is deleted by this workflow.
 

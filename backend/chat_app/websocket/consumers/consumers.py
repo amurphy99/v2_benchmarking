@@ -375,5 +375,5 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.streaming_active      = False     # True while STT stream is active (paused state)
         self._tts_streaming        = False     # True while audio chunks are actively being sent to the frontend
         self._pending_action       = None      # Tracks pending user-initiated action ("end_chat" | None)
-        self._turn_response_engine = None      # Optional standard-chat response strategy selected at startup
+        self._turn_response_engine = None      # Optional response engine supplied at connect (active listening or activity)
         self._dialogue_state       = "normal"  # Active-listening state ("normal" | "awaiting_end_confirmation")

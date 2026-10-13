@@ -1,6 +1,5 @@
 import GoalForm from "./components/GoalForm";
 import ChatTypeForm from "./components/ChatTypeForm";
-import RAGForm from "./components/RAGForm";
 
 export function Settings() {
     // --------------------------------------------------------------------

@@ -3,7 +3,8 @@ Regex-based intent detection for user-initiated end-chat and pauses.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.behavior.intent_detection`
 
-Called before every standard and activity-chat LLM attempt. Returns a scripted
+Called before every LLM attempt in a chat that has no response engine, which
+means standard chats in the default `single_stage` mode. Returns a scripted
 response (and whether to close the connection after) so the rest of the response
 code runs normally.
 

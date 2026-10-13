@@ -322,7 +322,7 @@ class ChatHandler:
             response_outcome = None
             response_engine  = getattr(consumer, "_turn_response_engine", None)
 
-            # Preserve the original intent and response path unless a standard chat opted in
+            # Preserve the original intent and response path unless the consumer supplies a response engine
             if response_engine is None:
                 scripted_resp, close_after = await handle_user_intent(consumer, combined_text)            # 'close_after' checked at method end
                 if scripted_resp is not None: system_resp = scripted_resp                                 # Scripted response

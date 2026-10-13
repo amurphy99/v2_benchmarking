@@ -498,6 +498,9 @@ The intent phrases live in `services/behavior/intent_detection.py`. The flow is 
 confirmation: the first trigger gets `"Okay, are you sure that's all for our chat?"`, and
 only an affirmative reply produces the goodbye plus close.
 
+Activity chats (`ws/chat/activity/`) do not use these phrases. They send the same
+`chat_ended` frame, in the same order, when the activity's own closing flow finishes.
+
 A robot should let the goodbye finish speaking before tearing down its UI, and should not
 treat the subsequent close as an error.
 

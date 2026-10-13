@@ -11,6 +11,7 @@ llm/
 +├── live_chat/                 # Wrapper classes for responding during live chats
  │    ├── cognibot_api.py       # Structured generation response class
  │    ├── dummy_LLM.py          # Dummy LLM class for offline testing
+ │    ├── activity_response_engine.py  # Adapter that lets activity chats answer through the response-engine hook
  │    └── active_listening/     # Optional assessment-then-response mode for standard chats
  │         ├── response_models.py
  │         ├── prompts.py
@@ -30,4 +31,5 @@ llm/
 Standard chats select `single_stage` or `active_listening` once at backend startup with
 `LIVE_CHAT_RESPONSE_MODE`. See `live_chat/active_listening/README.md` for the staged
 response flow, cancellation behavior, and fallbacks. Activity/RAG chats keep their own
-response method and do not use this setting.
+response method, reached through the `live_chat/activity_response_engine.py` adapter, and
+do not use this setting.
