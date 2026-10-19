@@ -236,33 +236,50 @@ information.
 ## `reply_now` Audio Barrier
 
 The `reply_now` command is accepted immediately, but response generation is coordinated
-in the background:
+in the background (`ChatHandler._coordinate_reply_now`):
 
-1. `ChatConsumer.reply_now()` inserts an `AudioBarrier` into the same ordered queue as
-   frontend audio chunks.
+1. `ChatConsumer.accept_reply_now()` (or `reply_now()`) calls
+   `SpeechToTextProvider.create_audio_barrier()`, which queues an `AudioBarrier` after every
+   chunk received so far. This happens before the `ReplyNowEvent` row is written, so Google
+   is already finishing while the database write runs.
 2. The command adapter sends its correlated acknowledgement without waiting for Google.
-3. The STT request generator drains all earlier chunks and then resolves the barrier.
-4. ChatHandler waits for a short quiet period after the latest meaningful STT progress.
-5. Once finalized staged text is stable, ChatHandler takes an immutable snapshot and runs
-   a forced response attempt.
-6. Continued speech does not cancel that LLM/TTS attempt. It remains staged for a later
+3. When the request generator reaches the barrier it ends the Google request stream, which
+   makes Google return final results for all buffered audio immediately instead of
+   waiting for its endpointer to hear silence.
+4. The barrier resolves only after that stream's responses have ended **and** every
+   `stage_and_schedule` task they scheduled has finished, so the waiter is guaranteed to
+   see the last utterance in `_staged_utterances`.
+5. The stream worker's handoff starts a successor stream for audio that arrived after the
+   barrier; nothing the client sends is dropped.
+6. ChatHandler runs a forced response attempt from the staged utterances right away. If
+   nothing is staged, the reply completes silently.
+7. Continued speech does not cancel that LLM/TTS attempt. It remains staged for a later
    response (scheduled automatically when automatic mode is active).
+
+If the flush times out (`REPLY_BARRIER_TIMEOUT_SEC`) or fails (the stream errored), the
+reply uses whatever is staged at that point. With no live stream (text-only clients), the
+barrier resolves immediately.
+
+Why the flush exists: "STT stopped making progress" is not the same as "STT finalized".
+Once the user stops talking, interim results stop growing, but the last utterance stays
+interim until Google hears enough trailing silence (often 0.5-1.5 s). A client that replies
+the moment the user stops (QT's Enter key) previously got a reply built without that
+utterance, which was then staged for the following turn.
 
 Every accepted `reply_now` has a `ReplyNowEvent` row. It records transport receipt and
 database creation times, origin and authenticated requester, command ID, response mode, and
 chat session. Automatic responses do not create these rows.
 
-The barrier guarantees that pre-command audio has been removed from the local queue and
-sent into the Google request stream. It does not claim that Google has already returned
-the corresponding final transcript; the post-barrier settling window covers that delay.
+Because each flush ends a Google stream, word-time offsets are anchored to the arrival of
+each stream's first chunk (not to when the stream was prepared), so audio queued during a
+handoff keeps accurate timestamps.
 
 Pausing listening rejects new audio chunks immediately but does not discard chunks that
-the backend already accepted. The provider queues a reusable pause barrier followed by a
-graceful stop marker, so `reply_now` can still wait on the accepted audio while listening
-is paused. A quick resume cancels that marker when the generator has not reached it; if
-the old Google stream has already stopped, its worker hands any newer queued audio to one
-successor stream. Disconnect shutdown remains intentionally destructive: it aborts queued
-audio and fails boundaries that can no longer be reached.
+the backend already accepted. The provider queues a pause barrier after them, which ends
+the Google stream once they have been sent, and `reply_now` can still wait on it while
+listening is paused. If listening resumes before that stream has finished, its worker
+hands the newer audio to one successor stream. Disconnect shutdown remains intentionally
+destructive: it aborts queued audio and fails boundaries that can no longer be reached.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Canonical Commands and Acknowledgements                                          -->

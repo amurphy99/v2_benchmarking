@@ -367,7 +367,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._manual_response_task     = None                       # Current admin-supplied or repeated response task
         self._reply_now_task           = None                       # Coordinator retaining a forced-reply request across retries
         self._reply_now_generation     = 0                          # Newer reply requests supersede older queue boundaries
-        self._stt_progress_revision    = 0                          # Meaningful interim/final progress used by settling logic
+        self._stt_progress_revision    = 0                          # Meaningful interim/final progress (lets a response drop a stale mood update)
         self._stage_lock               = asyncio.Lock()             # Serializes final-transcript scheduling decisions
         self._response_lock            = asyncio.Lock()             # Gives one response task ownership of staged text
 

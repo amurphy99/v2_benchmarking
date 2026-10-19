@@ -43,16 +43,14 @@ from ...services.logging_utils             import RESET, BOLD, UNBOLD, ORANGE
 from ...services.db_services               import ChatService
 
 # Import the class for type checking
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...models                                                    import ChatMessage
     from ...services.llm.live_chat.active_listening.response_models   import ResponseOutcome, ResponseTrigger
     from ..consumers.consumers                                        import ChatConsumer
 
 # Configuration constants
-REPLY_BARRIER_TIMEOUT_SEC = 2.0  # Maximum wait for pre-command audio to reach the STT request generator
-REPLY_SETTLE_SEC          = 0.2  # Quiet period required after meaningful STT progress
-REPLY_EMPTY_WAIT_SEC      = 1.0  # Maximum wait for finalized text before completing an empty reply
+REPLY_BARRIER_TIMEOUT_SEC = 2.0  # Maximum wait for Google to return (and stage) final results for the audio before `reply_now`
 
 
 # ================================================================================
@@ -177,39 +175,35 @@ class ChatHandler:
         explicit cancellations happen (e.g., a `pause_and_listen` control message or if
         the chat has been ended).
 
+        The `barrier` was queued right after the last audio received before the request.
+        It ends the Google stream there, so Google finalizes the user's last words right
+        away instead of waiting for trailing silence, and it resolves once those final
+        results are staged. A client that replies the moment the user stops talking (QT's
+        Enter key) would otherwise get a reply without its last utterance, and that text
+        would show up a turn late.
+
         """
-        # Wait for queued audio and STT to settle; retry if new speech arrives first
+        # Wait until everything said before the request has been finalized and staged
         try: await barrier.wait(timeout=REPLY_BARRIER_TIMEOUT_SEC)
-        except asyncio.TimeoutError: logger.warning("%s reply_now audio barrier timed out; using finalized text available.", ORANGE)
-        except RuntimeError as exc:  logger.warning("%s reply_now audio barrier unavailable: %s", ORANGE, exc)
+        except asyncio.TimeoutError: logger.warning("%s reply_now STT flush timed out; using finalized text available.", ORANGE)
+        except RuntimeError as exc:  logger.warning("%s reply_now STT flush unavailable: %s", ORANGE, exc)
 
+        # --------------------------------------------------------------------------------
+        # Respond from the staged utterances (retrying if the response task is cancelled)
+        # --------------------------------------------------------------------------------
         # Request versioning is used to supersede any rapid duplicate commands we get
-        if generation != consumer._reply_now_generation: return None
-
-        # Define how long we are willing to wait for the audio barrier to clear before we respond anyway
-        empty_deadline = asyncio.get_running_loop().time() + REPLY_EMPTY_WAIT_SEC
-
-        # --------------------------------------------------------------------------------
-        # Wait for the audio to settle and for the LLM generation task to complete
-        # --------------------------------------------------------------------------------
         while generation == consumer._reply_now_generation:
-            # 1) Check if we are still receiving meaningful ASR interim/final progress
-            #    (if we have results after the first ~0.2, then we wait another ~0.2 seconds)
-            revision = consumer._stt_progress_revision
-            await asyncio.sleep(REPLY_SETTLE_SEC)
-            if revision != consumer._stt_progress_revision: continue
+            # 1) Nothing staged by now means nothing was said since the last reply
+            if not consumer._staged_utterances:
+                logger.info("%s reply_now completed with no finalized user text.%s", ORANGE, RESET)
+                return None
 
-            # 2) ASR results complete; take a snapshot of the current staged utterances
-            snapshot, should_cancel = ChatHandler._try_get_snapshot(consumer, empty_deadline)
-            if should_cancel: return None
-            if not snapshot:  continue
-
-            # 3) Create a response task labeled with the trigger type (`reply_now`)
+            # 2) Create a response task labeled with the trigger type (`reply_now`)
             consumer._pending_response_trigger = "reply_now"
             response_task = asyncio.create_task(ChatHandler._execute_response(consumer, trigger="reply_now"), name="chat::forced_response")
             consumer._pending_response_task = response_task
 
-            # 4) Wait for the response task to finish (LLM generation + TTS if required)
+            # 3) Wait for the response task to finish (LLM generation + TTS if required)
             #    (adhere to explicit cancellations via the `generation` even after we get the result)
             result = (await asyncio.gather(response_task, return_exceptions=True))[0]
             if generation != consumer._reply_now_generation: return None
@@ -218,32 +212,15 @@ class ChatHandler:
             if isinstance(result, asyncio.CancelledError): continue
             if isinstance(result, BaseException         ): raise result
 
-            # 5) Respond to new speech that arrived while the forced `reply_now` response was running
+            # 4) Respond to new speech that arrived while the forced `reply_now` response was running
             #    (the completed snapshot was already consumed, the one we grab here is new)
             if result:
                 if consumer.response_mode == "automatic" and consumer._staged_utterances.snapshot():
                     consumer._pending_response_trigger = "automatic"
                     consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
-                return result
-
-            # The remaining audio in the ASR queue still hasn't finished processing; cancel the reply
-            if (asyncio.get_running_loop().time() >= empty_deadline): return None
+            return result
 
         return None
-
-    # Snapshot helper for `reply_now` coordination; Returns: (snapshot, should_cancel)
-    @staticmethod
-    def _try_get_snapshot(consumer: ChatConsumer, empty_deadline: float) -> tuple[Any, bool]:
-        snapshot = consumer._staged_utterances.snapshot()
-        
-        # State 1: We have a snapshot            => proceed normally
-        # State 2: No snapshot, but time remains => don't cancel
-        if snapshot:                                           return snapshot, False
-        if asyncio.get_running_loop().time() < empty_deadline: return None,     False
-                
-        # State 3: No snapshot, and deadline reached => log and cancel
-        logger.info("%s reply_now completed with no finalized user text.%s", ORANGE, RESET)
-        return None, True
 
     # --------------------------------------------------------------------------------
     # Flush staged utterances before disconnect finishes

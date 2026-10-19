@@ -3,11 +3,11 @@ Unit tests for the `reply_now` state and command helpers.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_reply_state`
 
-Exercise queue barriers, staged transcript snapshots, command acknowledgements, and
-interim STT comparison.
+Exercise queue barriers, the `reply_now` STT flush, staged transcript snapshots, command
+acknowledgements, and interim STT comparison.
 
 """
-import json, unittest
+import asyncio, json, threading, time, unittest
 
 from datetime      import timedelta
 from types         import SimpleNamespace
@@ -22,7 +22,8 @@ from chat_app.websocket.consumers.processing.stream          import set_streamin
 from chat_app.websocket.consumers.utils.groups               import claim_primary_connection, format_send_actions_command
 from chat_app.websocket.services.chatHelpers                import ChatHandler
 from chat_app.websocket.services.chat_state                 import StagedUtteranceBuffer
-from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, StopSignal, AudioInputQueue
+from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, AudioInputQueue
+from chat_app.websocket.services.speech.stt.speechProvider  import SpeechToTextProvider
 from chat_app.websocket.services.speech.stt.stream_state    import InterimProgressTracker
 
 
@@ -54,8 +55,8 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
     """
     Verify queue ordering and barrier completion across the asyncio/thread boundary.
     """
-    # Resolve the marker after older audio and before newer audio
-    async def test_queue_reaches_barrier_between_older_and_newer_audio(self) -> None:
+    # Order the marker between older and newer audio; dequeuing it says nothing about recognition
+    async def test_queue_orders_barrier_between_older_and_newer_audio(self) -> None:
         audio_queue = AudioInputQueue()
         audio_queue.put_audio(received_at=1.0, data=b"a")
         audio_queue.put_audio(received_at=2.0, data=b"b")
@@ -65,13 +66,14 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         first  = audio_queue.get()
         second = audio_queue.get()
         marker = audio_queue.get()
-        await barrier.wait(timeout=0.05)
         fourth = audio_queue.get()
 
         self.assertEqual([first.data, second.data], [b"a", b"b"])
         self.assertIs(marker, barrier)
         self.assertIsInstance(fourth, AudioChunk)
         self.assertEqual(fourth.data, b"c")
+        with self.assertRaises(asyncio.TimeoutError):
+            await barrier.wait(timeout=0.05)
 
     # Propagate both successful and failed one-shot barrier outcomes
     async def test_barrier_resolves_and_fails_without_external_services(self) -> None:
@@ -84,32 +86,14 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "stopped"):
             await stopped.wait(timeout=0.05)
 
-    # Preserve accepted audio and barriers ahead of an ordinary stream-stop marker
-    async def test_graceful_stop_drains_the_accepted_queue_prefix(self) -> None:
-        audio_queue = AudioInputQueue()
-        audio_queue.put_audio(received_at=1.0, data=b"old")
-        barrier = audio_queue.put_barrier()
-        signal  = audio_queue.request_stop()
+    # A waiter that times out must not cancel the barrier for the next one (paused `reply_now` reuses it)
+    async def test_timed_out_waiter_leaves_the_barrier_usable(self) -> None:
+        barrier = AudioBarrier()
+        with self.assertRaises(asyncio.TimeoutError):
+            await barrier.wait(timeout=0.01)
 
-        audio = audio_queue.get()
-        marker = audio_queue.get()
+        barrier.resolve()
         await barrier.wait(timeout=0.05)
-        stopped = audio_queue.get()
-
-        self.assertEqual(audio.data, b"old")
-        self.assertIs(marker, barrier)
-        self.assertIs(stopped, signal)
-
-    # Let a quick resume pass over a stop marker without reordering newer audio
-    async def test_cancelled_stop_keeps_the_current_queue_streaming(self) -> None:
-        audio_queue = AudioInputQueue()
-        signal = audio_queue.request_stop()
-        audio_queue.put_audio(received_at=1.0, data=b"resumed")
-        signal.cancel()
-
-        self.assertTrue(audio_queue.get().is_cancelled())
-        audio = audio_queue.get()
-        self.assertEqual(audio.data, b"resumed")
 
     # Fail an unreached boundary instead of leaving its coordinator blocked on shutdown
     async def test_aborting_queue_releases_an_unreached_barrier(self) -> None:
@@ -121,7 +105,153 @@ class AudioBarrierTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "aborted"):
             await barrier.wait(timeout=0.05)
-        self.assertIsInstance(audio_queue.get(), StopSignal)
+        self.assertIsInstance(audio_queue.get(), AudioBarrier)  # Fresh marker that ends the generator
+
+
+# ================================================================================
+# STT Flush Tests (`reply_now` makes Google finalize before snapshotting)
+# ================================================================================
+class FakeSpeechClient:
+    """
+    Stand-in for Google's streaming client: consumes requests until the generator ends
+    (a barrier half-closes the stream), then returns one final for that audio.
+    """
+    # Optionally hold the stream back so a test can reorder lifecycle calls first
+    def __init__(self, gate: threading.Event | None = None) -> None:
+        self.gate    = gate
+        self.streams = []
+
+    # Mirror `SpeechClient.streaming_recognize` closely enough for the provider
+    def streaming_recognize(self, config: object, requests: object) -> object:
+        if self.gate is not None: self.gate.wait(5)
+        audio = b"".join(request.audio_content for request in requests)
+        self.streams.append(audio)
+        time.sleep(0.05)  # Google's finalization latency after half-close
+        if audio:
+            alternative = SimpleNamespace(transcript=audio.decode(), words=[])
+            yield SimpleNamespace(results=[SimpleNamespace(is_final=True, result_end_time=None, alternatives=[alternative])])
+
+
+class SpeechFlushTests(unittest.IsolatedAsyncioTestCase):
+    """
+    Verify that a flush barrier resolves only after the final transcript for every chunk
+    ahead of it has been staged, and that later audio moves to a successor stream.
+    """
+    # Build a provider around the fake client with deliberately slow staging
+    async def asyncSetUp(self) -> None:
+        self.staged = []
+
+        async def stage(consumer, text, timestamp, words):
+            await asyncio.sleep(0.1)
+            self.staged.append(text)
+
+        stage_patch  = patch.object(ChatHandler, "stage_and_schedule", new=stage)
+        client_patch = patch("chat_app.websocket.services.speech.stt.speechProvider.speech.SpeechClient")
+        stage_patch.start(); client_patch.start()
+        self.addCleanup(stage_patch.stop); self.addCleanup(client_patch.stop)
+
+        self.consumer = type("WeakConsumer", (), {})()  # The provider only keeps a weakref to it
+        self.provider = SpeechToTextProvider(consumer=self.consumer, loop=asyncio.get_running_loop())
+        self.addCleanup(self.provider.shutdown)
+
+    # The waiter wakes with the last utterance staged; audio after the request starts a new stream
+    async def test_flush_waits_for_staged_final_and_hands_off_later_audio(self) -> None:
+        client = self.provider._client = FakeSpeechClient()
+        self.provider.send_audio(b"hello ")
+        self.provider.send_audio(b"world")
+        barrier = self.provider.create_audio_barrier()
+        self.provider.send_audio(b"next")
+
+        await barrier.wait(timeout=2)
+        self.assertEqual(self.staged, ["hello world"])
+
+        self.provider.stop()
+        await self.provider.create_audio_barrier().wait(timeout=2)  # The pause barrier, while paused
+        self.assertEqual(self.staged, ["hello world", "next"])
+        self.assertEqual(client.streams, [b"hello world", b"next"])
+
+    # Text-only clients never open a stream, so there is nothing to flush
+    async def test_flush_without_a_stream_resolves_immediately(self) -> None:
+        self.provider._client = FakeSpeechClient()
+        await self.provider.create_audio_barrier().wait(timeout=0.05)
+
+    # A quick resume still ends the paused stream at its barrier; resumed audio moves to a successor
+    async def test_quick_resume_still_flushes_the_paused_stream(self) -> None:
+        gate   = threading.Event()
+        client = self.provider._client = FakeSpeechClient(gate)
+        self.provider.send_audio(b"before pause")
+        self.provider.stop()
+        barrier = self.provider.create_audio_barrier()  # `reply_now` while paused reuses the pause barrier
+        self.provider.start()
+        self.provider.send_audio(b"after resume")
+        gate.set()
+
+        await barrier.wait(timeout=2)
+        self.assertEqual(self.staged, ["before pause"])
+
+        self.provider.stop()
+        await self.provider.create_audio_barrier().wait(timeout=2)
+        self.assertEqual(self.staged, ["before pause", "after resume"])
+        self.assertEqual(client.streams, [b"before pause", b"after resume"])
+
+
+class ReplyNowCoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    """
+    Verify that the coordinator answers as soon as the STT flush resolves, from a snapshot
+    that includes the utterance Google finalized during the flush.
+    """
+    # Build a consumer and a barrier that stages `late_text` just before it resolves
+    def make_consumer(self, *, late_text: str | None) -> tuple[SimpleNamespace, AudioBarrier]:
+        loop     = asyncio.get_running_loop()
+        barrier  = AudioBarrier()
+        consumer = SimpleNamespace(
+            response_mode             = "manual",
+            events                    = [],
+            _reply_now_generation     = 0,
+            _reply_now_task           = None,
+            _pending_response_task    = None,
+            _pending_response_trigger = None,
+            _manual_response_task     = None,
+            _staged_utterances        = StagedUtteranceBuffer(),
+        )
+
+        def finish() -> None:
+            if late_text: consumer._staged_utterances.append(text=late_text, words=None, timestamp=0.0)
+            consumer.events.append(("flushed", loop.time()))
+            barrier.resolve()
+        loop.call_later(0.1, finish)
+
+        async def execute(consumer_: SimpleNamespace, trigger: str = "automatic") -> str:
+            snapshot = consumer_._staged_utterances.snapshot()
+            consumer_.events.append(("execute", loop.time(), [item.text for item in snapshot]))
+            consumer_._staged_utterances.consume(snapshot)
+            return "reply"
+
+        execute_patch = patch.object(ChatHandler, "_execute_response", new=execute)
+        execute_patch.start()
+        self.addCleanup(execute_patch.stop)
+        return consumer, barrier
+
+    # The utterance still interim at the request is part of the reply, with no extra wait
+    async def test_reply_includes_the_utterance_finalized_by_the_flush(self) -> None:
+        consumer, barrier = self.make_consumer(late_text="this morning I planted tomatoes")
+        consumer._staged_utterances.append(text="I went to the garden.", words=None, timestamp=0.0)
+
+        result  = await ChatHandler.request_reply_now(consumer, barrier)
+        flushed = next(event for event in consumer.events if event[0] == "flushed")
+        execute = next(event for event in consumer.events if event[0] == "execute")
+
+        self.assertEqual(result, "reply")
+        self.assertEqual(execute[2], ["I went to the garden.", "this morning I planted tomatoes"])
+        self.assertLess(execute[1] - flushed[1], 0.1)
+
+    # Nothing said since the last reply: finish silently as soon as the flush confirms it
+    async def test_empty_reply_after_a_flush_completes_without_waiting(self) -> None:
+        consumer, barrier = self.make_consumer(late_text=None)
+
+        self.assertIsNone(await ChatHandler.request_reply_now(consumer, barrier))
+        flushed = next(event for event in consumer.events if event[0] == "flushed")
+        self.assertLess(asyncio.get_running_loop().time() - flushed[1], 0.1)
 
 
 # ================================================================================

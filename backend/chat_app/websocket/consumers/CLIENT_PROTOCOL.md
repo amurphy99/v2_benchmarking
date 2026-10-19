@@ -197,7 +197,7 @@ from a primary client (the robot), not just from the admin page.
 | `robot_action` | `{"kind": "emotion"\|"animation", "value": "Happy", "duration_ms": 3000}` | Round-trips an avatar action back out as a `robot_action` message. `duration_ms` is optional. See the caveat below. |
 | `repeat_last` | *(none)* | Re-speaks the last assistant response. Rejected with `ok: false` if there is no prior response. |
 | `send_custom` | `{"message": "text to say"}` | Speaks supplied text as the assistant. Rejected if `message` is missing/blank. |
-| `reply_now` | *(none)* | Forces a response from whatever has been heard so far. Once generation starts, later speech does not cancel it. Buddy does not need this (auto-reply is on). Clients in `manual` mode use it for every turn; see section 4.1. |
+| `reply_now` | *(none)* | Forces a response from everything heard up to the request, including the last words before it. Later speech does not cancel it. Buddy does not need this (auto-reply is on). Clients in `manual` mode use it for every turn; see section 4.1. |
 | `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. |
 | `set_response_mode` | `{"mode": "automatic"\|"manual"}` | Turns automatic replies on or off. |
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
@@ -635,24 +635,35 @@ reply into one user turn and answers it. No other message is needed between turn
 
 **What `reply_now` does** (`websocket/services/chatHelpers.py`, `_coordinate_reply_now`):
 
-1. It marks the end of the audio received so far and waits for speech recognition to catch
-   up with it (at most 2 seconds), then for the transcript to stop changing.
-2. It answers from everything finalized by then. Speech that arrives after generation
-   starts does not cancel the reply; it is kept for the next turn.
-3. If no speech has been finalized about a second later, it gives up **silently**. The ack
-   already said `ok: true`, and no `llm_response` follows. This is also what happens when
-   the user has said nothing since the last reply. Use a timeout of your own and return to
+1. The moment the command arrives, it makes speech recognition finish everything it has
+   heard so far, without waiting for the user to pause, and waits for those final results
+   (at most 2 seconds). Pressing the button right after the last word is fine; that word
+   is part of the reply.
+2. It answers from everything finalized by then. Audio that arrives after the command, and
+   speech during generation, does not cancel the reply; it is kept for the next turn.
+3. If nothing has been said since the last reply, it gives up **silently**. The ack already
+   said `ok: true`, and no `llm_response` follows. Use a timeout of your own and return to
    listening.
+
+The only wait the backend adds before the LLM call starts is recognition finishing,
+typically a few hundred milliseconds.
 
 A second `reply_now` sent before the first reply arrives replaces the first.
 
 **Rules for the audio stream.** Step 1 only works if these hold:
 
+- **Send audio and commands on the same socket.** Audio sent before `reply_now` is part of
+  the turn because a WebSocket keeps frames in order. Do not hold `reply_now` back to wait
+  for or flush your own audio; send it the moment the user asks.
 - **Send audio as it is captured.** Use small chunks (the web app sends 64 ms at a time) for
-  the whole time the robot is listening. Do **not** buffer the user's speech and send it
-  all when the button is pressed. Speech recognition finalizes an utterance only after it
-  hears the pause that follows it, so a burst that ends on the user's last word leaves that
-  utterance unfinished, and every reply runs one turn behind.
+  the whole time the robot is listening. A chunk still being captured when the button is
+  pressed arrives after the command and counts toward the next turn, so keep chunks small.
+  Do **not** buffer the user's speech and send it all when the button is pressed. A burst
+  has to be recognized from scratch inside the 2-second limit in step 1, so the end of a
+  long turn misses the limit and arrives a turn late. Word timestamps and the session
+  recording also assume audio arrives in real time.
+- **Keep streaming after the button press.** Nothing needs to stop when the user presses
+  the button. Pause only when the robot starts speaking (next rule).
 - **Do not simply stop sending.** Word timestamps and the session recording both assume the
   audio is continuous while listening is `active`. If the robot has to stop for a while --
   for example while it is speaking, so that it does not transcribe its own voice -- send
@@ -694,8 +705,9 @@ Things most likely to trip up a new client:
     same protocol with a different response engine behind it, so a client written to this
     document works against both.
 11. **Audio must be streamed as it is captured, never sent in one burst.** Holding the
-    user's speech back until a reply is wanted makes every reply run one turn behind.
-    (Section 4.1)
+    user's speech back until a reply is wanted pushes the end of long turns into the next
+    reply and breaks word timestamps. Send `reply_now` on the same socket as the audio, the
+    moment the user asks; there is nothing to wait for first. (Section 4.1)
 12. **`reply_now` can end in silence.** If nothing was heard, the ack is still `ok: true`
     and no `llm_response` follows. Do not wait for one forever. (Section 4.1)
 
@@ -717,6 +729,7 @@ Things most likely to trip up a new client:
 | `message` broadcast shape | `consumers/processing/messages.py` |
 | `llm_response`, `cancel_audio`, `chat_ended`, `user_utt` | `websocket/services/chatHelpers.py` |
 | `reply_now` coordination and wait times | `websocket/services/chatHelpers.py` |
+| `reply_now` recognition flush | `websocket/services/speech/stt/speechProvider.py` |
 | `stream_status` | `consumers/processing/stream.py` |
 | `tts_playback` validation | `consumers/processing/playback.py` |
 | `audio_data` validation | `consumers/processing/audio.py` |

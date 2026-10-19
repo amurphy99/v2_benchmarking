@@ -1,17 +1,16 @@
 """
-Ordered audio and control-marker queue for streaming STT.
+Ordered audio and barrier queue for streaming STT.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.services.speech.stt.audio_queue`
 
-Keep cross-thread chunk ordering, barrier completion, and stream-stop signaling
-in one place so the STT request generator sees a consistent queue lifecycle.
+Keep cross-thread chunk ordering and stream-ending barriers in one place so the STT
+request generator sees a consistent queue lifecycle.
 
 """
 from __future__         import annotations
 from concurrent.futures import Future
 from dataclasses        import dataclass, field
 from queue              import Empty, Queue
-from threading          import Event
 from typing             import TypeAlias
 import asyncio
 
@@ -28,9 +27,14 @@ class AudioChunk:
 # --------------------------------------------------------------------------------
 # Audio Barrier
 # --------------------------------------------------------------------------------
-# Acknowledge when every older queue entry has been removed for streaming
 @dataclass(slots=True)
 class AudioBarrier:
+    """
+    Ends the Google request stream that reaches it. Half-closing the stream makes Google
+    return final results for all audio queued ahead of the barrier right away, instead of
+    waiting for its endpointer to hear silence. The STT provider resolves the barrier once
+    those results have been staged.
+    """
     _future : Future[None] = field(default_factory=Future)
 
     # Resolve the barrier once without racing a timeout or stream shutdown
@@ -42,47 +46,27 @@ class AudioBarrier:
         if not self._future.done(): self._future.set_exception(RuntimeError(message))
 
     # Await the thread-safe future from the consumer's asyncio event loop
+    # (shielded, so one waiter's timeout or cancellation cannot cancel it for the others)
     async def wait(self, *, timeout: float | None = None) -> None:
-        wrapped = asyncio.wrap_future(self._future)
+        wrapped = asyncio.shield(asyncio.wrap_future(self._future))
         if timeout is None: await wrapped  # Timeout is the maximum seconds to wait for the queue boundary
         else:               await asyncio.wait_for(wrapped, timeout=timeout)
-
-# --------------------------------------------------------------------------------
-# Stop Signal
-# --------------------------------------------------------------------------------
-@dataclass(slots=True)
-class StopSignal:
-    """
-    End one Google request stream after every older queue item has been consumed.
-
-    A quick resume can cancel a signal that the generator has not crossed yet. This
-    keeps newly accepted audio on the existing stream without moving queue entries.
-    """
-    _cancelled : Event = field(default_factory=Event)
-
-    # Keep the current stream alive when listening resumes before this marker is reached
-    def cancel(self) -> None:
-        self._cancelled.set()
-
-    # Report whether the generator should pass over this marker
-    def is_cancelled(self) -> bool:
-        return self._cancelled.is_set()
 
 # ================================================================================
 # Ordered Audio Input Queue
 # ================================================================================
-# We can put three types of data into the queue
-AudioQueueItem: TypeAlias = AudioChunk | AudioBarrier | StopSignal
+# We can put two types of data into the queue
+AudioQueueItem: TypeAlias = AudioChunk | AudioBarrier
 
 class AudioInputQueue:
     """
-    Preserves the arrival order of audio and one-shot control markers across threads.
+    Preserves the arrival order of audio and one-shot barriers across threads.
     """
     # Initialize the thread-safe backing queue
     def __init__(self) -> None:
         self._items: Queue[AudioQueueItem] = Queue()
 
-    # Add one timestamped audio block 
+    # Add one timestamped audio block
     # (tracks monotonic time that the raw PCM audio was forwarded to Google)
     def put_audio(self, *, received_at: float, data: bytes) -> None:
         self._items.put(AudioChunk(received_at, data))
@@ -99,24 +83,16 @@ class AudioInputQueue:
     #    item = self._items.get(timeout=timeout)  # Timeout is the maximum seconds to block waiting for an item
     #    if isinstance(item, AudioBarrier): item.resolve()
     #    return item
-    
-    # Wait for the next queue item and acknowledge it when it is a barrier
+
+    # Wait for the next queue item (barriers are resolved by the provider, not here)
     def get(self) -> AudioQueueItem:
-        item = self._items.get()
-        if isinstance(item, AudioBarrier): item.resolve()
-        return item
+        return self._items.get()
 
     # Return an approximate queue depth for delay diagnostics
     def qsize(self) -> int:
         return self._items.qsize()
 
-    # End the current stream after all queue entries that were accepted before this call
-    def request_stop(self) -> StopSignal:
-        signal = StopSignal()
-        self._items.put(signal)
-        return signal
-
-    # Drop queued audio, fail pending barriers, and wake the generator during shutdown
+    # Drop queued audio, fail pending barriers, and end the generator during shutdown
     def abort(self) -> None:
         while True:
             try:
@@ -125,4 +101,4 @@ class AudioInputQueue:
                     item.fail("STT stream aborted before the audio barrier was reached")
             except Empty: break
 
-        self._items.put(StopSignal())
+        self._items.put(AudioBarrier())  # Nobody waits on this one; it only ends the stream
