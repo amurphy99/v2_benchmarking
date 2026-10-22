@@ -26,8 +26,9 @@ NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
 import type { ReactElement, Ref } from "react";
 
 // From this project
-import GltfRobotAvatar from "./GltfRobotAvatar";
-import SmileyAvatar    from "./smiley/SmileyAvatar";
+import   GltfRobotAvatar          from "./GltfRobotAvatar";
+import   SmileyAvatar             from "./smiley/SmileyAvatar";
+import { SMILEY_EXPRESSION_LIST } from "./smiley/faceState";
 
 
 // --------------------------------------------------------------------------------
@@ -57,7 +58,11 @@ export interface AvatarHandle {
     clearGaze?            : () => void;                           // Go back to automatic gaze
     setConversationState? : (state: ConversationState) => void;   // React to the conversation
     setSpeechLevel?       : (level: number) => void;              // Voice loudness, 0 to 1
+    setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
 }
+
+// One face an avatar can rest on: the name shown in the picker, and the value its handle takes
+export type RestingOption = {label: string; value: string};
 
 // Props every avatar component accepts
 export type AvatarProps = {
@@ -67,10 +72,11 @@ export type AvatarProps = {
 
 // One avatar the web app can show
 export type AvatarEntry = {
-    id       : string;                                 // `UserSettings.modelChoice` value
-    label    : string;                                 // Name shown in avatar pickers
-    features : AvatarFeature[];                        // Optional handle methods it implements
-    render   : (props: AvatarProps) => ReactElement;   // Builds the avatar element
+    id             : string;                                 // `UserSettings.modelChoice` value
+    label          : string;                                 // Name shown in avatar pickers
+    features       : AvatarFeature[];                        // Optional handle methods it implements
+    restingOptions : RestingOption[];                        // Faces it can rest on, default first (empty without `setRestingExpression`)
+    render         : (props: AvatarProps) => ReactElement;   // Builds the avatar element
 };
 
 
@@ -78,23 +84,28 @@ export type AvatarEntry = {
 // Avatars
 // ================================================================================
 // Clip-based 3D models of the two physical robots
-const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
-const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
+const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
+const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
+
+// Any named smiley expression can be its resting face (the catalog lists the default first)
+const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({name, emoji}) => ({label: `${emoji} ${name}`, value: name}));
 
 // Code-drawn face with expressions, gaze, and a speaking mouth (eyebrows only on the expressions that use them)
 const SMILEY_AVATAR: AvatarEntry = {
-    id       : "smiley",
-    label    : "Smiley (2D)",
-    features : ["gaze", "conversationState", "speechLevel"],
-    render   : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
+    id             : "smiley",
+    label          : "Smiley (2D)",
+    features       : ["gaze", "conversationState", "speechLevel"],
+    restingOptions : SMILEY_RESTING_OPTIONS,
+    render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
 
 // The same face with its eyebrows always showing
 const SMILEY_BROWS_AVATAR: AvatarEntry = {
-    id       : "smiley-brows",
-    label    : "Smiley + eyebrows (2D)",
-    features : ["gaze", "conversationState", "speechLevel"],
-    render   : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
+    id             : "smiley-brows",
+    label          : "Smiley + eyebrows (2D)",
+    features       : ["gaze", "conversationState", "speechLevel"],
+    restingOptions : SMILEY_RESTING_OPTIONS,
+    render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
 
 // Every avatar, in picker order

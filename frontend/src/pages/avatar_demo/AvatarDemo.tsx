@@ -40,6 +40,13 @@ const DEMO_DEFAULT_AVATAR_ID = "smiley";
 const DEMO_LOG_LENGTH = 10;
 
 
+// Resting face an avatar starts on (its first option; empty for avatars without a resting picker)
+function defaultResting(avatarId: string): string {
+    const options = getAvatarEntry(avatarId).restingOptions;
+    return (options.length > 0) ? options[0].value : "";
+}
+
+
 // ================================================================================
 // Avatar Demo
 // ================================================================================
@@ -53,6 +60,7 @@ export function AvatarDemo(): ReactElement {
     const logIdRef  = useRef<number>(0);
 
     // Face inputs the page drives (a newly picked avatar starts from these defaults too)
+    const [restingExpression, setRestingExpression] = useState<string>(defaultResting(DEMO_DEFAULT_AVATAR_ID));
     const [conversationState, setConversationState] = useState<ConversationState>("idle");
     const [gazePoint,         setGazePoint        ] = useState<GazePoint | null>(null);
     const [talking,           setTalking          ] = useState<boolean>(false);
@@ -92,6 +100,7 @@ export function AvatarDemo(): ReactElement {
     const changeAvatar = (id: string): void => {
         setAvatarId(id);
         setLog([]);
+        setRestingExpression(defaultResting(id));
         setConversationState("idle");
         setGazePoint(null);
         setTalking(false);
@@ -102,6 +111,7 @@ export function AvatarDemo(): ReactElement {
     // Face Inputs
     // --------------------------------------------------------------------------------
     // Each control updates the page's copy and passes the value to the avatar
+    const changeRestingExpression = (value: string): void            => { setRestingExpression(value);  avatarRef.current?.setRestingExpression?.(value); };
     const changeConversationState = (state: ConversationState): void => { setConversationState(state);  avatarRef.current?.setConversationState?.(state); };
     const changeGaze              = (x: number, y: number): void     => { setGazePoint({x, y});         avatarRef.current?.setGaze?.(x, y);               };
     const clearGaze               = (): void                         => { setGazePoint(null);           avatarRef.current?.clearGaze?.();                 };
@@ -142,11 +152,14 @@ export function AvatarDemo(): ReactElement {
                 {/* -------------------------------------------------------------------------------- */}
                 <div className="flex flex-col gap-4">
                     <DemoSetupGroup
-                        avatarId         = {avatarId}
-                        onAvatarChange   = {changeAvatar}
-                        durationMs       = {durationMs}
-                        onDurationChange = {setDurationMs}
-                        onReset          = {resetAvatar}
+                        avatarId            = {avatarId}
+                        onAvatarChange      = {changeAvatar}
+                        restingOptions      = {entry.restingOptions}
+                        restingExpression   = {restingExpression}
+                        onRestingExpression = {changeRestingExpression}
+                        durationMs          = {durationMs}
+                        onDurationChange    = {setDurationMs}
+                        onReset             = {resetAvatar}
                     />
 
                     {/* Same buttons as the AdminChat panel (always "connected": nothing goes over a socket) */}

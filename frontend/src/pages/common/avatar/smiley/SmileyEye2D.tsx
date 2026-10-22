@@ -11,19 +11,20 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import      { SMILEY_BROW_STROKE_W, SMILEY_FEATURE_HEX, SMILEY_FEATURE_STROKE_W               } from "./faceDrawing2D";
-import      { SMILEY_HEART_HEX, SMILEY_HEART_PATH, SMILEY_SPIRAL_STROKE_W                     } from "./faceDrawing2D";
-import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg } from "./faceDrawing2D";
-import type { FaceState                                                                       } from "./faceState";
+import type { SmileyPaint                                                                       } from "./faceDrawing2D";
+import      { SMILEY_HEART_HEX, SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W } from "./faceDrawing2D";
+import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg   } from "./faceDrawing2D";
+import type { FaceState                                                                         } from "./faceState";
 
 
 // --------------------------------------------------------------------------------
 // Smiley Eye (2D)
 // --------------------------------------------------------------------------------
 // One eye and its brow, in the feature group's coordinates
-export default function SmileyEye2D({side, face}: {
-    side : number;      // -1 for the left eye, 1 for the right
-    face : FaceState;   // Combined face for this frame
+export default function SmileyEye2D({side, face, paint}: {
+    side  : number;        // -1 for the left eye, 1 for the right
+    face  : FaceState;     // Combined face for this frame
+    paint : SmileyPaint;   // Gradient fills from `SmileyFace2D`
 }): ReactElement {
     // Eyelid clip id, unique per eye on the page (React's ids may hold characters `url(#...)` rejects)
     const lidClipId = `smiley-lid-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -34,21 +35,21 @@ export default function SmileyEye2D({side, face}: {
 
     return (
         <g>
-            {/* Eyebrow */}
+            {/* Tapered eyebrow */}
             {(face.brows > 0) ? (
-                <path d={browPath(side, face)} fill="none" stroke={SMILEY_FEATURE_HEX} strokeWidth={SMILEY_BROW_STROKE_W} strokeLinecap="round" opacity={face.brows} />
+                <path d={browPath(side, face)} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={face.brows} />
             ) : null}
 
             <g transform={`translate(${eye.cx} ${eye.cy})`}>
                 {/* Open eye, with the eyelid's slant cutting off its top */}
                 <clipPath id={lidClipId}>
-                    <rect x={-2 * eye.rx} y={eye.lidEdgeY} width={4 * eye.rx} height={(3 * eye.ry) + SMILEY_FEATURE_STROKE_W} transform={`rotate(${eye.lidDeg} 0 ${eye.lidEdgeY})`} />
+                    <rect x={-2 * eye.rx} y={eye.lidEdgeY} width={4 * eye.rx} height={4 * eye.ry} transform={`rotate(${eye.lidDeg} 0 ${eye.lidEdgeY})`} />
                 </clipPath>
-                <ellipse rx={eye.rx} ry={eye.ry} fill={SMILEY_FEATURE_HEX} clipPath={`url(#${lidClipId})`} opacity={openOpacity} />
+                <ellipse rx={eye.rx} ry={eye.ry} fill={paint.feature} clipPath={`url(#${lidClipId})`} opacity={openOpacity} />
 
-                {/* Closed-eye arc */}
+                {/* Tapered closed-eye arc */}
                 {(face.eyeArc > 0) ? (
-                    <path d={eyeArcPath(face)} fill="none" stroke={SMILEY_FEATURE_HEX} strokeWidth={SMILEY_FEATURE_STROKE_W} strokeLinecap="round" opacity={face.eyeArc} />
+                    <path d={eyeArcPath(face)} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={face.eyeArc} />
                 ) : null}
 
                 {/* Spinning spiral */}
@@ -57,7 +58,7 @@ export default function SmileyEye2D({side, face}: {
                         d              = {spiralPath(face)}
                         transform      = {`rotate(${spiralRotationDeg(side, face)})`}
                         fill           = "none"
-                        stroke         = {SMILEY_FEATURE_HEX}
+                        stroke         = {paint.feature}
                         strokeWidth    = {SMILEY_SPIRAL_STROKE_W}
                         strokeLinecap  = "round"
                         strokeLinejoin = "round"

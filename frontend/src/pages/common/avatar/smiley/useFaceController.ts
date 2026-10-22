@@ -5,7 +5,8 @@
 Each animation frame combines several layers into one `FaceState`:
 
   1) the expression, which moves into a new mood over a fixed short time, holds
-     for `duration_ms` once fully shown, then moves back to Neutral
+     for `duration_ms` once fully shown, then moves back to the resting face
+     (what "Neutral" means; the page can pick it with `setRestingExpression`)
   2) a named motion's offsets (nod, look around, ...) on top of the expression
   3) gaze: a point the page sets, else one picked by the conversation state,
      else small idle glances
@@ -27,7 +28,7 @@ import type { AvatarHandle, ConversationState, RobotAction  } from "../avatarReg
 import type { FaceMotion, MotionOffsets                     } from "./faceMotions";
 import      { motionFor                                     } from "./faceMotions";
 import type { FaceState                                     } from "./faceState";
-import      { blendFace, expressionFor, SMILEY_NEUTRAL_FACE } from "./faceState";
+import      { blendFace, expressionFor, SMILEY_BASE_FACE    } from "./faceState";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -82,19 +83,24 @@ export function useFaceController(
     browsAlways : boolean,   // Keep the eyebrows showing on every expression (the "Smiley + eyebrows" avatar)
 ): {face: FaceState; handle: AvatarHandle} {
     // Latest combined face (set once per animation frame)
-    const [face, setFace] = useState<FaceState>(SMILEY_NEUTRAL_FACE);
+    const [face, setFace] = useState<FaceState>(SMILEY_BASE_FACE);
 
     // --------------------------------------------------------------------------------
     // Layer State
     // --------------------------------------------------------------------------------
     // Expression: the change playing now, the face it has reached, and when it returns to Neutral
-    const transitionRef = useRef<ExpressionTransition>({from: SMILEY_NEUTRAL_FACE, to: SMILEY_NEUTRAL_FACE, startMs: 0, lengthMs: SMILEY_EXPRESSION_IN_MS});
-    const expressionRef = useRef<FaceState>(SMILEY_NEUTRAL_FACE);
+    const transitionRef = useRef<ExpressionTransition>({from: SMILEY_BASE_FACE, to: SMILEY_BASE_FACE, startMs: 0, lengthMs: SMILEY_EXPRESSION_IN_MS});
+    const expressionRef = useRef<FaceState>(SMILEY_BASE_FACE);
     const releaseAtRef  = useRef<number | null>(null);
+
+    // Neutral: the face to rest on (the base face until the page picks another), and whether it is showing
+    const restingRef = useRef<FaceState>(SMILEY_BASE_FACE);
+    const atRestRef  = useRef<boolean>(true);
 
     // Start moving from the face showing now to another one
     const startTransition = (to: FaceState, lengthMs: number, nowMs: number): void => {
         transitionRef.current = {from: expressionRef.current, to, startMs: nowMs, lengthMs};
+        atRestRef.current     = (to === restingRef.current);
     };
 
     // Motion playing now (null when none)
@@ -116,8 +122,8 @@ export function useFaceController(
                 // The hold starts once the new face is fully shown
                 const nowMs      = performance.now();
                 const durationMs = action.duration_ms ?? null;
-                startTransition(expressionFor(action.value), SMILEY_EXPRESSION_IN_MS, nowMs);
-                releaseAtRef.current = (durationMs === null) ? null : (nowMs + SMILEY_EXPRESSION_IN_MS + durationMs);
+                startTransition(expressionFor(action.value, restingRef.current), SMILEY_EXPRESSION_IN_MS, nowMs);
+                releaseAtRef.current = ((durationMs === null) || atRestRef.current) ? null : (nowMs + SMILEY_EXPRESSION_IN_MS + durationMs);
             }
             else if (action.kind === "animation") {
                 const motion      = motionFor(action.value);
@@ -125,11 +131,18 @@ export function useFaceController(
             }
         },
 
-        // Head back to Neutral now and stop any motion
+        // Head back to the resting face now and stop any motion
         reset: (): void => {
-            startTransition(SMILEY_NEUTRAL_FACE, SMILEY_EXPRESSION_OUT_MS, performance.now());
+            startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, performance.now());
             releaseAtRef.current = null;
             motionRef.current    = null;
+        },
+
+        // Pick the face Neutral means (an unknown name keeps the current one), moving to it if resting
+        setRestingExpression: (value: string): void => {
+            const wasResting   = atRestRef.current;
+            restingRef.current = expressionFor(value, restingRef.current);
+            if (wasResting) startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, performance.now());
         },
 
         // Page-driven inputs
@@ -162,7 +175,7 @@ export function useFaceController(
 
             // 1) Expression: head back to Neutral once its time is up, then move along the current change
             if ((releaseAtRef.current !== null) && (nowMs >= releaseAtRef.current)) {
-                startTransition(SMILEY_NEUTRAL_FACE, SMILEY_EXPRESSION_OUT_MS, nowMs);
+                startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, nowMs);
                 releaseAtRef.current = null;
             }
             const transition      = transitionRef.current;

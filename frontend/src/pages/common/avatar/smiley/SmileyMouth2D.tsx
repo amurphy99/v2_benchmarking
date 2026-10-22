@@ -1,0 +1,66 @@
+/* Draw the smiley's mouth: the lip line, and the opening with its teeth and tongue.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/common/avatar/smiley/SmileyMouth2D`
+
+A closed mouth is just the tapered lip line. As the mouth opens, the opening
+fills with the dark mouth gradient, and the tongue and teeth are drawn inside
+it, clipped to its outline so they never spill past the lips. The lip line
+stays on top, thinning as the mouth opens.
+
+*/
+import type { ReactElement } from "react";
+import      { useId        } from "react";
+
+// From this project
+import type { SmileyPaint                          } from "./faceDrawing2D";
+import      { SMILEY_MOUTH_Y, SMILEY_RIBBON_EDGE_W } from "./faceDrawing2D";
+import      { mouthShape                           } from "./faceDrawing2D";
+import type { FaceState                            } from "./faceState";
+
+// Mouth colors and line widths
+const SMILEY_TONGUE_HEX     = "#f0657a";   // Tongue
+const SMILEY_TOOTH_LINE_HEX = "#cbbfae";   // Lines between teeth and between the rows
+const SMILEY_TOOTH_LINE_W   = 1.8;
+
+// Openness below which the opening is not drawn (the lip line covers it)
+const SMILEY_MOUTH_MIN_OPEN = 0.02;
+
+
+// --------------------------------------------------------------------------------
+// Smiley Mouth (2D)
+// --------------------------------------------------------------------------------
+// The mouth, in the feature group's coordinates
+export default function SmileyMouth2D({face, paint}: {
+    face  : FaceState;     // Combined face for this frame
+    paint : SmileyPaint;   // Gradient fills from `SmileyFace2D`
+}): ReactElement {
+    // Opening clip id, unique per avatar on the page (React's ids may hold characters `url(#...)` rejects)
+    const clipId = `smiley-mouth-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    const mouth  = mouthShape(face);
+
+    return (
+        <g transform={`translate(0 ${SMILEY_MOUTH_Y})`}>
+            {/* Opening, with the tongue and teeth clipped inside it */}
+            {(face.mouthOpen > SMILEY_MOUTH_MIN_OPEN) ? (
+                <>
+                    <clipPath id={clipId}>
+                        <path d={mouth.opening} />
+                    </clipPath>
+                    <path d={mouth.opening} fill={paint.mouth} />
+                    <g clipPath={`url(#${clipId})`}>
+                        {(face.tongue > 0) ? <ellipse {...mouth.tongue} fill={SMILEY_TONGUE_HEX} opacity={face.tongue} /> : null}
+                        {(face.teethTop    > 0) ? <path d={mouth.topTeeth}    fill={paint.teeth} /> : null}
+                        {(face.teethBottom > 0) ? <path d={mouth.bottomTeeth} fill={paint.teeth} /> : null}
+                        {(face.teethGaps   > 0) ? <path d={mouth.toothGaps}   fill="none" stroke={SMILEY_TOOTH_LINE_HEX} strokeWidth={SMILEY_TOOTH_LINE_W} opacity={face.teethGaps} /> : null}
+                        {((face.teethTop > 0) && (face.teethBottom > 0)) ? (
+                            <path d={mouth.rowLine} fill="none" stroke={SMILEY_TOOTH_LINE_HEX} strokeWidth={SMILEY_TOOTH_LINE_W} opacity={Math.min(face.teethTop, face.teethBottom)} />
+                        ) : null}
+                    </g>
+                </>
+            ) : null}
+
+            {/* Tapered lip line */}
+            <path d={mouth.line} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" />
+        </g>
+    );
+}

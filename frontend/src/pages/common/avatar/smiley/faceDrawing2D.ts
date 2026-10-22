@@ -1,11 +1,16 @@
-/* Layout, colors, and SVG shape math for the 2D smiley renderer.
+/* Layout and SVG shape math for the 2D smiley renderer.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/faceDrawing2D`
 
-Shared by `SmileyFace2D`, `SmileyEye2D`, and `SmileyExtras2D`. Every size is in
-SVG units: the face is a radius-100 circle at the origin, and negative y is up.
-Feature positions are relative to the feature group, which slides with the head
-turn; eye shapes are relative to their eye's center.
+Shared by `SmileyFace2D` and its parts (`SmileyEye2D`, `SmileyMouth2D`,
+`SmileyHand2D`, `SmileyExtras2D`). Every size is in SVG units: the face is a
+radius-100 circle at the origin, and negative y is up. Feature positions are
+relative to the feature group, which slides with the head turn; eye shapes are
+relative to their eye's center, and mouth shapes to the mouth's center.
+
+Brows, closed-eye arcs, and the lip line are tapered like iOS emoji strokes:
+filled outlines ("ribbons") that are thickest in the middle and thin at the
+ends, rather than lines of one width.
 
 The tear, the Zs, the floating hearts, and the spiral spin are animated from
 `face.timeSec`, so the renderer stays a pure function of the face it is given.
@@ -19,12 +24,10 @@ export const SMILEY_TURN_SHIFT_X = 26;    // Feature slide at a full left or rig
 export const SMILEY_TURN_SHIFT_Y = 20;    // Feature slide at a full up or down turn
 export const SMILEY_MOUTH_Y      = 36;    // Mouth corner height
 
-// Feature colors and line widths
-export const SMILEY_FEATURE_HEX      = "#3b2a1a";   // Eyes, brows, and mouth
-export const SMILEY_HEART_HEX        = "#ff3b5c";   // Heart eyes and floating hearts
-export const SMILEY_FEATURE_STROKE_W = 5;           // Mouth, closed-eye arcs
-export const SMILEY_BROW_STROKE_W    = 6;           // Eyebrows
-export const SMILEY_SPIRAL_STROKE_W  = 3.5;         // Spiral eyes
+// Colors and line widths the parts share
+export const SMILEY_HEART_HEX       = "#ff3b5c";   // Heart eyes and floating hearts
+export const SMILEY_SPIRAL_STROKE_W = 3.5;         // Spiral eyes
+export const SMILEY_RIBBON_EDGE_W   = 1.2;         // Outline drawn around each ribbon so its ends come out round
 
 // Open eyes
 const SMILEY_EYE_X       = 34;     // Eye distance from the center line
@@ -40,26 +43,46 @@ const SMILEY_LID_DEPTH   = 0.55;   // How far a full slant cuts into the eye, as
 // Other eye styles
 const SMILEY_EYE_ARC_HALF_W          = 13;    // Half-width of a closed-eye arc
 const SMILEY_EYE_ARC_H               = 7;     // How far a closed-eye arc bows up or down
+const SMILEY_EYE_ARC_W               = 6.5;   // Closed-eye arc thickness at its middle
+const SMILEY_EYE_ARC_END_W           = 2.5;   // ...and at its ends
 const SMILEY_SPIRAL_R                = 15;    // Spiral eye radius
 const SMILEY_SPIRAL_TURNS            = 2.5;   // Turns in each spiral
 const SMILEY_SPIRAL_SPIN_DEG_PER_SEC = 90;    // Spiral spin speed (the eyes spin opposite ways)
 const SMILEY_HEART_EYE_SIZE          = 15;    // Heart eye half-width
 
 // Eyebrows
-const SMILEY_BROW_GAP     = 9;    // Gap between the top of the eye and the brow
-const SMILEY_BROW_HALF_W  = 14;   // Half the brow's width
-const SMILEY_BROW_ARCH    = 4;    // How far the brow's middle bows up
-const SMILEY_BROW_RAISE   = 9;    // Brow lift at a full `browRaise` or `browAsym`
-const SMILEY_BROW_TILT    = 7;    // Inner-end lift at a full `browAngle` (the outer end drops half as much)
+const SMILEY_BROW_GAP    = 9;     // Gap between the top of the eye and the brow
+const SMILEY_BROW_HALF_W = 13;    // Half the brow's width
+const SMILEY_BROW_ARCH   = 5;     // How far the brow's middle bows up
+const SMILEY_BROW_RAISE  = 9;     // Brow lift at a full `browRaise` or `browAsym`
+const SMILEY_BROW_TILT   = 7;     // Inner-end lift at a full `browAngle` (the outer end drops half as much)
+const SMILEY_BROW_W      = 7;     // Brow thickness at its middle
+const SMILEY_BROW_END_W  = 2.5;   // ...and at its ends
 
 // Mouth
-const SMILEY_MOUTH_HALF_W    = 38;   // Half the mouth's width
-const SMILEY_MOUTH_CURVE     = 20;   // Drop of the mouth's middle at a full smile
-const SMILEY_MOUTH_OPEN_UP   = 8;    // Upper lip lift at a fully open mouth
-const SMILEY_MOUTH_OPEN_DOWN = 26;   // Lower lip drop at a fully open mouth
-const SMILEY_MOUTH_WAVE      = 5;    // Wave height at a full `mouthWave`
-const SMILEY_MOUTH_WAVES     = 3;    // Half-waves across the mouth
-const SMILEY_MOUTH_SAMPLES   = 20;   // Points along each lip
+const SMILEY_MOUTH_HALF_W          = 38;     // Half the mouth's width
+const SMILEY_MOUTH_CURVE           = 20;     // Drop of the mouth's middle at a full smile
+const SMILEY_MOUTH_OPEN_UP         = 14;     // Upper lip lift at a fully open mouth (flattens a grin's top edge)
+const SMILEY_MOUTH_OPEN_DOWN       = 26;     // Lower lip drop at a fully open mouth
+const SMILEY_MOUTH_WAVE            = 5;      // Wave height at a full `mouthWave`
+const SMILEY_MOUTH_WAVES           = 3;      // Half-waves across the mouth
+const SMILEY_MOUTH_SQUARE_POWER    = 8;      // Extra flatness of the lips at a full `mouthSquare` (2 is a plain curve)
+const SMILEY_MOUTH_SAMPLES         = 24;     // Points along each lip
+const SMILEY_MOUTH_LINE_W          = 7;      // Lip line thickness at its middle
+const SMILEY_MOUTH_LINE_END_W      = 3;      // ...and at its corners
+const SMILEY_MOUTH_OPEN_LINE_SHARE = 0.35;   // Share of that thickness kept once the mouth opens (the opening shows the mouth)
+const SMILEY_MOUTH_LINE_FADE_OPEN  = 0.25;   // Openness at which the lip line has thinned all the way
+
+// Teeth and tongue, as shares of the open mouth's height at its middle
+const SMILEY_TEETH_ROW_SHARE      = 0.5;                            // Height of a full row of teeth
+const SMILEY_TOOTH_GAP_SPOTS      = [-0.66, -0.33, 0, 0.33, 0.66];  // Where the lines between teeth sit, across the mouth (-1 to 1)
+const SMILEY_TONGUE_WIDTH_SHARE   = 0.45;                           // Tongue half-width, as a share of the mouth's half-width
+const SMILEY_TONGUE_HEIGHT_SHARE  = 0.32;                           // Tongue half-height
+const SMILEY_TONGUE_RAISE_SHARE   = 0.22;                           // How far the tongue sits above the lower lip
+
+// Icicles along the bottom of the face: [angle in degrees (90 is straight down), base width, length]
+const SMILEY_ICICLES: [number, number, number][] = [[58, 10, 13], [71, 12, 22], [83, 11, 16], [96, 13, 25], [109, 11, 15], [122, 10, 19]];
+const SMILEY_ICICLE_INSET = 3;   // How far each icicle's base sits inside the face edge
 
 // Tear (one drip runs down the right cheek, then the next starts)
 const SMILEY_TEAR_X          = 42;    // Tear's path, just outside the right eye
@@ -91,6 +114,22 @@ export const SMILEY_HEART_PATH = "M 0 0.85 C -0.3 0.6 -1 0.1 -1 -0.35 C -1 -0.85
 // Tear drop with a half-width of 1, its round end at the origin and its point upward
 export const SMILEY_TEAR_PATH = "M 0 -2 C 0.45 -1.2 1 -0.6 1 0 A 1 1 0 0 1 -1 0 C -1 -0.6 -0.45 -1.2 0 -2 Z";
 
+
+// --------------------------------------------------------------------------------
+// Drawing Types
+// --------------------------------------------------------------------------------
+// An x, y point
+type Point = [number, number];
+
+// Fills the renderer's gradients provide to its parts (`url(#...)` strings, or a plain color)
+export type SmileyPaint = {
+    feature  : string;   // Eyes, brows, closed-eye arcs, and the lip line
+    mouth    : string;   // Inside an open mouth
+    teeth    : string;   // Teeth
+    skin     : string;   // Hands, shaded like the face
+    skinEdge : string;   // Hand outline (a plain color)
+};
+
 // A sprite drawn at a point, with its size and opacity
 export type Sprite = {x: number; y: number; size: number; opacity: number};
 
@@ -102,6 +141,17 @@ export type EyeGeometry = {
     ry       : number;
     lidDeg   : number;   // Eyelid slant
     lidEdgeY : number;   // Eyelid's lower edge, relative to the eye center
+};
+
+// Every shape of the mouth, around its center
+export type MouthShape = {
+    opening     : string;   // Outline of the opening: upper lip left to right, then lower lip back
+    line        : string;   // Tapered lip line along the upper lip
+    topTeeth    : string;   // Band of teeth under the upper lip
+    bottomTeeth : string;   // Band of teeth over the lower lip
+    toothGaps   : string;   // Lines between the teeth, top lip to bottom lip
+    rowLine     : string;   // Line between the two rows of teeth
+    tongue      : {cx: number; cy: number; rx: number; ry: number};
 };
 
 
@@ -125,11 +175,12 @@ export function eyeGeometry(side: number, face: FaceState): EyeGeometry {
     };
 }
 
-// Closed-eye arc around the eye center (bows up for smiling eyes, down for sleeping ones)
+// Tapered closed-eye arc around the eye center (bows up for smiling eyes, down for sleeping ones)
 export function eyeArcPath(face: FaceState): string {
-    const halfW = SMILEY_EYE_ARC_HALF_W * face.eyeScale;
-    const bow   = SMILEY_EYE_ARC_H * face.eyeArcBend;
-    return `M ${-halfW} ${0.4 * bow} Q 0 ${-1.6 * bow} ${halfW} ${0.4 * bow}`;
+    const halfW  = SMILEY_EYE_ARC_HALF_W * face.eyeScale;
+    const bow    = SMILEY_EYE_ARC_H * face.eyeArcBend;
+    const points = quadPoints([-halfW, 0.4 * bow], [0, -1.6 * bow], [halfW, 0.4 * bow]);
+    return ribbonPath(points, taper(points.length, SMILEY_EYE_ARC_W, SMILEY_EYE_ARC_END_W));
 }
 
 // Spiral around the eye center, before its spin
@@ -154,7 +205,7 @@ export function heartEyeScale(face: FaceState): number {
     return SMILEY_HEART_EYE_SIZE * face.eyeScale * (0.6 + (0.4 * face.heartEyes));
 }
 
-// One eyebrow, above its eye's resting spot (brows follow the head turn but not the gaze)
+// One tapered eyebrow, above its eye's resting spot (brows follow the head turn but not the gaze)
 export function browPath(side: number, face: FaceState): string {
     // Height above the eye, raised together and (for `browAsym`) one side more than the other
     const centerX = side * SMILEY_EYE_X;
@@ -162,40 +213,76 @@ export function browPath(side: number, face: FaceState): string {
 
     // Inner end (toward the nose) rises for worry and drops for anger
     const tilt   = face.browAngle * SMILEY_BROW_TILT;
-    const innerX = centerX - (side * SMILEY_BROW_HALF_W);
-    const outerX = centerX + (side * SMILEY_BROW_HALF_W);
-    return `M ${innerX} ${centerY - tilt} Q ${centerX} ${centerY - SMILEY_BROW_ARCH - (0.25 * tilt)} ${outerX} ${centerY + (0.5 * tilt)}`;
+    const inner  : Point = [centerX - (side * SMILEY_BROW_HALF_W), centerY - tilt];
+    const middle : Point = [centerX, centerY - SMILEY_BROW_ARCH - (0.25 * tilt)];
+    const outer  : Point = [centerX + (side * SMILEY_BROW_HALF_W), centerY + (0.5 * tilt)];
+    const points = quadPoints(inner, middle, outer);
+    return ribbonPath(points, taper(points.length, SMILEY_BROW_W, SMILEY_BROW_END_W));
 }
 
 
 // ================================================================================
 // Mouth
 // ================================================================================
-// Mouth outline around its center: upper lip left to right, then lower lip back (they meet when closed)
-export function mouthPath(face: FaceState): string {
-    // Depth of each lip's middle below the corners, and its width
+// Opening, lip line, teeth, and tongue for the face's mouth, around the mouth's center
+export function mouthShape(face: FaceState): MouthShape {
+    // 1) Each lip's depth below the corners at the middle, and how flat its curve is
     const halfW      = SMILEY_MOUTH_HALF_W * face.mouthWidth;
     const middle     = face.mouthCurve * SMILEY_MOUTH_CURVE;
     const upperDepth = middle - (face.mouthOpen * SMILEY_MOUTH_OPEN_UP);
     const lowerDepth = middle + (face.mouthOpen * SMILEY_MOUTH_OPEN_DOWN);
+    const power      = 2 + (face.mouthSquare * SMILEY_MOUTH_SQUARE_POWER);
 
-    // Sample both lips as parabolas between the corners, plus the shared wave
-    const lip = (depth: number): string[] => {
-        const points: string[] = [];
-        for (let i = 0; i <= SMILEY_MOUTH_SAMPLES; i++) {
-            const u    = -1 + ((2 * i) / SMILEY_MOUTH_SAMPLES);
-            const wave = face.mouthWave * SMILEY_MOUTH_WAVE * Math.sin(Math.PI * SMILEY_MOUTH_WAVES * (u + 1));
-            points.push(`${u * halfW} ${(depth * (1 - (u * u))) + wave}`);
-        }
-        return points;
+    // 2) Height of a lip across the mouth (`u` runs -1 to 1), with the shared wave
+    const lipY = (depth: number, u: number): number => (depth * (1 - Math.pow(Math.abs(u), power))) + (face.mouthWave * SMILEY_MOUTH_WAVE * Math.sin(Math.PI * SMILEY_MOUTH_WAVES * (u + 1)));
+    const spots = Array.from({length: SMILEY_MOUTH_SAMPLES + 1}, (_: unknown, i: number): number => -1 + ((2 * i) / SMILEY_MOUTH_SAMPLES));
+    const upper = spots.map((u: number): Point => [u * halfW, lipY(upperDepth, u)]);
+    const lower = spots.map((u: number): Point => [u * halfW, lipY(lowerDepth, u)]);
+
+    // 3) Lip line: thick when closed, thinning as the mouth opens
+    const lineShare = 1 - ((1 - SMILEY_MOUTH_OPEN_LINE_SHARE) * Math.min(1, face.mouthOpen / SMILEY_MOUTH_LINE_FADE_OPEN));
+    const lineWidth = spots.map((u: number): number => lineShare * (SMILEY_MOUTH_LINE_END_W + ((SMILEY_MOUTH_LINE_W - SMILEY_MOUTH_LINE_END_W) * Math.cos((Math.PI * u) / 2))));
+
+    // 4) Teeth rows follow their lip, each up to half the opening's height (the opening clips them)
+    const gap          = lowerDepth - upperDepth;
+    const topHeight    = gap * SMILEY_TEETH_ROW_SHARE * face.teethTop;
+    const bottomHeight = gap * SMILEY_TEETH_ROW_SHARE * face.teethBottom;
+    const shifted      = (points: Point[], dy: number): Point[] => points.map(([x, y]: Point): Point => [x, y + dy]);
+    const rowMiddle    = upper.map(([x, y]: Point, i: number): Point => [x, (y + topHeight + lower[i][1] - bottomHeight) / 2]);
+
+    // 5) Gap lines run from lip to lip at fixed spots across the mouth
+    const toothGaps = SMILEY_TOOTH_GAP_SPOTS.map((u: number): string => `M ${u * halfW} ${lipY(upperDepth, u)} L ${u * halfW} ${lipY(lowerDepth, u)}`).join(" ");
+
+    return {
+        opening     : closedPath([...upper, ...[...lower].reverse()]),
+        line        : ribbonPath(upper, lineWidth),
+        topTeeth    : closedPath([...upper, ...shifted(upper, topHeight).reverse()]),
+        bottomTeeth : closedPath([...lower, ...shifted(lower, -bottomHeight).reverse()]),
+        toothGaps   : toothGaps,
+        rowLine     : `M ${rowMiddle.map(([x, y]: Point) => `${x} ${y}`).join(" L ")}`,
+        tongue      : {
+            cx : 0,
+            cy : lowerDepth - (gap * SMILEY_TONGUE_RAISE_SHARE),
+            rx : halfW * SMILEY_TONGUE_WIDTH_SHARE,
+            ry : gap * SMILEY_TONGUE_HEIGHT_SHARE,
+        },
     };
-    return `M ${[...lip(upperDepth), ...lip(lowerDepth).reverse()].join(" L ")} Z`;
 }
 
 
 // ================================================================================
 // Extras
 // ================================================================================
+// Icicles hanging from the bottom edge of the face, in the face group's coordinates
+export const SMILEY_ICICLE_PATHS = SMILEY_ICICLES.map(([degrees, width, length]: [number, number, number]): string => {
+    // Base sits just inside the edge, across the edge; the tip points straight out from the center
+    const angle = (degrees * Math.PI) / 180;
+    const [nx, ny] = [Math.cos(angle), Math.sin(angle)];
+    const base: Point = [nx * (SMILEY_FACE_R - SMILEY_ICICLE_INSET), ny * (SMILEY_FACE_R - SMILEY_ICICLE_INSET)];
+    const tip : Point = [nx * (SMILEY_FACE_R + length), ny * (SMILEY_FACE_R + length)];
+    return closedPath([[base[0] + (ny * width / 2), base[1] - (nx * width / 2)], tip, [base[0] - (ny * width / 2), base[1] + (nx * width / 2)]]);
+});
+
 // Where the tear is in its drip: it forms under the eye, runs down the cheek (speeding up a little), and fades
 export function tearSprite(face: FaceState): Sprite {
     const phase = fraction(face.timeSec / SMILEY_TEAR_PERIOD_SEC);
@@ -233,6 +320,47 @@ export function heartSprites(face: FaceState): Sprite[] {
             opacity : face.hearts,
         };
     });
+}
+
+
+// --------------------------------------------------------------------------------
+// Path Helpers
+// --------------------------------------------------------------------------------
+// Points along a quadratic curve from `start` to `end`, bent toward `control`
+function quadPoints(start: Point, control: Point, end: Point, count: number = 14): Point[] {
+    return Array.from({length: count}, (_: unknown, i: number): Point => {
+        const t = i / (count - 1);
+        const a = (1 - t) * (1 - t);
+        const b = 2 * (1 - t) * t;
+        const c = t * t;
+        return [(a * start[0]) + (b * control[0]) + (c * end[0]), (a * start[1]) + (b * control[1]) + (c * end[1])];
+    });
+}
+
+// Thickness at each of `count` points, `middle` at the center easing to `end` at both ends
+function taper(count: number, middle: number, end: number): number[] {
+    return Array.from({length: count}, (_: unknown, i: number): number => end + ((middle - end) * Math.sin((Math.PI * i) / (count - 1))));
+}
+
+// Filled outline of a line through `points`, `widths[i]` thick at each point
+function ribbonPath(points: Point[], widths: number[]): string {
+    const left : Point[] = [];
+    const right: Point[] = [];
+    points.forEach(([x, y]: Point, i: number) => {
+        // Offset each point both ways along the line's normal (direction from its neighbors)
+        const [ax, ay] = points[Math.max(0, i - 1)];
+        const [bx, by] = points[Math.min(points.length - 1, i + 1)];
+        const length   = Math.hypot(bx - ax, by - ay);
+        const [nx, ny] = [-(by - ay) / length, (bx - ax) / length];
+        left.push ([x + ((nx * widths[i]) / 2), y + ((ny * widths[i]) / 2)]);
+        right.push([x - ((nx * widths[i]) / 2), y - ((ny * widths[i]) / 2)]);
+    });
+    return closedPath([...left, ...right.reverse()]);
+}
+
+// Closed SVG path through a list of points
+function closedPath(points: Point[]): string {
+    return `M ${points.map(([x, y]: Point) => `${x} ${y}`).join(" L ")} Z`;
 }
 
 // Fractional part of a number (0 up to 1)
