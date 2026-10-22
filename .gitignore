@@ -49,6 +49,7 @@ frontend/package-lock.json
 
 # VS Code
 .vscode/*
+CLAUDE.local.md
 
 # Notes
 notes/*
