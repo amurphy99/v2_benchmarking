@@ -69,7 +69,8 @@ export type FaceState = {
     mouthOpen   : number;   // 0 (closed) to 1 (wide open)
     mouthWidth  : number;   // Width multiplier
     mouthWave   : number;   // Wavy mouth line, 0 to 1
-    mouthSquare : number;   // Lips flatten into a rounded box (grimace), 0 to 1
+    mouthSquare : number;   // Opening flattens into a box (grimace), 0 to 1
+    mouthRound  : number;   // Opening's corners, 0 (pointed, like a big D-shaped grin) to 1 (rounded)
     teethTop    : number;   // Upper teeth, 0 (none) to 1 (fill the top half of the open mouth)
     teethBottom : number;   // Lower teeth, 0 (none) to 1 (fill the bottom half)
     teethGaps   : number;   // Lines between the teeth, 0 to 1
@@ -108,7 +109,7 @@ const FACE_NUMBER_KEYS: FaceNumberKey[] = [
     "gazeX", "gazeY", "turnX", "turnY", "tilt",
     "eyeOpen", "eyeScale", "lidAngle", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
     "brows", "browRaise", "browAngle", "browAsym",
-    "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "teethTop", "teethBottom", "teethGaps", "tongue",
+    "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "mouthRound", "teethTop", "teethBottom", "teethGaps", "tongue",
     "handMouth", "handChin", "handDX", "handDY", "handTilt",
     "tear", "fearShade", "frost", "icicles", "zzz", "hearts",
     "blush", "warmEdge", "scale", "offsetX", "offsetY",
@@ -144,6 +145,7 @@ export const SMILEY_BASE_FACE: FaceState = {
     mouthWidth  : 1,
     mouthWave   : 0,
     mouthSquare : 0,
+    mouthRound  : 1,
     teethTop    : 0,
     teethBottom : 0,
     teethGaps   : 0,
@@ -175,16 +177,17 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
     "Neutral Face"          : {emoji: "😐", face: {mouthCurve: 0, mouthWidth: 0.8}},
 
     // Happy
-    "Grinning Face"                  : {emoji: "😀", face: {mouthCurve: 1.0, mouthOpen: 0.75, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeScale: 1.05, browRaise: 0.3}},
-    "Grinning Face with Big Eyes"    : {emoji: "😃", face: {mouthCurve: 1.0, mouthOpen: 0.8, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeScale: 1.3, browRaise: 0.5}},
-    "Grinning Face with Smiling Eyes": {emoji: "😄", face: {mouthCurve: 1.0, mouthOpen: 0.8, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeArc: 1, eyeArcBend: 1, browRaise: 0.35}},
-    "Beaming Face with Smiling Eyes" : {emoji: "😁", face: {mouthCurve: 0.85, mouthOpen: 0.75, mouthWidth: 1.25, mouthSquare: 0.3, teethTop: 1, teethBottom: 1, teethGaps: 0.5, eyeArc: 1, eyeArcBend: 1.35, browRaise: 0.4}},
+    "Grinning Face"                  : {emoji: "😀", face: {mouthCurve: 1.0, mouthOpen: 0.75, mouthRound: 0.35, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeScale: 1.05, browRaise: 0.3}},
+    "Grinning Face with Big Eyes"    : {emoji: "😃", face: {mouthCurve: 1.0, mouthOpen: 0.8, mouthRound: 0.35, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeScale: 1.3, browRaise: 0.5}},
+    "Grinning Face with Smiling Eyes": {emoji: "😄", face: {mouthCurve: 1.0, mouthOpen: 0.8, mouthRound: 0.35, mouthWidth: 1.15, teethTop: 0.6, tongue: 0.6, eyeArc: 1, eyeArcBend: 1, browRaise: 0.35}},
+    "Beaming Face with Smiling Eyes" : {emoji: "😁", face: {mouthCurve: 0.85, mouthOpen: 0.75, mouthRound: 0.5, mouthWidth: 1.25, mouthSquare: 0.3, teethTop: 1, teethBottom: 1, teethGaps: 0.5, eyeArc: 1, eyeArcBend: 1.35, browRaise: 0.4}},
+    "Smiling Face"                   : {emoji: "☺️", face: {mouthCurve: 0.6, mouthWidth: 0.95, blush: 0.7, browRaise: 0.15}},
     "Smiling Face with Smiling Eyes" : {emoji: "😊", face: {mouthCurve: 0.9, eyeArc: 1, eyeArcBend: 1, blush: 0.6, browRaise: 0.2}},
-    "Face with Hand Over Mouth"      : {emoji: "🤭", face: {mouthCurve: 0.8, eyeArc: 1, eyeArcBend: 1, blush: 0.45, handMouth: 1, handDX: 4, handDY: 8, handTilt: -10, browRaise: 0.3}},
+    "Face with Hand Over Mouth"      : {emoji: "🤭", face: {mouthCurve: 0.8, eyeArc: 1, eyeArcBend: 1, blush: 0.45, handMouth: 1, handDX: 24, handDY: 14, handTilt: -10, browRaise: 0.3}},
 
     // Love
     "Smiling Face with Hearts"    : {emoji: "🥰", face: {mouthCurve: 0.9, eyeArc: 1, eyeArcBend: 1, blush: 0.85, hearts: 1, tilt: -6, browRaise: 0.2}},
-    "Smiling Face with Heart-Eyes": {emoji: "😍", face: {mouthCurve: 1.0, mouthOpen: 0.7, mouthWidth: 1.1, teethTop: 0.6, tongue: 0.5, heartEyes: 1, blush: 0.3, browRaise: 0.3}},
+    "Smiling Face with Heart-Eyes": {emoji: "😍", face: {mouthCurve: 1.0, mouthOpen: 0.7, mouthRound: 0.35, mouthWidth: 1.1, teethTop: 0.6, tongue: 0.5, heartEyes: 1, blush: 0.3, browRaise: 0.3}},
 
     // Sad
     "Crying Face"   : {emoji: "😢", face: {brows: 1, browAngle: 0.8, browRaise: 0.1, mouthCurve: -0.6, mouthWidth: 0.8, eyeOpen: 0.85, gazeY: 0.35, tear: 1}},
@@ -216,7 +219,7 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
 
     // Tired
     "Sleeping Face" : {emoji: "😴", face: {eyeArc: 1, eyeArcBend: -1, zzz: 1, mouthCurve: -0.1, mouthOpen: 0.3, mouthWidth: 0.32, tilt: -5, browRaise: -0.2}},
-    "Yawning Face"  : {emoji: "🥱", face: {eyeArc: 1, eyeArcBend: -1, mouthCurve: -0.4, mouthOpen: 1.0, mouthWidth: 0.55, tongue: 0.7, tilt: -4, browRaise: 0.3, browAngle: 0.3, handMouth: 1, handDX: 24, handDY: 14, handTilt: -35}},
+    "Yawning Face"  : {emoji: "🥱", face: {eyeArc: 1, eyeArcBend: -1, mouthCurve: -0.5, mouthOpen: 1.0, mouthWidth: 0.85, tongue: 0.7, tilt: -4, browRaise: 0.3, browAngle: 0.3, handMouth: 1, handDX: 34, handDY: 30, handTilt: -30}},
 
     // Angry (admin-only, like Buddy's)
     "Angry Face"   : {emoji: "😠", face: {brows: 1, browAngle: -1, browRaise: -0.4, lidAngle: -0.5, eyeOpen: 0.75, mouthCurve: -0.7, mouthWidth: 0.8, faceRgb: [...SMILEY_ANGRY_RGB]}},
@@ -226,7 +229,7 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
 // Expressions each mood picks from at random (keys are the backend's mood labels, plus admin-only
 // Angry; Neutral is not here because it means the resting expression)
 const SMILEY_MOOD_EXPRESSIONS: Record<string, string[]> = {
-    Happy     : ["Grinning Face", "Grinning Face with Big Eyes", "Grinning Face with Smiling Eyes", "Beaming Face with Smiling Eyes", "Smiling Face with Smiling Eyes", "Face with Hand Over Mouth"],
+    Happy     : ["Grinning Face", "Grinning Face with Big Eyes", "Grinning Face with Smiling Eyes", "Beaming Face with Smiling Eyes", "Smiling Face", "Smiling Face with Smiling Eyes", "Face with Hand Over Mouth"],
     Love      : ["Smiling Face with Hearts", "Smiling Face with Heart-Eyes"],
     Sad       : ["Crying Face", "Pensive Face", "Frowning Face"],
     Grumpy    : ["Unamused Face", "Face with Rolling Eyes"],

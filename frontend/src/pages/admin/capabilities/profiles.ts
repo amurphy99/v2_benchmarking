@@ -33,6 +33,7 @@ export type CapabilityProfile = {
     name       : string;          // Human-readable, shown in the panel header
     emotions   : ActionOption[];  // Mapped through the frontend's own emotion vocabulary
     animations : ActionOption[];  // Literal clip/behavior names, driven directly
+    moods      : ActionOption[];  // LLM moods shown in their own section, for frontends whose emotions are their own face names (else empty)
 };
 
 // --------------------------------------------------------------------------------
@@ -60,6 +61,7 @@ const DEFAULT_PROFILE: CapabilityProfile = {
     name       : "Generic",
     emotions   : asEmotions(LLM_MOODS),
     animations : [],
+    moods      : [],
 };
 
 // Webapp avatars offer both abstract mood controls and direct animation names. Which model is
@@ -71,25 +73,28 @@ const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
         name       : "Web Avatar (QT)",
         emotions   : asEmotions(LLM_MOODS),
         animations : asAnimations(Object.keys(qtAnimations)),
+        moods      : [],
     },
     buddy: {
         name       : "Web Avatar (Buddy)",
         emotions   : asEmotions(LLM_MOODS),
         animations : asAnimations(Object.keys(buddyAnimations)),
+        moods      : [],
     },
     // Code-drawn face, plain and with its eyebrows always showing (same buttons for both)
     smiley         : smileyProfile("Web Avatar (Smiley)"),
     "smiley-brows" : smileyProfile("Web Avatar (Smiley + eyebrows)"),
 };
 
-// Smiley buttons: each mood (a random one of its expressions, plus admin-only Angry), then every
-// named expression on its own, labeled with the emoji it borrows from, then its head motions
+// Smiley buttons: every named expression, labeled with the emoji it borrows from, then its head
+// motions, then the moods on their own (each shows a random one of its expressions; Angry is admin-only)
 function smileyProfile(name: string): CapabilityProfile {
     const expressions: ActionOption[] = SMILEY_EXPRESSION_LIST.map(({name: expression, emoji}) => ({label: `${emoji} ${expression}`, kind: "emotion", value: expression}));
     return {
         name       : name,
-        emotions   : [...asEmotions([...LLM_MOODS, "Angry"]), ...expressions],
+        emotions   : expressions,
         animations : asAnimations(SMILEY_ANIMATIONS),
+        moods      : asEmotions([...LLM_MOODS, "Angry"]),
     };
 }
 
@@ -100,6 +105,7 @@ const BUDDYROBOT_PROFILE: CapabilityProfile = {
     name       : "Buddy Robot",
     emotions   : asEmotions([...LLM_MOODS, "Angry"]),
     animations : [],
+    moods      : [],
 };
 
 // --------------------------------------------------------------------------------

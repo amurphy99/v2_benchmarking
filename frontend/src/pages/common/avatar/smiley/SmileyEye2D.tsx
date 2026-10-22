@@ -11,10 +11,10 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { SmileyPaint                                                                       } from "./faceDrawing2D";
-import      { SMILEY_HEART_HEX, SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W } from "./faceDrawing2D";
-import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg   } from "./faceDrawing2D";
-import type { FaceState                                                                         } from "./faceState";
+import type { SmileyPaint                                                                     } from "./faceDrawing2D";
+import      { SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W                 } from "./faceDrawing2D";
+import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg } from "./faceDrawing2D";
+import type { FaceState                                                                       } from "./faceState";
 
 
 // --------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ export default function SmileyEye2D({side, face, paint}: {
 
                 {/* Heart */}
                 {(face.heartEyes > 0) ? (
-                    <path d={SMILEY_HEART_PATH} transform={`scale(${heartEyeScale(face)})`} fill={SMILEY_HEART_HEX} opacity={face.heartEyes} />
+                    <path d={SMILEY_HEART_PATH} transform={`scale(${heartEyeScale(face)})`} fill={paint.heart} opacity={face.heartEyes} />
                 ) : null}
             </g>
         </g>

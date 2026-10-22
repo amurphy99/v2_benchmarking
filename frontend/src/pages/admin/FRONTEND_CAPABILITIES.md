@@ -27,6 +27,10 @@ The panel exposes two related but different controls:
    `Angry` is the standing example: the robot supports it, but the LLM cannot select it.
 2. **Animation buttons use the frontend's own action names.** A literal `HEAD TILT` or
    `Nodding Yes` button bypasses mood mapping and asks the frontend to play that named behavior.
+3. **Mood buttons (optional) list the LLM's moods on their own.** For a frontend whose emotion
+   buttons are its own face names (the web smiley's `Grinning Face`, `Cold Face`, …), the moods
+   move to a third section, so an admin can still preview what the LLM's `Happy` turns into.
+   Profiles that send mood labels as their emotion buttons leave `moods` empty.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- The two kinds                                                                    -->
@@ -117,6 +121,7 @@ Everything lives in `capabilities/profiles.ts`.
        name       : "My Robot",
        emotions   : asEmotions([...LLM_MOODS, "Angry"]),
        animations : asAnimations(["Wave", "Nod"]),
+       moods      : [],
    };
    ```
 
@@ -139,7 +144,7 @@ Everything lives in `capabilities/profiles.ts`.
 |---|---|---|
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
 | `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
-| `webapp` + `smiley` | Web Avatar (Smiley) | 10 moods + `Angry`, every named expression (`Grinning Face`, `Fearful Face`, …), and 8 motion names. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
+| `webapp` + `smiley` | Web Avatar (Smiley) | Every named expression (`Grinning Face`, `Fearful Face`, …) as emotions, 8 motion names, and the 10 moods + `Angry` in the mood section. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
 | `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Also demo-only for now |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |
 | `qtrobot` | *(default)* | Not yet characterized |

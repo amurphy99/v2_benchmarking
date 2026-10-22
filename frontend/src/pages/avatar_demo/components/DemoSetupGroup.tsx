@@ -41,35 +41,40 @@ export default function DemoSetupGroup({avatarId, onAvatarChange, restingOptions
         <div className={groupDivStyle}>
             <div className={buttonSectionHeader}>Demo Setup</div>
 
-            {/* Avatar picker */}
-            <label className="mt-2 block text-xs opacity-60" htmlFor="avatar-demo-picker">Avatar</label>
-            <select
-                id        = "avatar-demo-picker"
-                className = {DEMO_SELECT_CLASS}
-                value     = {avatarId}
-                onChange  = {(event: ChangeEvent<HTMLSelectElement>) => onAvatarChange(event.target.value)}
-            >
-                {AVATARS.map((entry: AvatarEntry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-            </select>
-
-            {/* Resting face: what "Neutral" (and every timed emotion's return) means */}
-            {(restingOptions.length > 0) ? (
-                <>
-                    <label className="mt-3 block text-xs opacity-60" htmlFor="avatar-demo-resting">Resting face (Neutral)</label>
+            {/* Pickers, side by side when there is room */}
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* Avatar picker */}
+                <div>
+                    <label className="block text-xs opacity-60" htmlFor="avatar-demo-picker">Avatar</label>
                     <select
-                        id        = "avatar-demo-resting"
+                        id        = "avatar-demo-picker"
                         className = {DEMO_SELECT_CLASS}
-                        value     = {restingExpression}
-                        onChange  = {(event: ChangeEvent<HTMLSelectElement>) => onRestingExpression(event.target.value)}
+                        value     = {avatarId}
+                        onChange  = {(event: ChangeEvent<HTMLSelectElement>) => onAvatarChange(event.target.value)}
                     >
-                        {restingOptions.map((option: RestingOption) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        {AVATARS.map((entry: AvatarEntry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
                     </select>
-                </>
-            ) : null}
+                </div>
 
-            {/* Hold time sent as `duration_ms` */}
+                {/* Resting face: what "Neutral" (and every timed emotion's return) means */}
+                {(restingOptions.length > 0) ? (
+                    <div>
+                        <label className="block text-xs opacity-60" htmlFor="avatar-demo-resting">Resting face (Neutral)</label>
+                        <select
+                            id        = "avatar-demo-resting"
+                            className = {DEMO_SELECT_CLASS}
+                            value     = {restingExpression}
+                            onChange  = {(event: ChangeEvent<HTMLSelectElement>) => onRestingExpression(event.target.value)}
+                        >
+                            {restingOptions.map((option: RestingOption) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                    </div>
+                ) : null}
+            </div>
+
+            {/* Hold time sent as `duration_ms`, with the reset button at the end of the row */}
             <div className="mt-3 text-xs opacity-60">Emotion duration (sent as duration_ms)</div>
-            <div className="mt-1 flex flex-wrap gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
                 {DEMO_DURATION_OPTIONS.map((option: DurationOption) => (
                     <button
                         key       = {option.label}
@@ -79,10 +84,8 @@ export default function DemoSetupGroup({avatarId, onAvatarChange, restingOptions
                         {option.label}
                     </button>
                 ))}
+                <button className={`ml-auto ${btnClass(false, "secondary")}`} onClick={onReset}>Reset to Neutral</button>
             </div>
-
-            {/* Reset */}
-            <button className={`mt-3 ${btnClass(false, "secondary")}`} onClick={onReset}>Reset to Neutral</button>
         </div>
     );
 }

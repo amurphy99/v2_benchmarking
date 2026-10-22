@@ -1,13 +1,20 @@
+/* Emotion, animation, and mood buttons for an avatar or robot, from its capability profile.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/admin/components/controlGroups/AvatarActionsGroup`
 
+Used by the AdminChat control panel and the avatar demo page.
+
+*/
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
 import type { CapabilityProfile } from "../../capabilities/profiles";
 
 // ================================================================================
 // Avatar (or Robot) action controls
 // ================================================================================
-// Emotion buttons carry shared backend mood labels; animation buttons carry the monitored
-// frontend's own literal action names. Both sets come from its capability profile.
-// See `pages/admin/FRONTEND_CAPABILITIES.md`.
+// Emotion buttons carry shared backend mood labels (or, for frontends with their own face names,
+// those names); animation buttons carry the monitored frontend's own literal action names; mood
+// buttons, when a profile lists them apart, send the LLM's moods. All come from its capability
+// profile. See `pages/admin/FRONTEND_CAPABILITIES.md`.
 export default function AvatarActionsGroup({
     connected,    // Connection with the backend
     capabilities, // Actions the monitored frontend can actually perform
@@ -64,6 +71,25 @@ export default function AvatarActionsGroup({
                                 onClick   = {() => onAnimation(action.value)}
                             >
                                 {pending.robot_animation ? "Sending..." : action.label}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {/* LLM moods (only for frontends whose emotion buttons are their own face names) */}
+            {capabilities.moods.length > 0 && (
+                <>
+                    <div className="mt-3 text-xs opacity-60">Moods (what the LLM sends; shows a matching face)</div>
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                        {capabilities.moods.map((action) => (
+                            <button
+                                key       = {`mood-${action.value}`}
+                                className = {btnClass(pending.robot_emotion || !connected, "secondary")}
+                                disabled  = {pending.robot_emotion || !connected}
+                                onClick   = {() => onEmotion(action.value)}
+                            >
+                                {pending.robot_emotion ? "Sending..." : action.label}
                             </button>
                         ))}
                     </div>

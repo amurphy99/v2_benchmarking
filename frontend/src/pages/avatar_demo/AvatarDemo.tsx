@@ -141,16 +141,14 @@ export function AvatarDemo(): ReactElement {
 
             <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
                 {/* -------------------------------------------------------------------------------- */}
-                {/* Avatar */}
+                {/* Avatar and Demo Setup */}
                 {/* -------------------------------------------------------------------------------- */}
-                <div className={`${groupDivStyle} h-[50vh] lg:h-[75vh]`}>
-                    <Avatar model={avatarId} zoom="body" ref={avatarRef} />
-                </div>
+                {/* Stays in view on wide screens while the longer button column scrolls */}
+                <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+                    <div className={`${groupDivStyle} h-[45vh] lg:h-[58vh]`}>
+                        <Avatar model={avatarId} zoom="body" ref={avatarRef} />
+                    </div>
 
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Controls */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="flex flex-col gap-4">
                     <DemoSetupGroup
                         avatarId            = {avatarId}
                         onAvatarChange      = {changeAvatar}
@@ -161,7 +159,12 @@ export function AvatarDemo(): ReactElement {
                         onDurationChange    = {setDurationMs}
                         onReset             = {resetAvatar}
                     />
+                </div>
 
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Controls */}
+                {/* -------------------------------------------------------------------------------- */}
+                <div className="flex flex-col gap-4">
                     {/* Same buttons as the AdminChat panel (always "connected": nothing goes over a socket) */}
                     <AvatarActionsGroup
                         connected    = {true}
