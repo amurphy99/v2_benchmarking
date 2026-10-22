@@ -4,11 +4,13 @@
 
 A pure renderer: it draws whatever `FaceState` it is given and holds no timers
 or behavior, so a 3D renderer can replace it without touching the controller.
+Shape math lives in `faceDrawing2D`; each eye is a `SmileyEye2D` and the tear,
+Zs, and hearts are `SmileyExtras2D`.
 
-The face is flat, so head turns are faked: the eyes, mouth, and cheeks slide
-toward the turn and the eye nearer the edge narrows. Eyelids are face-colored
-shapes laid over the top of each eye and slanted by `lidAngle`, standing in
-for eyebrows.
+The face is shaded like an iOS emoji (bright in the middle, warm orange at the
+edge, no outline), with a small highlight near the top. The face is flat, so
+head turns are faked: the features slide toward the turn and the eye nearer the
+edge narrows. The fearful look adds blue shading over the top of the face.
 
 A soft shadow sits on the ground under the face. It follows the face sideways
 and with its size, and shrinks and fades as the face lifts off the ground.
@@ -18,69 +20,49 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { FaceState, RGB } from "./faceState";
+import        SmileyExtras2D                                               from "./SmileyExtras2D";
+import        SmileyEye2D                                                  from "./SmileyEye2D";
+import      { SMILEY_FACE_R, SMILEY_FEATURE_HEX, SMILEY_FEATURE_STROKE_W } from "./faceDrawing2D";
+import      { SMILEY_MOUTH_Y, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y   } from "./faceDrawing2D";
+import      { mouthPath                                                  } from "./faceDrawing2D";
+import type { FaceState, RGB                                             } from "./faceState";
 
-// Drawing sizes in SVG units (the face is a radius-100 circle at the origin; negative y is up)
-const SMILEY_FACE_R          = 100;   // Face radius
-const SMILEY_VIEW_TOP        = 45;    // Room above the face for bounces
-const SMILEY_VIEW_SIDE       = 28;    // Room beside the face for sways and breathing
-const SMILEY_VIEW_BOTTOM     = 30;    // Room below the face for its shadow
-const SMILEY_STROKE_W        = 5;     // Outline and mouth line width
-const SMILEY_EYE_X           = 34;    // Eye distance from the center line
-const SMILEY_EYE_Y           = -22;   // Eye height
-const SMILEY_EYE_RX          = 11;    // Eye half-width
-const SMILEY_EYE_RY          = 17;    // Eye half-height
-const SMILEY_EYE_MIN_RY      = 1.5;   // Closed eyes stay a thin line
-const SMILEY_GAZE_SHIFT      = 16;    // Farthest the eyes move for gaze
-const SMILEY_MOUTH_Y         = 36;    // Mouth corner height
-const SMILEY_MOUTH_HALF_W    = 38;    // Half the mouth's width
-const SMILEY_MOUTH_CURVE     = 20;    // Drop of the mouth's middle at a full smile
-const SMILEY_MOUTH_OPEN_UP   = 8;     // Upper lip lift at a fully open mouth
-const SMILEY_MOUTH_OPEN_DOWN = 26;    // Lower lip drop at a fully open mouth
-const SMILEY_BLUSH_X         = 56;    // Cheek distance from the center line
-const SMILEY_BLUSH_Y         = 14;    // Cheek height
-const SMILEY_BLUSH_RX        = 17;    // Cheek half-width
-const SMILEY_BLUSH_RY        = 10;    // Cheek half-height
-const SMILEY_TURN_SHIFT_X    = 26;    // Feature slide at a full left or right turn
-const SMILEY_TURN_SHIFT_Y    = 20;    // Feature slide at a full up or down turn
-const SMILEY_TURN_NARROW     = 0.35;  // Narrowing of the eye nearer the edge at a full turn
-const SMILEY_LID_MAX_DEG     = 28;    // Eyelid slant at a full `lidAngle`
-const SMILEY_LID_DEPTH       = 0.55;  // How far a full slant covers the eye, as a fraction of its height
-const SMILEY_LID_WIDTH       = 3.2;   // Eyelid width, in eye half-widths
-const SMILEY_LID_OVERHANG    = 0.6;   // Eyelid height past the eye's top, in eye half-widths (covers the slant)
-const SMILEY_SHINE_X         = -38;   // Highlight center
-const SMILEY_SHINE_Y         = -52;
-const SMILEY_SHINE_RX        = 22;    // Highlight half-width and half-height
-const SMILEY_SHINE_RY        = 12;
-const SMILEY_SHINE_DEG       = -30;   // Highlight slant
+// Room around the face in the viewport
+const SMILEY_VIEW_TOP    = 55;   // Above the face, for bounces and the Zs
+const SMILEY_VIEW_SIDE   = 28;   // Beside the face, for sways and the hearts
+const SMILEY_VIEW_BOTTOM = 30;   // Below the face, for its shadow
 
-// Ground shadow (sizes in SVG units; lift is how far the face is above its resting height, in face radii)
-const SMILEY_SHADOW_Y           = 116;   // Shadow center, just below the resting face
-const SMILEY_SHADOW_RX          = 72;    // Shadow half-width and half-height with the face resting on the ground
+// Cheeks
+const SMILEY_BLUSH_X           = 56;    // Cheek distance from the center line
+const SMILEY_BLUSH_Y           = 14;    // Cheek height
+const SMILEY_BLUSH_RX          = 17;    // Cheek half-width
+const SMILEY_BLUSH_RY          = 10;    // Cheek half-height
+const SMILEY_BLUSH_HEX         = "#ff6f8e";
+const SMILEY_BLUSH_MAX_OPACITY = 0.7;   // Cheek opacity at full blush
+
+// Highlight (high on the upper left, clear of the eyes and brows)
+const SMILEY_SHINE_X       = -44;   // Highlight center
+const SMILEY_SHINE_Y       = -77;
+const SMILEY_SHINE_RX      = 16;    // Highlight half-width and half-height
+const SMILEY_SHINE_RY      = 7;
+const SMILEY_SHINE_DEG     = -30;   // Highlight slant
+const SMILEY_SHINE_HEX     = "#ffffff";
+const SMILEY_SHINE_OPACITY = 0.45;
+
+// Face shading (the edge keeps this share of each red, green, and blue channel, which warms it toward orange)
+const SMILEY_SHADE_LIGHT_MIX = 0.35;                        // How far the middle of the face mixes toward white
+const SMILEY_SHADE_EDGE      = [0.97, 0.78, 0.5] as const;  // Channel shares kept at the edge
+const SMILEY_FEAR_HEX        = "#6f86ff";                   // Fearful shading over the top of the face
+const SMILEY_FEAR_OPACITY    = 1;                           // Fearful shading at the very top (it holds most of that to 30%, then fades by 50%)
+
+// Ground shadow (lift is how far the face is above its resting height, in face radii)
+const SMILEY_SHADOW_Y           = 116;    // Shadow center, just below the resting face
+const SMILEY_SHADOW_RX          = 72;     // Shadow half-width and half-height with the face resting on the ground
 const SMILEY_SHADOW_RY          = 10;
-const SMILEY_SHADOW_LIFT_SHRINK = 1.2;   // Shadow size lost per face radius of lift
-const SMILEY_SHADOW_LIFT_FADE   = 1.5;   // Shadow opacity lost per face radius of lift
-
-// Colors and opacities
-const SMILEY_FEATURE_HEX       = "#3b2a1a";   // Eyes and mouth
-const SMILEY_BLUSH_HEX         = "#ff6f8e";   // Cheeks
-const SMILEY_SHINE_HEX         = "#ffffff";   // Highlight on the upper left
-const SMILEY_OUTLINE_SHADE     = 0.78;        // Outline is the face color darkened by this factor
-const SMILEY_BLUSH_MAX_OPACITY = 0.7;         // Cheek opacity at full blush
-const SMILEY_SHINE_OPACITY     = 0.28;        // Highlight opacity
-const SMILEY_SHADOW_HEX        = "#000000";   // Ground shadow
-const SMILEY_SHADOW_OPACITY    = 0.28;        // Shadow opacity at its center (it fades to clear at the edge)
-
-// One eye's position, size, and eyelid, relative to the feature group
-type EyeGeometry = {
-    cx       : number;   // Eye center
-    cy       : number;
-    rx       : number;   // Eye half-width and half-height
-    ry       : number;
-    lidDeg   : number;   // Eyelid slant (0 draws no lid)
-    lidEdgeY : number;   // Eyelid's lower edge, relative to the eye center
-    lidH     : number;   // Eyelid height above that edge
-};
+const SMILEY_SHADOW_LIFT_SHRINK = 1.2;    // Shadow size lost per face radius of lift
+const SMILEY_SHADOW_LIFT_FADE   = 1.5;    // Shadow opacity lost per face radius of lift
+const SMILEY_SHADOW_HEX         = "#000000";
+const SMILEY_SHADOW_OPACITY     = 0.28;   // Shadow opacity at its center (it fades to clear at the edge)
 
 
 // ================================================================================
@@ -90,39 +72,49 @@ type EyeGeometry = {
 export default function SmileyFace2D({face}: {
     face : FaceState;   // Combined face for this frame (from `useFaceController`)
 }): ReactElement {
-    // Face colors and the viewport around it
-    const fill    = rgbString(face.faceRgb, 1);
-    const outline = rgbString(face.faceRgb, SMILEY_OUTLINE_SHADE);
-    const viewBox = `${-(SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${-(SMILEY_FACE_R + SMILEY_VIEW_TOP)} ${2 * (SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${(2 * SMILEY_FACE_R) + SMILEY_VIEW_TOP + SMILEY_VIEW_BOTTOM}`;
+    // Gradient ids, unique per avatar on the page (React's ids may hold characters `url(#...)` rejects)
+    const baseId   = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+    const shadeId  = `smiley-shade-${baseId}`;
+    const fearId   = `smiley-fear-${baseId}`;
+    const shadowId = `smiley-shadow-${baseId}`;
 
-    // Shadow gradient id, unique per avatar on the page (React's ids may hold characters `url(#...)` rejects)
-    const shadowId = `smiley-shadow-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    // Face shading colors and the viewport around the face
+    const [r, g, b] = face.faceRgb;
+    const light: RGB = mixRgb(face.faceRgb, [255, 255, 255], SMILEY_SHADE_LIGHT_MIX);
+    const edge:  RGB = [r * SMILEY_SHADE_EDGE[0], g * SMILEY_SHADE_EDGE[1], b * SMILEY_SHADE_EDGE[2]];
+    const viewBox = `${-(SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${-(SMILEY_FACE_R + SMILEY_VIEW_TOP)} ${2 * (SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${(2 * SMILEY_FACE_R) + SMILEY_VIEW_TOP + SMILEY_VIEW_BOTTOM}`;
 
     // Shadow follows the face's size, and shrinks and fades as the face lifts off the ground
     const lift          = Math.max(0, -face.offsetY);
     const shadowSpread  = face.scale * Math.max(0, 1 - (lift * SMILEY_SHADOW_LIFT_SHRINK));
     const shadowOpacity = Math.max(0, 1 - (lift * SMILEY_SHADOW_LIFT_FADE));
 
-    // Features slide toward the head turn
-    const shiftX = face.turnX * SMILEY_TURN_SHIFT_X;
-    const shiftY = face.turnY * SMILEY_TURN_SHIFT_Y;
-
-    // Mouth as an upper and a lower curve between the corners (they meet when closed)
-    const halfW     = SMILEY_MOUTH_HALF_W * face.mouthWidth;
-    const middle    = 2 * face.mouthCurve * SMILEY_MOUTH_CURVE;   // Quadratic control points sit at twice the curve's depth
-    const upper     = middle - (2 * face.mouthOpen * SMILEY_MOUTH_OPEN_UP);
-    const lower     = middle + (2 * face.mouthOpen * SMILEY_MOUTH_OPEN_DOWN);
-    const mouthPath = `M ${-halfW} 0 Q 0 ${upper} ${halfW} 0 Q 0 ${lower} ${-halfW} 0 Z`;
-
     return (
         <svg className="h-full w-full" viewBox={viewBox} role="img" aria-label="Smiley avatar">
-            {/* Ground shadow (stays on the ground, so it never tilts or lifts with the face) */}
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Gradients */}
+            {/* -------------------------------------------------------------------------------- */}
             <defs>
+                <radialGradient id={shadeId} cx="50%" cy="40%" r="60%" fx="50%" fy="30%">
+                    <stop offset="0%"   stopColor={rgbString(light)}        />
+                    <stop offset="60%"  stopColor={rgbString(face.faceRgb)} />
+                    <stop offset="100%" stopColor={rgbString(edge)}         />
+                </radialGradient>
+                <linearGradient id={fearId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stopColor={SMILEY_FEAR_HEX} stopOpacity={SMILEY_FEAR_OPACITY}        />
+                    <stop offset="30%" stopColor={SMILEY_FEAR_HEX} stopOpacity={0.8 * SMILEY_FEAR_OPACITY} />
+                    <stop offset="50%" stopColor={SMILEY_FEAR_HEX} stopOpacity={0}                          />
+                </linearGradient>
                 <radialGradient id={shadowId}>
                     <stop offset="0%"   stopColor={SMILEY_SHADOW_HEX} stopOpacity={SMILEY_SHADOW_OPACITY} />
                     <stop offset="100%" stopColor={SMILEY_SHADOW_HEX} stopOpacity={0}                     />
                 </radialGradient>
             </defs>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Ground Shadow */}
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Outside the face group, so it never tilts or lifts with the face */}
             <ellipse
                 cx      = {face.offsetX * SMILEY_FACE_R}
                 cy      = {SMILEY_SHADOW_Y}
@@ -133,47 +125,42 @@ export default function SmileyFace2D({face}: {
             />
 
             <g transform={`translate(${face.offsetX * SMILEY_FACE_R} ${face.offsetY * SMILEY_FACE_R}) rotate(${face.tilt}) scale(${face.scale})`}>
+                {/* -------------------------------------------------------------------------------- */}
                 {/* Face */}
-                <circle r={SMILEY_FACE_R} fill={fill} stroke={outline} strokeWidth={SMILEY_STROKE_W} />
+                {/* -------------------------------------------------------------------------------- */}
+                <circle r={SMILEY_FACE_R} fill={`url(#${shadeId})`} />
+                {(face.fearShade > 0) ? <circle r={SMILEY_FACE_R} fill={`url(#${fearId})`} opacity={face.fearShade} /> : null}
 
-                <g transform={`translate(${shiftX} ${shiftY})`}>
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Features (they slide with the head turn) */}
+                {/* -------------------------------------------------------------------------------- */}
+                <g transform={`translate(${face.turnX * SMILEY_TURN_SHIFT_X} ${face.turnY * SMILEY_TURN_SHIFT_Y})`}>
                     {/* Cheeks */}
                     <ellipse cx={-SMILEY_BLUSH_X} cy={SMILEY_BLUSH_Y} rx={SMILEY_BLUSH_RX} ry={SMILEY_BLUSH_RY} fill={SMILEY_BLUSH_HEX} opacity={face.blush * SMILEY_BLUSH_MAX_OPACITY} />
                     <ellipse cx={ SMILEY_BLUSH_X} cy={SMILEY_BLUSH_Y} rx={SMILEY_BLUSH_RX} ry={SMILEY_BLUSH_RY} fill={SMILEY_BLUSH_HEX} opacity={face.blush * SMILEY_BLUSH_MAX_OPACITY} />
 
-                    {/* Eyes, each with its eyelid */}
-                    {[-1, 1].map((side: number) => {
-                        const eye = eyeGeometry(side, face);
-                        return (
-                            <g key={side} transform={`translate(${eye.cx} ${eye.cy})`}>
-                                <ellipse rx={eye.rx} ry={eye.ry} fill={SMILEY_FEATURE_HEX} />
-                                {(eye.lidDeg !== 0) ? (
-                                    <rect
-                                        x         = {-0.5 * SMILEY_LID_WIDTH * eye.rx}
-                                        y         = {eye.lidEdgeY - eye.lidH}
-                                        width     = {SMILEY_LID_WIDTH * eye.rx}
-                                        height    = {eye.lidH}
-                                        transform = {`rotate(${eye.lidDeg} 0 ${eye.lidEdgeY})`}
-                                        fill      = {fill}
-                                    />
-                                ) : null}
-                            </g>
-                        );
-                    })}
+                    {/* Eyes and brows */}
+                    <SmileyEye2D side={-1} face={face} />
+                    <SmileyEye2D side={ 1} face={face} />
 
                     {/* Mouth */}
                     <path
-                        d              = {mouthPath}
+                        d              = {mouthPath(face)}
                         transform      = {`translate(0 ${SMILEY_MOUTH_Y})`}
                         fill           = {SMILEY_FEATURE_HEX}
                         stroke         = {SMILEY_FEATURE_HEX}
-                        strokeWidth    = {SMILEY_STROKE_W}
+                        strokeWidth    = {SMILEY_FEATURE_STROKE_W}
                         strokeLinecap  = "round"
                         strokeLinejoin = "round"
                     />
+
+                    {/* Tear, Zs, and hearts */}
+                    <SmileyExtras2D face={face} />
                 </g>
 
-                {/* Highlight (drawn last so face-colored eyelids never cut into it) */}
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Highlight (drawn last, so it sits on top) */}
+                {/* -------------------------------------------------------------------------------- */}
                 <ellipse
                     cx        = {SMILEY_SHINE_X}
                     cy        = {SMILEY_SHINE_Y}
@@ -190,31 +177,14 @@ export default function SmileyFace2D({face}: {
 
 
 // --------------------------------------------------------------------------------
-// Drawing Helpers
+// Color Helpers
 // --------------------------------------------------------------------------------
-// Place and size one eye (`side` is -1 for the left eye, 1 for the right)
-function eyeGeometry(side: number, face: FaceState): EyeGeometry {
-    // The eye nearer the edge narrows as the head turns toward it
-    const edgeward = Math.max(0, side * face.turnX);
-    const rx       = SMILEY_EYE_RX * face.eyeScale * (1 - (edgeward * SMILEY_TURN_NARROW));
-    const ry       = Math.max(SMILEY_EYE_RY * face.eyeScale * face.eyeOpen, SMILEY_EYE_MIN_RY);
-
-    // Slanted lids cover more of the eye the stronger the slant (mirrored so the inner corners match)
-    const lidEdgeY = -ry + (Math.abs(face.lidAngle) * 2 * ry * SMILEY_LID_DEPTH);
-    const lidH     = (lidEdgeY + ry) + (SMILEY_LID_OVERHANG * rx) + SMILEY_STROKE_W;
-
-    return {
-        cx       : (side * SMILEY_EYE_X) + (face.gazeX * SMILEY_GAZE_SHIFT),
-        cy       : SMILEY_EYE_Y + (face.gazeY * SMILEY_GAZE_SHIFT),
-        rx       : rx,
-        ry       : ry,
-        lidDeg   : side * face.lidAngle * SMILEY_LID_MAX_DEG,
-        lidEdgeY : lidEdgeY,
-        lidH     : lidH,
-    };
+// Move `amount` of the way from one color to another
+function mixRgb([r, g, b]: RGB, [toR, toG, toB]: RGB, amount: number): RGB {
+    return [r + ((toR - r) * amount), g + ((toG - g) * amount), b + ((toB - b) * amount)];
 }
 
-// CSS color for an RGB face color, darkened by `shade` (1 keeps it as is)
-function rgbString([r, g, b]: RGB, shade: number): string {
-    return `rgb(${Math.round(r * shade)} ${Math.round(g * shade)} ${Math.round(b * shade)})`;
+// CSS color for an RGB triple
+function rgbString([r, g, b]: RGB): string {
+    return `rgb(${Math.round(r)} ${Math.round(g)} ${Math.round(b)})`;
 }

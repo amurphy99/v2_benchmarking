@@ -78,7 +78,9 @@ type ExpressionTransition = {from: FaceState; to: FaceState; startMs: number; le
 // Face Controller
 // ================================================================================
 // Run the face's frame loop and return the latest face plus the avatar handle that steers it
-export function useFaceController(): {face: FaceState; handle: AvatarHandle} {
+export function useFaceController(
+    browsAlways : boolean,   // Keep the eyebrows showing on every expression (the "Smiley + eyebrows" avatar)
+): {face: FaceState; handle: AvatarHandle} {
     // Latest combined face (set once per animation frame)
     const [face, setFace] = useState<FaceState>(SMILEY_NEUTRAL_FACE);
 
@@ -218,8 +220,10 @@ export function useFaceController(): {face: FaceState; handle: AvatarHandle} {
                 offsetY   : expression.offsetY + (offsets.offsetY ?? 0),
                 eyeOpen   : expression.eyeOpen * blink,
                 eyeScale  : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
+                brows     : browsAlways ? 1 : expression.brows,
                 mouthOpen : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
                 scale     : expression.scale * breath,
+                timeSec   : nowMs / 1_000,
             });
             frameId = requestAnimationFrame(tick);
         };
@@ -227,7 +231,7 @@ export function useFaceController(): {face: FaceState; handle: AvatarHandle} {
         // Run until the avatar unmounts
         frameId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frameId);
-    }, []);
+    }, [browsAlways]);
 
     return {face, handle};
 }

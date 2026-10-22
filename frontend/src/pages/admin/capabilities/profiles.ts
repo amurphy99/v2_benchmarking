@@ -17,6 +17,7 @@ See `../FRONTEND_CAPABILITIES.md` for how to add a profile for a new robot.
 */
 import { buddyAnimations, qtAnimations } from "@/pages/common/avatar/AvatarUtils";
 import { SMILEY_ANIMATIONS             } from "@/pages/common/avatar/smiley/faceMotions";
+import { SMILEY_EXPRESSION_LIST        } from "@/pages/common/avatar/smiley/faceState";
 
 // --------------------------------------------------------------------------------
 // Types
@@ -76,13 +77,21 @@ const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
         emotions   : asEmotions(LLM_MOODS),
         animations : asAnimations(Object.keys(buddyAnimations)),
     },
-    // Code-drawn face: has its own Angry face (admin-only, like Buddy's) and named head motions
-    smiley: {
-        name       : "Web Avatar (Smiley)",
-        emotions   : asEmotions([...LLM_MOODS, "Angry"]),
-        animations : asAnimations(SMILEY_ANIMATIONS),
-    },
+    // Code-drawn face, plain and with its eyebrows always showing (same buttons for both)
+    smiley         : smileyProfile("Web Avatar (Smiley)"),
+    "smiley-brows" : smileyProfile("Web Avatar (Smiley + eyebrows)"),
 };
+
+// Smiley buttons: each mood (a random one of its expressions, plus admin-only Angry), then every
+// named expression on its own, labeled with the emoji it borrows from, then its head motions
+function smileyProfile(name: string): CapabilityProfile {
+    const expressions: ActionOption[] = SMILEY_EXPRESSION_LIST.map(({name: expression, emoji}) => ({label: `${emoji} ${expression}`, kind: "emotion", value: expression}));
+    return {
+        name       : name,
+        emotions   : [...asEmotions([...LLM_MOODS, "Angry"]), ...expressions],
+        animations : asAnimations(SMILEY_ANIMATIONS),
+    };
+}
 
 // Physical Buddy robot: has dedicated "Angry" and "Love" faces that look much better than the
 // generic mapping, and Angry is one we specifically do not want the LLM choosing on its own.

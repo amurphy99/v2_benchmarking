@@ -81,7 +81,7 @@ export type AvatarEntry = {
 const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
 const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
 
-// Code-drawn face with expressions, gaze, and a speaking mouth
+// Code-drawn face with expressions, gaze, and a speaking mouth (eyebrows only on the expressions that use them)
 const SMILEY_AVATAR: AvatarEntry = {
     id       : "smiley",
     label    : "Smiley (2D)",
@@ -89,8 +89,16 @@ const SMILEY_AVATAR: AvatarEntry = {
     render   : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
 
+// The same face with its eyebrows always showing
+const SMILEY_BROWS_AVATAR: AvatarEntry = {
+    id       : "smiley-brows",
+    label    : "Smiley + eyebrows (2D)",
+    features : ["gaze", "conversationState", "speechLevel"],
+    render   : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
+};
+
 // Every avatar, in picker order
-export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, QT_AVATAR, BUDDY_AVATAR];
+export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, SMILEY_BROWS_AVATAR, QT_AVATAR, BUDDY_AVATAR];
 
 // Find an avatar by id (a model choice with no entry shows Buddy, the backend's default model)
 export function getAvatarEntry(id: string): AvatarEntry {

@@ -84,7 +84,7 @@ all:
 |---|---|
 | `buddy` | `DANCE`, `SHAKE NO`, `EMBARRASSED`, `HEAD TILT`, `NOD YES` (5 clips) |
 | `qt` | `Celebration`, `Dancing`, `Nodding Yes`, `Thinking`, … (17 clips) |
-| `smiley` | `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions) |
+| `smiley`, `smiley-brows` | `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions) |
 
 The web avatars and the shared `performAction()` contract they follow live in
 `pages/common/avatar/` (`avatarRegistry.tsx`). The public `/avatar-demo` page shows each web
@@ -98,8 +98,9 @@ the same way, through `session_info` in
 
 Emotions are safe across every model because each avatar maps them itself:
 `getAnimationFromEmotion()` (`pages/common/avatar/AvatarUtils.tsx`) for QT and Buddy, and the
-mood presets in `pages/common/avatar/smiley/faceState.ts` for the smiley. Only raw `animation`
-buttons need the model to be known.
+expression catalog in `pages/common/avatar/smiley/faceState.ts` for the smiley (each mood picks
+one of a few iOS-emoji-style expressions at random). Only raw `animation` buttons, and the
+smiley's named-expression emotion buttons, need the model to be known.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Adding a profile                                                                 -->
@@ -138,7 +139,8 @@ Everything lives in `capabilities/profiles.ts`.
 |---|---|---|
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
 | `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
-| `webapp` + `smiley` | Web Avatar (Smiley) | 10 moods + `Angry` + 8 motion names. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
+| `webapp` + `smiley` | Web Avatar (Smiley) | 10 moods + `Angry`, every named expression (`Grinning Face`, `Fearful Face`, …), and 8 motion names. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
+| `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Also demo-only for now |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |
 | `qtrobot` | *(default)* | Not yet characterized |
 | anything else | *(default)* | 10 moods, no animations |

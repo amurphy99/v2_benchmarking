@@ -19,11 +19,12 @@ import      { useFaceController        } from "./useFaceController";
 // Smiley Avatar
 // ================================================================================
 // Expose the face controller as the avatar handle and draw its latest face
-export default function SmileyAvatar({ref}: {
-    ref? : Ref<AvatarHandle>;   // Handle the page drives the avatar through
-    zoom : AvatarZoom;          // Not used (the face always fills its box)
+export default function SmileyAvatar({ref, browsAlways = false}: {
+    ref?         : Ref<AvatarHandle>;   // Handle the page drives the avatar through
+    zoom         : AvatarZoom;          // Not used (the face always fills its box)
+    browsAlways? : boolean;             // Keep the eyebrows showing on every expression
 }): ReactElement {
-    const {face, handle} = useFaceController();
+    const {face, handle} = useFaceController(browsAlways);
     useImperativeHandle(ref, (): AvatarHandle => handle, [handle]);
 
     return (
