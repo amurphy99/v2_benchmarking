@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider            } from "@/context/AuthProvider";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { AuthProvider                    } from "@/context/AuthProvider";
 
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient, IsStaff } from "@/routes";
 
@@ -18,7 +18,6 @@ import { useEffect, useState } from "react";
 // --------------------------------------------------------------------
 // Routes and Pages
 // --------------------------------------------------------------------
-// ToDo: Almost all of them are shared, we just don't show everything to patients... ?
 export default function App() {
     const [width, setWidth] = useState(window.innerWidth);
 
@@ -37,16 +36,20 @@ export default function App() {
     window.isMobile = isMobile;
 
   return (
-    <AuthProvider>
       <Routes>
-        <Route element={<AppLayout />}> 
+        {/* Public avatar demo, outside the login check (so it never asks the backend for an account) */}
+        <Route path="/avatar-demo" element={<AvatarDemo />} />
+
+        {/* Every other page runs inside the login check */}
+        <Route element={<AuthProvider><Outlet /></AuthProvider>}>
+        <Route element={<AppLayout />}>
 
             {/* Public Routes */}
             <Route element={ <Unprotected/> }> 
-                <Route path="/"        element={<Home   />} />
-                <Route path="/login"   element={<Login  />} />
-                <Route path="/signup-patient"  element={<SignUpPatient />} />
-                <Route path="/signup"  element={<SignUpAccount />} />
+                <Route path="/"               element={<Home          />} />
+                <Route path="/login"          element={<Login         />} />
+                <Route path="/signup-patient" element={<SignUpPatient />} />
+                <Route path="/signup"         element={<SignUpAccount />} />
             </Route>
 
             {/* Protected Routes */}
@@ -92,15 +95,12 @@ export default function App() {
                 </Route>
             </Route>
 
-            {/* Public avatar demo (no login needed) */}
-            <Route path="/avatar-demo" element={<AvatarDemo />} />
-
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />
-            
+
+        </Route>
         </Route>
 
       </Routes>
-    </AuthProvider>
   );
 }
