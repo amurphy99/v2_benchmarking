@@ -9,13 +9,18 @@ profile). Each button hands a `RobotAction` straight to the avatar's
 behavior that works here works in a chat. Avatars with optional features (gaze,
 conversation state, speech level) also get the face controls.
 
+For tuning one face, the URL can pick the avatar and hold a face from the start
+(`/avatar-demo?avatar=smiley&face=Yawning Face`), so a reload after an edit
+lands right back on it.
+
 NOTE: `AvatarActionsGroup` and `AdminPage` stay in `pages/admin/` even though
       this page uses them too (an agreed exception to moving shared UI into
       `components/`).
 
 */
-import type { ReactElement     } from "react";
-import      { useRef, useState } from "react";
+import type { ReactElement                } from "react";
+import      { useEffect, useRef, useState } from "react";
+import      { useSearchParams             } from "react-router-dom";
 
 // From this project
 import      { groupDivStyle                                } from "@/hooks/chat-listener/chat-controls/styles";
@@ -52,15 +57,20 @@ function defaultResting(avatarId: string): string {
 // ================================================================================
 // Show one avatar beside every control it supports
 export function AvatarDemo(): ReactElement {
-    // Selected avatar, the hold time every action sends, and the actions sent so far
-    const [avatarId,   setAvatarId  ] = useState<string>(DEMO_DEFAULT_AVATAR_ID);
-    const [durationMs, setDurationMs] = useState<number | null>(DEMO_DEFAULT_DURATION_MS);
+    // Optional starting avatar and held face from the URL (unknown avatars fall back like any model choice)
+    const [searchParams] = useSearchParams();
+    const startAvatarId  = getAvatarEntry(searchParams.get("avatar") ?? DEMO_DEFAULT_AVATAR_ID).id;
+    const startFace      = searchParams.get("face");
+
+    // Selected avatar, the hold time every action sends (held when the URL names a face), and the actions sent so far
+    const [avatarId,   setAvatarId  ] = useState<string>(startAvatarId);
+    const [durationMs, setDurationMs] = useState<number | null>((startFace === null) ? DEMO_DEFAULT_DURATION_MS : null);
     const [log,        setLog       ] = useState<LoggedAction[]>([]);
     const avatarRef = useRef<AvatarHandle>(null);
     const logIdRef  = useRef<number>(0);
 
     // Face inputs the page drives (a newly picked avatar starts from these defaults too)
-    const [restingExpression, setRestingExpression] = useState<string>(defaultResting(DEMO_DEFAULT_AVATAR_ID));
+    const [restingExpression, setRestingExpression] = useState<string>(defaultResting(startAvatarId));
     const [conversationState, setConversationState] = useState<ConversationState>("idle");
     const [gazePoint,         setGazePoint        ] = useState<GazePoint | null>(null);
     const [talking,           setTalking          ] = useState<boolean>(false);
@@ -72,6 +82,11 @@ export function AvatarDemo(): ReactElement {
 
     // Feed simulated speech into the avatar's mouth while "talking" is on
     useSimulatedSpeech(talking, (level: number): void => { avatarRef.current?.setSpeechLevel?.(level); });
+
+    // Hold the URL's face once the avatar is up (a 3D robot still loading its model ignores it)
+    useEffect(() => {
+        if (startFace !== null) avatarRef.current?.performAction({kind: "emotion", value: startFace});
+    }, [startFace]);
 
     // --------------------------------------------------------------------------------
     // Robot Actions

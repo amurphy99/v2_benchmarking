@@ -97,6 +97,9 @@ export function useFaceController(
     const restingRef = useRef<FaceState>(SMILEY_BASE_FACE);
     const atRestRef  = useRef<boolean>(true);
 
+    // When the latest emotion arrived (its own clock times the tear, so one drip fits its hold)
+    const emotionStartRef = useRef<number>(0);
+
     // Start moving from the face showing now to another one
     const startTransition = (to: FaceState, lengthMs: number, nowMs: number): void => {
         transitionRef.current = {from: expressionRef.current, to, startMs: nowMs, lengthMs};
@@ -122,6 +125,7 @@ export function useFaceController(
                 // The hold starts once the new face is fully shown
                 const nowMs      = performance.now();
                 const durationMs = action.duration_ms ?? null;
+                emotionStartRef.current = nowMs;
                 startTransition(expressionFor(action.value, restingRef.current), SMILEY_EXPRESSION_IN_MS, nowMs);
                 releaseAtRef.current = ((durationMs === null) || atRestRef.current) ? null : (nowMs + SMILEY_EXPRESSION_IN_MS + durationMs);
             }
@@ -224,19 +228,20 @@ export function useFaceController(
             // 6) Combine the layers into the face the renderer draws
             setFace({
                 ...expression,
-                gazeX     : clampRange(expression.gazeX + gaze.x + (offsets.gazeX ?? 0), -1, 1),
-                gazeY     : clampRange(expression.gazeY + gaze.y + (offsets.gazeY ?? 0), -1, 1),
-                turnX     : expression.turnX   + (offsets.turnX   ?? 0),
-                turnY     : expression.turnY   + (offsets.turnY   ?? 0),
-                tilt      : expression.tilt    + (offsets.tilt    ?? 0),
-                offsetX   : expression.offsetX + (offsets.offsetX ?? 0),
-                offsetY   : expression.offsetY + (offsets.offsetY ?? 0),
-                eyeOpen   : expression.eyeOpen * blink,
-                eyeScale  : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
-                brows     : browsAlways ? 1 : expression.brows,
-                mouthOpen : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
-                scale     : expression.scale * breath,
-                timeSec   : nowMs / 1_000,
+                gazeX         : clampRange(expression.gazeX + gaze.x + (offsets.gazeX ?? 0), -1, 1),
+                gazeY         : clampRange(expression.gazeY + gaze.y + (offsets.gazeY ?? 0), -1, 1),
+                turnX         : expression.turnX   + (offsets.turnX   ?? 0),
+                turnY         : expression.turnY   + (offsets.turnY   ?? 0),
+                tilt          : expression.tilt    + (offsets.tilt    ?? 0),
+                offsetX       : expression.offsetX + (offsets.offsetX ?? 0),
+                offsetY       : expression.offsetY + (offsets.offsetY ?? 0),
+                eyeOpen       : expression.eyeOpen * blink,
+                eyeScale      : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
+                brows         : browsAlways ? 1 : expression.brows,
+                mouthOpen     : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
+                scale         : expression.scale * breath,
+                timeSec       : nowMs / 1_000,
+                expressionSec : clampRange(nowMs - emotionStartRef.current, 0, Infinity) / 1_000,
             });
             frameId = requestAnimationFrame(tick);
         };

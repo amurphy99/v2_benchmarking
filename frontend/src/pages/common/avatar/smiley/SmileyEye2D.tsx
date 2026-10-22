@@ -11,10 +11,15 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { SmileyPaint                                                                     } from "./faceDrawing2D";
-import      { SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W                 } from "./faceDrawing2D";
-import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg } from "./faceDrawing2D";
-import type { FaceState                                                                       } from "./faceState";
+import type { SmileyPaint                                                                              } from "./faceDrawing2D";
+import      { SMILEY_HEART_EYE_EDGE_W, SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W } from "./faceDrawing2D";
+import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg          } from "./faceDrawing2D";
+import type { FaceState                                                                                } from "./faceState";
+
+// Heart eye outline and gloss
+const SMILEY_HEART_EYE_EDGE_HEX      = "#8a0820";
+const SMILEY_HEART_EYE_GLOSS_HEX     = "#ffffff";
+const SMILEY_HEART_EYE_GLOSS_OPACITY = 0.6;
 
 
 // --------------------------------------------------------------------------------
@@ -66,9 +71,13 @@ export default function SmileyEye2D({side, face, paint}: {
                     />
                 ) : null}
 
-                {/* Heart */}
+                {/* Heart with a thin darker outline and a small gloss (sizes are in the heart's own unit size,
+                    so the outline width undoes its scale) */}
                 {(face.heartEyes > 0) ? (
-                    <path d={SMILEY_HEART_PATH} transform={`scale(${heartEyeScale(face)})`} fill={paint.heart} opacity={face.heartEyes} />
+                    <g transform={`scale(${heartEyeScale(face)})`} opacity={face.heartEyes}>
+                        <path d={SMILEY_HEART_PATH} fill={paint.heartEye} stroke={SMILEY_HEART_EYE_EDGE_HEX} strokeWidth={SMILEY_HEART_EYE_EDGE_W / heartEyeScale(face)} strokeLinejoin="round" />
+                        <ellipse cx={-0.42} cy={-0.5} rx={0.2} ry={0.12} transform="rotate(-35 -0.42 -0.5)" fill={SMILEY_HEART_EYE_GLOSS_HEX} opacity={SMILEY_HEART_EYE_GLOSS_OPACITY} />
+                    </g>
                 ) : null}
             </g>
         </g>

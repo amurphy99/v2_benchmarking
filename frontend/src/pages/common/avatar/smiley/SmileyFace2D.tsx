@@ -11,10 +11,11 @@ The face is shaded glossy, like an iOS emoji: bright and nearly white at the
 top, the face color through the middle, and a deeper warm shade toward the
 bottom edge, with a soft white sheen over the upper half. The features are
 brown with a light-to-dark gradient rather than flat black, and every extra
-(teeth, tongue, hearts, tear, Zs, cheeks) has its own gradient too. The face is
+(tongue, hearts, tear, Zs, cheeks) has its own gradient too; the teeth are shaded
+by `SmileyMouth2D`, which lays their gradients out from the mouth. The face is
 flat, so head turns are faked: the features slide toward the turn and the eye
 nearer the edge narrows. Some looks add an overlay: blue shading (fearful), or
-frost and icicles (cold).
+frost with a thin dark-blue rim along the top edge, and icicles (cold).
 
 A soft shadow sits on the ground under the face. It follows the face sideways
 and with its size, and shrinks and fades as the face lifts off the ground.
@@ -39,9 +40,9 @@ const SMILEY_VIEW_BOTTOM = 32;   // Below the face, for its shadow, icicles, and
 
 // Cheeks (a soft round glow that fades to nothing at its edge)
 const SMILEY_BLUSH_X   = 60;   // Cheek distance from the center line
-const SMILEY_BLUSH_Y   = 8;    // Cheek height
-const SMILEY_BLUSH_RX  = 25;   // Cheek half-width
-const SMILEY_BLUSH_RY  = 15;   // Cheek half-height
+const SMILEY_BLUSH_Y   = 9;    // Cheek height
+const SMILEY_BLUSH_RX  = 33;   // Cheek half-width
+const SMILEY_BLUSH_RY  = 21;   // Cheek half-height
 const SMILEY_BLUSH_HEX = "#ff6f8e";
 
 // Face shading (a warm edge keeps this share of each red, green, and blue channel, which turns yellow orange)
@@ -64,12 +65,14 @@ const SMILEY_FEATURE_BOTTOM_HEX = "#6b4422";
 const SMILEY_MOUTH_TOP_HEX      = "#3d1a0c";   // Inside an open mouth, top to bottom
 const SMILEY_MOUTH_BOTTOM_HEX   = "#7a2d17";
 
-// Extra colors, light at the top to deep at the bottom (teeth get a third, glossy stop)
-const SMILEY_TEETH_HEXES  = ["#ffffff", "#f6f2ec", "#d8cebf"] as const;
+// Extra colors, light at the top to deep at the bottom
 const SMILEY_TONGUE_HEXES = ["#ff9aa7", "#d8455c"] as const;
-const SMILEY_HEART_HEXES  = ["#ff8fa6", "#e3123f"] as const;
+const SMILEY_HEART_HEXES  = ["#ff8fa6", "#e3123f"] as const;   // Floating hearts
 const SMILEY_TEAR_HEXES   = ["#d8f2ff", "#3b97e6"] as const;
 const SMILEY_ZZZ_HEXES    = ["#93a6ff", "#3c52cc"] as const;
+
+// Heart eyes: a deeper red, lit from the upper left so they look rounded (center, middle, and edge)
+const SMILEY_HEART_EYE_HEXES = ["#ff9db0", "#ee2f4d", "#930720"] as const;
 
 // Hand shading, laid out in the hand's own coordinates (fingertips at the top, wrist at the bottom)
 const SMILEY_HAND_SHADE_TOP_Y    = -50;
@@ -80,6 +83,11 @@ const SMILEY_FEAR_HEX  = "#6f86ff";   // Fearful blue
 const SMILEY_FEAR_END  = "50%";
 const SMILEY_FROST_HEX = "#f4fbff";   // Cold-face frost
 const SMILEY_FROST_END = "38%";
+
+// Cold-face rim: a thin dark-blue outline along the top edge, over the frost (it fades out by `END`)
+const SMILEY_COLD_RIM_HEX = "#2b5f9e";
+const SMILEY_COLD_RIM_W   = 2.5;
+const SMILEY_COLD_RIM_END = "60%";
 
 // Icicle colors, base to tip
 const SMILEY_ICE_TOP_HEX    = "#ffffff";
@@ -122,11 +130,12 @@ export default function SmileyFace2D({face}: {
     const paint: SmileyPaint = {
         feature  : url("feature"),
         mouth    : url("mouth"),
-        teeth    : url("teeth"),
         tongue   : url("tongue"),
         hand     : url("hand"),
         skinEdge : rgbString(mixRgb(edge, [0, 0, 0], 1 - SMILEY_HAND_EDGE_SHADE)),
         heart    : url("heart"),
+        heartEye : url("heartEye"),
+        ice      : url("ice"),
         tear     : url("tear"),
         zzz      : url("zzz"),
         blush    : url("blush"),
@@ -165,14 +174,18 @@ export default function SmileyFace2D({face}: {
                 </radialGradient>
 
                 {/* Features and extras */}
-                {verticalGradient(id("feature"), [SMILEY_FEATURE_TOP_HEX, SMILEY_FEATURE_BOTTOM_HEX])}
-                {verticalGradient(id("mouth"),   [SMILEY_MOUTH_TOP_HEX,   SMILEY_MOUTH_BOTTOM_HEX  ])}
-                {verticalGradient(id("teeth"),   SMILEY_TEETH_HEXES )}
-                {verticalGradient(id("tongue"),  SMILEY_TONGUE_HEXES)}
-                {verticalGradient(id("heart"),   SMILEY_HEART_HEXES )}
-                {verticalGradient(id("tear"),    SMILEY_TEAR_HEXES  )}
-                {verticalGradient(id("zzz"),     SMILEY_ZZZ_HEXES   )}
-                {verticalGradient(id("ice"),     [SMILEY_ICE_TOP_HEX, SMILEY_ICE_BOTTOM_HEX])}
+                {verticalGradient(id("feature"),  [SMILEY_FEATURE_TOP_HEX, SMILEY_FEATURE_BOTTOM_HEX])}
+                {verticalGradient(id("mouth"),    [SMILEY_MOUTH_TOP_HEX,   SMILEY_MOUTH_BOTTOM_HEX  ])}
+                {verticalGradient(id("ice"),      [SMILEY_ICE_TOP_HEX,     SMILEY_ICE_BOTTOM_HEX    ])}
+                {verticalGradient(id("tongue"),   SMILEY_TONGUE_HEXES)}
+                {verticalGradient(id("heart"),    SMILEY_HEART_HEXES )}
+                {verticalGradient(id("tear"),     SMILEY_TEAR_HEXES  )}
+                {verticalGradient(id("zzz"),      SMILEY_ZZZ_HEXES   )}
+                <radialGradient id={id("heartEye")} cx="38%" cy="32%" r="78%">
+                    <stop offset="0%"   stopColor={SMILEY_HEART_EYE_HEXES[0]} />
+                    <stop offset="38%"  stopColor={SMILEY_HEART_EYE_HEXES[1]} />
+                    <stop offset="100%" stopColor={SMILEY_HEART_EYE_HEXES[2]} />
+                </radialGradient>
                 <radialGradient id={id("blush")}>
                     <stop offset="0%"   stopColor={SMILEY_BLUSH_HEX} stopOpacity={0.85} />
                     <stop offset="55%"  stopColor={SMILEY_BLUSH_HEX} stopOpacity={0.45} />
@@ -187,8 +200,9 @@ export default function SmileyFace2D({face}: {
                 </linearGradient>
 
                 {/* Overlays and the ground shadow */}
-                {topOverlayGradient(id("fear"),  SMILEY_FEAR_HEX,  SMILEY_FEAR_END )}
-                {topOverlayGradient(id("frost"), SMILEY_FROST_HEX, SMILEY_FROST_END)}
+                {topOverlayGradient(id("fear"),  SMILEY_FEAR_HEX,     SMILEY_FEAR_END    )}
+                {topOverlayGradient(id("frost"), SMILEY_FROST_HEX,    SMILEY_FROST_END   )}
+                {topOverlayGradient(id("rim"),   SMILEY_COLD_RIM_HEX, SMILEY_COLD_RIM_END)}
                 <radialGradient id={id("shadow")}>
                     <stop offset="0%"   stopColor={SMILEY_SHADOW_HEX} stopOpacity={SMILEY_SHADOW_OPACITY} />
                     <stop offset="100%" stopColor={SMILEY_SHADOW_HEX} stopOpacity={0}                     />
@@ -216,8 +230,9 @@ export default function SmileyFace2D({face}: {
                 <ellipse cy={SMILEY_SHEEN_Y} rx={SMILEY_SHEEN_RX} ry={SMILEY_SHEEN_RY} fill={url("sheen")} />
                 {(face.fearShade > 0) ? <circle r={SMILEY_FACE_R} fill={url("fear")}  opacity={face.fearShade} /> : null}
                 {(face.frost     > 0) ? <circle r={SMILEY_FACE_R} fill={url("frost")} opacity={face.frost}     /> : null}
+                {(face.frost     > 0) ? <circle r={SMILEY_FACE_R - (SMILEY_COLD_RIM_W / 2)} fill="none" stroke={url("rim")} strokeWidth={SMILEY_COLD_RIM_W} opacity={face.frost} /> : null}
                 {(face.icicles   > 0) ? (
-                    <g fill={url("ice")} opacity={face.icicles}>
+                    <g fill={paint.ice} opacity={face.icicles}>
                         {SMILEY_ICICLE_PATHS.map((icicle: string, i: number) => <path key={i} d={icicle} />)}
                     </g>
                 ) : null}
