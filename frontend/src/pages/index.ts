@@ -16,7 +16,7 @@ export { Transcript      } from "@/pages/transcript/Transcript";
 export { Practice        } from "@/pages/practice/Practice";
 export { PracticePage    } from "@/pages/practice-page/PracticePage";
 export { Settings        } from "@/pages/settings/Settings";
-export { AnimationTest   } from "@/pages/animationTest/AnimationTest";
+export { AvatarDemo      } from "@/pages/avatar_demo/AvatarDemo";
 export { Profile         } from "@/pages/profile/Profile";
 export { Admin           } from "@/pages/admin/Admin";
 export { AdminChat       } from "@/pages/admin/AdminChat";

@@ -1,10 +1,17 @@
+/* Clip names, mood-to-clip maps, and camera framing for the QT and Buddy GLB avatars.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/common/avatar/AvatarUtils`
+
+*/
 import { randInt } from "three/src/math/MathUtils.js";
 
+// Every clip in `buddyRobot.glb`
 export const buddyAnimations: Record<string, string> = {
-    DANCE: "DANCE",
-    "SHAKE NO": "SHAKE NO",
-    EMBARRASSED: "EMBARRASSED",
-    "HEAD TILT": "HEAD TILT",
+    DANCE       : "DANCE",
+    "SHAKE NO"  : "SHAKE NO",
+    EMBARRASSED : "EMBARRASSED",
+    "HEAD TILT" : "HEAD TILT",
+    "NOD YES"   : "NOD YES",
 };
 
 // Maps the backend's emotion vocabulary onto the clips this model actually has.
@@ -78,14 +85,19 @@ export const qtZoomMap: Record<string, any> = {
 
 // An unrecognized emotion falls back to that model's idle clip rather than failing; frontends
 // are expected to handle vocabulary they do not implement (see FRONTEND_CAPABILITIES.md).
-export const getAnimationFromEmotion = (emotion: string, model: string) => {
+export const getAnimationFromEmotion = (emotion: string, model: string): string => {
     if (model == "qt") {
-        const clips = qtEmotionMap[emotion];
+        const clips = findMood(qtEmotionMap, emotion);
         // randInt is inclusive on both ends, so the top index is length - 1
         return clips ? clips[randInt(0, clips.length - 1)] : "Hello";
-    } else if (model == "buddy") {
-        return buddyEmotionMap[emotion] ? buddyEmotionMap[emotion] : "HEAD TILT";
     }
+    return findMood(buddyEmotionMap, emotion) ?? "HEAD TILT";
+}
+
+// Look up a mood label ignoring case (CLIENT_PROTOCOL.md §3.1 recommends case-insensitive matching)
+function findMood<T>(map: Record<string, T>, emotion: string): T | undefined {
+    const label = Object.keys(map).find((mood: string) => mood.toLowerCase() === emotion.toLowerCase());
+    return (label === undefined) ? undefined : map[label];
 }
 
 export const getZoom = (zoom: string, model: string) => {

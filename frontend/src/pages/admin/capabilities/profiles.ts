@@ -1,6 +1,6 @@
-/* profiles.ts
+/* Per-frontend action capability profiles for the AdminChat control panel.
 --------------------------------------------------------------------------------
-Per-frontend action capability profiles for the AdminChat control panel.
+`@frontend/src/pages/admin/capabilities/profiles`
 
 The backend sends every interface the same `robot_action` vocabulary and does
 not know what any given frontend can actually do. This registry is the admin
@@ -16,6 +16,7 @@ See `../FRONTEND_CAPABILITIES.md` for how to add a profile for a new robot.
 
 */
 import { buddyAnimations, qtAnimations } from "@/pages/common/avatar/AvatarUtils";
+import { SMILEY_ANIMATIONS             } from "@/pages/common/avatar/smiley/faceMotions";
 
 // --------------------------------------------------------------------------------
 // Types
@@ -60,9 +61,10 @@ const DEFAULT_PROFILE: CapabilityProfile = {
     animations : [],
 };
 
-// Webapp avatars offer both abstract mood controls and direct 3D animation clips. Which model
-// is showing is a per-user setting, which is why `avatarModel` has to come through session_info
-// -- `source: "webapp"` is not enough to select the literal animation names.
+// Webapp avatars offer both abstract mood controls and direct animation names. Which model is
+// showing is a per-user setting, which is why `avatarModel` has to come through session_info
+// -- `source: "webapp"` is not enough to select the literal animation names. The avatar demo
+// page reads these same profiles, keyed by the ids in `common/avatar/avatarRegistry`.
 const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
     qt: {
         name       : "Web Avatar (QT)",
@@ -73,6 +75,12 @@ const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
         name       : "Web Avatar (Buddy)",
         emotions   : asEmotions(LLM_MOODS),
         animations : asAnimations(Object.keys(buddyAnimations)),
+    },
+    // Code-drawn face: has its own Angry face (admin-only, like Buddy's) and named head motions
+    smiley: {
+        name       : "Web Avatar (Smiley)",
+        emotions   : asEmotions([...LLM_MOODS, "Angry"]),
+        animations : asAnimations(SMILEY_ANIMATIONS),
     },
 };
 

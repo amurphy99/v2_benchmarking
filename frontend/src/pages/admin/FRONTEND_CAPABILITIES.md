@@ -77,13 +77,18 @@ Before writing a profile, gather:
 
 The webapp is the worked example. `source: "webapp"` does not tell you what the interface can
 do, because the avatar model is a **per-user setting** (`UserSettings.modelChoice`, chosen in
-the settings page and read at `pages/chat/Chat.tsx`). The two models share no clip names at
+the settings page and read at `pages/chat/Chat.tsx`). The models share no animation names at
 all:
 
-| Model | Clips |
+| Model | Animations |
 |---|---|
-| `buddy` | `DANCE`, `SHAKE NO`, `EMBARRASSED`, `HEAD TILT` (4) |
-| `qt` | `Celebration`, `Dancing`, `Nodding Yes`, `Thinking`, … (17) |
+| `buddy` | `DANCE`, `SHAKE NO`, `EMBARRASSED`, `HEAD TILT`, `NOD YES` (5 clips) |
+| `qt` | `Celebration`, `Dancing`, `Nodding Yes`, `Thinking`, … (17 clips) |
+| `smiley` | `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions) |
+
+The web avatars and the shared `performAction()` contract they follow live in
+`pages/common/avatar/` (`avatarRegistry.tsx`). The public `/avatar-demo` page shows each web
+avatar beside the same buttons this panel would show for it.
 
 So the backend sends `avatarModel` alongside `source` in the `session_info` frame, and
 `getCapabilityProfile()` takes both. If a future interface has any capability that varies at
@@ -91,8 +96,9 @@ runtime — a hardware revision, an accessory, a user setting — it has to reac
 the same way, through `session_info` in
 `backend/chat_app/websocket/consumers/utils/db_data.py`.
 
-Emotions are safe across both models because `getAnimationFromEmotion()`
-(`pages/common/avatar/AvatarUtils.tsx`) maps them per-model internally. Only raw `animation`
+Emotions are safe across every model because each avatar maps them itself:
+`getAnimationFromEmotion()` (`pages/common/avatar/AvatarUtils.tsx`) for QT and Buddy, and the
+mood presets in `pages/common/avatar/smiley/faceState.ts` for the smiley. Only raw `animation`
 buttons need the model to be known.
 
 <!-- -------------------------------------------------------------------------------- -->
@@ -131,7 +137,8 @@ Everything lives in `capabilities/profiles.ts`.
 | `source` | Profile | Notes |
 |---|---|---|
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
-| `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 4 real clip names |
+| `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
+| `webapp` + `smiley` | Web Avatar (Smiley) | 10 moods + `Angry` + 8 motion names. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |
 | `qtrobot` | *(default)* | Not yet characterized |
 | anything else | *(default)* | 10 moods, no animations |

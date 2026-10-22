@@ -1,9 +1,15 @@
+/* Participant chat page: the avatar, the assistant's latest line, and chat controls.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/chat/Chat`
+
+*/
 import { useRef, useState } from "react";
 import { useNavigate      } from "react-router-dom";
 import { Spinner          } from "react-bootstrap";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
 // From this project
+import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import { Avatar          } from "../common/avatar/Avatar";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
@@ -20,7 +26,7 @@ export function Chat() {
     const navigate = useNavigate();
     const { data: settings, isLoading } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const avatarRef = useRef<any>(null);
+    const avatarRef = useRef<AvatarHandle>(null);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
@@ -44,13 +50,8 @@ export function Chat() {
     const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
 
     // Backend "robot_action" frames: {kind: "emotion" | "animation", value, duration_ms}
-    // "emotion" is the LLM's own vocabulary, which AvatarUtils maps onto this model's clips.
-    // "animation" is a literal clip name (the admin panel drives the avatar directly).
-    const onRobotAction = (data: any) => {
-        if (!avatarRef.current) return;
-        if      (data?.kind === "emotion"  ) { avatarRef.current.playEmotion  (data.value); }
-        else if (data?.kind === "animation") { avatarRef.current.playAnimation(data.value); }
-    }
+    // The avatar decides how to act each one out (contract in `common/avatar/avatarRegistry`)
+    const onRobotAction = (data: RobotAction): void => { avatarRef.current?.performAction(data); };
 
     // --------------------------------------------------------------------------------
     // IDK, unlabeled stuff people add in

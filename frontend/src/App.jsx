@@ -4,7 +4,7 @@ import { AuthProvider            } from "@/context/AuthProvider";
 import { Unprotected, Protected, AppLayout, IsCaregiver, IsPatient, IsStaff } from "@/routes";
 
 import { Dashboard, History, ChatDetails, Chat, ChatEnd, ProgressSummary, Goal, ChatAlbum, DaySummary,
-    WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AnimationTest,
+    WeekSummary, Analysis, AnalysisFlagged, Alert, Transcript, Practice, Settings, AvatarDemo,
     PracticePage, Profile, Admin, AdminChat, AdminChatInactive, AdminChatActivities, TranscriptPlayback } from "@/pages";
 import Home            from "@/pages/Home";
 import Login           from "@/pages/Login";
@@ -92,7 +92,8 @@ export default function App() {
                 </Route>
             </Route>
 
-            <Route path="/animation-test" element={<AnimationTest />} />
+            {/* Public avatar demo (no login needed) */}
+            <Route path="/avatar-demo" element={<AvatarDemo />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />
