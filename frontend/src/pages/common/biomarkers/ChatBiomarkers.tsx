@@ -37,7 +37,7 @@ function BiomarkerAnalysis({ score_type, score, prev }: { score_type: string, sc
     // Popover
     const popover = (
         <Popover id="anomia-popover" style={{ maxWidth: "none", width: "max-content" }}> 
-            <AnomiaCard/>
+            <AnomiaCard biomarker={score_type} />
         </Popover>
     );
 

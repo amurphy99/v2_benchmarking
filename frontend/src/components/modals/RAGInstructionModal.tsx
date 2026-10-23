@@ -163,7 +163,7 @@ export default function RAGInstructionModal({
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity">
               {isCreate ? "Create Instruction" : "Save Changes"}
             </button>
           </div>

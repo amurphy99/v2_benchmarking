@@ -1,67 +1,84 @@
-import logging
-from . import biomarker_config as BioConfig
-from ...services.logging_utils import RESET
+"""
+Entry point for generating biomarker scores.
+--------------------------------------------------------------------------------
+`backend.chat_app.websocket.biomarkers.biomarker_scores`
 
-# Set up logger
-logger = logging.getLogger(__name__)
+Both functions return a list of ScoreSpan dicts:
+    {"score_type": str, "score": float, "start_ts": datetime, "end_ts": datetime}
+
+Each span is one row in the database (linked to a ChatMessage by the caller).
+A single utterance can produce many spans -- one altered-grammar span per
+sentence, one perplexity span per tri-gram, one prosody/pronunciation span per
+audio window, and one turn-taking span per utterance.
+
+TODO: There is kind of some overlap between this and `biomarker_extraction.py`, 
+      maybe it's just more of a documentation thing I should fix up, or I should
+      split it into one file that does text and one that does audio...
+
+TODO: Like you can see the pre-processing for audio is already done by this point,
+      but not yet for text. So maybe the only change I need to make is to just
+      move the text-preprocessing into the other file...
+
+TODO: Not 100% sure how to handle anomia. At this point, with Google's STT, we 
+      might be able to add the old version back since it gives filler words like
+      "umm", but I don't know if I like/fully trust that biomarker personally...
+
+"""
+# From this project
+from .preprocessing.text_preprocessing     import preprocess
+from .core.altered_grammar.altered_grammar import generate_altered_grammar
+from .core.prosody        .prosody         import generate_prosody
+from .core.pronunciation  .pronunciation   import generate_pronunciation
+from .core.turntaking     .turntaking      import generate_turntaking
+
+# Config for IF scores should be generated
+from .biomarker_config import AG_MIN_UTT_WORDS
 
 
-# =======================================================================
-# Import Biomarker Functions
-# =======================================================================
-from .core.pragmatic       import generate_pragmatic_score       as prag
-from .core.altered_grammar import generate_altered_grammar_score as gram
-from .core.prosody         import generate_prosody_score         as pros
-from .core.pronunciation   import generate_pronunciation_score   as pron
-from .core.anomia          import generate_anomia_score          as anom
-from .core.turntaking      import generate_turntaking_score      as turn
+# ================================================================================
+# Text-based (per user utterance)
+# ================================================================================
+def generate_utterance_biomarkers(recent_text, words, context_buffer):
+    """
+    Tokenize once, dispatch to each text biomarker, concatenate the resulting spans.
 
-# --------------------------------------------------------------------
-# Try/Except Wrapper
-# --------------------------------------------------------------------
-# Calls the given biomarker function & defaults to 0.0 on errors
-def generate_biomarker_score(biomarker: str, generate_score, args):
-    try:                   score = 1.0 - generate_score(**args)
-    except Exception as e: score = 0.0; logger.error(f"Error with {biomarker}{RESET}: {e}")
-    return score
+    TODO: `context_buffer` is unused but kept here for when I add the Pragmatic 
+          Impairment biomarker in the future.
+    """
+    if not recent_text or not words: return []
 
-# --------------------------------------------------------------------
-# Function for Timing/Logging each score as they are calculated
-# --------------------------------------------------------------------
-# Biomarker calculation functions are completely independent now
-# Don't need to have logging or try/except blocks in those files
+    # Shared preprocessing step (e.g., only get POS tags once)
+    cleaned, tokens, pos_tags = preprocess(recent_text)
 
-# Only time the individual calculations if specified in configuration
-if BioConfig.TIME_BIOMARKERS:
-    from time import time
-    def gen_score(biomarker: str, generate_score, args):
-        # Time how long it takes to calculate the score
-        start_time = time()
-        score = generate_biomarker_score(biomarker, generate_score, args)
-        
-        # Log & return score
-        #logger.info(f"{biomarker} {score:.4f} ({(time()-start_time):5.4f}s) {RESET}")
-        return score
+    # Generate text biomarker scores (Altered Grammar needs a minumum number of words)
+    spans = []
+    if len(cleaned) >= AG_MIN_UTT_WORDS: spans.extend(generate_altered_grammar(cleaned, tokens, pos_tags, words))
 
-else:
-    # Don't need to time the calculations
-    def gen_score(biomarker: str, generate_score, args):
-        score = generate_biomarker_score(biomarker, generate_score, args)
-        #logger.info(f"{biomarker} {score:.4f} {RESET}")
-        return score
-
-# =======================================================================
-# Generate Multiple Scores
-# =======================================================================
-# 1) On-Utterance Biomarkers
-def generate_utterance_biomarkers(context_buffer):
-    return {"pragmatic"      : gen_score(BioConfig.PRAG, prag, {"context_buffer": context_buffer}),
-            "alteredgrammar" : gen_score(BioConfig.GRAM, gram, {"context_buffer": context_buffer}), 
-            "anomia"         : gen_score(BioConfig.ANOM, anom, {"context_buffer": context_buffer}),}
-
-# 2) On-Audio Biomarkers
-def generate_audio_biomarkers(prosody_features, pronunciation_features, overlapped_speech_count):
-    return {"prosody"      : gen_score(BioConfig.PROS, pros, {      "prosody_features" :       prosody_features }),
-            "pronunciation": gen_score(BioConfig.PRON, pron, {"pronunciation_features" : pronunciation_features }),
-             "turntaking"  : gen_score(BioConfig.TURN, turn, {"overlapped_speech_count": overlapped_speech_count}),}
     
+    # TODO: spans.extend(generate_perplexity(cleaned, tokens, pos_tags, words))
+    # TODO: spans.extend(generate_pragmatic_impairment(cleaned, tokens, pos_tags, words))
+
+    return spans
+
+
+# ================================================================================
+# Audio-based (per user utterance)
+# ================================================================================
+def generate_audio_biomarkers(windows, overlapped_speech_count, words):
+    """
+    `windows` is the list of OpenSMILE feature windows produced by
+    `audio_preprocessing.window_features_within_utterance`. May be empty if the
+    utterance was shorter than one window -- in that case prosody/pronunciation
+    are skipped but turntaking still fires (it's per-utterance).
+
+    TODO: Need to decide how to handle turntaking...
+    """
+    if not words: return []
+
+    # Generate audio biomarker scores
+    spans = []
+    spans.extend(generate_prosody      (windows))
+    # TODO: spans.extend(generate_pronunciation(windows))
+    # TODO: spans.extend(generate_turntaking   (overlapped_speech_count, words))
+
+    return spans

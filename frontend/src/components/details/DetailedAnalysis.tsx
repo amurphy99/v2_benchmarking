@@ -32,7 +32,7 @@ export default function DetailedAnalysis ({ session }: { session: ChatSession })
             {/* Daily Topics */}
             <div className={cardStyle}>
                 <h4>Daily Topics</h4>
-                {session.topics}
+                {session.topics?.join(", ")}
                 {/* <MyWordCloud messages={chatData.messages} /> */}
             </div>
             

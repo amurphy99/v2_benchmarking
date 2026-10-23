@@ -1,6 +1,13 @@
-// All TypeScript interfaces
-// Types mirror Django DB models/what the serializers return for them.
+/* TypeScript copies of what the REST serializers return.
+--------------------------------------------------------------------------------
+`@frontend/src/api/models`
 
+Field names match the DRF serializers exactly: most are snake_case, and a few
+models pass camelCase field names straight through (`UserSettings.modelChoice`).
+Nothing checks these against the backend, so a serializer change updates this
+file in the same change.
+
+*/
 // =======================================================================
 // Misc. Models
 // =======================================================================
@@ -11,6 +18,10 @@ export interface UserSettings {
   taskSubtype       : string;
   modelChoice       : string;
 }
+
+// Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
+export const AVATAR_MODEL_CHOICES = ["smiley", "qt", "buddy"] as const;
+export type  AvatarModelChoice    = (typeof AVATAR_MODEL_CHOICES)[number];
 
 export interface Reminder {
   id         : number;
@@ -33,28 +44,30 @@ export interface Goal {
   current    : number;
   remaining  : number;
 }
+// =======================================================================
+// RAG/Activity Instructions
+// =======================================================================
 
 export interface RAGInstructions {
-    id          : number;
-    name        : string;
-    instructions: string;
-    description : string;
-    user        : number; // PK of user
-    activity    : number; // PK of Activity
-    instruction_order: number;   // order of state instructions
+    id               : number;
+    name             : string;
+    instructions     : string;
+    description      : string;
+    activity         : number; // PK of Activity
+    instruction_order: number;
 }
 
 export interface CreateRAGInstructionsPayload {
-    name        : string;
-    instructions: string;
-    description : string;
+    name             : string;
+    instructions     : string;
+    description      : string;
     instruction_order?: number;
 }
 
 export interface UpdateRAGInstructionsPayload {
-    name?: string;
-    instructions: string;
-    description : string;
+    name?            : string;
+    instructions     : string;
+    description      : string;
     instruction_order?: number;
 }
 
@@ -77,14 +90,28 @@ export interface Account {
 }
 
 export interface Profile {
-  id        : number;
-  account   : Account;
-  zipcode   : string;
-  birthDate : string;
-  locationStatus : string;
-  settings  : UserSettings;
-  goal      : Goal;
+  id                    : number;
+  account               : Account;
+  zipcode               : string;
+  birthDate             : string;
+  locationStatus        : string;
+  save_audio_by_default : boolean;
+  settings              : UserSettings;
+  goal                  : Goal;
 }
+
+// One participant on the admin settings page (`AdminProfileSerializer`)
+export interface AdminProfile {
+    id                    : number;
+    user                  : User;
+    save_audio_by_default : boolean;             // Whether each new chat starts with its audio set to be saved
+    modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
+    chat_count            : number;              // Chats so far (demo sessions left out)
+    last_chat_at          : string | null;       // Start of the latest of those chats (null before the first)
+}
+
+// Settings staff can change for one participant (either may be sent alone)
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "modelChoice">>;
 
 export interface Access {
     id      : number;
@@ -103,13 +130,24 @@ export interface CreateAccessPayload {
 // =======================================================================
 // Messages
 export type ChatRole = "user" | "assistant";
+
+export interface ChatWord {
+  id         : number;
+  word       : string;
+  start_ts   : string;
+  end_ts     : string;
+  index      : number;
+  confidence?: number | null;
+}
+
 export interface ChatMessage {
-  id        : number;
-  role      : ChatRole;
-  content   : string;
-  ts        : string; 
-  start_ts? : string | null;
-  end_ts?   : string | null;
+  id         : number;
+  role       : ChatRole;
+  content    : string;
+  ts         : string;
+  start_ts ? : string | null;
+  end_ts   ? : string | null;
+  words    ? : ChatWord[];
 }
 
 // Biomarkers (string fallback for unknown score types)
@@ -121,12 +159,15 @@ export type BiomarkerType =
   | "Prosody"
   | "Turntaking"
   | "Perplexity"
-  | string; 
+  | string;
 export interface ChatBiomarkerScore {
   id         : number;
   score_type : BiomarkerType;
   score      : number;
   ts         : string;
+  message?   : number | null;
+  start_ts?  : string | null;
+  end_ts?    : string | null;
 }
 
 export interface AlbumImage {
@@ -137,6 +178,18 @@ export interface AlbumImage {
     photographer_url: string;
 }
 
+export interface SessionAudio {
+  storage_backend  : "local" | "gcs";
+  started_at       : string | null;
+  sample_rate      : number | null;
+  channels         : number | null;
+  bits_per_sample  : number | null;
+  duration_seconds : number | null;
+  size_bytes       : number | null;
+  sha256           : string | null;
+  created_at       : string;
+}
+
 // ChatSessions
 export interface ChatSession {
   id        : number;
@@ -145,14 +198,15 @@ export interface ChatSession {
   date      : string;
   is_active : boolean;
 
-  start_ts  : string;
-  end_ts    : string | null;
-  duration  : number;          // in seconds
-  audio_file: string | null;
+  start_ts       : string;
+  end_ts         : string | null;
+  duration       : number;         // in seconds
+  audio          : SessionAudio | null;
 
-  topics    : string;        // stored as an unparsed list string
+  topics    : string[] | null;
   image     : AlbumImage;
   sentiment : "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative" | "N/A" | string;
+  emotion   : string | null;
   notes     : string | null;
   summary   : string | null;
 

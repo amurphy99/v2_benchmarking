@@ -8,7 +8,7 @@ TODO: Maybe do some kind of thing here where if the thought fields are "FAILED",
       algorithm-based methods for topics and emotions...
 
 """
-import logging, os, time
+import logging, time
 logger = logging.getLogger(__name__)
 
 # From this project
@@ -17,15 +17,17 @@ from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
 from ....config                 import USE_LLM
 
 # Import helper methods 
-from .utils            import to_transcript
-from .instruct_wrapper import InstructWrapper
-from .chat_summary     import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summary_topics_messages,  log_summary_response
-from .chat_sentiment   import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
-from .chat_risks       import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
+from .utils                          import to_transcript
+from .instruct_wrapper               import InstructWrapper
+from .response_models.chat_summary   import ChatSummaryTopics,  DEFAULT_TOPICS,    build_summary_topics_messages,  log_summary_response
+from .response_models.chat_sentiment import ChatSentimentRisk,  DEFAULT_SENTIMENT, build_sentiment_messages,       log_sentiment_response
+from .response_models.chat_risks     import ChatRiskAssessment, DEFAULT_RISK,      build_risk_assessment_messages, log_risk_response
+
+# Load constants from the new endpoint
+from ..endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE
 
 # Config
-DEFAULT_MODEL = "qwen2.5-3b"
-TEMPERATURE   = 0.5
+DEFAULT_MODEL = "qwen2.5-3b" # TODO: Old cloud version used this...
 
 # Default Response (empty transcript or local mode)
 DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutral", "emotion_label": "neutral"}
@@ -34,10 +36,10 @@ DEF_ANALYSIS = {"summary": "Empty chat", "topics": [], "sentiment_label": "neutr
 # ================================================================================
 # Make all LLM queries for the post-chat analysis
 # ================================================================================
-async def post_chat_analysis(chat_messages, model=DEFAULT_MODEL):
-    # Check if we are in local or deployed mode
-    if not USE_LLM: 
-        logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis attempted in local mode. {RESET}")
+async def post_chat_analysis(chat_messages, model=MODEL_NAME):
+    # Skip endpoint requests when local testing explicitly selects the dummy LLM
+    if not USE_LLM:
+        logger.info(f"{LLM_MAIN}[LLM] {lu.RED}{BOLD}WARNING{UNBOLD}{LLM_MAIN} Post-chat analysis skipped while USE_LLM is false. {RESET}")
         return DEF_ANALYSIS
 
     # Prepare the transcript & handle empty chats

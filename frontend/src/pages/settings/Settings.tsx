@@ -1,6 +1,5 @@
 import GoalForm from "./components/GoalForm";
 import ChatTypeForm from "./components/ChatTypeForm";
-import RAGForm from "./components/RAGForm";
 
 export function Settings() {
     // --------------------------------------------------------------------
@@ -10,7 +9,6 @@ export function Settings() {
     <div className="m-[1rem] pb-[5rem]">
         <GoalForm />
         <ChatTypeForm />
-        <RAGForm />
     </div>
     );
 }

@@ -1,13 +1,22 @@
+"""
+DRF serializers for profiles, settings, chat sessions, and signup.
+--------------------------------------------------------------------------------
+`backend.chat_app.api.serializers`
+
+Field names follow the model fields, including the few camelCase ones (such as
+`UserSettings.modelChoice`); `frontend/src/api/models.ts` mirrors them exactly.
+
+"""
 from rest_framework import serializers
-from ..models import ChatSession, ChatMessage, ChatBiomarkerScore, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
+from ..models import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
 
 from django.contrib.auth import get_user_model
 from django.db           import transaction
 
-# =======================================================================
+# ================================================================================
 # Profiles and Profile-related Data
-# =======================================================================
+# ================================================================================
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = UserSettings
@@ -32,8 +41,8 @@ class GoalSerializer(serializers.ModelSerializer):
 class RAGInstructionsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = RAGInstructions
-        fields = ("id", "name", "instructions", "description", "user", "activity", "instruction_order")
-        read_only_fields = ("id", "user", "activity")
+        fields = ("id", "name", "instructions", "description", "activity", "instruction_order")
+        read_only_fields = ("id", "activity")
     
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -54,9 +63,39 @@ class ProfileSerializer(serializers.ModelSerializer):
     goal      = GoalSerializer        (read_only=True)
     class Meta:
         model  = Profile
-        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "settings", "goal")
-        read_only_fields = ("id",) # Not sure...
-        
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "settings", "goal")
+        read_only_fields = ("id", "save_audio_by_default")
+
+
+# --------------------------------------------------------------------------------
+# Admin Participant Settings
+# --------------------------------------------------------------------------------
+# One participant for the admin settings page: who they are, their chat activity, and the settings staff change
+class AdminProfileSerializer(serializers.ModelSerializer):
+    user         = UserSerializer(source="account.user", read_only=True)
+    modelChoice  = serializers.ChoiceField(source="settings_user.modelChoice", choices=UserSettings.MODEL_CHOICES)
+    chat_count   = serializers.IntegerField (read_only=True)   # Annotated by `AdminProfileViewSet` (demo sessions left out)
+    last_chat_at = serializers.DateTimeField(read_only=True)   # Start of the latest of those sessions (null without one)
+
+    class Meta:
+        model            = Profile
+        fields           = ("id", "user", "save_audio_by_default", "modelChoice", "chat_count", "last_chat_at")
+        read_only_fields = ("id",)
+
+    # Save the recording default (on the profile) and the avatar (on its settings row) together
+    @transaction.atomic
+    def update(self, profile: Profile, validated_data: dict[str, object]) -> Profile:
+        # A PATCH may carry either setting alone
+        settings_fields = validated_data.pop("settings_user", {})
+        for name, value in validated_data.items():  setattr(profile,               name, value)
+        for name, value in settings_fields.items(): setattr(profile.settings_user, name, value)
+
+        # Write only the columns that were sent (an empty `update_fields` skips that save)
+        profile.save(update_fields=list(validated_data))
+        profile.settings_user.save(update_fields=list(settings_fields))
+        return profile
+
+
 class AccessSerializer(serializers.ModelSerializer):
     account     = AccountSerializer(read_only=True)
     profile     = ProfileSerializer(read_only=True)
@@ -88,6 +127,7 @@ class CreateAccessSerializer(serializers.Serializer):
         
         # Update permissions if access already existed and permissions differ
         if not created and access.permissions != validated['permissions']:
+            access.profile = profile # Update the profile if it has changed
             access.permissions = validated['permissions']
             access.save()
         
@@ -96,39 +136,55 @@ class CreateAccessSerializer(serializers.Serializer):
     def to_representation(self, access: Access):
         return {"success"   : True,
                 "name"      : f'Account {access.account.id} has {access.permissions} access to Profile {access.profile.id}',}
-# =======================================================================
+
+# ================================================================================
 # ChatSession Related Data
-# =======================================================================
+# ================================================================================
 class AlbumImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = AlbumImage
         fields = ("id", "topic", "url", "photographer", "photographer_url")
         read_only_fields = fields
+
+class ChatWordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ChatWord
+        fields = ("id", "word", "start_ts", "end_ts", "index")
+        read_only_fields = fields
+
 class ChatMessageSerializer(serializers.ModelSerializer):
+    words = ChatWordSerializer(many=True, read_only=True)
     class Meta:
         model  = ChatMessage
-        fields = ("id", "role", "content", "ts", "start_ts", "end_ts")
+        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "words")
+        read_only_fields = fields
+
+class SessionAudioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = SessionAudio
+        fields = ("storage_backend", "started_at", "sample_rate", "channels", "bits_per_sample", "duration_seconds", "size_bytes", "sha256", "created_at")
         read_only_fields = fields
 
 class BiomarkerSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ChatBiomarkerScore
-        fields = ("id", "score_type", "score", "ts")
+        fields = ("id", "score_type", "score", "ts", "message", "start_ts", "end_ts")
         read_only_fields = fields
 
 class ChatSessionSerializer(serializers.ModelSerializer):
-    profile        = ProfileSerializer(read_only=True)
-    image          = AlbumImageSerializer(read_only=True)
+    profile        = ProfileSerializer    (           read_only=True)
+    image          = AlbumImageSerializer (           read_only=True)
     messages       = ChatMessageSerializer(many=True, read_only=True)
     biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
     start_ts       = serializers.SerializerMethodField()
     duration       = serializers.SerializerMethodField()
     average_scores = serializers.SerializerMethodField()
+    audio          = SessionAudioSerializer(read_only=True)
 
     class Meta:
         model  = ChatSession
-        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio_file", "duration", "topics", 
-                  "sentiment", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio", "duration", "topics",
+                  "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
                   "image", "risk_level", "risk_quotes", "risk_reason")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
@@ -136,9 +192,9 @@ class ChatSessionSerializer(serializers.ModelSerializer):
     def get_duration      (self, obj): return obj.duration
     def get_average_scores(self, obj): return obj.average_scores
 
-# =======================================================================
+# ================================================================================
 # Other Data
-# =======================================================================
+# ================================================================================
 class DownloadDataSerializer(serializers.ModelSerializer):
     fileName = serializers.SerializerMethodField()
     fileContents = serializers.SerializerMethodField()
@@ -153,9 +209,9 @@ class DownloadDataSerializer(serializers.ModelSerializer):
     def get_fileContents(self, obj):
         return get_download_data(obj)
 
-# =======================================================================
+# ================================================================================
 # Signup
-# =======================================================================
+# ================================================================================
 class SignupPatientSerializer(serializers.Serializer):
     '''
     Because all the data is connected to the Patient, on creation of a Patient account, we also create an empty Profile,
@@ -230,3 +286,4 @@ class SignupAccountSerializer(serializers.Serializer):
         return {"success"   : True,
                 "username"  : account.user.username,
                 "name"      : f'{account.user.first_name} {account.user.last_name}',}
+    

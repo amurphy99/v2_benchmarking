@@ -4,6 +4,7 @@ import { ChatWeek } from "@/utils/functions/getChatWeeks";
 import { defaultImage } from "@/utils/functions/matchImage";
 import { dateFormatOptionsMonth, dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { smallShadow } from "@/utils/styling/sharedStyles";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
@@ -20,13 +21,13 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
             onClick={() => {toWeeklySummary(week)}}> {week.start.toLocaleDateString("en-US", dateFormatOptionsShort)} - 
                 {week.end.toLocaleDateString("en-US", dateFormatOptionsShort)} {week.end.getFullYear()} </h2>
             <div>
-                <div className="carousel-container w-[95%]">
+                <div className={`carousel-container w-[95%]`}>
                     { sessions.map( (session, idx) => {
                         if (!session.image) {
                             session.image = defaultImage
                         }
                         const date = new Date(session.date);
-                        const topics = session.topics.replace(/[\[\]"']/g, "").split(",")
+                        const topics = session.topics;
                         return (
                             <div key={idx} className={`${smallShadow} flex flex-col p-2 rounded-lg album-img hover:cursor-pointer hover:scale-110`}
                             onClick={() => {toDaySummary(session)}}>
@@ -45,7 +46,7 @@ export default function AlbumWeekDesktop({ week } : { week: ChatWeek }) {
                                         </a>
                                     </div>
                                 </div>
-                                <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics[0]}</p>
+                                <p className={`m-0 mx-auto ${role}-text font-semibold`}>{topics ? topics[0] : "No topics detected"}</p>
                                 <p className="m-0 mx-auto">{Math.round(session.duration / 60 * 100)/100} minutes</p>
                             </div>
                         )

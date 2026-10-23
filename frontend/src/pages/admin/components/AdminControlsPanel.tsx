@@ -1,105 +1,85 @@
-/* ================================================================================
-// AdminControlsPanel
-// ================================================================================
-Control panel for the admin chat listener page. Contains button groups that all 
-send commands to the backend.
+/* Chat controls row on the live chat page: listening, responses, and recording.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/admin/components/AdminControlsPanel`
 
-Currently three button groups only, and they are not yet implemented on the backend...
+Every button sends a command through the page's `useCommandAcks` hook, which
+tracks which buttons are waiting on a backend acknowledgement. The avatar's
+action buttons live in the page's side column instead (`LiveSidePanel`).
 
-// ================================================================================ */
+*/
+import type { ReactElement } from "react";
 
-// Utilities
-import { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
-import { useCommandAcks           } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
+// From this project
+import type { ControlState   } from "@/hooks/chat-listener/chat-controls/types";
+import type { useCommandAcks } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
 
 // Button Groups
-import    DevSamplesGroup   from "./controlGroups/DevSamplesGroup";
-import  ChatControlsGroup   from "./controlGroups/ChatControlsGroup";
-import AvatarActionsGroup   from "./controlGroups/AvatarActionsGroup";
-import ResponseControlGroup from "./controlGroups/ResponseControlGroup";
+import    DevSamplesGroup       from "./controlGroups/DevSamplesGroup";
+import    ChatControlsGroup     from "./controlGroups/ChatControlsGroup";
+import    ResponseControlGroup  from "./controlGroups/ResponseControlGroup";
+import    RecordingControlGroup from "./controlGroups/RecordingControlGroup";
+
+// Pending flags and button actions from the page's command hook
+type CommandAcks = ReturnType<typeof useCommandAcks>;
+
 
 // ================================================================================
 // Control panel with commands the admin can send to the backend
 // ================================================================================
-export function AdminControlsPanel({
-    connected,            // Connection with the backend
+export function AdminControlsPanel({connected, controlState, pending, actions, onAddSampleMessage, onAddSampleBiomarker}: {
+    // Command state
+    connected    : boolean;                  // Connection with the backend
+    controlState : ControlState;             // Listening, response mode, and recording, as the backend last confirmed
+    pending      : CommandAcks["pending"];   // Buttons waiting on a backend acknowledgement
+    actions      : CommandAcks["actions"];   // Commands the buttons send
 
     // Development-only helpers (keeping these for now)
-    onAddSampleMessage,   // Add sample messages to the page
-    onAddSampleBiomarker, // Add sample biomarker data to the page
-
-    // All used by 'useCommandAcks' hook
-    send,                 // Send data through the WebSocket
-    controlState,         // State of the control buttons (e.g. "listeningPaused", "responsesPaused")
-    setControlState,      // Apply state updates to the AdminControlPanel (listening or paused)
-    registerAckHandler,   // Method that allows us to register something from here as the handler for an ack
-}: {
-    connected            : boolean;
-    onAddSampleMessage   : () => void;
-    onAddSampleBiomarker : () => void;
-    send                 : (msg: any) => void;
-    controlState         : ControlState;
-    setControlState      : (fn: (prev: ControlState) => ControlState) => void;
-    registerAckHandler   : (fn: (ack:  CommandAck  ) => void        ) => void;
-}) {
-
-    // Use the prebuilt hook for handling commands & acks
-    const { pending, actions } = useCommandAcks({
-        connected,
-        send,
-        controlState,
-        setControlState,
-        registerAckHandler,
-    });
-
-    // ================================================================================
+    onAddSampleMessage   : () => void;   // Add sample messages to the page
+    onAddSampleBiomarker : () => void;   // Add sample biomarker data to the page
+}): ReactElement {
+    // --------------------------------------------------------------------------------
     // UI Components
-    // ================================================================================
-    return (       
-        <div className="px-[1rem] grid grid-cols-2 gap-[1rem]">
+    // --------------------------------------------------------------------------------
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-            {/* Manually Control How the Robot Responds */}
-            <ResponseControlGroup 
-                connected          = {connected} 
-                manualMode         = {controlState.manualMode} 
-                pending={{
-                    pause_and_listen   : pending.pause_and_listen,
-                    resume_and_respond : pending.resume_and_respond,
-                    paraphrase_last    : pending.paraphrase_last,
-                    send_custom        : pending.send_custom,
-                }}
-                onPauseAndListen   = {actions.pauseAndListen  } 
-                onResumeAndRespond = {actions.resumeAndRespond}
-                onParaphraseLast   = {actions.paraphraseLast  } 
-                onSendCustom       = {actions.sendCustom      }
-                suggestedDraft     = {null                    }
-            />
-            
-            {/* Chat Response Controls */}
-            {/* 
+            {/* Listening and automatic-response controls */}
             <ChatControlsGroup
                 connected    = {connected}
                 controlState = {controlState}
-                pending={{
-                    pause_listening : pending.pause_listening,
-                    pause_responses : pending.pause_responses,
-                    respond_now     : pending.respond_now,
+                pending      = {{
+                    set_listening     : pending.set_listening,
+                    set_response_mode : pending.set_response_mode,
+                    reply_now         : pending.reply_now,
                 }}
                 onToggleListening = {actions.toggleListening}
                 onToggleResponses = {actions.toggleResponses}
                 onRespondNow      = {actions.respondNow     }
             />
-            */}
 
-            {/* Avatar Actions */}
-            <AvatarActionsGroup
-                connected = {connected}
-                pending   = {{
-                    robot_spin    : pending.robot_spin,
-                    robot_excited : pending.robot_excited,
+            {/* Manually Control How the Robot Responds */}
+            <ResponseControlGroup
+                connected          = {connected}
+                responseMode       = {controlState.response_mode}
+                pending={{
+                    pause_and_listen   : pending.pause_and_listen,
+                    resume_and_respond : pending.resume_and_respond,
+                    repeat_last        : pending.repeat_last,
+                    send_custom        : pending.send_custom,
                 }}
-                onSpin    = {actions.robotSpin   }
-                onExcited = {actions.robotExcited}
+                onPauseAndListen   = {actions.pauseAndListen  }
+                onResumeAndRespond = {actions.resumeAndRespond}
+                onRepeatLast       = {actions.repeatLast      }
+                onSendCustom       = {actions.sendCustom      }
+                suggestedDraft     = {null                    }
+            />
+
+            {/* Recording Toggle */}
+            <RecordingControlGroup
+                connected        = {connected}
+                recordingEnabled = {controlState.recording_enabled}
+                pending          = {pending.set_recording}
+                onToggleRecording= {actions.toggleRecording}
             />
 
         </div>

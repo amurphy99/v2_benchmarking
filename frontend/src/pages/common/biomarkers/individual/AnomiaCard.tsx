@@ -1,11 +1,11 @@
-import { Popover } from "react-bootstrap";
+import { getBiomarkerDefinition, getBiomarkerDescription } from "@/utils/misc/descriptions";
 
-export default function AnomiaCard() {
+export default function AnomiaCard({biomarker} : {biomarker: string}) {
 
     return (
     <div className="d-flex flex-col m-[1rem] w-[33vw]">
-        <span className="fs-5 fw-semibold"> Anomia Score </span>
-        <span> Anomia, also known as anomic aphasia, is a language disorder characterized by difficulty finding the right words, particularly nouns and verbs, during speech [Google AI overview]. </span>
+        <span className="fs-5 fw-semibold"> {biomarker} Score </span>
+        <span> {biomarker}, also known as {getBiomarkerDescription(biomarker.toLowerCase())}, is characterized by {getBiomarkerDefinition(biomarker.toLowerCase())} </span>
         
         <div className="d-flex flex-col pt-[1rem] gap-[1rem]">
             <span> <b> Status: </b> Your score decreased slightly from where it was last week. </span>

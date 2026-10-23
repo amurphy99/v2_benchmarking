@@ -53,7 +53,11 @@ export default function ChatWeekCard({ week } : { week: ChatWeek }) {
             {/* Topics, Sentiment, & other */}
             <div className="d-flex flex-col gap-[0.5rem]">
                 <span className="fs-6 fw-semibold"> Topics: </span>
-                <span className="fst-italic"> Add a summary of the topics for that week, the sentiment, suggestions, etc. </span>
+                <span className="fst-italic"> Moon Landing, Gardening, Morning Routine </span>
+                <span className="fs-6 fw-semibold"> Overall Sentiment: </span>
+                <span className="fst-italic"> Happy </span>
+                <span className="fs-6 fw-semibold"> Care Suggestions: </span>
+                <span className="fst-italic"> Go outside and take a walk! Or play a puzzle game. </span>
             </div>
 
             {/* Scores */}

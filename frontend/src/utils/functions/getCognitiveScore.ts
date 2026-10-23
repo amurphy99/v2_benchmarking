@@ -1,9 +1,9 @@
-import { ChatWeek } from "./getChatWeeks";
+import { ChatSession } from "@/api";
 
-export function getCognitiveScore(week: ChatWeek): number {
+export function getCognitiveScore(sessions: ChatSession[]): number {
     var totalScore = 0;
     var count = 0;
-    for (var session of week.sessions) {
+    for (var session of sessions) {
         for (var value of Object.values(session.average_scores)) {
             totalScore += value;
             count++;

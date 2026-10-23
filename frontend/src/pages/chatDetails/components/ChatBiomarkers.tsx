@@ -15,7 +15,6 @@ export default function ChatBiomarkers({ chatSession, prevScores } : { chatSessi
     return (
     <div className="flex flex-col border rounded p-[1rem] h-100">
         <span className={h3}> Chat Biomarker Scores: </span>
-        <span className="fst-italic"> <span className="fw-bold"> ToDo:</span> Make these into buttons that can be used to swap between analysis for a specific biomarker. </span>
 
         <div className="flex flex-col mt-[1rem] gap-[0.5rem]">
             {biomarkerKeys.map((key) => (

@@ -4,8 +4,8 @@ import GoalProgress from "@/components/graphics/GoalProgress";
 import WeekTrack     from "./components/WeekTrack";
 import { useChatSessions } from "@/hooks/queries/useChatSessions";
 import { getCurrentWeek } from "@/utils/functions/getChatWeeks";
-import Avatar from "../common/avatar/Avatar";
 import { useProfile } from "@/hooks/queries/useProfile";
+import { Avatar } from "../common/avatar/Avatar";
 
 export function Goal() {
     const role = useAuth().account.role;
@@ -15,6 +15,7 @@ export function Goal() {
     if (isLoading || isLoadingProfile) { 
         return <p>Loading goal...</p>; 
     }
+    
     const week = getCurrentWeek(sessions, 1);
     const model = profile.settings.modelChoice;
 

@@ -54,15 +54,20 @@ async def send_initial_data(session_data, consumer):
       3) "biomarker_history" : All existing biomarkers from the chat
     """
     # Get DB objects from the provided 'session_info'
-    session   = session_data["session"]
-    chat_user = session_data["user"   ]
+    session   = session_data["session" ]
+    chat_user = session_data["user"    ]
+    settings  = session_data["settings"]
 
-    # 1) Create "session_info" with the required fields 
+    # 1) Create "session_info" with the required fields
+    # NOTE: "avatarModel" only means something when source == "webapp"; it tells the admin page
+    #       which avatar the user is actually looking at, so it can show that model's real
+    #       action names in the control panel. Physical robots ignore it.
     start_dt = await ChatService.get_start_ts(session)
     session_info = {
         "sessionId"   : session.id,
         "username"    : getattr(chat_user, "username", str(chat_user)),
         "source"      : getattr(session,   "source",   "unknown"     ),
+        "avatarModel" : getattr(settings,  "modelChoice", None       ),
         "isActive"    : getattr(session,   "is_active", None         ),
         "startTs"     : start_dt.timestamp() if start_dt else None,
         "messageCount": 0, # TODO: This just needs to be handled on the frontend

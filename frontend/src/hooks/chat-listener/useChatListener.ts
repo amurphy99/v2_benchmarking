@@ -1,10 +1,16 @@
+/* Main hook for handling an admin user's "ChatListener" WebSocket session.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/chat-listener/useChatListener`
 
+*/
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 
 import { buildChatListenerWsUrl } from "./ws/buildWsUrl";
 import { createWsRouter         } from "./ws/createWsRouter";
 import { useWsLatencyPing       } from "./ws/useWsLatencyPing";
 import { noopAny                } from "./ws/types";
+
+const RECONNECT_DELAY_MS = 1_000; // Delay before reconnecting an interrupted listener socket
 
 // ================================================================================
 // Handle the WebSocket Connection to the Backend
@@ -26,6 +32,8 @@ export default function useChatListener({
     // Handle commands sent to the backend (and the confirmation responses)
     onCommandAck      = noopAny, // Relay "acks" confirming commands were received
     onControlState    = noopAny, // Relay new control states (depending on result of commands)
+    onStreamStatus    = noopAny, // Relay stream status changes ("active" | "paused" | "ended")
+    onRecordingStatus = noopAny, // Relay recording toggle changes from the primary consumer
 }) {
     // --------------------------------------------------------------------------------
     // Timing (header UI)
@@ -58,9 +66,10 @@ export default function useChatListener({
         handlersRef.current = {setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers};
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
-    // Acks
-    const controlHandlersRef = useRef({ onCommandAck, onControlState });
-    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState };}, [onCommandAck, onControlState]);
+    // Acks (command success/failure confirmation communications with the backend)
+    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus };
+    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus ]);
 
     // --------------------------------------------------------------------------------
     // Message Handling
@@ -68,11 +77,13 @@ export default function useChatListener({
     // Router parses messages received from the backend and handles consequences
     const onMessage = useMemo(() => {
         return createWsRouter({
-            setLastEventAt : (d  ) => setLastEventAt(d),
-            setLatencyMs   : (n  ) => setLatencyMs(n),
-            getHandlers    : (   ) => handlersRef.current,
-            onCommandAck   : (ack) => controlHandlersRef.current.onCommandAck  (ack),
-            onControlState : (st ) => controlHandlersRef.current.onControlState(st ),
+            setLastEventAt    : (d  ) => setLastEventAt(d),
+            setLatencyMs      : (n  ) => setLatencyMs(n),
+            getHandlers       : (   ) => handlersRef.current,
+            onCommandAck      : (ack) => controlHandlersRef.current.onCommandAck     (ack),
+            onControlState    : (st ) => controlHandlersRef.current.onControlState   (st ),
+            onStreamStatus    : (st ) => controlHandlersRef.current.onStreamStatus   (st ),
+            onRecordingStatus : (st ) => controlHandlersRef.current.onRecordingStatus(st ),
         });
     }, []);
 
@@ -85,13 +96,43 @@ export default function useChatListener({
     useEffect(() => {
         if (!enabled || !wsUrl) {wsRef.current?.close(); wsRef.current = null; setConnected(false); return;}
 
-        const ws = new WebSocket(wsUrl); wsRef.current = ws;
-        ws.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",              wsUrl);};
-        ws.onclose   = (event) => {setConnected(false); console.log  ("WebSocket closed:",                    event);};
-        ws.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:",  error);};
-        ws.onmessage = onMessage;
-        
-        return () => {wsRef.current?.close(); wsRef.current = null;} // clean up on unmount
+        // This effect owns every socket and retry timer created for the current URL
+        let disposed       = false;
+        let reconnectTimer : number | null = null;
+
+        const connect = () => {
+            // Effect cleanup permanently stops this connection generation from reopening
+            if (disposed) return;
+
+            const ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
+            ws.onopen    = (     ) => {setConnected(true ); console.log  ("WebSocket connected to:",             wsUrl);};
+            ws.onclose   = (event) => {
+                // A stale socket must not clear a newer socket installed by a retry
+                if (wsRef.current === ws) wsRef.current = null;
+                setConnected(false);
+                console.log("WebSocket closed:", event);
+
+                // Retry network/server interruptions, but not normal closure, authentication
+                // failures, authorization failures, or a listener session that does not exist
+                if ((!disposed) && ![1_000, 4_001, 4_003, 4_404].includes(event.code)) {
+                    reconnectTimer = window.setTimeout(connect, RECONNECT_DELAY_MS);
+                }
+            };
+
+            // onclose owns retry scheduling because browsers generally emit error then close
+            ws.onerror   = (error) => {setConnected(false); console.error("WebSocket connection failed, error:", error);};
+            ws.onmessage = onMessage;
+        };
+
+        connect();
+        return () => {
+            // Prevent a queued retry from reopening the listener after unmount/URL change
+            disposed = true;
+            if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+            wsRef.current?.close();
+            wsRef.current = null;
+        };
     }, [enabled, wsUrl, onMessage]);
 
     // ================================================================================

@@ -8,57 +8,29 @@ Receives live updates about the current chat's status, including:
 - Biomarker scores
 - Structured chat elements (e.g. "conversation_state")
 
-How it works:
-* TODO: The admin user can then click on one of these sessions and it uses the "session_id" field to connect via this consumer.
-* Here they can receive updates about the chat, control pausing, etc. 
+See `CLIENT_PROTOCOL.md` in this directory for the full command vocabulary and payloads.
 
-
-Frontend sends commands such as:
-- Tell backend to stop/resume using STT "utterance ends" to respond with the LLM
-    { "type": "command", "data": { "cmd": "pause_auto" } }
-    { "type": "command", "data": { "cmd": "resume_auto" } }
-
-- Tell LLM to respond immediately with whatever context it has heard recently (e.g. button control)
-    { "type": "command", "data": { "cmd": "respond_now" } } 
-
-    
-TODO: Future possibilities:
-* Manually trigger conversation state changes
-* Manually trigger messages from the LLM (e.g. the "puppet" system they already had at Indiana)
-* Manually trigger behaviors (animations, emotions)
-
---------------------------------------------------------------------------------
-TODO: To completely finish this on the backend
---------------------------------------------------------------------------------
-* Add functionality for the commands
-    - pause/resume automatic responses (STT based responding)
-        > this may require a bunch of logic for concatenating consecutive, uninterrupted user utterances
-    - manually trigger a response from the system
-        > may need a "cooldown" option in the case of rapid successive clicks
-
-* Re-enable the biomarker logging thing, but that might need to wait for until I finish updating the biomarker code...
-
-* Probably some other stuff... need to look back through each file again
-
-* Add the responding mode to the frontend UI
+TODO:
+* Manually trigger conversation state changes (if in that mode/type of chat)
+* Add the responding mode to the frontend UI (e.g., "automatic" vs. "manual")
 
 """
-
 import logging, time
 logger = logging.getLogger(__name__)
 
 # Django 
-from django.core.exceptions     import ObjectDoesNotExist
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 from django.apps                import apps
+from uuid                       import uuid4
 
-# Imports from this project
+# From this project
 from ...services.db_services import ChatService
 from ...services             import logging_utils       as lu
 from   .utils.logging        import ChatListenerLogging as log
 from   .utils.db_data        import send_initial_data
-from   .utils.groups         import leave_all_groups, format_message_broadcast, format_biomarker_broadcast
+from   .utils.groups         import leave_all_groups, format_biomarker_broadcast
+
 
 # ================================================================================
 # ChatListenerConsumer
@@ -88,12 +60,17 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Connect
     # --------------------------------------------------------------------------------
     async def connect(self):
+        self.user          = self.scope.get("user")
+        self.session       = None
+        self.session_id    = None
+        self.room_group    = None
+        self.monitor_group = None
+        self.control_group = None
+
         # 1) Authenticate before accepting connection
-        if not self.scope["user"].is_authenticated:
+        if not self.user.is_authenticated:
             logger.info(f"{lu.CL_MAIN} Not authenticated (stage 1) {lu.RESET}")
             await self.close(code=4001); return
-        
-        self.user = self.scope["user"]
         
         # 2) Identify which ChatSession this listener is observing
         # Session ID is passed via URL:  "ws/chat/<session_id>/listen/"
@@ -116,7 +93,6 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         self.room_group    = f"chat_{sid}"       # all listeners + primary (message events)
         self.monitor_group = f"chat_{sid}_mon"   # listeners (biomarker events)
         self.control_group = f"chat_{sid}_ctl"   # primaries only (commands)
-        self.ack_group     = f"chat_{sid}_ack"   # for relaying command acks to frontend
 
         # 6) Accept the websocket (must be done before send_json / receiving messages)
         await self.accept()
@@ -130,18 +106,23 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # 7) Join groups
         await self.channel_layer.group_add(self.   room_group, self.channel_name)
         await self.channel_layer.group_add(self.monitor_group, self.channel_name)
-        await self.channel_layer.group_add(self.    ack_group, self.channel_name)
 
         # 8) Collect and send all data required on-connection by the frontend
         num_messages, num_biomarkers = await send_initial_data(self.session_info, self)
+
+        # Ask the primary connection for its live control state after joining its groups
+        await self.channel_layer.group_send(
+            self.control_group,
+            {"type": "ws.command", "payload": {"id": str(uuid4()), "name": "get_control_state"}, "reply_channel": self.channel_name},
+        )
         log.log_connect_done(num_messages, num_biomarkers)
 
     # --------------------------------------------------------------------------------
     # Disconnect (listener does NOT close the session in DB)
     # --------------------------------------------------------------------------------
     async def disconnect(self, code):      
-        leave_all_groups(self, log)
-        log.log_disconnect(self.user.username, self.session_id, code)
+        await leave_all_groups(self, log)
+        log.log_disconnect(getattr(self.user, "username", "unknown"), self.session_id, code)
 
     # ================================================================================
     # Group Event Handlers | Handle all messages send from consumer-to-consumer
@@ -160,7 +141,7 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
     # Receives chat message updates (user/assistant) broadcast from the primary consumer.
     async def ws_broadcast(self, event):
-        await self.send_json(format_message_broadcast(event))
+        await self.send_json(event["payload"])
 
     # Receives biomarker updates broadcast from the primary consumer.
     async def ws_monitor(self, event):
@@ -170,12 +151,25 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     async def ws_command_acks(self, event):
         await self.send_json(event.get("payload", {}))
 
+    # Receives stream status changes ("active" | "paused" | "ended") from the primary consumer
+    async def ws_stream_status(self, event):
+        await self.send_json({"type": "stream_status", "data": event.get("data", {})})
+
+    # Receives recording toggle state from the primary consumer and relays to the admin frontend
+    async def ws_recording_status(self, event):
+        await self.send_json({"type": "recording_status", "data": event.get("data", {})})
+
+    # Receives complete control state after any accepted command
+    async def ws_control_state(self, event: dict) -> None:
+        await self.send_json({"type": "control_state", "data": event.get("data", {})})
+
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to
     # ================================================================================
     # Handle messages sent from the 'listener' intended for the primary consumer
     async def receive_json(self, data, **kwargs):
-        msg_type = data.get("type")
+        received_at = time.time()
+        msg_type    = data.get("type")
 
         # --------------------------------------------------------------------------------
         # Allow ping/pong for latency measurement
@@ -196,8 +190,13 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
 
             # Route to the primary consumer through the control group
             await self.channel_layer.group_send(
-                self.control_group,
-                {"type": "ws.command", "payload": payload}
+                self.control_group, {
+                    "type"            : "ws.command",
+                    "payload"         : payload,
+                    "reply_channel"   : self.channel_name,
+                    "requested_by_id" : self.user.id,
+                    "received_at"     : received_at,
+                },
             )
 
             # Log update
@@ -207,5 +206,5 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
         # Unknown message type received from the client
         # --------------------------------------------------------------------------------
         else:
-            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN}{payload}{lu.RESET}")
+            logger.info(f"{lu.CL_MAIN} Unknown client message: {lu.GREEN}{data}{lu.RESET}")
             return

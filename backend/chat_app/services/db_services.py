@@ -3,27 +3,28 @@ Service for working with chat data
 --------------------------------------------------------------------------------
 `backend.chat_app.services.db_services`
 
-Later on may need to specifically add start/end timestamps to chats/messages...
+Centralizes transactional writes for sessions, messages, word timing,
+biomarkers, recording metadata, and optional assistant playback boundaries.
 
 """
 import logging, time
+from datetime import datetime, timezone as datetime_timezone
 logger = logging.getLogger(__name__)
 
 # Django imports
 from channels.db         import database_sync_to_async
-from django  .db         import transaction
-from django  .db.models  import Min
-from django  .utils      import timezone
+from django.db           import transaction
+from django.db.models    import Min, Max
+from django.utils        import timezone
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, ChatMessage, ChatBiomarkerScore, UserSettings
+from ..models         import ChatSession, SessionAudio, ChatMessage, ReplyNowEvent, ChatBiomarkerScore, ChatWord, UserSettings, LLMTurnLog
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
-
 
 # Helpers
 from  .chat_info.topicHelpers   import get_topics
@@ -50,11 +51,16 @@ class ChatService:
         session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
         return session
 
+    # Load the patient's initial recording preference for a newly connected session
+    @staticmethod
+    def get_audio_recording_default(session_id: int) -> bool:
+        return bool(ChatSession.objects.values_list("profile__save_audio_by_default", flat=True).get(id=session_id))
+
     # ===============================================================================
     # Close Session
     # ================================================================================
-    @staticmethod 
-    async def close_session(user_id, session_id, *, username="unknown", source="webapp", notes=None, sentiment=None, topics=None):
+    @staticmethod
+    async def close_session(user_id, session_id, *, username="unknown", source="webapp"):
         """
         NOT an atomic transaction. All of the helpers are atomic, but the slower calls here from
         post-chat analysis and searching for images, so we do those outside of the DB calls.
@@ -73,27 +79,16 @@ class ChatService:
         # Run a post-chat analysis to fill out the rest of the fields
         analysis = await post_chat_analysis(messages) # summary, topics, sentiment, emotion
 
-        # Create the "notes" field  
-        # TODO: We need this for now until we update the DB fields for the new results.
-        risk_rating  = analysis.get('risk_rating', 0)
-        risk_quotes  = "\n".join(q.strip() for q in analysis.get("risk_quotes", ["No quotes given."]) if q and q.strip())
-        risk_reason  = analysis.get('risk_reason', 'No reason given.')
-        chat_emotion = analysis.get('emotion', 'No emotion.')
-        summary        = (
-            f"{analysis.get('summary', 'No summary available.')} \n"
-            f"Emotion: {analysis.get('emotion', 'No emotion.')} \n"
-            f"Sentiment: {analysis.get('sentiment', 'No sentiment')}"
-        )
-        # Frontend expects fields to be separated by: 
-        sep = "\n<|ANALYSIS|>\n"
-        notes = sep.join([summary, str(risk_rating), risk_quotes, risk_reason, chat_emotion])
-
-        # Use the results to save the rest of the fields
+        # Save analysis results to the proper database fields
         session = await database_sync_to_async(ChatService.save_session_fields)(
-            user, session, messages, 
-            notes     = notes, 
-            sentiment =           analysis.get("sentiment", "Neutral"   ).capitalize(), 
-            topics    = ", ".join(analysis.get("topics",    ["N/A"]     ))
+            user, session, messages,
+            summary        = analysis.get("summary",     None),
+            sentiment      = analysis.get("sentiment",   None),
+            emotion        = analysis.get("emotion",     None),
+            topics         = analysis.get("topics",      None),
+            risk_level     = analysis.get("risk_rating", None),
+            risk_reason    = analysis.get("risk_reason", None),
+            risk_quotes    = [q.strip() for q in analysis.get("risk_quotes", []) if q and q.strip()],
         )
 
         # Done
@@ -107,12 +102,15 @@ class ChatService:
     @transaction.atomic
     def prepare_session_for_analysis(user_id, session_id):
         # Get user and session objects with their IDs
-        user    = User       .objects.get(id=   user_id)
-        session = ChatSession.objects.get(id=session_id)
+        try:
+            user    = User       .objects.get(id=   user_id)
+            session = ChatSession.objects.get(id=session_id)
+        except (User.DoesNotExist, ChatSession.DoesNotExist):
+            return None, None, False, []
 
-        # Set session to inactive & add the end timestamp
+        # Set session to inactive without replacing an earlier disconnect timestamp
         session.is_active = False
-        session.end_ts = timezone.now()
+        if session.end_ts is None: session.end_ts = timezone.now()
 
         # Retrieve messages for the session (includes user & assistant; reuse this so we only need one DB query)
         qs       = ChatMessage.objects.filter(session=session).order_by("ts", "id")
@@ -136,14 +134,21 @@ class ChatService:
     # One method to wrap with `async_to_sync`
     @staticmethod
     @transaction.atomic
-    def save_session_fields(user, session, messages, notes=None, sentiment=None, topics=None):
-        # Set the topics TODO: if it works, these will come from analysis
-        topics, sentiment = ChatService.set_analysis_fields(session, messages, notes=notes, sentiment=sentiment, topics=topics)
-        
+    def save_session_fields(user, session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
+        # Set the analysis fields 
+        topics, sentiment = ChatService.set_analysis_fields(
+            session, messages,
+            summary=summary, sentiment=sentiment, emotion=emotion, topics=topics,
+            risk_level=risk_level, risk_quotes=risk_quotes, risk_reason=risk_reason,
+        )
+
+        # Set the other fields to update 
+        update_fields = ["image", "taskType", "taskSubtype"]
+
         # Get an AlbumImage for the session
         album_image = get_image_for_topics(topics)
         session.image = album_image
-        
+
         # Get the chat type and subtype from the user's profile
         profile = get_profile(user)
         if profile is not None:
@@ -152,36 +157,68 @@ class ChatService:
             session.taskSubtype = settings.taskSubtype
 
         # Save & return the session
-        session.save(update_fields=["image", "taskType", "taskSubtype"])
+        session.save(update_fields=update_fields)
         return session
+
+    # Persist metadata for an object that has already reached durable storage
+    @staticmethod
+    @transaction.atomic
+    def attach_session_audio(session_id: int, artifact: dict[str, object]) -> SessionAudio:
+        return SessionAudio.objects.create(session_id=session_id, **artifact)
+
+    # --------------------------------------------------------------------------------
+    # Store an idempotent playback boundary for one assistant message in this session
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    @transaction.atomic
+    def mark_assistant_playback(session_id: int, message_id: int, state: str) -> bool:
+        """
+        We can't actually track when TTS playback starts or ends on any of the frontend
+        clients from the backend, but they have the option of sending us messages to
+        inform us when playback has started and/or ended. When we get those messages,
+        we add the timestamp to the associated assistant ChatMessage entry in the DB.
+        """
+        # Grab the associated ChatMessage object (we are supplied with the ID)
+        message = (ChatMessage.objects.select_for_update()
+                   .filter(id=message_id, session_id=session_id, role="assistant").first())
+        if message is None: return False
+
+        # Add a timestamp for the `start_ts` field
+        if (state == "started") and (message.start_ts is None):
+            message.start_ts = timezone.now()
+            message.save(update_fields=["start_ts"])
+
+        # Add a timestamp for the `end_ts` field
+        elif (state == "finished") and (message.end_ts is None):
+            message.end_ts = timezone.now()
+            message.save(update_fields=["end_ts"])
+
+        return True
 
     # --------------------------------------------------------------------------------
     # Set post-chat analysis fields for the session (summary, topics, sentiment)
     # --------------------------------------------------------------------------------
-    # TODO: Check whatever the default values are (that get returned on LLM error) and
-    #       call the original methods when given those.
-    @staticmethod 
+    @staticmethod
     @transaction.atomic
-    def set_analysis_fields(session, messages, notes=None, sentiment=None, topics=None):
-        # Get ONLY message content ONLY for the user
-        user_texts = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
+    def set_analysis_fields(session, messages, summary=None, sentiment=None, emotion=None, topics=None, risk_level=None, risk_quotes=None, risk_reason=None):
+        # Get user message text for fallback topic/sentiment calculations
+        user_texts   = [normalize_text(m.content) for m in messages if m.role == "user" and normalize_text(m.content)]
         message_text = " ".join(user_texts)
 
-        if topics    is None: topics    = get_topics                 (message_text)
-        if sentiment is None: sentiment = classify_emotion_with_vader(message_text)
+        if not topics  : topics  = get_topics                 (message_text)
+        if not emotion : emotion = classify_emotion_with_vader(message_text)
 
-        # Set sentiment and notes
-        if sentiment is not None: session.sentiment = sentiment
-        if notes     is not None: session.notes     = notes
-        if topics    is not None: session.topics    = topics
+        # Write each field only if a value was provided
+        if summary     is not None: session.summary     = summary
+        if sentiment   is not None: session.sentiment   = sentiment
+        if emotion     is not None: session.emotion     = emotion
+        if topics      is not None: session.topics      = topics
+        if risk_level  is not None: session.risk_level  = risk_level
+        if risk_quotes is not None: session.risk_quotes = risk_quotes
+        if risk_reason is not None: session.risk_reason = risk_reason
 
-        # Done; save and return topics
-        session.save(update_fields=["topics", "sentiment", "notes"])
+        session.save(update_fields=["summary", "sentiment", "emotion", "topics", "risk_level", "risk_quotes", "risk_reason"])
         return topics, sentiment
-
-
-
-
 
 
     # --------------------------------------------------------------------------------
@@ -189,32 +226,129 @@ class ChatService:
     # --------------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
-    def close_any_active_session(user):
+    def close_any_active_session(user) -> list[dict[str, object]]:
         profile = get_profile(user)
-        qs = ChatSession.objects.select_for_update().filter(profile=profile, is_active=True)
-        for s in qs:
-            ChatService.close_session(user, s, source=s.source)
+        sessions = list(ChatSession.objects.select_for_update().filter(profile=profile, is_active=True))
+        closed   = []
+        end_ts   = timezone.now()
+
+        # Release the one-active-session constraint before scheduling slow analysis
+        for session in sessions:
+            session.is_active = False
+            session.end_ts    = session.end_ts or end_ts
+            session.save(update_fields=["is_active", "end_ts"])
+            closed.append({"id": session.id, "source": session.source})
+
+        return closed
+
+    # Mark one session inactive before its slower post-chat analysis starts
+    @staticmethod
+    @transaction.atomic
+    def deactivate_session(session_id: int) -> bool:
+        session = ChatSession.objects.select_for_update().filter(id=session_id).first()
+        if session is None: return False
+
+        session.is_active = False
+        session.end_ts    = session.end_ts or timezone.now()
+        session.save(update_fields=["is_active", "end_ts"])
+        return True
         
     # ================================================================================
     # Message & Biomarker Score Helpers
     # ================================================================================
+    # `reply_now` command audit events
+    @staticmethod
+    def add_reply_now_event(
+        session_id: int,  # ChatSession the command is from
+        *,
+        origin          : str,                # Who sent it (client or consumer)
+        received_at,                          # Timestamp we received the control message at
+        response_mode   : str,                # Response mode the chat was in: "automatic" | "manual"
+        requested_by_id : int | None = None,  # ID of the user who requested it (could be the client or an admin)
+        command_id      : str | None = None,  # ID of the command
+    ) -> ReplyNowEvent:
+        if       isinstance(received_at, (int, float)): received_at = datetime.fromtimestamp(received_at, tz=datetime_timezone.utc)
+        elif not isinstance(received_at, datetime    ): received_at = timezone.now()
+        return ReplyNowEvent.objects.create(
+            session_id      = session_id,
+            origin          = origin,
+            received_at     = received_at,
+            response_mode   = response_mode,
+            requested_by_id = requested_by_id,
+            command_id      = command_id,
+        )
+
     # Messages
     @staticmethod
     def add_message(session_id, role, text, *, start_ts=None, end_ts=None):
         session = ChatSession.objects.get(id=session_id)
         return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
+
+    # Save the matching user/assistant turn together so a failed second write cannot split it
+    @staticmethod
+    @transaction.atomic
+    def add_exchange(session_id: int, user_text: str, assistant_text: str) -> tuple[ChatMessage, ChatMessage]:
+        session       = ChatSession.objects.get   (id=session_id)
+        user_message  = ChatMessage.objects.create(session=session, role="user",      content=user_text     )
+        assistant_msg = ChatMessage.objects.create(session=session, role="assistant", content=assistant_text)
+        return user_message, assistant_msg
     
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
-    # It is fine to pass the session here because we get the session from `add_biomarkers_bulk`
+    # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
+    # TODO: IDK what types to set for the timestamps
     @staticmethod
-    def add_biomarker(session, score_type, score):
-        return ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=score)
+    def add_biomarker(session: ChatSession, score_type: str, score: float, message: ChatMessage | None = None, start_ts = None, end_ts = None):
+        return ChatBiomarkerScore.objects.create(
+            session    = session,
+            score_type = score_type,
+            score      = score,
+            message    = message,
+            start_ts   = start_ts,
+            end_ts     = end_ts,
+        )
     
     # Biomarker scores (in bulk)
+    # Each span is a dict: {"score_type", "score", "start_ts", "end_ts"}
+    # `message_id` may be None (e.g. audio-window scores not bound to an utterance)
     @staticmethod
-    def add_biomarkers_bulk(session_id, scores: dict):
+    def add_biomarker_spans_bulk(session_id, message_id, spans: list):
+        if not spans: return
         session = ChatSession.objects.get(id=session_id)
-        ChatBiomarkerScore.objects.bulk_create([ChatBiomarkerScore(session=session, score_type=k, score=v) for k, v in scores.items()])
+        ChatBiomarkerScore.objects.bulk_create([
+            ChatBiomarkerScore(
+                session    = session,
+                message_id = message_id,
+                score_type = s["score_type"],
+                score      = s["score"],
+                start_ts   = s.get("start_ts"),
+                end_ts     = s.get("end_ts"),
+            ) for s in spans
+        ])
+
+    # --------------------------------------------------------------------------------
+    # Word-level STT timestamps for a confirmed user message
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    @transaction.atomic
+    def add_words_bulk(message_id: int, words: list[dict[str, object]]) -> None:
+        """
+        Bulk-insert ChatWord records for a committed user message (confidence is optional).
+        words: [{"word": str, "start": datetime, "end": datetime, "confidence": float}, ...]
+        Also sets the parent `ChatMessage` object's utterance-level start and end timestamps.
+        """
+        if not words: return
+
+        message = ChatMessage.objects.select_for_update().get(id=message_id)
+        ChatWord.objects.bulk_create([
+            ChatWord(message_id=message_id, word=w["word"], start_ts=w["start"], end_ts=w["end"], index=i, confidence=w.get("confidence"))
+            for i, w in enumerate(words)
+        ])
+
+        # Derive the utterance's start and end timestamps from the associated words
+        bounds = message.words.aggregate(start_ts=Min("start_ts"), end_ts=Max("end_ts"))
+        message.start_ts = bounds["start_ts"]
+        message.end_ts   = bounds[  "end_ts"]
+        message.save(update_fields=["start_ts", "end_ts"])
 
 
 
@@ -223,18 +357,19 @@ class ChatService:
     # ================================================================================
     @staticmethod
     def get_session_info(session_id):
-        # Pull session + profile + account + user in one DB query
+        # Pull session + profile + account + user + settings in one DB query
         session = (
             ChatSession.objects
-                .select_related("profile", "profile__account", "profile__account__user")
+                .select_related("profile", "profile__account", "profile__account__user", "profile__settings_user")
                 .get(id=session_id)
         )
 
         return {
-            "session": session,
-            "profile": session.profile,
-            "account": session.profile.account,
-            "user"   : session.profile.account.user,
+            "session" : session,
+            "profile" : session.profile,
+            "account" : session.profile.account,
+            "user"    : session.profile.account.user,
+            "settings": getattr(session.profile, "settings_user", None),
         }
     
     # Get the starting timestamp of a session
@@ -246,4 +381,35 @@ class ChatService:
         timestamps   = [ts for ts in [biomarker_ts, message_ts] if ts is not None]
         return min(timestamps) if timestamps else None
 
+    # LLM Turn Logs
+    @staticmethod
+    def log_llm_turn(*, session_id, user_id, activity_name, turn_index, user_text_length, state_before, state_after, same_state_turn_count, forced_state_transition, total_latency_ms, agents_data):
+        """
+        Saves one LLMTurnLog row for a completed multi-agent activity chat turn.
+        All fields are keyword-only. Missing FK IDs are handled gracefully.
+        """
 
+        session = None
+        user    = None
+        try:
+            if session_id: session = ChatSession.objects.get(id=session_id)
+        except ChatSession.DoesNotExist:
+            logger.warning(f"[DB] log_llm_turn: ChatSession id={session_id} not found.")
+        try:
+            if user_id: user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            logger.warning(f"[DB] log_llm_turn: User id={user_id} not found.")
+
+        LLMTurnLog.objects.create(
+            session                 = session,
+            user                    = user,
+            activity_name           = activity_name,
+            turn_index              = turn_index,
+            user_text_length        = user_text_length,
+            state_before            = state_before,
+            state_after             = state_after,
+            same_state_turn_count   = same_state_turn_count,
+            forced_state_transition = forced_state_transition,
+            total_latency_ms        = total_latency_ms,
+            agents_data             = agents_data,
+        )

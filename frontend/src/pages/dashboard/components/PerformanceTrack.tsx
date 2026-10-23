@@ -11,7 +11,6 @@ import GoalProgressBar from "./GoalProgress";
 // Performance Track Panel (shown on Dashboard)
 // ====================================================================
 export default function PerformanceTrack() {
-    const { profile         } = useAuth();
     const [active, setActive] = useState<"Overall" | "Biomarkers">("Overall");
 
     // Return the UI component
@@ -29,9 +28,8 @@ export default function PerformanceTrack() {
             {/* Text Section */}
             <div className="d-flex flex-col mt-[1rem] gap-[0.5rem] fs-6">
                 <GoalProgressBar />
-                <p className="fst-italic"><b>ToDo:</b> "Biomarkers chart" with individual selection; automatic performance evaluation in the paragraphs below.</p>
-                <p>Good days: A list of days with higher biomarker scores.</p>
-                <p>Bad days: A list of days with lower biomarker scores.</p>
+                <span className="flex flex-row gap-2"><p>Good days: </p> <b>April 20</b> <b>April 21</b></span>
+                <span className="flex flex-row gap-2"><p>Bad days: </p> <b>April 18</b> <b>April 22</b></span>
             </div>
         </div>
 

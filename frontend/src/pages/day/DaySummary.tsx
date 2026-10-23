@@ -18,8 +18,6 @@ export function DaySummary() {
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date);
 
-    const topics = state?.chatSession.topics.replace(/[\[\]"']/g, "").split(",");
-
     if (window.isMobile) {
     return (
         <div>
@@ -33,7 +31,7 @@ export function DaySummary() {
                         <Icon icon={getMoodIcon(state?.chatSession.sentiment)} width={"3rem"}/>
                     </div>
                 </div>
-                <TopicsCard topics={topics} type="Daily" role={role} />
+                <TopicsCard topics={state.chatSession.topics ?? []} type="Daily" role={role} />
                 <ChatLengthCard role={role} sessions={[state.chatSession]} type="" />
                 <ChatSummaryCard role={role} sessions={[state.chatSession]} type="Daily" />
                 <DropdownModal title="Speech Analysis" content={getDailyAnalysis(state.chatSession)} />
@@ -59,7 +57,7 @@ export function DaySummary() {
                             </div>
                         </div>
                         <div className="flex col-span-2">
-                            <TopicsCard topics={topics} type="Daily" role={role} />
+                            <TopicsCard topics={state.chatSession.topics ?? []} type="Daily" role={role} />
                         </div>
                         <div className="flex h-full">
                             <ChatLengthCard role={role} sessions={[state.chatSession]} type="" />

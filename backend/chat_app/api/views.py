@@ -1,16 +1,32 @@
-# Django Rest Framework imports
-from rest_framework import viewsets, generics, permissions
-from django.contrib.auth import get_user_model
+"""
+REST endpoints for profiles, settings, chat sessions, and the admin tools.
+--------------------------------------------------------------------------------
+`backend.chat_app.api.views`
+
+Most views act on the logged-in user's own profile (or the one a caregiver
+reaches through `Access`) via `ProfileMixin`, and the chat-session views scope
+their lookups with `accessible_chat_sessions`. The admin views (activity
+instructions and participant settings) also require `is_staff`.
+
+"""
+from rest_framework                       import viewsets, generics, mixins, permissions
+from rest_framework.response              import Response
+from rest_framework.views                 import APIView
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
-from rest_framework_simplejwt.state import token_backend
-from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.state       import token_backend
+from rest_framework.exceptions            import PermissionDenied
+
+from django.contrib.auth import get_user_model
+from django.db.models    import Count, F, Max, Q, QuerySet
+from django.shortcuts    import get_object_or_404
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
-from  .mixins      import ProfileMixin
-from ..helpers.downloadHelpers     import get_download_data
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer, AdminProfileSerializer
+from  .mixins      import ProfileMixin, accessible_chat_sessions
+from ..helpers.downloadHelpers             import get_download_data
+from ..services.session_audio_storage      import create_recording_playback_url
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
 # ======================================================================= ===================================
@@ -55,17 +71,15 @@ class DownloadDataView(ProfileMixin, generics.RetrieveAPIView):
 class RAGInstructionsView(generics.RetrieveUpdateAPIView):
     """
     GET  /api/rag/<int:ragid>/  => fetch a single set of RAG instructions
-    PUT  /api/rag/<int:ragid>/  => update various fields
+    PUT  /api/rag/<int:ragid>/  => update various fields (admin only)
     """
     serializer_class   = RAGInstructionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get_object(self):
         ragid = self.kwargs["ragid"]
-        instructions = RAGInstructions.objects.get(
-            id=ragid, 
-            user=self.request.user, # only allow access to own instructions
-        )
+        # make instructions global for all users, so no user_id filtering
+        instructions = RAGInstructions.objects.get(id=ragid)
         return instructions
     
 class ChatSessionView(generics.RetrieveAPIView):
@@ -77,13 +91,24 @@ class ChatSessionView(generics.RetrieveAPIView):
 
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
-        try:
-            session = ChatSession.objects.get(
-                id=sessionid, 
-            )
-            return session
-        except:
-            raise (f"ChatSession with id {sessionid} does not exist.")
+        sessions = (accessible_chat_sessions(self.request.user)
+                    .select_related  ("profile", "image", "audio")
+                    .prefetch_related("messages__words", "biomarker_scores"))
+        return get_object_or_404(sessions, id=sessionid)
+
+class SessionAudioPlaybackView(APIView):
+    """Issue a short-lived playback URL for an authorized session recording."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, sessionid: int) -> Response:
+        sessions = accessible_chat_sessions(request.user).select_related("audio")
+        session  = get_object_or_404(sessions, id=sessionid)
+        audio    = getattr(session, "audio", None)
+        if audio is None: return Response({"detail": "This session has no saved recording."}, status=404)
+
+        response = Response({"url": create_recording_playback_url(audio, request)})
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 # ======================================================================= ===================================
 # List + Create
@@ -106,32 +131,22 @@ class ReminderViewSet(ProfileMixin, viewsets.ModelViewSet):
         
 class RAGInstructionsViewSet(viewsets.ModelViewSet):
     """
-    GET  /api/rag/  => fetch all RAG instructions for the current user
+    GET    /api/rags/        => fetch all global RAG instructions (admin only)
+    POST   /api/rags/        => create a new global RAG instruction (admin only)
+    PUT    /api/rags/<id>/   => update (admin only)
+    DELETE /api/rags/<id>/   => delete (admin only)
     """
     serializer_class   = RAGInstructionsSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def _require_caregiver(self):
-        """
-        Ensure only caregivers can create/update/delete RAG instructions.
-        """
-        try:
-            if self.request.user.account_user.role.lower() != "caregiver":
-                raise PermissionDenied("Only caregivers can manage RAG instructions.")
-        except Exception:
-            raise PermissionDenied("Only caregivers can manage RAG instructions.")
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get_queryset(self):
-        self._require_caregiver()
-        # Only return instructions belonging to the logged-in user
-        return RAGInstructions.objects.filter(user=self.request.user).order_by("instruction_order", "name")
+        # Instructions are now global; return all ordered for display
+        return RAGInstructions.objects.order_by("instruction_order", "name")
 
     def perform_create(self, serializer):
-        # Only caregivers should be able to create RAG instructions, since they are the ones configuring the activities for the PLWD. Enforce this at the API level.
-        self._require_caregiver()
         # For now, always use the 'memory_activity'
         activity = Activity.objects.get(name="memory_activity")
-        instance = serializer.save(user=self.request.user, activity=activity)
+        instance = serializer.save(activity=activity)
 
         # Vector DB update
         try:
@@ -140,8 +155,6 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to index new instruction {instance.id}: {e}")
 
     def perform_update(self, serializer):
-        self._require_caregiver()
-        # Save the updated instruction to the default DB
         instance = serializer.save()
 
         # Update the vector store for this instruction
@@ -151,7 +164,6 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
             print(f"[VectorDB] Failed to update embedding for instruction {instance.id}: {e}")
 
     def perform_destroy(self, instance):
-        self._require_caregiver()
         inst_id = instance.id
 
         # Delete chunks from vector DB first
@@ -174,17 +186,15 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self): 
-        profile = self.get_profile()
-        
         # Filtering objects  
         active  = self.kwargs["active"]
         demo    = self.kwargs["demo"  ]
         
-        objs = (ChatSession.objects
-                .filter(profile=profile)
-                .select_related  ("profile",  "image")
-                .prefetch_related("messages", "biomarker_scores"))
-        
+        # Start with the base query (unfiltered by profile)
+        objs = (accessible_chat_sessions(self.request.user)
+                .select_related("profile", "image", "audio")
+                .prefetch_related("messages__words", "biomarker_scores"))
+
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)
         elif int(active) == 1: objs = objs.filter(is_active=True )
@@ -207,8 +217,8 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
         profile = self.get_profile()
         return (ChatSession.objects
                 .filter(profile=profile)
-                .select_related("profile", "image")
-                .prefetch_related("messages", "biomarker_scores")
+                .select_related("profile", "image", "audio")
+                .prefetch_related("messages__words", "biomarker_scores")
                 .order_by("-end_ts")
                 .first())
 
@@ -268,8 +278,33 @@ class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
         profile = self.get_profile()
         return Access.objects.filter(profile=profile)
 
+
+# --------------------------------------------------------------------------------
+# Admin Participant Settings
+# --------------------------------------------------------------------------------
+# Let staff list every participant and change their recording default and avatar
+class AdminProfileViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    GET   /api/admin/profiles/      => every participant (patient profile), most recent chat first
+    PATCH /api/admin/profiles/<id>/ => change one participant's recording default and avatar
+    """
+    serializer_class   = AdminProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    # Every profile with its chat count and latest chat (demo sessions are hidden from admin views)
+    def get_queryset(self) -> QuerySet[Profile]:
+        real_chats = ~Q(chat_sessions__source="demo")
+        return (Profile.objects
+                .select_related("account__user", "settings_user")
+                .annotate(
+                    chat_count   = Count("chat_sessions",       filter=real_chats),
+                    last_chat_at = Max  ("chat_sessions__date", filter=real_chats),
+                )
+                .order_by(F("last_chat_at").desc(nulls_last=True), "account__user__username"))
+
+
 # ======================================================================= ===================================
-# Tokens 
+# Tokens
 # ======================================================================= ===================================
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod

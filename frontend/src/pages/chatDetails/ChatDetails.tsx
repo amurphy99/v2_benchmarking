@@ -33,10 +33,12 @@ export function ChatDetails () {
         
         <div className="flex flex-col mx-[1rem]">
 
-            <div className="flex gap-4"> 
+            <div className="flex gap-4 pb-2"> 
                 <div className="w-1/2"> <ChatBiomarkers chatSession={state?.chatSession}                prevScores={prevScores} /> </div>
                 <div className="w-1/2"> <RadarTrack     current    ={state?.chatSession.average_scores} previous  ={prevScores} /> </div>
             </div>
+
+            <h1>Chat Transcript</h1>
 
             <ChatTranscript chatSession={state?.chatSession}/>
 

@@ -1,17 +1,22 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { GiAlliedStar } from "react-icons/gi";
 import { LuImage } from "react-icons/lu";
 import { FaChartBar, FaRegBell, FaRegCompass } from "react-icons/fa";
 import { footerLinkPatientCls, footerLinkCaregiverCls } from "@/utils/styling/colors";
 import { useAuth } from "@/context/AuthProvider";
-import { Profile } from "@/api";
 import { useProfile } from "@/hooks/queries/useProfile";
 
+const HIDE_FOOTER: string[] = ["/history", "/dashboard", "/chatDetails", "/v2", "/progress"]
 export default function FooterNav() {
     const { account } = useAuth();
     const { data: profile, isLoading } = useProfile();
+    const { pathname } = useLocation();
+
 
     if (!account || !profile.account || isLoading) {
+        return null;
+    }
+    if (HIDE_FOOTER.includes(pathname)) {
         return null;
     }
     if (account.role == "caregiver") {

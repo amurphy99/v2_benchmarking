@@ -8,9 +8,6 @@ FROM node:22-alpine
 WORKDIR /app
 COPY . .
 
-# Check the .env file
-RUN echo "The value of APP_ENVIRONMENT is: ${APP_ENVIRONMENT}"
-
 # Install packages and build the app
 RUN npm install --legacy-peer-deps
 RUN npm run build

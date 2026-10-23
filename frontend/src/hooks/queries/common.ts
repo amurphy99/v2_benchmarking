@@ -14,6 +14,7 @@ interface ModelQueryOptions<T> {
     empty                 : T;                 // default fallback
     staleTime?            : number;            // override
     refetchOnWindowFocus? : boolean;           // refetch on focus even if fresh
+    enabled?              : boolean;           // wait until dependent query inputs are available
 }
 
 export function useModelQuery<T>({
@@ -22,13 +23,15 @@ export function useModelQuery<T>({
     empty, 
     staleTime            = DEFAULT_STALE,
     refetchOnWindowFocus = true,
+    enabled              = true,
 } : ModelQueryOptions<T>) {
     // TanStack Query
     const query = useQuery<T, Error>({
-        queryKey : [queryKey], // Cache key
-        queryFn  : queryFn,    // Returns Promise<T>
-        staleTime: staleTime,  // Cache cleared X ms after component unloads
-        refetchOnWindowFocus: refetchOnWindowFocus,
+        queryKey             : [queryKey], // Cache key
+        queryFn              : queryFn,    // Returns Promise<T>
+        staleTime            : staleTime,  // Cache cleared X ms after component unloads
+        refetchOnWindowFocus : refetchOnWindowFocus,
+        enabled              : enabled,
     });
 
     // Error handling

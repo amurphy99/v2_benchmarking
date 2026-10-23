@@ -12,26 +12,38 @@ services:
   db_vector:
     image: ankane/pgvector:latest
     container_name: db_vector
-    env_file: [.env]
     environment:
       POSTGRES_DB: ${VECTOR_DB_NAME}
       POSTGRES_USER: ${VECTOR_DB_USER}
       POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
     networks: [appnet]
     ports:
-      - "5434:5434"
+      - "5434:5432"
     volumes:
       - vector_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VECTOR_DB_USER} -d ${VECTOR_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   db:
     image: postgres:17 #ankane/pgvector:latest
     container_name: db
-    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks: [appnet]
     ports:
       - "5433:5432"   # expose main DB on localhost:5433 (for local testing)
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 
     
@@ -49,13 +61,20 @@ services:
         python manage.py makemigrations --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
+        python manage.py close_stale_sessions &&
         python manage.py seed_demo &&
+        mkdir -p chat_app/static &&
+        python manage.py collectstatic --noinput &&
         daphne -b 0.0.0.0 -p 8000 backend.asgi:application
       "
     env_file: [.env]
     volumes:
       - .:/app                # general project mount
-    #depends_on: [db, db_vector]
+    depends_on:
+      db:
+        condition: service_healthy
+      db_vector:
+        condition: service_healthy
     networks: [appnet]
     ports:                    # expose 8000 to host for Vite
       - "8000:8000"

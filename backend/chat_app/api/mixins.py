@@ -1,5 +1,7 @@
 from rest_framework.exceptions import NotFound
-from ..models import Profile, Account, Access
+from django.db.models import Q, QuerySet
+
+from ..models import Profile, Account, Access, ChatSession
 
 class ProfileMixin:
     """
@@ -35,8 +37,7 @@ def get_profile(user):
     user: The user to get the profile for.
     '''
     account = get_account(user)
-    try:
-        return Profile.objects.get(account=account)
+    try: return Profile.objects.get(account=account)
     except Profile.DoesNotExist:
         try:
             access = Access.objects.get(account=account)
@@ -44,3 +45,17 @@ def get_profile(user):
         except Access.DoesNotExist:
             print("This Account does not have access to any Profiles.")
             return None
+
+# Return only sessions the authenticated user may inspect or play back
+def accessible_chat_sessions(user: object) -> QuerySet[ChatSession]:
+    sessions = ChatSession.objects.all()
+    if getattr(user, "is_staff", False): return sessions
+
+    return sessions.filter(
+        Q(profile__account__user                 = user) |
+        Q(profile__profile_access__account__user = user)
+    ).distinct()
+
+# Check session access without exposing whether an inaccessible ID exists
+def can_access_chat_session(user: object, session_id: int) -> bool:
+    return accessible_chat_sessions(user).filter(id=session_id).exists()

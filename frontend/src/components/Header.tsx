@@ -36,6 +36,7 @@ const TITLES: Record<string, string> = {
 
 const SHOW_HEADER: string[] = ["/chat", "/chat/end", "/album", "/analysis", "/analysis/flagged", "/goal", 
     "/practice", "/schedule", "/alert", "/settings", "/profile", "/admin"]
+const SIMPLE_HEADER: string[] = ["/history", "/dashboard", "/chatDetails", "/v2", "/progress"]
 
 // ====================================================================
 // Header
@@ -58,6 +59,23 @@ export default function Header() {
     const title  = TITLES[pathname] ?? TITLES.default;
 
     // Return UI component
+    if (SIMPLE_HEADER.includes(pathname)) {
+        return (
+            <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>
+                <NavLink to="/v2" style={{ color: "black", textDecoration: "none" }}>
+                    <h1>CogniBot</h1>
+                </NavLink>
+                <div className={`ml-auto flex items-center gap-3`}>
+                    <NavLink to="/history" style={{ color: "black" }}>
+                        <h4>History</h4>
+                    </NavLink>
+                    <NavLink to="/dashboard" style={{ color: "black" }}>
+                        <h4>Dashboard</h4>
+                    </NavLink>
+                </div>
+            </header>
+        )
+    }
     if (SHOW_HEADER.includes(pathname)) {
         return (
         <header className={"flex items-center gap-3 md:gap-6 px-[1rem] md:px-[2rem] py-[1rem]"}>

@@ -1,34 +1,52 @@
-import { useState    } from "react";
-import { useNavigate } from "react-router-dom";
+/* Participant chat page: the avatar, the assistant's latest line, and controls.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/chat/Chat`
+
+The avatar dozes until the chat starts and follows the conversation while it
+runs (`useChatAvatar`). The settings are re-read every time the page opens, so
+an avatar picked on the admin or caregiver page shows on the next visit.
+
+*/
+import { useEffect, useRef, useState } from "react";
+import { useNavigate                 } from "react-router-dom";
+import { Spinner                     } from "react-bootstrap";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
-import useLiveChat   from "@/hooks/useLiveChat";
-import SaveChatModal from "@/components/modals/SaveChatModal";
-
+// From this project
+import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
-import Avatar from "../common/avatar/Avatar";
-import { Spinner } from "react-bootstrap";
+import { Avatar          } from "../common/avatar/Avatar";
+import { useChatAvatar   } from "./useChatAvatar";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
+import   SaveChatModal     from "@/components/modals/SaveChatModal";
+import   useLiveChat       from "@/hooks/useLiveChat";
 
 
-// ====================================================================
-// Chat
-// ====================================================================
-// ToDo: Move speech providers folder to utils, fix the index
-// ToDo: Might need to add the user/token stuff to the websocket
+// ================================================================================
+// Chat Page (UI that users see during a webapp chat)
+// ================================================================================
+// TODO: Move speech providers folder to utils, fix the index
+// TODO: Might need to add the user/token stuff to the websocket
 export function Chat() {
     const navigate = useNavigate();
-    const { data: settings, isLoading } = useUserSettings();
+    const { data: settings, isFetchedAfterMount } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
-    const [emotion, setEmotion] = useState<string>("Neutral");
-    const [emoCount, setEmoCount] = useState<number>(0);
+    const avatarRef = useRef<AvatarHandle>(null);
+
+    // True from the participant's finished utterance until the reply starts playing (the avatar's "thinking" look)
+    const [awaitingReply, setAwaitingReply] = useState(false);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
     
-    const onUserUtterance   = (text: string) => { 
-        pushMessage("user",      text); 
-        setBotMessage( 
+    // --------------------------------------------------------------------------------
+    // WebSocket Response Callbacks
+    // --------------------------------------------------------------------------------
+    // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
+    const onUserUtterance   = (text: string) => {
+        pushMessage("user",      text);
+        setAwaitingReply(true);
+        setBotMessage(
             <div className="flex flex-row gap-2 justify-center">
                 <Spinner animation="grow" />
                 <Spinner animation="grow" />
@@ -36,20 +54,23 @@ export function Chat() {
             </div>
         );
     };
-    const onSystemUtterance = (text: string) => { 
-        pushMessage("assistant", text); 
-        setBotMessage(<>{text}</>)
-    };
-    // Happy, Sad, Surprised, Scared, Angry, Neutral
-    const onEmotion = (emotion: string) => {
-        setEmotion(emotion);
-        setEmoCount((t) => t + 1);
-    }
 
-    // selecting the type of chat
+    // System utterance received
+    const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
+
+    // Backend "robot_action" frames: {kind: "emotion" | "animation", value, duration_ms}
+    // The avatar decides how to act each one out (contract in `common/avatar/avatarRegistry`)
+    const onRobotAction = (data: RobotAction): void => { avatarRef.current?.performAction(data); };
+
+    // --------------------------------------------------------------------------------
+    // IDK, unlabeled stuff people add in
+    // --------------------------------------------------------------------------------
+    // Selecting the type of chat
     type ChatMode = "default" | "memory_activity";
     const [chatMode, setChatMode] = useState<ChatMode>("default");
 
+
+    // This should be deleted
     type DebugTurn = {
         ts: number;
         role: "user" | "assistant";
@@ -59,68 +80,53 @@ export function Chat() {
 
     const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
 
-    // Live-chat hook
 
-    const { start, stop, save } = useLiveChat({
+
+    // Live-chat hook
+    const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
-        onEmotion,
+        onRobotAction,
         wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
-        onDebugTurn: (t) =>
-            setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]),
-        onRagParseError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
-        onChatError: () => {
-            setBotMessage(
-              <>Sorry, I didn’t quite catch that. Could you please repeat what you said?</>
-            );
-        },
+
+        onDebugTurn     : (t) => { setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]);                                 },
+
+        // Chat ended
         onChatClosed: () => {
             setRecording(false);
             setShowModal(false);
-            navigate("/goal");
+            navigate("/chat/end"); // navigate("/goal")
         },
+        onChatPaused      : (       ) => { setRecording     (false  ); },
+        onChatResumed     : (       ) => { setRecording     (true   ); },
+        onRecordingStatus : (enabled) => { setAdminRecording(enabled); },
     });
     
     // Separate recording flag that we control ourselves
-    const [recording, setRecording ] = useState(false);
-    const startChat = () => {
-		start();
-		setRecording(true);
-	};
-	const pauseChat = () => {
-		stop();
-		setRecording(false);
-	};
+    const [recording,       setRecording      ] = useState(false);
+    const [adminRecording,  setAdminRecording ] = useState(false); // true when admin has enabled audio saving
+    const startChat = () => { start(); setRecording(true ); };
+	const pauseChat = () => { stop (); setRecording(false); };
+	const saveChat  = () => { save (); setShowModal(false); navigate("/chat/end"); }; // use the stop speaking callback
 
     // Modal control
     const [showModal, setShowModal] = useState(false);
-    const endChatModal = () => {
-		setShowModal(true);
-		if (!recording) {
-			pauseChat();
-		}
-	};
+    const endChatModal = () => {setShowModal(true); if (!recording) { pauseChat(); } };
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
+    // A reply that starts playing, or a chat that stops, ends the wait for a reply
+    useEffect(() => { if (systemSpeaking || !recording) setAwaitingReply(false); }, [systemSpeaking, recording]);
 
+    // Avatar from the participant's settings (`UserSettings.modelChoice`), asleep until the chat starts
     const model = settings.modelChoice;
+    useChatAvatar(avatarRef, isFetchedAfterMount ? model : null, {running: recording, systemSpeaking, awaitingReply}, readSpeechLoudness);
 
-	const saveChat = () => {
-		save();
-		setShowModal(false);
-		navigate("/chat/end");
-	}; // use the stop speaking callback
-
-    // --------------------------------------------------------------------
+    // ================================================================================
     // Return UI elements
-    // --------------------------------------------------------------------
+    // ================================================================================
+    // Wait for this visit's settings (a cached copy could still name an avatar changed since)
+    if (!isFetchedAfterMount) { return <div>Loading...</div>; }
+
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
     <>
@@ -129,7 +135,7 @@ export function Chat() {
                 <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
                     <div className="sm:w-1/5" />
                     <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar emotion={emotion} emoCount={emoCount} model={"qt"} zoom="body" /> 
+                        <Avatar model={model} zoom="body" ref={avatarRef} /> 
                     </div> 
                     <div className="hidden sm:inline-block bubble"> 
                         {botMessage} 
@@ -137,7 +143,7 @@ export function Chat() {
                 </div>
                 :  
                 <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar emotion={emotion} emoCount={emoCount} model={model} zoom="head"/>
+                    <Avatar model={model} zoom="head" ref={avatarRef}/>
                     <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
                         {botMessage}
                     </div>
@@ -145,27 +151,51 @@ export function Chat() {
             }
 
             {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-           <div
-                className={`flex flex-row ${
-                    chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"
-                } mx-[20vw] gap-[4em] justify-around`}
-            >
-                <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
-                <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+           <div className={`flex flex-col ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} items-center gap-3`}>
 
-                <select
-                value={chatMode}
-                onChange={(e) => {
-                    setChatMode(e.target.value as ChatMode);
-                    setDebugTurns([]);
-                }}
-                disabled={recording}
-                className="border max-h-1/2 rounded px-2 py-2"
-                >
-                <option value="default">default</option>
-                <option value="memory_activity">memory_activity</option>
-                </select>
-            </div>
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Recording Indicator (shown when admin has set audio to be saved on chat end) */}
+                {/* -------------------------------------------------------------------------------- */}
+                {adminRecording && (
+                    <div className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                        Recording
+                    </div>
+                )}
+
+
+                <div className="flex flex-row mx-[20vw] gap-[4em] justify-around w-full">
+
+                    {/* Again, I don't know what this is... */}
+                    {chatEnding
+                        ? <div className="flex flex-col gap-2 items-center text-gray-500">
+                            <BsStopCircle size={"8vh"} color={"gray"} />
+                            Ending chat...
+                        </div>
+                        : <>
+                            <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
+                            <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
+                        </>
+                    }
+
+                    
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Select Chat Mode */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <select
+                        value     = {chatMode}
+                        onChange  = {(e) => {setChatMode(e.target.value as ChatMode); setDebugTurns([]); }}
+                        disabled  = {recording}
+                        className = "border max-h-1/2 rounded px-2 py-2"
+                    >
+                        <option value="default"         >default</option>
+                        <option value="memory_activity" >memory_activity</option>
+                    </select>
+
+
+
+                </div>  {/* end flex-row buttons */}
+            </div>  {/* end flex-col wrapper */}
 
             {/* Added only for debugging, will probably remove later */}
             {chatMode === "memory_activity" && (
@@ -197,7 +227,9 @@ export function Chat() {
 }
 
 
+// --------------------------------------------------------------------------------
 // Returns the Play or Pause buttons
+// --------------------------------------------------------------------------------
 function RecordButton({ recording, stopRecording, startRecording } : { recording: boolean, stopRecording: () => void, startRecording: () => void }) {
     const style = "flex flex-col gap-2 items-center";
 
@@ -208,6 +240,10 @@ function RecordButton({ recording, stopRecording, startRecording } : { recording
     return <button className={style} onClick={onClick}> {icon} {text} </button>;
 }
 
+
+// --------------------------------------------------------------------------------
+// idk the purpose of this, was unlabeled
+// --------------------------------------------------------------------------------
 const default_message = `Chat with me!`;
 export function getRecentMessage(messages: LocalChatMessage[], fallback = default_message): string {
     const latest = messages.reduce<LocalChatMessage | null>((acc, m) => {
@@ -216,3 +252,4 @@ export function getRecentMessage(messages: LocalChatMessage[], fallback = defaul
     }, null);
     return latest ? latest.content : fallback;
 }
+

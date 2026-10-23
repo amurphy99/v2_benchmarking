@@ -27,7 +27,7 @@ export function btnClass(
 // --------------------------------------------------------------------------------
 // General Style Helpers
 // --------------------------------------------------------------------------------
-export const groupDivStyle       = "rounded-xl border border-black/10 p-3";
-export const buttonSectionHeader = "text-base font-semibold text-black/70";
+export const groupDivStyle       = "rounded-xl border border-admin-border bg-admin-panel shadow-sm p-4";
+export const buttonSectionHeader = "text-sm font-semibold text-admin-subtext uppercase tracking-wide";
 
 

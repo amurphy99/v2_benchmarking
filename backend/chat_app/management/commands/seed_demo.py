@@ -1,338 +1,232 @@
-from django.core.management.base import BaseCommand
-from django.db           import transaction
-from django.utils        import timezone
-from django.contrib.auth import get_user_model
+"""
+Ensure configured accounts and optional demo fixtures exist.
+--------------------------------------------------------------------------------
+`backend.chat_app.management.commands.seed_demo`
 
-from datetime        import timedelta, date, time
-from random          import random
-from chat_app.models import Profile, Account, Access, UserSettings, Goal, ChatSession, ChatMessage, ChatBiomarkerScore, Reminder, Activity, RAGInstructions, AlbumImage
-from rag_vectorstore.services.vdb_services import index_single_instruction
+This command is safe to run at every backend startup. Account setup never
+deletes linked application data, and each enabled fixture seeder creates only
+data that is currently missing.
 
-# Demo data
-USERNAMES     = ("demo_patient", "demo_caregiver", "buddy_user", "buddy_care")
-BIOMARKERS    = ("alteredgrammar", "anomia", "pragmatic", "pronunciation", "prosody", "turntaking")
-DEMO_MESSAGES = [
-    "Hi, I'm the user.", 
-    "Hello, how are you today?", 
-    "I'm doing well, thank you!", 
-    "Can you tell me about your day?", 
-    "Sure. This morning I went for a walk.",
-    "Did you enjoy your walk?",
-    "Yes, I enjoyed my walk.",
-]
-DEMO_MESSAGES_ALERT = [
-    "Hi, I'm the user. I was feeling sad today.",
-    "Why were you feeling sad today?",
-    "I was feeling lonely and down.",
-    "I'm sorry to hear that."
-]
-DEMO_RAG_NAMES = [
-    "start_conversation",
-    "end_conversation",
-    "initiate_smalltalk",
-]
-DEMO_RAG_DESCRIPTIONS = [
-    "Instructions for starting a conversation with the user.",
-    "Instructions for ending a conversation with the user.",
-    "Instructions for initiating small talk with the user.",
-]
+"""
+from django.conf                   import settings as django_settings
+from django.contrib.auth           import get_user_model
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.core.management.base   import BaseCommand
+from django.db                     import transaction
+from django.utils                  import timezone
+from datetime                      import date, timedelta
 
-DEMO_RAG_INSTRUCTIONS = [
-    '''
-    Purpose / Goal:
-    Start the chat warmly, introduce yourself as QT Robot, and invite the user to share their name.
+# From this project
+from chat_app.models           import Access, Account, Goal, Profile, UserSettings
+from  ..seed_data.analyzed     import seed_analyzed_chats
+from  ..seed_data.sample       import seed_activities, seed_chats, seed_images, seed_rag_instructions, seed_reminders
+from  ..seed_data.transcript   import seed_transcript_chat
+from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 
-    When to use:
-    At the very beginning of interaction, when there is no previous chat history with the user.
-    ''',
-    '''
-    Purpose / Goal:
-    Close the interaction on a positive emotional note so the user feels valued.
 
-    When to use:
-    After reflecting on fun and imaginative scenarios regarding the past and the future, gracefully bring an end to the conversation.
-    ''',
-    '''
-    Purpose / Goal:
-    Build rapport and make the user comfortable through short, pleasant conversation.
+# --------------------------------------------------------------------------------
+# Configuration
+# --------------------------------------------------------------------------------
+# These are all pulled from the environment (`/backend/.env `if local)
+SEED_UI_SAMPLE_DATA       = django_settings.SEED_UI_SAMPLE_DATA        # Ensure random UI chats, reminders, activities, and RAG fixtures exist
+SEED_ANALYZED_CHAT_DATA   = django_settings.SEED_ANALYZED_CHAT_DATA    # Ensure fixed text-only analyzed chat fixtures exist
+SEED_TRANSCRIPT_CHAT_DATA = django_settings.SEED_TRANSCRIPT_CHAT_DATA  # Ensure imported transcript, audio, and biomarker fixtures exist
 
-    When to use:
-    •	Once the user replies or shares their name, transition naturally into light small talk or a fun, simple question about them. 
-    •	Also, as a follow-up after the initial greetings phase, you will ask questions based on the user's response. The follow-up questions should be open-ended based on the user's response, such that the user can elaborate on the previously mentioned topic.
-    ''',
-]
-DEMO_IMAGES = [
-    {
-        "topic": "Moon Landing",
-        "url": "https://images.pexels.com/photos/41162/moon-landing-apollo-11-nasa-buzz-aldrin-41162.jpeg",
-        "photographer": "Pixabay",
-        "photographer_url": "https://www.pexels.com/@pixabay/"
-    },
-    {
-        "topic": "Gardening",
-        "url": "https://images.pexels.com/photos/5905352/pexels-photo-5905352.jpeg",
-        "photographer": "Vanessa P",
-        "photographer_url": "https://www.pexels.com/@vanessa-p-273294/"
-    },
-    {
-        "topic": "Grandchildren",
-        "url": "https://images.pexels.com/photos/6148876/pexels-photo-6148876.jpeg",
-        "photographer": "RDNE Stock Project",
-        "photographer_url": "https://www.pexels.com/@rdne/"
-    },
-    {
-        "topic": "Walk",
-        "url": "https://images.pexels.com/photos/631986/pexels-photo-631986.jpeg",
-        "photographer": "Tobi",
-        "photographer_url": "https://www.pexels.com/@pripicart/"
-    }
-]
+TRANSCRIPT_FIXTURE_DIRS = ("test_02", "test_03", "test_04", "test_05")  # Imported transcript folders enabled for the workshop profile
 
+
+# ================================================================================
+# Make sure that all "default" accounts and optional demo data exist
+# ================================================================================
 class Command(BaseCommand):
-    help = "Seeds demo users and a sample ChatSession with messages+biomarkers."
+    help = "Ensure configured accounts and enabled demo fixture datasets exist."
 
-    # ====================================================================
-    # Seed default demo data into the DB 
-    # ====================================================================
+    # ================================================================================
+    # Command entry point
+    # ================================================================================
     @transaction.atomic
-    def handle(self, *args, **kwargs):
-        # Delete and recreate AlbumImages first
-        AlbumImage.objects.all().delete()
-        self.seed_images()
+    def handle(self, *args: object, **options: object) -> None:
+        # Reference dates used only when a related Goal is first created
+        two_days_ago    = timezone.localdate() - timedelta(days= 2)
+        seven_days_ago  = timezone.localdate() - timedelta(days= 7)
+        thirty_days_ago = timezone.localdate() - timedelta(days=30)
 
-        # Delete and recreate the user data, RAG instructions
-        # User = get_user_model()
-        # User.objects.filter(username__in=USERNAMES).delete()
+        # Album images are shared reference rows, so safely ensure them on every run
+        seed_images()
 
-        # Setup for Goal creation
-        two_days_ago = timezone.localdate() - timedelta(days=2)
+        # Keep operational accounts separate from fixture-only data owners
+        self.setup_environment_accounts(days_ago=two_days_ago)
+        self.setup_ui_sample_data      (days_ago=thirty_days_ago)
+        self.setup_analyzed_data       (days_ago=seven_days_ago)
 
-        # Create user entries for both the patient and caregiver
-        # I added this so that the user_id does not change on every seed run. 
-        # This could lead to dangling vector embeddings since they are linked to a separate DB using the user_id, and cascading delete won't work across DBs.
-        plwd = self.get_or_create_demo_user("demo_patient",   password="1", first_name="John", last_name="Patient"  )
-        care = self.get_or_create_demo_user("demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=True)
-        plwd_account, _ = Account.objects.get_or_create(user=plwd, defaults={"role": "patient"})
-        care_account, _ = Account.objects.get_or_create(user=care, defaults={"role": "caregiver"})
-        profile, _ = Profile.objects.get_or_create(account=plwd_account,defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",},)
-        
-        # Create an Access object so caregiver account can access the plwd account
-        Access.objects.get_or_create(account=care_account, profile=profile)
+        # TODO: Temporary -- an earlier version of this command promoted this hardcoded account.
+        #       Remove once every deployed database has started once with this demotion
+        get_user_model().objects.filter(username="AdnanSadi2").update(is_staff=False, is_superuser=False)
 
-        # Also create settings and goal objects for the new Profile
-        UserSettings.objects.get_or_create(profile=profile)
-        Goal        .objects.get_or_create(profile=profile, target=5, start_date=two_days_ago)
-        # Add sample ChatSessions
-        self.seed_chats(profile, days_back=10)
-        
-        # Add sample Reminders
-        self.seed_reminders(profile, num_reminders=5)
+    # ================================================================================
+    # User and Profile helpers
+    # ================================================================================
+    # Make sure a user account exists
+    def ensure_user(
+        self,
+        *,
+        username         : str,           # Stable username identifying the account
+        password         : str,           # Initial or environment-authoritative password
+        refresh_password : bool = False,  # Reapply environment-managed credentials when changed
+        **fields         : object,        # Django user fields that should match configured values
+    ) -> AbstractBaseUser:
+        """
+        Create an account or refresh its configured identity fields without touching
+        any Account, Profile, Access, ChatSession, or recording linked to that user.
 
-        # --------------------------------------------------------------------
-        # Second profile
-        # --------------------------------------------------------------------
-        plwd_2 = self.get_or_create_demo_user("buddy_user", password="1", first_name="Buddy", last_name="Robot"    )
-        care_2 = self.get_or_create_demo_user("buddy_care", password="1", first_name="Buddy", last_name="Caregiver", is_staff=True)
-        plwd_account_2, _ = Account.objects.get_or_create(user=plwd_2, defaults={"role": "patient"})
-        care_account_2, _ = Account.objects.get_or_create(user=care_2, defaults={"role": "caregiver"})
-        profile_2, _ = Profile.objects.get_or_create(account=plwd_account_2, defaults={"zipcode": "9999", "birthDate": timezone.now(), "locationStatus": "alone",})
-        
-        # Create an Access object so caregiver account can access the plwd account
-        Access.objects.get_or_create(account=care_account_2, profile=profile_2)
+        Environment-managed passwords are reapplied when they change. Hardcoded fixture
+        passwords are only assigned at creation so an intentional later change survives.
+        """
+        User          = get_user_model()
+        user, created = User.objects.get_or_create(username=username, defaults=fields)
+        changed_fields : list[str] = []
 
-        UserSettings.objects.get_or_create(profile=profile_2)
-        Goal        .objects.get_or_create(profile=profile_2, target=5, start_date=two_days_ago)
-        self.seed_chats(profile_2, days_back=10)
-        self.seed_reminders(profile_2, num_reminders=5)
-        self.seed_activities()
-        self.seed_rag_instructions()
-    
-    # ====================================================================
-    # Helper: Deletes all data associated with a user, such as Account, Profile, Settings, etc
-    # ====================================================================
-    def delete_user_data(self, user):
-        account = Account.objects.filter(user=user).first()
-        # if there is no account linked to this user, then there is no data to delete, so we can just return.
-        if not account:
-            return
+        # Refresh configured identity and permission fields without replacing the user
+        for field_name, value in fields.items():
+            if getattr(user, field_name, None) == value: continue
+            setattr(user, field_name, value)
+            changed_fields.append(field_name)
 
-        RAGInstructions.objects.filter(user=user).delete()
-        try: # The case where this user's account is the main account of a Profile object
-            profile = Profile.objects.get(account=account)
-            Goal.objects.get(profile=profile).delete()
-            UserSettings.objects.get(profile=profile).delete()
-            ChatSession.objects.filter(profile=profile).delete()
-            profile.delete()
-        except Profile.DoesNotExist: # The case where this user's account is a secondary account of a Profile object
-            try: # The case where this user's account is linked to a Profile
-                access = Access.objects.get(account=account)
-                profile = access.profile
-                Goal.objects.get(profile=profile).delete()
-                UserSettings.objects.get(profile=profile).delete()
-                ChatSession.objects.filter(profile=profile).delete()
-                profile.delete()
-            except Access.DoesNotExist: # The case where this user's account is not linked to anything; do nothing
-                pass
-        account.delete()
+        # New accounts need a password; environment accounts also follow credential updates
+        if (created) or (refresh_password and not user.check_password(password)):
+            user.set_password(password)
+            changed_fields.append("password")
 
-    # ====================================================================
-    # Helper: Get user if exists (cleaning their data), or create new
-    # ====================================================================
-    def get_or_create_demo_user(self, username, **kwargs):
-        User = get_user_model()
-        password = kwargs.pop("password", "1")
-
-        user, created = User.objects.get_or_create(username=username, defaults=kwargs)
-
-        # Always ensure password is hashed and details are correct
-        changed = False
-        for k, v in kwargs.items():
-            if getattr(user, k, None) != v:
-                setattr(user, k, v)
-                changed = True
-
-        user.set_password(password)  # hashes properly
-        changed = True
-
-        if changed:
-            user.save()
-
-        # If user already existed, delete linked demo data (resetting the user but keeping the same user_id to avoid dangling vector DB entries)
-        if not created:
-            self.delete_user_data(user)
-
+        if changed_fields: user.save(update_fields=changed_fields)
         return user
 
-    # Seed AlbumImages into the DB
-    # ====================================================================
-    def seed_images(self):
-        for img in DEMO_IMAGES:
-            album_image = AlbumImage.objects.create(topic=img["topic"], url=img["url"], photographer=img["photographer"], photographer_url=img["photographer_url"])
-            album_image.save()
-            
-    # ====================================================================
-    # Seed ChatSessions into the DB for a user
-    # ====================================================================
-    def seed_chats(self, profile, days_back=6):
-        # Times for everything need to override "auto_now_add" field properties
-        now_utc = timezone.now()
-        for i in range(1, days_back+1):
-            day_offset = timedelta(days=i)
-            started_at = (now_utc - day_offset).replace(hour=9, minute=0, second=0, microsecond=0)
-            ended_at   = started_at + timedelta(minutes=5)
-            
-            topic = DEMO_IMAGES[i % len(DEMO_IMAGES)]['topic']
-            image = AlbumImage.objects.get(topic=topic)
+    # Ensure a patient account has its persistent profile-level support records
+    def ensure_patient_profile(self, user: AbstractBaseUser, days_ago: date) -> Profile:
+        account, _ = Account.objects.get_or_create(user=user, defaults={"role": "patient"})
+        if account.role != "patient": account.role = "patient"; account.save(update_fields=["role"])
 
-            # 1) Create a ChatSession object
-            session = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at, 
-                                                 topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
-                                                 sentiment="Positive", image=image)
-            session.date = started_at
-            session.save(update_fields=["date"])
+        profile, _ = Profile.objects.get_or_create(
+            account  = account,
+            defaults = {"zipcode": "9999", "birthDate": timezone.localdate(), "locationStatus": "alone"},
+        )
+        UserSettings.objects.get_or_create(profile=profile)
+        Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": days_ago})
+        return profile
 
-            # 2) Add ChatMessages to the ChatSession (message timestamps spaced 20 seconds apart)
-            for idx, text in enumerate(DEMO_MESSAGES):
-                ts   = started_at + timedelta(seconds=20 * idx)
-                role = "user" if idx % 2 == 0 else "assistant"
-                message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=ts, end_ts=(ts + timedelta(seconds=20)))
-                message.ts = ts
-                message.save(update_fields=["ts"])
+    # Ensure a caregiver can reach the intended profile without moving existing access
+    def ensure_caregiver_access(self, user: AbstractBaseUser, profile: Profile) -> None:
+        account, _ = Account.objects.get_or_create(user=user, defaults={"role": "caregiver"})
+        if account.role != "caregiver": account.role = "caregiver"; account.save(update_fields=["role"])
 
-            # 3) Add ChatBiomarkerScores to the ChatSession (random scores)
-            for j in range(3):
-                ts = started_at + timedelta(seconds=40 * j + 20)
-                for score_type in BIOMARKERS:
-                    score = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3), ts=ts)
-                    score.ts = ts
-                    score.save(update_fields=["ts"])
-        # Seed the chat that will have flagged words and sentiment
-        topic = DEMO_IMAGES[0]['topic']
-        image = AlbumImage.objects.get(topic=topic)
+        access, created = Access.objects.get_or_create(account=account, defaults={"profile": profile})
+        if (not created) and (access.profile_id != profile.id):
+            self.stdout.write(self.style.WARNING(
+                f"{SEED_DATA} Preserved existing profile access for {SD_H}{user.username}{SD_R}; "
+                f"the account was not reassigned automatically.{RESET}"
+            ))
 
-        # 1) Create a ChatSession object
-        session = ChatSession.objects.create(profile=profile, source="demo", is_active=False, end_ts=ended_at, 
-                                                topics="['Moon Landing','Granddaughter','Gardening','Morning Routine']",
-                                                sentiment="Negative", image=image)
-        session.date = (now_utc).replace(hour=9, minute=0, second=0, microsecond=0)
-        session.save(update_fields=["date"])
+    # ================================================================================
+    # Persistent environment accounts
+    # ================================================================================
+    # Check each of the "default" accounts we need exist in the database
+    def setup_environment_accounts(self, days_ago: date) -> None:
+        """
+        Ensure the two admins, workshop login, and Buddy robot login from the private
+        environment. These are persistent operational accounts, even when they also
+        provide access to seeded transcript fixtures.
+        """
+        # Only the primary admin is a Django superuser (full access to the admin dashboard)
+        primary_admin   = self.ensure_environment_user("ADMIN_USERNAME_0", "ADMIN_PASSWORD_0", "Primary",   "Admin", is_staff=True, is_superuser=True)
+        secondary_admin = self.ensure_environment_user("ADMIN_USERNAME_1", "ADMIN_PASSWORD_1", "Secondary", "Admin", is_staff=True)
+        workshop_user   = self.ensure_environment_user("DEMO_USERNAME_0",  "DEMO_PASSWORD_0",  "Workshop",  "Participant")
+        buddy_user      = self.ensure_environment_user("BUDDY_USERNAME",   "BUDDY_PASSWORD",   "Buddy",     "Speaker"    )
 
-        # 2) Add ChatMessages to the ChatSession (message timestamps spaced 20 seconds apart)
-        for idx, text in enumerate(DEMO_MESSAGES_ALERT):
-            ts   = started_at + timedelta(seconds=20 * idx)
-            role = "user" if idx % 2 == 0 else "assistant"
-            message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=ts, end_ts=(ts + timedelta(seconds=20)))
-            message.ts = ts
-            message.save(update_fields=["ts"])
+        # Give each non-admin operational login its own durable patient profile
+        workshop_profile = self.ensure_patient_profile(workshop_user, days_ago) if (workshop_user) else None
+        if buddy_user:     self.ensure_patient_profile(   buddy_user, days_ago)
 
-        # 3) Add ChatBiomarkerScores to the ChatSession (random scores)
-        for j in range(3):
-            ts = started_at + timedelta(seconds=40 * j + 20)
-            for score_type in BIOMARKERS:
-                score = ChatBiomarkerScore.objects.create(session=session, score_type=score_type, score=round(random(), 3), ts=ts)
-                score.ts = ts
-                score.save(update_fields=["ts"])
-            #print(f"Seeded ChatSession for {(now_utc - day_offset).date()}")
-            
-    # ====================================================================
-    # Seed Reminders into the DB for a user
-    # ====================================================================
-    def seed_reminders(self, profile, num_reminders=5):
-        now_utc = timezone.now()
-        for i in range(1, num_reminders+1):
-            day_offset = timedelta(days=i)
-            
-            start_day = (now_utc - day_offset).date()
-            end_day   = start_day
-            start_time = time(0, 0, 0)
-            end_time = time(2, 0, 0)
-            title = f"Reminder {i}"
+        # Admins can monitor the protected workshop profile without owning it
+        if (workshop_profile) and (  primary_admin): self.ensure_caregiver_access(  primary_admin, workshop_profile)
+        if (workshop_profile) and (secondary_admin): self.ensure_caregiver_access(secondary_admin, workshop_profile)
 
-            # Create a Reminder object
-            reminder = Reminder.objects.create(profile=profile, title=title, start=start_day, end=end_day, 
-                                               startTime=start_time, endTime=end_time, daysOfWeek=[])
-            reminder.save()
-            
-        # Create repeating Reminder
-        start_day = now_utc.date()
-        end_day = (now_utc + timedelta(weeks=5)).date()
-        start_time = time(hour=0, minute=0, second=0)
-        end_time = time(hour=2, minute=0, second=0)
-        reminder = Reminder.objects.create(profile=profile, title="Repeat reminder", start=start_day, 
-                                           end=end_day, startTime=start_time, endTime=end_time,
-                                           daysOfWeek=[3])
-        reminder.save()
-
-    # ====================================================================
-    # Seed Activities into the DB
-    # ====================================================================
-    def seed_activities(self):
-        # just one for now
-        Activity.objects.get_or_create(name="memory_activity")  # don't create if already exists.
+        # Transcript fixtures need a target profile and a user for normal session fields
+        if (SEED_TRANSCRIPT_CHAT_DATA) and (workshop_profile):
+            analysis_user = primary_admin or workshop_user
+            for test_dir in TRANSCRIPT_FIXTURE_DIRS:
+                seed_transcript_chat(workshop_profile, analysis_user, test_dir=test_dir)
         
-    # ====================================================================
-    # Seed RAG Instructions into the DB
-    # ====================================================================
-    def seed_rag_instructions(self):
-        User = get_user_model()
-        memory_activity = Activity.objects.get(name="memory_activity")
-        demo_user = User.objects.get(username="demo_caregiver")
+        elif SEED_TRANSCRIPT_CHAT_DATA:
+            self.stdout.write(self.style.WARNING(
+                f"{SEED_DATA} Skipped transcript fixtures because {SD_H}DEMO_USERNAME_0{SD_R} "
+                f"and {SD_H}DEMO_PASSWORD_0{SD_R} are not configured.{RESET}"
+            ))
 
-        for idx, name in enumerate(DEMO_RAG_NAMES):
-            description = DEMO_RAG_DESCRIPTIONS[idx]
-            instructions = DEMO_RAG_INSTRUCTIONS[idx]
-            obj, _ = RAGInstructions.objects.update_or_create(
-                        name=name,
-                        user=demo_user,
-                        activity=memory_activity,
-                        defaults={
-                            "description": description,
-                            "instructions": instructions,
-                            "instruction_order": 1,
-                        },
-                    )
+    # Ensure one optional environment-controlled login
+    def ensure_environment_user(
+        self,
+        username_setting : str,           # Django setting containing the username
+        password_setting : str,           # Django setting containing the password
+        first_name       : str,           # Configured display first name
+        last_name        : str,           # Configured display last name
+        *,
+        is_staff         : bool = False,  # Whether custom admin-only access is enabled
+        is_superuser     : bool = False,  # Whether the Django admin dashboard is fully accessible
+    ) -> AbstractBaseUser | None:
+        username = getattr(django_settings, username_setting)
+        password = getattr(django_settings, password_setting)
+        if (not username) or (not password): return None
 
-            try:
-                index_single_instruction(obj)
-            except Exception as e:
-                print(f"[VectorDB] Failed to index seeded instruction {obj.id}: {e}")
+        user = self.ensure_user(
+            username         = username,
+            password         = password,
+            refresh_password = True,
+            first_name       = first_name,
+            last_name        = last_name,
+            is_staff         = is_staff,
+            is_superuser     = is_superuser,
+        )
+        self.stdout.write(self.style.SUCCESS(
+            f"{SEED_DATA} Account {SD_H}{username}{SD_R} ensured from the environment.{RESET}"
+        ))
+        return user
+
+    # ================================================================================
+    # Random UI Sample Fixtures
+    # ================================================================================
+    def setup_ui_sample_data(self, days_ago: date) -> None:
+        """
+        Ensure the fixture-only patient/caregiver pair used by random user-interface
+        examples. Their account records are never deleted when fixture seeding is off
+        or when this command is run repeatedly.
+        """
+        patient   = self.ensure_user(username="demo_patient",   password="1", first_name="John", last_name="Patient")
+        caregiver = self.ensure_user(username="demo_caregiver", password="1", first_name="Jane", last_name="Caregiver", is_staff=False)
+        profile   = self.ensure_patient_profile(patient, days_ago)
+        self.ensure_caregiver_access(caregiver, profile)
+
+        if not SEED_UI_SAMPLE_DATA: return
+
+        seed_chats           (profile, days_back     = 10)
+        seed_reminders       (profile, num_reminders =  5)
+        seed_activities      ()
+        seed_rag_instructions()
+
+    # ================================================================================
+    # Fixed Analyzed Chat Fixtures
+    # ================================================================================
+    def setup_analyzed_data(self, days_ago: date) -> None:
+        """
+        Ensure the fixture-only profile for fixed analyzed conversations. Random UI
+        filler and analyzed chats remain independently controlled datasets attached to
+        this same profile for backwards compatibility with the existing demo screens.
+        """
+        patient   = self.ensure_user(username="sample_user", password="1", first_name="Analysis", last_name="Tester")
+        caregiver = self.ensure_user(username="sample_care", password="1", first_name="Sample",   last_name="Caregiver", is_staff=False)
+        profile   = self.ensure_patient_profile(patient, days_ago)
+        self.ensure_caregiver_access(caregiver, profile)
+
+        if SEED_UI_SAMPLE_DATA:
+            seed_chats    (profile, days_back     = 10)
+            seed_reminders(profile, num_reminders =  5)
+
+        if SEED_ANALYZED_CHAT_DATA: seed_analyzed_chats(profile, patient)

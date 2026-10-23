@@ -73,7 +73,6 @@ def index_single_instruction(instruction) -> None:
         rows.append(
             RAGInstructionChunkEmbedding(
                 instruction_id=instruction.id,
-                user_id=getattr(instruction, "user_id", None),
                 activity_id=getattr(instruction, "activity_id", None),
                 name=instruction.name,
                 chunk_index=idx,

@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-listener/chat-controls/styles";
+import type { ResponseMode } from "@/hooks/chat-listener/chat-controls/types";
 
 // --------------------------------------------------------------------------------
 // Define Types
@@ -7,22 +8,21 @@ import { btnClass, groupDivStyle, buttonSectionHeader } from "@/hooks/chat-liste
 type Pending = Partial<{
     pause_and_listen   : boolean;
     resume_and_respond : boolean;
-    paraphrase_last    : boolean;
+    repeat_last        : boolean;
     send_custom        : boolean;
 }>;
 
-// manualMode is:
-//     TRUE only after backend ACK confirms pause/listen entered.
-//     FALSE when in normal automatic responses mode.
+// responseMode is the backend's own control state; it only becomes "manual" after an ACK
+// confirms the transition, never optimistically when a button is pressed.
 type Props = {
-    connected   : boolean;
-    manualMode  : boolean;
-    pending    ?: Pending;
+    connected    : boolean;
+    responseMode : ResponseMode;
+    pending     ?: Pending;
 
-    // Commands (send to backend; parent flips manualMode only on ACK)
+    // Commands (send to backend; parent flips responseMode only on ACK)
     onPauseAndListen   : () => void;
     onResumeAndRespond : () => void;
-    onParaphraseLast   : () => void;
+    onRepeatLast       : () => void;
     onSendCustom       : (text: string) => void;
 
     // If I decide to have the backend ever do "suggested drafts" where the admin can edit it before approving
@@ -35,19 +35,22 @@ type Props = {
 // ================================================================================
 export default memo(function ResponseControlGroup({
     connected,
-    manualMode,
+    responseMode,
     pending,
     onPauseAndListen,
     onResumeAndRespond,
-    onParaphraseLast,
+    onRepeatLast,
     onSendCustom,
     suggestedDraft = null,
 }: Props) {
+    // Every control in this group is only usable once the backend is in manual mode
+    const manualMode = responseMode === "manual";
+
     // Keep track of the different pending states (each command type waits for acks)
     const p = useMemo(() => ({
         pause_and_listen   : false,
         resume_and_respond : false,
-        paraphrase_last    : false,
+        repeat_last        : false,
         send_custom        : false,
     ...pending,}), [pending]);
 
@@ -89,7 +92,7 @@ export default memo(function ResponseControlGroup({
         {/* First Button Row */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="mt-2 grid grid-cols-2 gap-2">
-            {/* Paraphrase Last Question (changes to listening when in manual mode) */}
+            {/* Pause controls change to a listening indicator in manual mode */}
             {!manualMode ? (
                 <button
                     className = {btnClass(disabled(p.pause_and_listen), "secondary")}
@@ -117,12 +120,12 @@ export default memo(function ResponseControlGroup({
         {/* Second Button Row */}
         {/* -------------------------------------------------------------------------------- */}
         <div className="mt-2 grid grid-cols-2 gap-2">
-            {/* Paraphrase Last Question */}
+            {/* Repeat the last assistant response */}
             <button
-                className = {btnClass(disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast, "secondary")}
-                disabled  = {disabled(p.paraphrase_last) || !manualMode || !onParaphraseLast}
-                onClick   = {() => onParaphraseLast?.()}
-            >{p.paraphrase_last ? "Working..." : "Repeat Last Response"}</button>
+                className = {btnClass(disabled(p.repeat_last) || !manualMode || !onRepeatLast, "secondary")}
+                disabled  = {         disabled(p.repeat_last) || !manualMode || !onRepeatLast}
+                onClick   = {() => onRepeatLast?.()}
+            >{p.repeat_last ? "Working..." : "Repeat Last Response"}</button>
 
             {/* Enable Text Box */}
             <button

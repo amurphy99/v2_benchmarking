@@ -109,7 +109,9 @@ SSH:/home/user/
 3. `cd` into the `backend` directory
 4. ***<b>(Local only, don't commit this)</b>*** In `docker-compose.backend.yaml` comment out both `external: true` lines. Also, Uncomment the database related services, since this branch uses external database connection during deployment.
 5. Run: `docker compose -f docker-compose.backend.yaml up --build`
-6. If this was the first time you created the volume for the vector database. Then also run: `docker exec -it db_vector psql -U postgres -d dementia_chat_vector_db -c "CREATE EXTENSION IF NOT EXISTS vector;"` (only required once).
+
+The `rag_vectorstore` migration enables the PostgreSQL `vector` extension
+automatically when a new vector database is migrated.
 
 
 The web app can be accessed through localhost:5173 in your browser.
@@ -135,5 +137,4 @@ Useful commands:
 
 <hr>
 </details>
-
 

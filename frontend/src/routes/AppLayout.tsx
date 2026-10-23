@@ -14,7 +14,8 @@ export function AppLayout() {
     // Add routes with no footer
     const hideFooter =
         pathname.startsWith("/admin/chat"         ) ||
-        pathname.startsWith("/admin/chat/inactive");   // (redundant but leaving as example)
+        pathname.startsWith("/admin/chat/inactive") || // Redundant but leaving as example
+        pathname.startsWith("/transcript-playback");   // TranscriptPlayback page
 
     // Return UI component
     if (loading) { return <Spinner />; }

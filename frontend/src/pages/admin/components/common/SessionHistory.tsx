@@ -1,4 +1,9 @@
-import { useRef, useMemo } from "react";
+/* Admin ChatSession messages & biomarkers view components
+--------------------------------------------------------------------------------
+`frontend/src/pages/admin/components/common/SessionHistory.tsx`
+
+*/
+import { useMemo } from "react";
 
 // ChatSession DB model + local type equivalents
 // LIVE version uses the local equivalents; OFFLINE version uses the full model
@@ -9,50 +14,49 @@ import { LocalBiomarkerSeries } from "@/hooks/chat-listener/data_utils/useLocalB
 // Components
 import { ChatMessages   } from "./ChatMessages";
 import { BiomarkerPanel } from "./BiomarkerPanel";
-import { cardClass      } from "./commonStyle";
 
 // Misc. Helpers
-import { useElementHeight           } from "@/hooks/style/useElementHeight";
 import { ChatBiomarkerToLocalSeries } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
 
-// Input needs to be either offline session OR live data
+// Either offline session OR live data
 type SessionHistoryProps =
-    | { session : ChatSession; messages?: never;              series?: never                }
-    | { session?: never;       messages : LocalChatMessage[]; series : LocalBiomarkerSeries };
+    | { session : ChatSession; messages?: never;              series?: never;                fillHeight?: boolean }
+    | { session?: never;       messages : LocalChatMessage[]; series : LocalBiomarkerSeries; fillHeight?: boolean };
 
 // ================================================================================
 // Admin ChatSession Messages & Biomarkers View Components
 // ================================================================================
 // Flexible for active & inactive chats
 export function SessionHistory(props: SessionHistoryProps) {
-    // Check if chat is active or not
+    // Default mode  (inactive chat): natural height, scrolls with the page
+    // `fillHeight` mode (live chat): take parent's height, ChatHistory scrolls internally, no page-level overflow.
     const inactive = ("session" in props);
 
-    // Normalize inputs once
+    // Normalize inpu types once
     const messages = useMemo(() => {return inactive ? (props.session.messages ?? [])                       : props.messages;}, [props]);
     const series   = useMemo(() => {return inactive ? ChatBiomarkerToLocalSeries(props.session.biomarkers) : props.series;  }, [props]);
 
-    // Keep the heights equal (maybe doing it this way sucks, idk)
-    const bioPanelRef    = useRef<HTMLDivElement | null>(null);
-    const bioHeight      = useElementHeight(bioPanelRef);
-
     // Style helpers
-    const style_messages   = cardClass("w-full flex flex-col min-h-0");
-    const style_biomarkers = cardClass("w-full");
+    const cardClass     = "rounded-xl border border-admin-border bg-admin-panel shadow-sm overflow-hidden";
+    const messagesClass = `${cardClass} flex flex-col min-h-0`;
+    const biomarkClass  = `${cardClass} min-h-0 overflow-y-auto`;
+
+    // Fixed height in inactive mode so the inner panels actually scroll
+    const heightClass = props.fillHeight ? "h-full" : "h-[70vh]";
 
     return (
-        <div className="grid grid-cols-2 m-[1rem] gap-[1rem] items-start">
+        <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] gap-4 items-stretch ${heightClass}`}>
 
             {/* Chat Messages */}
-            <div className={style_messages} style={bioHeight ? { height: bioHeight } : undefined}>
+            <div className={messagesClass}>
                 <ChatMessages messages={messages} do_auto_scroll={!inactive} />
             </div>
 
             {/* Biomarker Scores */}
-            <div ref={bioPanelRef} className={style_biomarkers}>
+            <div className={biomarkClass}>
                 <BiomarkerPanel series={series} windowSeconds={"all"} />
             </div>
-        
+
         </div>
-    )
+    );
 }

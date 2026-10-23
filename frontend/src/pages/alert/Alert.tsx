@@ -6,12 +6,12 @@ import { getMoodAlert, getWordAlert, WordAlert } from "@/utils/functions/getAler
 import { useAuth } from "@/context/AuthProvider";
 import { dateFormatOptionsMed, dateFormatOptionsShort } from "@/utils/styling/numFormatting";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
+import { useProfile } from "@/hooks/queries/useProfile";
 
 export function Alert() {
     const { data: sessions, isLoading } = useChatSessions();
-    const { data: settings, isLoading: settingsLoading } = useUserSettings();
 
-    if (isLoading || settingsLoading) { 
+    if (isLoading) { 
         return <p>Loading...</p>; 
     }
 
@@ -38,10 +38,14 @@ export function Alert() {
 }
 
 function FlaggedWordAlert( { wordAlerts } : { wordAlerts: WordAlert[] } ) {
+    const { data: profile, isLoading: profileLoading } = useProfile();
+    if (profileLoading) {
+        return null;
+    }
     return (
         <div className={blockStyle}>
             <h2 className={`caregiver-text mb-0`}>Flagged Words</h2>
-            <p className="text-lg mt-[1rem]">{useAuth().account.user.first_name} mentioned several flagged words this week.</p>
+            <p className="text-lg mt-[1rem]">{profile.account.user.first_name} mentioned several flagged words this week.</p>
             <div className="flex flex-col gap-2">
                 {wordAlerts.map( (alert, idx) => {
                     return(
@@ -65,10 +69,14 @@ function FlaggedWordAlert( { wordAlerts } : { wordAlerts: WordAlert[] } ) {
 }
 
 function MoodAlert( { week, days } : { week: ChatWeek, days: Date[] } ) {
+    const { data: profile, isLoading: profileLoading } = useProfile();
+    if (profileLoading) {
+        return null;
+    }
     return (
         <div className={`${blockStyle}`}>
             <h2 className={`caregiver-text mb-0`}>Mood Change</h2>
-            <p className="text-lg mt-[1rem]">{useAuth().account.user.first_name} was in a bad mood on {stringifyDays(days)}. 
+            <p className="text-lg mt-[1rem]">{profile.account.user.first_name} was in a bad mood on {stringifyDays(days)}. 
                 You might want to talk with them.</p>
             <WeeklyMoods week={week} />
         </div>
