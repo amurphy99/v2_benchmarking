@@ -1,59 +1,42 @@
-/* ================================================================================
-// AdminControlsPanel
-// ================================================================================
-Control panel for the admin chat listener page. Contains button groups that all
-send commands to the backend.
+/* Chat controls row on the live chat page: listening, responses, and recording.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/admin/components/AdminControlsPanel`
 
-// ================================================================================ */
+Every button sends a command through the page's `useCommandAcks` hook, which
+tracks which buttons are waiting on a backend acknowledgement. The avatar's
+action buttons live in the page's side column instead (`LiveSidePanel`).
 
-// Utilities
-import { ControlState, CommandAck } from "@/hooks/chat-listener/chat-controls/types";
-import { useCommandAcks           } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
-import type { CapabilityProfile   } from "../capabilities/profiles";
+*/
+import type { ReactElement } from "react";
+
+// From this project
+import type { ControlState   } from "@/hooks/chat-listener/chat-controls/types";
+import type { useCommandAcks } from "@/hooks/chat-listener/chat-controls/useCommandAcks";
 
 // Button Groups
 import    DevSamplesGroup       from "./controlGroups/DevSamplesGroup";
 import    ChatControlsGroup     from "./controlGroups/ChatControlsGroup";
-import    AvatarActionsGroup    from "./controlGroups/AvatarActionsGroup";
 import    ResponseControlGroup  from "./controlGroups/ResponseControlGroup";
 import    RecordingControlGroup from "./controlGroups/RecordingControlGroup";
+
+// Pending flags and button actions from the page's command hook
+type CommandAcks = ReturnType<typeof useCommandAcks>;
+
 
 // ================================================================================
 // Control panel with commands the admin can send to the backend
 // ================================================================================
-export function AdminControlsPanel({
-    connected,            // Connection with the backend
+export function AdminControlsPanel({connected, controlState, pending, actions, onAddSampleMessage, onAddSampleBiomarker}: {
+    // Command state
+    connected    : boolean;                  // Connection with the backend
+    controlState : ControlState;             // Listening, response mode, and recording, as the backend last confirmed
+    pending      : CommandAcks["pending"];   // Buttons waiting on a backend acknowledgement
+    actions      : CommandAcks["actions"];   // Commands the buttons send
 
     // Development-only helpers (keeping these for now)
-    onAddSampleMessage,   // Add sample messages to the page
-    onAddSampleBiomarker, // Add sample biomarker data to the page
-
-    // All used by 'useCommandAcks' hook
-    send,                 // Send data through the WebSocket
-    controlState,         // State of the control buttons (e.g. "listening", "response_mode")
-    setControlState,      // Apply state updates to the AdminControlPanel (listening or paused)
-    registerAckHandler,   // Method that allows us to register something from here as the handler for an ack
-    capabilities,         // Which robot actions the monitored frontend can actually perform
-}: {
-    connected            : boolean;
-    onAddSampleMessage   : () => void;
-    onAddSampleBiomarker : () => void;
-    send                 : (msg: any) => void;
-    controlState         : ControlState;
-    setControlState      : (fn: (prev: ControlState) => ControlState) => void;
-    registerAckHandler   : (fn: (ack:  CommandAck  ) => void        ) => void;
-    capabilities         : CapabilityProfile;
-}) {
-
-    // Use the prebuilt hook for handling commands & acks
-    const { pending, actions } = useCommandAcks({
-        connected,
-        send,
-        controlState,
-        setControlState,
-        registerAckHandler,
-    });
-
+    onAddSampleMessage   : () => void;   // Add sample messages to the page
+    onAddSampleBiomarker : () => void;   // Add sample biomarker data to the page
+}): ReactElement {
     // --------------------------------------------------------------------------------
     // UI Components
     // --------------------------------------------------------------------------------
@@ -89,18 +72,6 @@ export function AdminControlsPanel({
                 onRepeatLast       = {actions.repeatLast      }
                 onSendCustom       = {actions.sendCustom      }
                 suggestedDraft     = {null                    }
-            />
-
-            {/* Avatar Actions (buttons come from the monitored frontend's capability profile) */}
-            <AvatarActionsGroup
-                connected    = {connected}
-                capabilities = {capabilities}
-                pending      = {{
-                    robot_emotion   : pending.robot_emotion,
-                    robot_animation : pending.robot_animation,
-                }}
-                onEmotion   = {actions.robotEmotion  }
-                onAnimation = {actions.robotAnimation}
             />
 
             {/* Recording Toggle */}

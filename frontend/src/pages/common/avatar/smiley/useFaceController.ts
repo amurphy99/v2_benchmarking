@@ -43,7 +43,7 @@ const SMILEY_WAKE_YAWN_MS     = 1_500;   // How long the yawn holds before the f
 // Easing rates (how quickly each layer closes the gap to its target, per second)
 const SMILEY_GAZE_EASE_PER_SEC   = 14;   // Eyes jumping to a new point
 const SMILEY_STATE_EASE_PER_SEC  =  5;   // Conversation-state looks fading in and out
-const SMILEY_SPEECH_EASE_PER_SEC = 30;   // Mouth following the voice level
+const SMILEY_SPEECH_EASE_PER_SEC = 60;   // Mouth following the voice level (the chat page's level is already smooth and on time)
 
 // Blinks
 const SMILEY_BLINK_INTERVAL_MIN_MS   = 2_500;   // Shortest gap between blinks

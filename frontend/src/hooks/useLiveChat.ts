@@ -5,7 +5,7 @@
 The chat page starts, pauses, and ends the chat through this hook. A backend
 pause or resume (`stream_status`) stops or restarts the microphone here, and
 the page hears about both through `onChatPaused` and `onChatResumed`. The TTS
-player's `systemSpeaking` and `readOutputLevel` pass through for the avatar.
+player's `systemSpeaking` and `readSpeechLoudness` pass through for the avatar.
 
 */
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -15,12 +15,12 @@ import { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
 // What the hook gives the chat page
 interface LiveChatControls {
-    start           : () => void;     // Connect if needed, then stream the microphone and play replies
-    stop            : () => void;     // Pause: stop the microphone and drop buffered speech
-    save            : () => void;     // End the chat
-    chatEnding      : boolean;        // The backend ended the chat (the goodbye may still be playing)
-    systemSpeaking  : boolean;        // Reply speech is playing
-    readOutputLevel : () => number;   // Loudness (RMS, 0 to 1) of the reply speech playing now
+    start              : () => void;                                              // Connect if needed, then stream the microphone and play replies
+    stop               : () => void;                                              // Pause: stop the microphone and drop buffered speech
+    save               : () => void;                                              // End the chat
+    chatEnding         : boolean;                                                 // The backend ended the chat (the goodbye may still be playing)
+    systemSpeaking     : boolean;                                                 // Reply speech is playing
+    readSpeechLoudness : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness of the reply heard from `fromSec` from now, per frame
 }
 
 // ================================================================================
@@ -80,7 +80,7 @@ export default function useLiveChat({
 
     // TODO: Maybe these values should be pulled from a config file somewhere...
     // Instantiate the audio player for backend-sent TTS
-    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readOutputLevel } = useAudioPlayer({
+    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness } = useAudioPlayer({
         sampleRate      : 24_000,
         numChannels     : 1,
         bitsPerSample   : 16,
@@ -149,5 +149,5 @@ export default function useLiveChat({
     };
 
     // Exposes start, stop, save & chatEnding (true while goodbye audio is playing), plus the reply speech state for the avatar
-    return { start, stop, save, chatEnding, systemSpeaking, readOutputLevel };
+    return { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness };
 }

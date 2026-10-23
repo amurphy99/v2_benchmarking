@@ -83,7 +83,7 @@ export function Chat() {
 
 
     // Live-chat hook
-    const { start, stop, save, chatEnding, systemSpeaking, readOutputLevel } = useLiveChat({
+    const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
@@ -119,7 +119,7 @@ export function Chat() {
 
     // Avatar from the participant's settings (`UserSettings.modelChoice`), asleep until the chat starts
     const model = settings.modelChoice;
-    useChatAvatar(avatarRef, isFetchedAfterMount ? model : null, {running: recording, systemSpeaking, awaitingReply}, readOutputLevel);
+    useChatAvatar(avatarRef, isFetchedAfterMount ? model : null, {running: recording, systemSpeaking, awaitingReply}, readSpeechLoudness);
 
     // ================================================================================
     // Return UI elements

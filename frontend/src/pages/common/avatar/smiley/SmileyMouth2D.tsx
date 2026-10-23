@@ -2,13 +2,15 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/SmileyMouth2D`
 
-A closed mouth is the tapered smile line. As the mouth opens, that line fades
-and the opening takes over: filled with the dark mouth gradient, with the
-tongue and teeth drawn inside it (clipped to its outline so they never spill
-past the lips), and a rounded outline all the way around on top. `mouthEyeFill`
-fills the opening with the eyes' color instead of the dark red-brown. Lines between
-the teeth use the outline's color and width, so every mouth line matches.
-The cold face's icicles hang from the lower lip.
+A closed mouth is the tapered smile line. As the mouth opens, the opening fades
+in on top of that line, and the line stays underneath until the opening covers
+it, so a talking mouth never thins out between syllables. The opening is filled
+with the dark mouth gradient, with the tongue and teeth drawn inside it
+(clipped to its outline so they never spill past the lips), and a rounded
+outline all the way around on top. `mouthEyeFill` fills the opening with the
+eyes' color instead of the dark red-brown. Lines between the teeth use the
+outline's color and width, so every mouth line matches. The cold face's icicles
+hang from the lower lip.
 
 Each row of teeth is shaded white at its top to soft gray at its bottom. Both
 gradients are laid out from the mouth's shape each frame rather than from each
@@ -56,9 +58,14 @@ export default function SmileyMouth2D({face, paint}: {
 
     return (
         <g transform={`translate(0 ${SMILEY_MOUTH_Y + face.mouthShift})`}>
-            {/* Opening, with the tongue and teeth clipped inside it, then its outline on top */}
+            {/* Tapered closed-mouth line, under any small opening until the opening covers it */}
+            {(mouth.lineFade > 0) ? (
+                <path d={mouth.line} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={mouth.lineFade} />
+            ) : null}
+
+            {/* Opening, with the tongue and teeth clipped inside it, then its outline on top (all fading in together) */}
             {(face.mouthOpen > SMILEY_MOUTH_MIN_OPEN) ? (
-                <>
+                <g opacity={mouth.openFade}>
                     <defs>
                         <clipPath id={clipId}>
                             <path d={mouth.opening} />
@@ -77,17 +84,12 @@ export default function SmileyMouth2D({face, paint}: {
                             <path d={mouth.rowLine} fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} strokeLinecap="round" opacity={Math.min(face.teethTop, face.teethBottom)} />
                         ) : null}
                     </g>
-                    <path d={mouth.opening} fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} strokeLinejoin="round" opacity={mouth.openFade} />
-                </>
+                    <path d={mouth.opening} fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} strokeLinejoin="round" />
+                </g>
             ) : null}
 
             {/* Lip icicles (cold face) */}
             {(face.icicles > 0) ? <path d={mouth.drool} fill={paint.ice} opacity={face.icicles} /> : null}
-
-            {/* Tapered closed-mouth line, fading out as the mouth opens */}
-            {(mouth.openFade < 1) ? (
-                <path d={mouth.line} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={1 - mouth.openFade} />
-            ) : null}
         </g>
     );
 }

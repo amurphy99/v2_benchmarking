@@ -70,7 +70,9 @@ const SMILEY_MOUTH_ROUND_EXPONENT   = 0.5;   // Corner shape at a full `mouthRou
 const SMILEY_MOUTH_SAMPLES          = 40;    // Points along each lip (packed toward the corners, where they turn fastest)
 const SMILEY_MOUTH_LINE_W           = 8;     // Closed-mouth line thickness at its middle
 const SMILEY_MOUTH_LINE_END_W       = 3.4;   // ...and at its corners
-const SMILEY_MOUTH_OUTLINE_OPEN     = 0.2;   // Openness by which the closed-mouth line has handed over to the outline
+const SMILEY_MOUTH_OUTLINE_OPEN     = 0.2;   // Openness by which the opening (fill, teeth, and outline) has fully faded in
+const SMILEY_MOUTH_LINE_HIDE_FROM   = 0.12;  // Openness at which the closed-mouth line under it starts fading (the opening covers it by then)
+const SMILEY_MOUTH_LINE_HIDE_TO     = 0.25;  // ...and is gone
 
 // Teeth and tongue, as shares of the open mouth's height at its middle
 const SMILEY_TEETH_ROW_SHARE      = 0.5;                            // Height of a full row of teeth
@@ -158,7 +160,8 @@ export type EyeGeometry = {
 export type MouthShape = {
     opening      : string;             // Outline of the opening: upper lip left to right, then lower lip back
     line         : string;             // Tapered closed-mouth line (the smile curve)
-    openFade     : number;             // How far the closed-mouth line has handed over to the opening's outline, 0 to 1
+    openFade     : number;             // How far the opening (fill, teeth, and outline) has faded in, 0 to 1
+    lineFade     : number;             // How visible the closed-mouth line under it still is, 0 to 1
     topTeeth     : string;             // Band of teeth under the upper lip
     bottomTeeth  : string;             // Band of teeth over the lower lip
     topTeethY    : [number, number];   // Heights the upper teeth's shading runs between (its lip, then where the rows meet)
@@ -284,9 +287,10 @@ export function mouthShape(face: FaceState): MouthShape {
     const upper = spots.map((u: number): Point => [u * halfW, upperY(u)]);
     const lower = spots.map((u: number): Point => [u * halfW, lowerY(u)]);
 
-    // 4) Closed-mouth line along the smile curve, thickest at the middle
+    // 4) Closed-mouth line along the smile curve, thickest at the middle (it fades only once an opening covers it)
     const closed    = spots.map((u: number): Point => [u * halfW, smile(u) + wave(u)]);
     const lineWidth = spots.map((u: number): number => SMILEY_MOUTH_LINE_END_W + ((SMILEY_MOUTH_LINE_W - SMILEY_MOUTH_LINE_END_W) * Math.cos((Math.PI * u) / 2)));
+    const lineHide  = clampUnit((face.mouthOpen - SMILEY_MOUTH_LINE_HIDE_FROM) / (SMILEY_MOUTH_LINE_HIDE_TO - SMILEY_MOUTH_LINE_HIDE_FROM));
 
     // 5) Teeth rows follow their lip and taper with the opening (the opening clips them)
     const gap          = lowerY(0) - upperY(0);
@@ -319,6 +323,7 @@ export function mouthShape(face: FaceState): MouthShape {
         opening      : closedPath([...upper, ...[...lower].reverse()]),
         line         : ribbonPath(closed, lineWidth),
         openFade     : Math.min(1, face.mouthOpen / SMILEY_MOUTH_OUTLINE_OPEN),
+        lineFade     : 1 - (lineHide * lineHide * (3 - (2 * lineHide))),
         topTeeth     : closedPath([...upper, ...[...topEdge].reverse()]),
         bottomTeeth  : closedPath([...lower, ...[...bottomEdge].reverse()]),
         topTeethY    : [Math.min(...upper.map(([, y]: Point) => y)), topInnerY(0)],
