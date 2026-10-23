@@ -35,11 +35,11 @@ SEED_TRANSCRIPT_CHAT_DATA = django_settings.SEED_TRANSCRIPT_CHAT_DATA  # Ensure 
 TRANSCRIPT_FIXTURE_DIRS = ("test_02", "test_03", "test_04", "test_05")  # Imported transcript folders enabled for the workshop profile
 
 # Study logins as (username, first name, last name); their two passwords come from the environment
-STUDY_CAREGIVER    = ("study_caregiver", "Study", "Caregiver")
+STUDY_CAREGIVER    = ("study_caregiver_1", "Study", "Caregiver")
 STUDY_PARTICIPANTS = (
-    ("study_participant_1", "Participant", "One"  ),
-    ("study_participant_2", "Participant", "Two"  ),
-    ("study_participant_3", "Participant", "Three"),
+    ("p1_english", "John",     "England" ),
+    ("p2_german",  "Hans",     "Germany" ),
+    ("p3_greek",   "Leonidas", "Greece"  ),
 )
 
 
