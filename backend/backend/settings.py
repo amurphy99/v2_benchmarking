@@ -34,7 +34,7 @@ ALLOWED_HOSTS = [
     "cognibot.org",            "www.cognibot.org", 
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
-    "sandbox1.cognibot.org",   "www.sandbox1.cognibot.org"
+    "sandbox1.cognibot.org",   "www.sandbox1.cognibot.org",
     "sandbox2.cognibot.org",   "www.sandbox2.cognibot.org",
     "sandbox3.cognibot.org",   "www.sandbox3.cognibot.org",
     "10.0.2.2", # for android dev
@@ -261,6 +261,10 @@ DEMO_PASSWORD_0 = config("DEMO_PASSWORD_0", default="")
 # Buddy robot user
 BUDDY_USERNAME = config("BUDDY_USERNAME", default="")
 BUDDY_PASSWORD = config("BUDDY_PASSWORD", default="")
+
+# Study caregiver and its three participants (usernames are fixed in `seed_demo.py`)
+STUDY_CAREGIVER_PASSWORD   = config("STUDY_CAREGIVER_PASSWORD",   default="")
+STUDY_PARTICIPANT_PASSWORD = config("STUDY_PARTICIPANT_PASSWORD", default="")  # Shared by all three participants
 
 
 # --------------------------------------------------------------------------------

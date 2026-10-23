@@ -26,3 +26,4 @@ export { AdminChatInactive   } from "@/pages/admin/AdminChatInactive";
 export { AdminChatActivities } from "@/pages/admin/AdminChatActivities";
 export { TranscriptPlayback  } from "@/pages/transcript_playback/TranscriptPlayback";
 export { AdminParticipants   } from "@/pages/admin/AdminParticipants";
+export { AdminCreateAccount  } from "@/pages/admin/AdminCreateAccount";

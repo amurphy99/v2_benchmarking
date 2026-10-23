@@ -236,7 +236,7 @@ start_time,end_time,score
 
 ## Environment Variables
 
-The seed command provisions four persistent, environment-controlled users from `.env` (in [`backend/.env`](../../.env)):
+The seed command provisions persistent, environment-controlled users from `.env` (in [`backend/.env`](../../.env)):
 
 ```
 ADMIN_USERNAME_0=...   # primary staff admin; can view all transcripts including the demo
@@ -250,9 +250,16 @@ DEMO_PASSWORD_0=...
 
 BUDDY_USERNAME=...     # owns an independent profile without seeded chat data
 BUDDY_PASSWORD=...
+
+STUDY_CAREGIVER_PASSWORD=...     # password for the fixed "study_caregiver" login
+STUDY_PARTICIPANT_PASSWORD=...   # one password shared by "study_participant_1" to "study_participant_3"
 ```
 
-The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users get `Access` to that profile through caregiver links. The Buddy user gets a separate patient profile and no seeded chat sessions. Re-running `seed_demo` can refresh the configured identity fields and environment-managed passwords, but it never deletes data linked to any of these accounts.
+The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users always get a caregiver account, plus `Access` to that profile when it exists. The Buddy user gets a separate patient profile and no seeded chat sessions. Re-running `seed_demo` can refresh the configured identity fields and environment-managed passwords, but it never deletes data linked to any of these accounts.
+
+The study usernames are fixed in [`seed_demo.py`](commands/seed_demo.py) (`STUDY_CAREGIVER`, `STUDY_PARTICIPANTS`); only their two passwords live in `.env`, and the group is skipped while either is blank. `study_caregiver` is not staff, so the Monitor pages show it only its three linked participants. New participants start on the model defaults: the Smiley avatar, recording off, and English (`en-US`). Those are only applied when a row is first created, so changes made later on the admin pages survive restarts.
+
+A caregiver account may hold `Access` links to any number of participants. Staff accounts (`is_staff`) see every participant without links. Outside of seeding, staff create accounts and change caregiver links on the admin pages; there is no public signup.
 
 The hardcoded `demo_patient` / `demo_caregiver` and `sample_user` / `sample_care` pairs own repository fixture data. Their fixture passwords are only assigned when the users are first created. Seeding does not reset their profiles or any conversations they later accumulate.
 
@@ -276,7 +283,7 @@ When the backend container starts, the management commands execute the following
 3. **`setup_environment_accounts()`** —
     - Creates or refreshes the two admins, workshop demo user, and Buddy user from `.env` without deleting linked records.
     - Makes the primary admin a Django superuser so it can use the `/cognibot-manage-dashboard/` admin site. Every other environment account is reset to non-superuser on each startup.
-    - Links both admins to the workshop profile and gives Buddy a separate empty profile.
+    - Gives both admins a caregiver account, links them to the workshop profile, and gives Buddy a separate empty profile.
     - If `SEED_TRANSCRIPT_CHAT_DATA`, calls `seed_transcript_chat()` for every configured source folder. Each importer hashes its WAV and skips that individual fixture when the same recording is already attached to the workshop profile.
     - `seed_transcript_chat` in turn:
       1. Reads `transcript_config.json` and parses the CSV into utterances grouped by `uttID`.
@@ -288,11 +295,13 @@ When the backend container starts, the management commands execute the following
          otherwise runs `post_chat_analysis()` normally. It then saves the summary,
          sentiment, topics, and risk fields through the standard session helper.
 
-4. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity, and creates missing RAG instructions without overwriting later edits.
+4. **`setup_study_accounts()`** — when both study passwords are set, ensures `study_caregiver` and `study_participant_1` to `_3`, gives each participant a profile, and links all three to the caregiver. Existing links and settings are kept.
 
-5. **`setup_analyzed_data()`** — ensures `sample_user` + `sample_care` and their profile. If `SEED_ANALYZED_CHAT_DATA`, it creates the complete `source="analyzed"` fixture set only when that set is absent. Real `source="webapp"` sessions are never selected or deleted.
+5. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity, and creates missing RAG instructions without overwriting later edits.
 
-6. **Temporary cleanup** — removes staff and superuser status from the hardcoded `AdnanSadi2` account, which an earlier version of `seed_demo` promoted. Delete this step once every deployed database has started once with it.
+6. **`setup_analyzed_data()`** — ensures `sample_user` + `sample_care` and their profile. If `SEED_ANALYZED_CHAT_DATA`, it creates the complete `source="analyzed"` fixture set only when that set is absent. Real `source="webapp"` sessions are never selected or deleted.
+
+7. **Temporary cleanup** — removes staff and superuser status from the hardcoded `AdnanSadi2` account, which an earlier version of `seed_demo` promoted. Delete this step once every deployed database has started once with it.
 
 No user, Account, Profile, Access, ChatSession, SessionAudio, recording object, or unrelated image is deleted by this workflow.
 

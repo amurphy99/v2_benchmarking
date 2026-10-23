@@ -8,17 +8,17 @@ These tests replace the analyzed-chat LLM call with a local async mock version.
 """
 from django.contrib.auth    import get_user_model
 from django.core.management import call_command
-from django.test            import TestCase
+from django.test            import TestCase, override_settings
 from datetime            import date
 from unittest            import mock
 
 # From this project
-from chat_app.management.commands.seed_demo             import Command
+from chat_app.management.commands.seed_demo             import Command, STUDY_CAREGIVER, STUDY_PARTICIPANTS
 from chat_app.management.seed_data.analyzed             import ANALYZED_SOURCE, seed_analyzed_chats
 from chat_app.management.seed_data.sample               import seed_chats, seed_images, seed_reminders
 from chat_app.management.seed_data.transcript           import seed_transcript_chat
 from chat_app.management.seed_data.transcript_data.data import DEMO_IMAGES
-from chat_app.models                                    import AlbumImage, ChatSession, SessionAudio
+from chat_app.models                                    import Access, Account, AlbumImage, ChatSession, Profile, SessionAudio, UserSettings
 
 
 # ================================================================================
@@ -63,6 +63,63 @@ class SeedAccountSafetyTests(TestCase):
         self.assertFalse(session.is_active)
         self.assertIsNotNone(session.end_ts)
         self.assertTrue(ChatSession.objects.filter(id=session.id).exists())
+
+    # Give a staff admin a caregiver account even when no workshop profile exists to link
+    @override_settings(ADMIN_USERNAME_0="lonely_admin", ADMIN_PASSWORD_0="admin-password", DEMO_USERNAME_0="", DEMO_PASSWORD_0="")
+    def test_admin_gets_caregiver_account_without_workshop_profile(self) -> None:
+        Command().setup_environment_accounts(date(2026, 1, 1))
+
+        account = Account.objects.get(user__username="lonely_admin")
+        self.assertEqual(account.role, "caregiver")
+        self.assertTrue(account.user.is_staff)
+        self.assertFalse(Access.objects.filter(account=account).exists())
+
+
+# ================================================================================
+# Study Accounts
+# ================================================================================
+@override_settings(STUDY_CAREGIVER_PASSWORD="caregiver-password", STUDY_PARTICIPANT_PASSWORD="participant-password")
+class StudyAccountSeedTests(TestCase):
+
+    # Create one caregiver linked to three participants, once, on the participant defaults
+    def test_study_accounts_are_created_once_with_defaults(self) -> None:
+        command = Command()
+        command.setup_study_accounts(date(2026, 1, 1))
+        command.setup_study_accounts(date(2026, 1, 1))
+
+        caregiver = Account.objects.get(user__username=STUDY_CAREGIVER[0])
+        self.assertEqual(caregiver.role, "caregiver")
+        self.assertFalse(caregiver.user.is_staff)
+        self.assertTrue(caregiver.user.check_password("caregiver-password"))
+
+        # Each participant has one profile, linked once, with Smiley, recording off, and English
+        usernames = [username for username, _, _ in STUDY_PARTICIPANTS]
+        profiles  = Profile.objects.filter(account__user__username__in=usernames)
+        self.assertEqual(profiles.count(), 3)
+        self.assertEqual(Access.objects.filter(account=caregiver).count(), 3)
+        for profile in profiles:
+            self.assertTrue (profile.account.user.check_password("participant-password"))
+            self.assertTrue (Access.objects.filter(account=caregiver, profile=profile).exists())
+            self.assertFalse(profile.save_audio_by_default)
+            self.assertEqual(profile.language, "en-US")
+            self.assertEqual(UserSettings.objects.get(profile=profile).modelChoice, "smiley")
+
+    # Keep a setting changed on the admin pages when startup seeding runs again
+    def test_study_seeding_keeps_later_setting_changes(self) -> None:
+        command = Command()
+        command.setup_study_accounts(date(2026, 1, 1))
+
+        username = STUDY_PARTICIPANTS[0][0]
+        UserSettings.objects.filter(profile__account__user__username=username).update(modelChoice="qt")
+        command.setup_study_accounts(date(2026, 1, 1))
+
+        self.assertEqual(UserSettings.objects.get(profile__account__user__username=username).modelChoice, "qt")
+
+    # Skip the whole group while either password is blank
+    @override_settings(STUDY_PARTICIPANT_PASSWORD="")
+    def test_study_accounts_skipped_without_both_passwords(self) -> None:
+        Command().setup_study_accounts(date(2026, 1, 1))
+        self.assertFalse(get_user_model().objects.filter(username=STUDY_CAREGIVER[0]).exists())
 
 
 # ================================================================================

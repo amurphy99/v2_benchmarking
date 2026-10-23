@@ -1,8 +1,8 @@
-/* Modal for changing one participant's recording default and avatar.
+/* Modal for changing one participant's recording default, language, and avatar.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/components/participants/ParticipantSettingsModal`
 
-Edits a draft copy of the two settings, and nothing reaches the backend until
+Edits a draft copy of the three settings, and nothing reaches the backend until
 Save. Escape, the close button, Cancel, and a click on the backdrop all close
 it and drop the draft. While a save runs, every control is disabled and the
 modal stays open; the page closes it once the save succeeds.
@@ -13,20 +13,23 @@ import      { useEffect, useId, useState } from "react";
 import      { LuX                        } from "react-icons/lu";
 
 // From this project
-import type { AdminProfile, AvatarModelChoice, UpdateAdminProfilePayload } from "@/api";
-import { AVATAR_MODEL_CHOICES } from "@/api";
-import { getAvatarEntry       } from "@/pages/common/avatar/avatarRegistry";
+import type { AdminProfile, AvatarModelChoice, LanguageChoice, UpdateAdminProfilePayload } from "@/api";
+import      { AVATAR_MODEL_CHOICES, LANGUAGE_CHOICES                                    } from "@/api";
+import      { getAvatarEntry, hasAvatarEntry                                            } from "@/pages/common/avatar/avatarRegistry";
 
 // UI Components
-import { AdminButton     } from "../ui/AdminButton";
-import { AdminSwitch     } from "../ui/AdminSwitch";
-import { participantName } from "./ParticipantCard";
+import { AdminButton                    } from "../ui/AdminButton";
+import { AdminSwitch                    } from "../ui/AdminSwitch";
+import { languageLabel, participantName } from "./ParticipantCard";
+
+// Avatars that can be picked (reserved choices stay hidden until their avatar is built)
+const PICKABLE_AVATARS = AVATAR_MODEL_CHOICES.filter(hasAvatarEntry);
 
 
 // ================================================================================
 // Participant Settings Modal
 // ================================================================================
-// Recording switch and avatar dropdown for one participant, saved together
+// Recording switch plus language and avatar dropdowns for one participant, saved together
 export function ParticipantSettingsModal({participant, saving, onSave, onClose}: {
     participant : AdminProfile;                                // Participant being edited (its values start the draft)
     saving      : boolean;                                     // A save is running
@@ -36,14 +39,19 @@ export function ParticipantSettingsModal({participant, saving, onSave, onClose}:
     // --------------------------------------------------------------------------------
     // Draft Settings
     // --------------------------------------------------------------------------------
-    // Copies of the two settings, changed freely until Save
+    // Copies of the three settings, changed freely until Save
     const [saveAudio, setSaveAudio] = useState<boolean          >(participant.save_audio_by_default);
+    const [language,  setLanguage ] = useState<LanguageChoice   >(participant.language);
     const [avatar,    setAvatar   ] = useState<AvatarModelChoice>(participant.modelChoice);
-    const changed = (saveAudio !== participant.save_audio_by_default) || (avatar !== participant.modelChoice);
+    const changed =
+        (saveAudio !== participant.save_audio_by_default) ||
+        (language  !== participant.language)              ||
+        (avatar    !== participant.modelChoice);
 
     // Ids tying the labels to their controls
-    const titleId  = useId();
-    const avatarId = useId();
+    const titleId    = useId();
+    const languageId = useId();
+    const avatarId   = useId();
 
     // --------------------------------------------------------------------------------
     // Closing
@@ -98,6 +106,21 @@ export function ParticipantSettingsModal({participant, saving, onSave, onClose}:
                         <AdminSwitch checked={saveAudio} onChange={setSaveAudio} label="Save chat audio automatically" disabled={saving} />
                     </div>
 
+                    {/* Language their chats will use */}
+                    <div>
+                        <label htmlFor={languageId} className="text-sm font-medium text-admin-text">Language</label>
+                        <select
+                            id        = {languageId}
+                            value     = {language}
+                            disabled  = {saving}
+                            onChange  = {(event: ChangeEvent<HTMLSelectElement>) => setLanguage(event.target.value as LanguageChoice)}
+                            className = "mt-1 w-full rounded-md border border-admin-border bg-admin-panel px-3 py-2 text-sm text-admin-text"
+                        >
+                            {LANGUAGE_CHOICES.map((choice: LanguageChoice) => <option key={choice} value={choice}>{languageLabel(choice)}</option>)}
+                        </select>
+                        <div className="text-xs text-admin-subtext mt-1">Saved for their speech recognition, responses, and voice. Chats are still in English for now.</div>
+                    </div>
+
                     {/* Avatar on their web chat page */}
                     <div>
                         <label htmlFor={avatarId} className="text-sm font-medium text-admin-text">Avatar</label>
@@ -108,7 +131,7 @@ export function ParticipantSettingsModal({participant, saving, onSave, onClose}:
                             onChange  = {(event: ChangeEvent<HTMLSelectElement>) => setAvatar(event.target.value as AvatarModelChoice)}
                             className = "mt-1 w-full rounded-md border border-admin-border bg-admin-panel px-3 py-2 text-sm text-admin-text"
                         >
-                            {AVATAR_MODEL_CHOICES.map((choice: AvatarModelChoice) => <option key={choice} value={choice}>{getAvatarEntry(choice).label}</option>)}
+                            {PICKABLE_AVATARS.map((choice: AvatarModelChoice) => <option key={choice} value={choice}>{getAvatarEntry(choice).label}</option>)}
                         </select>
                         <div className="text-xs text-admin-subtext mt-1">Shown the next time their chat page opens.</div>
                     </div>
@@ -123,7 +146,7 @@ export function ParticipantSettingsModal({participant, saving, onSave, onClose}:
                         variant  = "primary"
                         size     = "sm"
                         disabled = {!changed || saving}
-                        onClick  = {() => onSave({save_audio_by_default: saveAudio, modelChoice: avatar})}
+                        onClick  = {() => onSave({save_audio_by_default: saveAudio, language, modelChoice: avatar})}
                     >
                         {saving ? "Saving..." : "Save"}
                     </AdminButton>

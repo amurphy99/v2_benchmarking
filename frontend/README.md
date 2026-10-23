@@ -12,7 +12,7 @@ Pages
 - Chat
 + ChatDetails
 + Dashboard ("Speech Analysis" Page)
-+ Login / Signup
++ Login (no signup: staff create accounts on the admin Accounts page)
 - ProgressSummary (robot, prog bar, info, games)
 + Schedule
 

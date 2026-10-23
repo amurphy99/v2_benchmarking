@@ -1,13 +1,16 @@
-/* AdminChatActivities.tsx
+/* Staff-only page for managing Activities and their RAGInstructions.
 --------------------------------------------------------------------------------
-Admin-only page for managing Activities and their RAGInstructions.
-Accessible at /admin/chat/activities.
+`@frontend/src/pages/admin/AdminChatActivities`
+
+Accessible at /admin/chat/activities. The instructions are shared by every user,
+so caregivers who are not staff never see this page.
 
 Admins can:
  - View all instructions grouped (currently only memory_activity exists)
  - Create new instructions
  - Edit existing instructions
  - Delete instructions
+
 */
 import { useState, useCallback } from "react";
 import { useNavigate }           from "react-router-dom";
@@ -110,7 +113,7 @@ export function AdminChatActivities() {
                         className="text-sm text-admin-subtext hover:text-admin-text transition-colors mb-4 w-fit"
                         onClick={() => navigate("/admin")}
                     >
-                        ← Back to Admin
+                        ← Back to Monitor
                     </button>
                     
                     {/* Page header */}

@@ -1,3 +1,12 @@
+/* Profile page: the user's own details and who their profile is shared with.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/profile/Profile`
+
+Patients see their details and the caregivers linked to them. Caregivers see the
+participant they are linked to (the first one, when there are several). Links
+are read-only here; staff change them on the admin accounts page.
+
+*/
 import { useAuth } from "@/context/AuthProvider";
 import ProfileForm from "./components/ProfileForm";
 import DisplayProfileAccess from "./components/DisplayProfileAccess";
@@ -43,7 +52,7 @@ export function Profile() {
                 <h1 className="flex justify-center">{account?.user.first_name} {account?.user.last_name}</h1>
                 <FaCircleUser size={"5rem"} className={`mx-auto mb-[1rem]`} color={CAREGIVER_OKLCH}/>
                 <p className="text-lg text-center">{profile.account.user.first_name} is currently sharing their information with you.
-                    Is there anyone else with whom you'd like to share {profile.account.user.first_name}'s profile?
+                    Everyone {profile.account.user.first_name} shares their profile with:
                 </p>
                 <DisplayProfileAccess />
             </div>

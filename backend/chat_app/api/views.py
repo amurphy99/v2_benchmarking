@@ -3,10 +3,11 @@ REST endpoints for profiles, settings, chat sessions, and the admin tools.
 --------------------------------------------------------------------------------
 `backend.chat_app.api.views`
 
-Most views act on the logged-in user's own profile (or the one a caregiver
+Most views act on the logged-in user's own profile (or the first one a caregiver
 reaches through `Access`) via `ProfileMixin`, and the chat-session views scope
-their lookups with `accessible_chat_sessions`. The admin views (activity
-instructions and participant settings) also require `is_staff`.
+their lookups with `accessible_chat_sessions`. Participant settings are scoped by
+`monitored_profiles`, so a caregiver changes only their own participants. Activity
+instructions, account creation, and caregiver links require `is_staff`.
 
 """
 from rest_framework                       import viewsets, generics, mixins, permissions
@@ -23,8 +24,9 @@ from django.shortcuts    import get_object_or_404
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer, AdminProfileSerializer
-from  .mixins      import ProfileMixin, accessible_chat_sessions
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from  .serializers import AdminCaregiverSerializer, AdminCreateAccountSerializer, AdminProfileSerializer
+from  .mixins      import ProfileMixin, accessible_chat_sessions, monitored_profiles
 from ..helpers.downloadHelpers             import get_download_data
 from ..services.session_audio_storage      import create_recording_playback_url
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
@@ -225,14 +227,6 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
 # ======================================================================= ===================================
 # Profile Related Views
 # ======================================================================= ===================================
-class SignupPatientView(generics.CreateAPIView):
-    permission_classes = [permissions.AllowAny]
-    serializer_class   = SignupPatientSerializer
-    
-class SignupAccountView(generics.CreateAPIView):
-    permission_classes = [permissions.AllowAny]
-    serializer_class   = SignupAccountSerializer
-
 class ProfileView(ProfileMixin, generics.RetrieveUpdateAPIView):
     serializer_class   = ProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -247,33 +241,12 @@ class AccountView(generics.RetrieveAPIView):
     def get_object(self):
         user = self.request.user
         return Account.objects.get(user=user)
-    
-class SingleAccountView(generics.RetrieveAPIView):
-    serializer_class   = AccountSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self):
-        username = self.kwargs["username"]
-        user = get_user_model().objects.get(username=username)
-        account = Account.objects.get(user=user)
-        return account
-
-class AccessView(ProfileMixin, generics.RetrieveUpdateAPIView):
+# Who the user's profile is shared with (read-only; staff change links on the admin accounts page)
+class AccessViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class    = AccessSerializer
     permission_classes  = [permissions.IsAuthenticated]
-    
-    def get_object(self):
-        account = self.get_account()
-        return Access.objects.get(account=account)
-    
-class CreateAccessView(generics.CreateAPIView):
-    serializer_class   = CreateAccessSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
-class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
-    serializer_class    = AccessSerializer
-    permission_classes  = [permissions.IsAuthenticated]
-    
     def get_queryset(self):
         profile = self.get_profile()
         return Access.objects.filter(profile=profile)
@@ -282,25 +255,53 @@ class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
 # --------------------------------------------------------------------------------
 # Admin Participant Settings
 # --------------------------------------------------------------------------------
-# Let staff list every participant and change their recording default and avatar
+# Let staff and caregivers list their participants and change their chat settings
 class AdminProfileViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
-    GET   /api/admin/profiles/      => every participant (patient profile), most recent chat first
-    PATCH /api/admin/profiles/<id>/ => change one participant's recording default and avatar
+    GET   /api/admin/profiles/      => participants the user monitors (every one for staff), most recent chat first
+    PATCH /api/admin/profiles/<id>/ => change one participant's recording default, language, and avatar
     """
     serializer_class   = AdminProfileSerializer
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
 
-    # Every profile with its chat count and latest chat (demo sessions are hidden from admin views)
+    # Monitored profiles with their chat count and latest chat (demo sessions are hidden from admin views)
     def get_queryset(self) -> QuerySet[Profile]:
         real_chats = ~Q(chat_sessions__source="demo")
-        return (Profile.objects
+        return (monitored_profiles(self.request.user)
                 .select_related("account__user", "settings_user")
                 .annotate(
                     chat_count   = Count("chat_sessions",       filter=real_chats),
                     last_chat_at = Max  ("chat_sessions__date", filter=real_chats),
                 )
                 .order_by(F("last_chat_at").desc(nulls_last=True), "account__user__username"))
+
+
+# --------------------------------------------------------------------------------
+# Admin Accounts
+# --------------------------------------------------------------------------------
+# Let staff create a participant or caregiver login (there is no public signup)
+class AdminCreateAccountView(generics.CreateAPIView):
+    serializer_class   = AdminCreateAccountSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+# Let staff list caregivers and replace the set of participants each one is linked to
+class AdminCaregiverViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    GET /api/admin/caregivers/      => every non-staff caregiver with their linked participants
+    PUT /api/admin/caregivers/<id>/ => {"participant_ids": [...]} becomes that caregiver's full set of links
+    """
+    serializer_class   = AdminCaregiverSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    http_method_names  = ["get", "put", "head", "options"]  # PUT only: a request always sends the whole set
+
+    # Non-patient accounts without staff status (staff see everything without links)
+    def get_queryset(self) -> QuerySet[Account]:
+        return (Account.objects
+                .exclude(role="patient")
+                .filter(user__is_staff=False)
+                .select_related("user")
+                .prefetch_related("account_access__profile__account__user")
+                .order_by("user__username"))
 
 
 # ======================================================================= ===================================

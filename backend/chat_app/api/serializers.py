@@ -1,18 +1,22 @@
 """
-DRF serializers for profiles, settings, chat sessions, and signup.
+DRF serializers for profiles, settings, chat sessions, and admin account tools.
 --------------------------------------------------------------------------------
 `backend.chat_app.api.serializers`
 
 Field names follow the model fields, including the few camelCase ones (such as
 `UserSettings.modelChoice`); `frontend/src/api/models.ts` mirrors them exactly.
+Accounts are created only by staff (`AdminCreateAccountSerializer`); there is no
+public signup.
 
 """
 from rest_framework import serializers
 from ..models import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
 
-from django.contrib.auth import get_user_model
-from django.db           import transaction
+from django.contrib.auth                     import get_user_model
+from django.contrib.auth.password_validation import validate_password as check_password_rules
+from django.contrib.auth.validators          import UnicodeUsernameValidator
+from django.db                               import transaction
 
 # ================================================================================
 # Profiles and Profile-related Data
@@ -79,7 +83,7 @@ class AdminProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model            = Profile
-        fields           = ("id", "user", "save_audio_by_default", "modelChoice", "chat_count", "last_chat_at")
+        fields           = ("id", "user", "save_audio_by_default", "language", "modelChoice", "chat_count", "last_chat_at")
         read_only_fields = ("id",)
 
     # Save the recording default (on the profile) and the avatar (on its settings row) together
@@ -96,46 +100,93 @@ class AdminProfileSerializer(serializers.ModelSerializer):
         return profile
 
 
+# --------------------------------------------------------------------------------
+# Admin Accounts
+# --------------------------------------------------------------------------------
+# New login created by staff: a participant (with their profile) or a caregiver
+class AdminCreateAccountSerializer(serializers.Serializer):
+    username   = serializers.CharField(max_length=150, validators=[UnicodeUsernameValidator()])
+    password   = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(max_length=150)
+    last_name  = serializers.CharField(max_length=150)
+    role       = serializers.ChoiceField(choices=["patient", "caregiver"])
+
+    # Refuse a username that is already taken
+    def validate_username(self, username: str) -> str:
+        if get_user_model().objects.filter(username=username).exists(): raise serializers.ValidationError("Username already exists.")
+        return username
+
+    # Apply the project's password rules (`AUTH_PASSWORD_VALIDATORS`)
+    def validate_password(self, password: str) -> str:
+        check_password_rules(password)
+        return password
+
+    # Create the login and its account (a participant also gets a profile, settings, and goal)
+    @transaction.atomic
+    def create(self, validated: dict[str, object]) -> Account:
+        user = get_user_model().objects.create_user(
+            username   = validated["username"  ],
+            password   = validated["password"  ],
+            first_name = validated["first_name"],
+            last_name  = validated["last_name" ],
+        )
+        account = Account.objects.create(user=user, role=validated["role"])
+
+        # New participants start on the model defaults (Smiley, recording off, English)
+        if validated["role"] == "patient":
+            profile = Profile.objects.create(account=account)
+            UserSettings.objects.create(profile=profile)
+            Goal        .objects.create(profile=profile)
+        return account
+
+    # Reply with the new account as the rest of the API shows it
+    def to_representation(self, account: Account) -> dict[str, object]:
+        return AccountSerializer(account).data
+
+
+# One participant linked to a caregiver: their profile ID and who they are
+class LinkedParticipantSerializer(serializers.ModelSerializer):
+    user = UserSerializer(source="account.user", read_only=True)
+
+    class Meta:
+        model            = Profile
+        fields           = ("id", "user")
+        read_only_fields = fields
+
+
+# One caregiver for the admin accounts page, with the participants linked to them
+class AdminCaregiverSerializer(serializers.ModelSerializer):
+    user            = UserSerializer(read_only=True)
+    participants    = serializers.SerializerMethodField()
+    participant_ids = serializers.PrimaryKeyRelatedField(many=True, write_only=True, queryset=Profile.objects.all())
+
+    class Meta:
+        model            = Account
+        fields           = ("id", "user", "participants", "participant_ids")
+        read_only_fields = ("id",)
+
+    # Linked participants, oldest link first (the first one is what the caregiver pages show)
+    def get_participants(self, account: Account) -> list[dict[str, object]]:
+        links = sorted(account.account_access.all(), key=lambda access: access.id)
+        return LinkedParticipantSerializer([access.profile for access in links], many=True).data
+
+    # Replace the caregiver's links with exactly the participants sent
+    @transaction.atomic
+    def update(self, account: Account, validated_data: dict[str, object]) -> Account:
+        profiles = validated_data["participant_ids"]
+        account.account_access.exclude(profile__in=profiles).delete()
+        for profile in profiles: Access.objects.get_or_create(account=account, profile=profile)
+        return account
+
+
+# Who a profile is shared with (read-only; staff change links on the admin accounts page)
 class AccessSerializer(serializers.ModelSerializer):
     account     = AccountSerializer(read_only=True)
     profile     = ProfileSerializer(read_only=True)
-    
+
     class Meta:
         model   = Access
         fields  = ("id", "account", "profile")
-        
-class CreateAccessSerializer(serializers.Serializer):
-    # Fields from the frontend
-    profileId    = serializers.IntegerField()
-    accountId    = serializers.IntegerField()
-    permissions  = serializers.CharField()
-    
-    # Creates an Access object
-    @transaction.atomic
-    def create(self, validated):
-        profile = Profile.objects.get(id=validated['profileId'])
-        account = Account.objects.get(id=validated['accountId'])
-        
-        # Use get_or_create to handle duplicate access gracefully
-        access, created = Access.objects.get_or_create(
-            account=account,
-            defaults={
-                'profile': profile,
-                'permissions': validated['permissions']
-            }
-        )
-        
-        # Update permissions if access already existed and permissions differ
-        if not created and access.permissions != validated['permissions']:
-            access.profile = profile # Update the profile if it has changed
-            access.permissions = validated['permissions']
-            access.save()
-        
-        return access
-    
-    def to_representation(self, access: Access):
-        return {"success"   : True,
-                "name"      : f'Account {access.account.id} has {access.permissions} access to Profile {access.profile.id}',}
 
 # ================================================================================
 # ChatSession Related Data
@@ -208,82 +259,3 @@ class DownloadDataSerializer(serializers.ModelSerializer):
     
     def get_fileContents(self, obj):
         return get_download_data(obj)
-
-# ================================================================================
-# Signup
-# ================================================================================
-class SignupPatientSerializer(serializers.Serializer):
-    '''
-    Because all the data is connected to the Patient, on creation of a Patient account, we also create an empty Profile,
-    UserSettings, and Goal object.
-    '''
-    # Fields expected from the frontend
-    username        = serializers.CharField()
-    password        = serializers.CharField(write_only=True)
-    firstName       = serializers.CharField()
-    lastName        = serializers.CharField()
-
-    def validate(self, attrs):
-        User = get_user_model()
-        if User.objects.filter(username=attrs["username"]).exists(): raise serializers.ValidationError(  "Username already exists.")
-        return attrs
-
-    # Create user entries for both the patient and caregiver
-    # Also create settings and goal objects for the new Profile
-    # Can return whatever the API needs
-    @transaction.atomic
-    def create(self, validated):
-        User = get_user_model()
-        user = User.objects.create_user(
-            username   = validated["username"],
-            password   = validated["password"],
-            first_name = validated["firstName"],
-            last_name  = validated["lastName"],
-        )
-        account = Account.objects.create(user=user, role="patient")
-        profile = Profile.objects.create(account=account)
-        UserSettings.objects.create(profile=profile)
-        Goal        .objects.create(profile=profile)
-        return account
-
-    def to_representation(self, account: Account):
-        return {"success"   : True,
-                "username"  : account.user.username,
-                "name"      : f'{account.user.first_name} {account.user.last_name}',}
-        
-class SignupAccountSerializer(serializers.Serializer):
-    '''
-    Just need to create a User and Account object
-    '''
-    # Fields expected from the frontend
-    username        = serializers.CharField()
-    password        = serializers.CharField(write_only=True)
-    firstName       = serializers.CharField()
-    lastName        = serializers.CharField()
-    role            = serializers.CharField()
-
-    def validate(self, attrs):
-        User = get_user_model()
-        if User.objects.filter(username=attrs["username"]).exists(): raise serializers.ValidationError("Username already exists.")
-        return attrs
-
-    # Create user entries for both the patient and caregiver
-    # Also create settings and goal objects for the new Profile
-    # Can return whatever the API needs
-    @transaction.atomic
-    def create(self, validated):
-        User = get_user_model()
-        user = User.objects.create_user(
-            username   = validated["username"],
-            password   = validated["password"],
-            first_name = validated["firstName"],
-            last_name  = validated["lastName"],
-        )
-        account = Account.objects.create(user=user, role=validated["role"])
-        return account
-
-    def to_representation(self, account: Account):
-        return {"success"   : True,
-                "username"  : account.user.username,
-                "name"      : f'{account.user.first_name} {account.user.last_name}',}
-    

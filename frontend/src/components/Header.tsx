@@ -1,3 +1,8 @@
+/* Page header: profile menu, page title, and the caregiver settings link.
+--------------------------------------------------------------------------------
+`@frontend/src/components/Header`
+
+*/
 import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
 
@@ -29,7 +34,7 @@ const TITLES: Record<string, string> = {
     "/transcript"   : "Transcript",
     "/practice"     : "Practice",
     "/alert"        : "Alerts",
-    "/admin"        : "Admin",
+    "/admin"        : "Monitor",
     "/profile"      : "Profile",
     default         : "Cognibot",
 };

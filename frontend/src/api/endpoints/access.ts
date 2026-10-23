@@ -1,8 +1,13 @@
-import { request } from "../client";
-import { Access, CreateAccessPayload } from "../models";
+/* REST call for who the user's profile is shared with.
+--------------------------------------------------------------------------------
+`@frontend/src/api/endpoints/access`
 
-export const getAccountAccess     = ()                      => request<Access>("/access/", { method: "GET" });
+Read-only: staff change caregiver links on the admin accounts page.
 
-export const getProfileAccess     = ()                      => request<Access[]>(`/accesses/`, { method: "GET" });
+*/
+// From this project
+import      { request } from "../client";
+import type { Access  } from "../models";
 
-export const createAccess         = (body: Partial<CreateAccessPayload>) => request<Access>("/access/create/", { method: "POST", body: JSON.stringify(body) });
+// Links from caregivers to the user's profile
+export const getProfileAccess = (): Promise<Access[]> => request<Access[]>("/accesses/", {method: "GET"});

@@ -113,6 +113,9 @@ What each setting means for you:
 | `4004` | This primary connection was replaced by a newer connection for the same user |
 
 `4003` / `4404` only apply to the admin listener endpoint, not to the primary chat socket.
+The listener closes with `4404` when the session does not exist, and with `4003` when the
+account is not staff, does not own the session, and is not a caregiver linked to its
+participant through `Access`.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Messages you send                                                                -->

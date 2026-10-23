@@ -1,18 +1,15 @@
+/* Query and save hooks for the logged-in user's account.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/queries/useAccount`
+
+*/
 import toast from "react-hot-toast";
 import { useModelQuery } from "@/hooks/queries/common";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAccount, getSingleAccount, updateAccount } from "@/api/endpoints/account";
+import { getAccount, updateAccount } from "@/api/endpoints/account";
 import { Account } from "@/api";
 
 // [GET] Hook to wrap useQuery for retrieving Account objects
-
-// Get account by username
-export const useGetAccount = (username: string) =>
-    useModelQuery<Account>({
-        queryKey: "goal",
-        queryFn : () => getSingleAccount(username),
-        empty   : {} as Account,
-    });
 
 // Get current user's account
 export const useAccount = () =>

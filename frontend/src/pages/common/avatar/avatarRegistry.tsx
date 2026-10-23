@@ -115,7 +115,12 @@ const SMILEY_BROWS_AVATAR: AvatarEntry = {
 // Every avatar, in picker order
 export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, SMILEY_BROWS_AVATAR, QT_AVATAR, BUDDY_AVATAR];
 
-// Find an avatar by id (a model choice with no entry shows Buddy, the backend's default model)
+// Find an avatar by id (a model choice with no entry shows Smiley, the backend's default model)
 export function getAvatarEntry(id: string): AvatarEntry {
-    return AVATARS.find((entry: AvatarEntry) => entry.id === id.toLowerCase()) ?? BUDDY_AVATAR;
+    return AVATARS.find((entry: AvatarEntry) => entry.id === id.toLowerCase()) ?? SMILEY_AVATAR;
+}
+
+// Whether a model choice has an avatar built yet (pickers hide reserved choices such as `temp1` until it does)
+export function hasAvatarEntry(id: string): boolean {
+    return AVATARS.some((entry: AvatarEntry) => entry.id === id);
 }

@@ -25,27 +25,48 @@ DAYS_OF_WEEK = ((0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday')
 # Non-Chat Models
 # ================================================================================
 class Account(models.Model):
-    ROLE_CHOICES = [("Patient", "patient"), ("Caregiver", "caregiver"), ("Family", "family"), ("Physician", "physician"), ("Other", "other")]
+    ROLE_CHOICES = [("patient", "Patient"), ("caregiver", "Caregiver"), ("family", "Family"), ("physician", "Physician"), ("other", "Other")]
     user        = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="account_user")
     role        = models.CharField(max_length=32, choices=ROLE_CHOICES, **init_args)
-    
+
     def __str__(self): return f"Account for {self.user.username}"
 
 class Profile(models.Model):
+    # Chat languages as BCP-47 tags (`LANGUAGE_CHOICES` in `frontend/src/api/models.ts` copies these)
+    LANGUAGE_CHOICES = [
+        ("en-US", "English (US)"         ), ("en-GB", "English (UK)"         ),
+        ("de-DE", "German"               ), ("el-GR", "Greek"                ),
+        ("es-ES", "Spanish (Spain)"      ), ("es-MX", "Spanish (Mexico)"     ),
+        ("fr-FR", "French"               ), ("it-IT", "Italian"              ),
+        ("nl-NL", "Dutch"                ), ("pl-PL", "Polish"               ),
+        ("pt-PT", "Portuguese (Portugal)"), ("pt-BR", "Portuguese (Brazil)"  ),
+        ("tr-TR", "Turkish"              ), ("ru-RU", "Russian"              ),
+        ("ar-SA", "Arabic"               ), ("hi-IN", "Hindi"                ),
+        ("ja-JP", "Japanese"             ), ("ko-KR", "Korean"               ),
+        ("zh-CN", "Chinese (Simplified)" ), ("zh-TW", "Chinese (Traditional)"),
+    ]
+
     account               = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="profile_account")
     zipcode               = models.CharField(max_length=10, **init_args)
     birthDate             = models.DateField(**init_args)
     locationStatus        = models.CharField(max_length=100, **init_args)
     save_audio_by_default = models.BooleanField(default=False)
-    
+
+    # TODO: Will select the chat's STT, LLM, and TTS language; nothing reads it yet
+    language = models.CharField(max_length=16, choices=LANGUAGE_CHOICES, default="en-US")
+
     def __str__(self): return f"Profile for {self.account.user.username}"
-    
+
+# One caregiver's link to one participant (a caregiver may hold several)
 class Access(models.Model):
     PERMISSIONS_CHOICES = [("Full", "full"), ("View", "view")]
-    account     = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="account_access")
+    account     = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="account_access")
     profile     = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="profile_access")
     permissions = models.CharField(max_length=100, choices=PERMISSIONS_CHOICES, default="full", **init_args)
-    
+
+    class Meta:
+        constraints = [UniqueConstraint(fields=["account", "profile"], name="unique_access_per_account_profile")]
+
     def __str__(self): return f"{self.account.user.username} has {self.permissions} permissions for {self.profile.account.user.username}'s profile"
 
 
@@ -382,14 +403,18 @@ class Goal(models.Model):
 
 class UserSettings(models.Model):
     TASK_CHOICES = [("chat", "Chat"), ("chattopic", "ChatTopic"), ("chatimage", "ChatImage")]
-    MODEL_CHOICES = [("buddy", "Buddy"), ("qt", "QT"), ("smiley", "Smiley")]   # Web avatars (`AVATAR_MODEL_CHOICES` in `frontend/src/api/models.ts` copies these)
-    
+    # Web avatars (`AVATAR_MODEL_CHOICES` in `frontend/src/api/models.ts` copies these)
+    MODEL_CHOICES = [
+        ("buddy", "Buddy"), ("qt", "QT"), ("smiley", "Smiley"), ("talkinghead", "TalkingHead"),
+        ("temp1", "Temp 1"), ("temp2", "Temp 2"), ("temp3", "Temp 3"),  # Reserved for avatars still being built
+    ]
+
     profile            = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="settings_user")
     patientViewOverall = models.BooleanField(default=True)
     patientCanSchedule = models.BooleanField(default=True)
     taskType           = models.CharField(max_length=32, choices=TASK_CHOICES, default="chat")
     taskSubtype        = models.CharField(max_length=32, default="N/A")
-    modelChoice        = models.CharField(max_length=32, choices=MODEL_CHOICES, default="buddy")
+    modelChoice        = models.CharField(max_length=32, choices=MODEL_CHOICES, default="smiley")
 
     def __str__(self): return f"{self.profile.account.user.username}'s settings"
 

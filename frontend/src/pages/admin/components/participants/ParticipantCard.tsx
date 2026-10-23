@@ -3,14 +3,14 @@
 `@frontend/src/pages/admin/components/participants/ParticipantCard`
 
 Shows who the participant is, how much they have chatted, and their current
-avatar and recording settings. The settings change only through the modal
-its button opens.
+avatar, language, and recording settings. The settings change only through the
+modal its button opens.
 
 */
 import type { ReactElement } from "react";
 
 // From this project
-import type { AdminProfile, User } from "@/api";
+import type { AdminProfile, LanguageChoice, User } from "@/api";
 import { getAvatarEntry } from "@/pages/common/avatar/avatarRegistry";
 import { dateFormatLong } from "@/utils/styling/numFormatting";
 import { formatTimeAgo  } from "../chat_lists/timeGrouping";
@@ -50,6 +50,7 @@ export function ParticipantCard({participant, onEdit}: {
             {/* Current settings */}
             <div className="flex gap-2 flex-wrap">
                 <Pill label="Avatar"    value={getAvatarEntry(participant.modelChoice).label} />
+                <Pill label="Language"  value={languageLabel(participant.language)} />
                 <Pill label="Recording" value={recordOn ? "On" : "Off"} variant={recordOn ? "accent" : "offline"} dot />
             </div>
 
@@ -65,4 +66,12 @@ export function ParticipantCard({participant, onEdit}: {
 // Name to show for a participant (operational logins may have no first or last name)
 export function participantName(user: User): string {
     return `${user.first_name} ${user.last_name}`.trim() || user.username;
+}
+
+// English names for BCP-47 tags ("de-DE" reads "German (Germany)")
+const LANGUAGE_NAMES = new Intl.DisplayNames(["en"], {type: "language"});
+
+// Name to show for a participant's chat language
+export function languageLabel(language: LanguageChoice): string {
+    return LANGUAGE_NAMES.of(language) ?? language;
 }

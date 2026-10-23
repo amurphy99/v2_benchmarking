@@ -1,18 +1,15 @@
-import { Access } from "@/api";
-import { getAccountAccess, getProfileAccess } from "@/api/endpoints/access";
-import { useModelQuery } from "@/hooks/queries/common";
+/* Query hook for who the user's profile is shared with.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/queries/useAccess`
 
-// Gets the Profile(s) the current user has access to
-export const useAccountAccess = () =>
-    useModelQuery<Access>({
-        queryKey: "accountAccess",
-        queryFn : getAccountAccess,
-        empty   : {} as Access,
-    });
+*/
+// From this project
+import type { Access           } from "@/api";
+import      { getProfileAccess } from "@/api/endpoints/access";
+import      { useModelQuery    } from "@/hooks/queries/common";
 
-// Gets the accounts the current user's Profile has access to
-// ToDo: Update to take the profile ID as an argument
-export const useProfileAccess = () =>
+// Caregivers linked to the current user's profile
+export const useProfileAccess = (): ReturnType<typeof useModelQuery<Access[]>> =>
     useModelQuery<Access[]>({
         queryKey: "profileAccess",
         queryFn : () => getProfileAccess(),

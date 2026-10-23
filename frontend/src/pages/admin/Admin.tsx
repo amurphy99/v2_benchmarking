@@ -1,9 +1,13 @@
-/* Admin home: live and completed chat lists, plus links to the admin tools.
+/* Monitor home: live and completed chat lists, plus links to the admin tools.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/Admin`
 
-This shows a list of all of the offline/completed chats as well as a list of all
-of the active chats. These lists are all "cards" that provide a quick 
+Shown as "Monitor" in the UI. Staff see every participant's chats; a caregiver
+sees only the chats of the participants linked to them (the backend scopes both
+lists).
+
+This shows a list of the offline/completed chats as well as a list of the
+active chats. These lists are all "cards" that provide a quick 
 summary/description of the chat session and when clicked on, take you to a more 
 detailed page (different for active/inactive chats) to inspect more information 
 for that chat. Clicking on a ChatSessionCard from the live chat list takes you 
@@ -11,14 +15,15 @@ to the "Live Chat" (AdminChat.tsx) page, and clicking on a ChatSessionCard from
 the inactive  chat list takes you to the "Inactive Chat" (AdminChatInactive.tsx)
 page.
 
-Between the two lists, cards link to the Activity Instructions and Participant
-Settings pages.
+Between the two lists, cards link to the Participant Settings page (Accounts for
+staff) and, for staff only, the Activity Instructions page.
 
 */
 import { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 // From this project
+import { useAuth                                        } from "@/context/AuthProvider";
 import { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatList      } from "./components/chat_lists/ChatList";
 import { AdminPage     } from "./components/ui/AdminPage";
@@ -31,6 +36,7 @@ import { NON_DEMO_ONLY } from "@/utils/misc/constants";
 // ================================================================================
 export function Admin() {
     const navigate = useNavigate();
+    const isStaff  = useAuth().account.user.is_staff;
 
     // Query the DB for a list of ChatSessions
     const { data:   active, isLoading: loading_1, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
@@ -72,29 +78,33 @@ export function Admin() {
                     variant     = "active"
                 />
 
-                {/* Activity & Instructions Management */}
-                <AdminCard
-                    header={
-                        <SectionHeader
-                            title    = "Activity Instructions"
-                            subtitle = "Manage chat activities and their conversation instructions. Define and edit the instructions that guide the AI during memory activity chat sessions. Changes here affect all users."
-                        />
-                    }
-                >
-                    <button
-                        className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                        onClick={() => navigate("/admin/chat/activities")}
+                {/* Activity & Instructions Management (staff only: the instructions are shared by every user) */}
+                {isStaff ? (
+                    <AdminCard
+                        header={
+                            <SectionHeader
+                                title    = "Activity Instructions"
+                                subtitle = "Manage chat activities and their conversation instructions. Define and edit the instructions that guide the AI during memory activity chat sessions. Changes here affect all users."
+                            />
+                        }
                     >
-                        Manage Activity Instructions
-                    </button>
-                </AdminCard>
+                        <button
+                            className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                            onClick={() => navigate("/admin/chat/activities")}
+                        >
+                            Manage Activity Instructions
+                        </button>
+                    </AdminCard>
+                ) : null}
 
-                {/* Participant avatar and recording settings */}
+                {/* Participant settings, plus account creation and caregiver links for staff */}
                 <AdminCard
                     header={
                         <SectionHeader
-                            title    = "Participant Settings"
-                            subtitle = "Choose each participant's web avatar (Smiley, QT, or Buddy) and whether their chat audio is saved automatically."
+                            title    = {isStaff ? "Accounts" : "Participant Settings"}
+                            subtitle = {isStaff
+                                ? "Create accounts, choose which participants each caregiver monitors, and set each participant's avatar, language, and recording default."
+                                : "Choose each of your participants' web avatar and language, and whether their chat audio is saved automatically."}
                         />
                     }
                 >
@@ -102,7 +112,7 @@ export function Admin() {
                         className = "px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
                         onClick   = {() => navigate("/admin/participants")}
                     >
-                        Manage Participants
+                        {isStaff ? "Manage Accounts" : "Manage Participants"}
                     </button>
                 </AdminCard>
 

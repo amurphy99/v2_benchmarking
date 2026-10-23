@@ -1,3 +1,11 @@
+/* Login page, the only page a logged-out user can reach.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/Login`
+
+There is no signup: staff create accounts on the admin pages. After logging in,
+`/` sends the user to their landing page (Monitor for staff).
+
+*/
 import { useState, ChangeEvent, FormEvent } from "react";
 import   toast         from "react-hot-toast";  
 import { useNavigate } from "react-router-dom";
@@ -21,7 +29,7 @@ export default function Login() {
             setLoading(true);
             await login(form.username, form.password);
             toast.success("Logged in!"); 
-            navigate("/goal");
+            navigate("/");
         } catch (err) { 
             toast.error((err as Error).message); 
             console.log((err as Error).message);
@@ -51,7 +59,7 @@ export default function Login() {
                                 <input required autoComplete="current-password" placeholder="Password" type="password"  name="password" value={form.password} onChange={handleChange} className={loginStyle}/>
                                 <button type="submit" className="btn btn-primary"> Log In </button>
                             </div>
-                            <p>Don't have an account? <a className="hover:cursor-pointer" onClick={() => navigate("/")}>Sign Up</a></p>
+                            <p>Need an account? Ask a study administrator to create one for you.</p>
                         </div>
                     </form>
                 </div>

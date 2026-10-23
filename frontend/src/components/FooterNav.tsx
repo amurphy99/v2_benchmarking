@@ -1,6 +1,15 @@
+/* Bottom navigation bar: one set of links for caregivers, one for patients.
+--------------------------------------------------------------------------------
+`@frontend/src/components/FooterNav`
+
+Caregivers (staff included) also get Monitor, the page whose code lives under
+`pages/admin/`; it shows only the participants linked to them (every participant
+for staff).
+
+*/
 import { NavLink, useLocation } from "react-router-dom";
 import { GiAlliedStar } from "react-icons/gi";
-import { LuImage } from "react-icons/lu";
+import { LuImage, LuMonitor } from "react-icons/lu";
 import { FaChartBar, FaRegBell, FaRegCompass } from "react-icons/fa";
 import { footerLinkPatientCls, footerLinkCaregiverCls } from "@/utils/styling/colors";
 import { useAuth } from "@/context/AuthProvider";
@@ -50,6 +59,12 @@ export default function FooterNav() {
                     <NavLink to="/alert" className={footerLinkCaregiverCls}>
                         <FaRegBell size={"2rem"} />
                         Alert
+                    </NavLink>
+                </div>
+                <div className="flex flex-col items-center">
+                    <NavLink to="/admin" className={footerLinkCaregiverCls}>
+                        <LuMonitor size={"2rem"} />
+                        Monitor
                     </NavLink>
                 </div>
             </div>

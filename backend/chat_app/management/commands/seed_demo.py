@@ -34,6 +34,14 @@ SEED_TRANSCRIPT_CHAT_DATA = django_settings.SEED_TRANSCRIPT_CHAT_DATA  # Ensure 
 
 TRANSCRIPT_FIXTURE_DIRS = ("test_02", "test_03", "test_04", "test_05")  # Imported transcript folders enabled for the workshop profile
 
+# Study logins as (username, first name, last name); their two passwords come from the environment
+STUDY_CAREGIVER    = ("study_caregiver", "Study", "Caregiver")
+STUDY_PARTICIPANTS = (
+    ("study_participant_1", "Participant", "One"  ),
+    ("study_participant_2", "Participant", "Two"  ),
+    ("study_participant_3", "Participant", "Three"),
+)
+
 
 # ================================================================================
 # Make sure that all "default" accounts and optional demo data exist
@@ -56,6 +64,7 @@ class Command(BaseCommand):
 
         # Keep operational accounts separate from fixture-only data owners
         self.setup_environment_accounts(days_ago=two_days_ago)
+        self.setup_study_accounts      (days_ago=two_days_ago)
         self.setup_ui_sample_data      (days_ago=thirty_days_ago)
         self.setup_analyzed_data       (days_ago=seven_days_ago)
 
@@ -113,17 +122,16 @@ class Command(BaseCommand):
         Goal        .objects.get_or_create(profile=profile, defaults={"target": 5, "start_date": days_ago})
         return profile
 
-    # Ensure a caregiver can reach the intended profile without moving existing access
-    def ensure_caregiver_access(self, user: AbstractBaseUser, profile: Profile) -> None:
+    # Ensure a user has a caregiver account (staff admins need one to open any page)
+    def ensure_caregiver_account(self, user: AbstractBaseUser) -> Account:
         account, _ = Account.objects.get_or_create(user=user, defaults={"role": "caregiver"})
         if account.role != "caregiver": account.role = "caregiver"; account.save(update_fields=["role"])
+        return account
 
-        access, created = Access.objects.get_or_create(account=account, defaults={"profile": profile})
-        if (not created) and (access.profile_id != profile.id):
-            self.stdout.write(self.style.WARNING(
-                f"{SEED_DATA} Preserved existing profile access for {SD_H}{user.username}{SD_R}; "
-                f"the account was not reassigned automatically.{RESET}"
-            ))
+    # Link a caregiver to one more profile (links to other profiles are kept)
+    def ensure_caregiver_access(self, user: AbstractBaseUser, profile: Profile) -> None:
+        account = self.ensure_caregiver_account(user)
+        Access.objects.get_or_create(account=account, profile=profile)
 
     # ================================================================================
     # Persistent environment accounts
@@ -144,6 +152,10 @@ class Command(BaseCommand):
         # Give each non-admin operational login its own durable patient profile
         workshop_profile = self.ensure_patient_profile(workshop_user, days_ago) if (workshop_user) else None
         if buddy_user:     self.ensure_patient_profile(   buddy_user, days_ago)
+
+        # Admins always get a caregiver account, even when there is no workshop profile to link
+        if primary_admin:   self.ensure_caregiver_account(primary_admin  )
+        if secondary_admin: self.ensure_caregiver_account(secondary_admin)
 
         # Admins can monitor the protected workshop profile without owning it
         if (workshop_profile) and (  primary_admin): self.ensure_caregiver_access(  primary_admin, workshop_profile)
@@ -188,6 +200,50 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"{SEED_DATA} Account {SD_H}{username}{SD_R} ensured from the environment.{RESET}"
         ))
+        return user
+
+    # ================================================================================
+    # Study Accounts
+    # ================================================================================
+    def setup_study_accounts(self, days_ago: date) -> None:
+        """
+        Ensure one caregiver linked to three participants. Usernames are fixed above;
+        both passwords come from the environment, and the group is skipped while either
+        is blank. New participants start on the model defaults (Smiley avatar, recording
+        off, English), and later changes from the admin pages survive restarts.
+        """
+        caregiver_password   = django_settings.STUDY_CAREGIVER_PASSWORD
+        participant_password = django_settings.STUDY_PARTICIPANT_PASSWORD
+        if (not caregiver_password) or (not participant_password): return
+
+        # The caregiver login (never staff, so it sees only its own participants)
+        username, first_name, last_name = STUDY_CAREGIVER
+        caregiver = self.ensure_study_user(username, caregiver_password, first_name, last_name)
+
+        # Each participant gets a profile and a link to the caregiver
+        for username, first_name, last_name in STUDY_PARTICIPANTS:
+            participant = self.ensure_study_user(username, participant_password, first_name, last_name)
+            profile     = self.ensure_patient_profile(participant, days_ago)
+            self.ensure_caregiver_access(caregiver, profile)
+
+    # Ensure one study login, following the environment password like the other operational accounts
+    def ensure_study_user(
+        self,
+        username   : str,  # Fixed study username
+        password   : str,  # Password from the environment (reapplied when it changes)
+        first_name : str,  # Configured display first name
+        last_name  : str,  # Configured display last name
+    ) -> AbstractBaseUser:
+        user = self.ensure_user(
+            username         = username,
+            password         = password,
+            refresh_password = True,
+            first_name       = first_name,
+            last_name        = last_name,
+            is_staff         = False,
+            is_superuser     = False,
+        )
+        self.stdout.write(self.style.SUCCESS(f"{SEED_DATA} Study account {SD_H}{username}{SD_R} ensured.{RESET}"))
         return user
 
     # ================================================================================

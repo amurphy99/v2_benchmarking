@@ -20,8 +20,16 @@ export interface UserSettings {
 }
 
 // Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
-export const AVATAR_MODEL_CHOICES = ["smiley", "qt", "buddy"] as const;
+// Pickers list only the ones with an entry in `avatarRegistry.tsx` (`talkinghead` and `temp1`-`temp3` are reserved)
+export const AVATAR_MODEL_CHOICES = ["smiley", "qt", "buddy", "talkinghead", "temp1", "temp2", "temp3"] as const;
 export type  AvatarModelChoice    = (typeof AVATAR_MODEL_CHOICES)[number];
+
+// Chat languages as BCP-47 tags (`Profile.LANGUAGE_CHOICES` in `backend/chat_app/models.py`)
+export const LANGUAGE_CHOICES = [
+    "en-US", "en-GB", "de-DE", "el-GR", "es-ES", "es-MX", "fr-FR", "it-IT", "nl-NL", "pl-PL",
+    "pt-PT", "pt-BR", "tr-TR", "ru-RU", "ar-SA", "hi-IN", "ja-JP", "ko-KR", "zh-CN", "zh-TW",
+] as const;
+export type LanguageChoice = (typeof LANGUAGE_CHOICES)[number];
 
 export interface Reminder {
   id         : number;
@@ -105,24 +113,50 @@ export interface AdminProfile {
     id                    : number;
     user                  : User;
     save_audio_by_default : boolean;             // Whether each new chat starts with its audio set to be saved
+    language              : LanguageChoice;      // Language their chats will use (not read by the backend yet)
     modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
     chat_count            : number;              // Chats so far (demo sessions left out)
     last_chat_at          : string | null;       // Start of the latest of those chats (null before the first)
 }
 
-// Settings staff can change for one participant (either may be sent alone)
-export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "modelChoice">>;
+// Settings staff and caregivers can change for one participant (any of them may be sent alone)
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "language" | "modelChoice">>;
+
+// --------------------------------------------------------------------------------
+// Admin Accounts
+// --------------------------------------------------------------------------------
+// One participant linked to a caregiver (`LinkedParticipantSerializer`; `id` is the profile ID)
+export interface LinkedParticipant {
+    id   : number;
+    user : User;
+}
+
+// One caregiver on the admin accounts page (`AdminCaregiverSerializer`)
+export interface AdminCaregiver {
+    id           : number;                // Account ID
+    user         : User;
+    participants : LinkedParticipant[];   // Oldest link first (the first is what the caregiver pages show)
+}
+
+// A caregiver's whole new set of linked participants (profile IDs)
+export type UpdateCaregiverLinksPayload = {participant_ids: number[]};
+
+// Kinds of login staff can create
+export type NewAccountRole = "patient" | "caregiver";
+
+// A new login created by staff (`AdminCreateAccountSerializer`)
+export interface CreateAccountPayload {
+    username   : string;
+    password   : string;
+    first_name : string;
+    last_name  : string;
+    role       : NewAccountRole;
+}
 
 export interface Access {
     id      : number;
     account : Account;
     profile : Profile;
-}
-
-export interface CreateAccessPayload {
-    profileId   : number;
-    accountId   : number;
-    permissions : string;
 }
 
 // =======================================================================
@@ -223,23 +257,8 @@ export interface ChatSession {
 }
 
 // =======================================================================
-// Signup Types -- ToDo: Not sure if these are ncessary?
+// Auth
 // =======================================================================
-
-export interface SignupPayload {
-  username      : string;
-  password      : string;
-  firstName     : string;
-  lastName      : string;
-  role          : string;
-}
-
-export interface SignupResponse {
-  success       : true;
-  username      : string;
-  name          : string;
-}
-
 // User verification token
 export type Tokens = { access: string; refresh: string, user: User };
 

@@ -5,14 +5,14 @@
 Saves through `PUT /api/settings/` for the profile the caregiver is linked to.
 The avatar options are the same list the admin participant settings page uses
 (`AVATAR_MODEL_CHOICES`, copied from the backend's
-`UserSettings.MODEL_CHOICES`).
+`UserSettings.MODEL_CHOICES`), leaving out reserved choices with no avatar built.
 
 */
 import { useEffect, useState } from "react";
 
 // From this project
 import { AVATAR_MODEL_CHOICES, getUserSettings, updateUserSettings } from "@/api";
-import { getAvatarEntry  } from "@/pages/common/avatar/avatarRegistry";
+import { getAvatarEntry, hasAvatarEntry } from "@/pages/common/avatar/avatarRegistry";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
 import { toastMessage    } from "@/utils/functions/toast_helper";
 import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
@@ -68,7 +68,7 @@ export default function ChatTypeForm() {
             <div className={`w-1/2 ${rowThree}`}>
                 <label className={formText}>Avatar Model</label>
                 <select className={`${borderStyle}`} value={model} onChange={(e) => setModel(e.target.value)}>
-                    {AVATAR_MODEL_CHOICES.map((choice: string) => <option key={choice} value={choice}>{getAvatarEntry(choice).label}</option>)}
+                    {AVATAR_MODEL_CHOICES.filter(hasAvatarEntry).map((choice: string) => <option key={choice} value={choice}>{getAvatarEntry(choice).label}</option>)}
                 </select>
             </div>
         </div>

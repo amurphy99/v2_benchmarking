@@ -1,7 +1,7 @@
 """
 Monitor & control a live chat session. 
 --------------------------------------------------------------------------------
-backend.chat_app.websocket.consumers.chat_listener
+`backend.chat_app.websocket.consumers.chat_listener`
 
 Receives live updates about the current chat's status, including:
 - Messages (from user & backend)
@@ -25,6 +25,7 @@ from django.apps                import apps
 from uuid                       import uuid4
 
 # From this project
+from ...api.mixins           import can_access_chat_session
 from ...services.db_services import ChatService
 from ...services             import logging_utils       as lu
 from   .utils.logging        import ChatListenerLogging as log
@@ -83,8 +84,8 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
             logger.info("[WS] listener connect: invalid session_id=%s user=%s", self.session_id, self.scope["user"])
             await self.close(code=4404); return # custom "not found" code
 
-        # 4) Authorize (session owner can listen, admin users can listen)
-        if (not self.user.is_staff):  # TODO: Make this so you have to be like the associated user?
+        # 4) Authorize (staff, the session's owner, and caregivers linked to that participant)
+        if not await db_s2a(can_access_chat_session)(self.user, self.session_id):
             logger.info(f"{lu.CL_MAIN} {self.user} not authorized (stage 2) {lu.RESET}")
             await self.close(code=4003); return
         

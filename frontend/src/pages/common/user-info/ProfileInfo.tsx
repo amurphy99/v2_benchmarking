@@ -1,3 +1,11 @@
+/* Profile icon with a hover menu: profile settings, Monitor, and logout.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/common/user-info/ProfileInfo`
+
+Every caregiver gets a Monitor link. Staff land on Monitor and don't get the
+caregiver navigation bar there, so they also get a link to the caregiver pages.
+
+*/
 import { useState                } from "react";
 import { OverlayTrigger, Popover, Spinner } from "react-bootstrap";
 import { FaCircleUser } from "react-icons/fa6";
@@ -38,9 +46,14 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
                     <NavLink to="/profile">
                         <button className="text-lg hover:text-blue-600">Profile Settings</button>
                     </NavLink>
-                    { user.is_staff ? 
+                    { isCare ? 
                         <NavLink to="/admin">
-                            <button className="text-lg hover:text-blue-600">Admin Page</button>
+                            <button className="text-lg hover:text-blue-600">Monitor</button>
+                        </NavLink> 
+                    : null}
+                    { user.is_staff ? 
+                        <NavLink to="/goal">
+                            <button className="text-lg hover:text-blue-600">Caregiver Pages</button>
                         </NavLink> 
                     : null}
                     <button className="text-left text-blue-500 hover:text-blue-600 text-lg" onClick={() => logout()}>Log Out</button>
