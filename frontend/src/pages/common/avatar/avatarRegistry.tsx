@@ -16,7 +16,9 @@ Every avatar receives backend `robot_action` frames through one method,
 
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
-for the rest.
+for the rest. `sleep` and `wake` let the chat page doze an avatar while the
+chat is off: while asleep, Neutral means the sleeping face, so an emotion that
+arrives still shows and the avatar then dozes off again.
 
 NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
       action in a live chat is currently timed. Holding is only reachable from
@@ -45,7 +47,7 @@ export type RobotAction = {
 export type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
 // Optional handle methods an avatar implements
-export type AvatarFeature = "gaze" | "conversationState" | "speechLevel";
+export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "sleep";
 
 // Framing the page asks for (avatars that always fill their box ignore it)
 export type AvatarZoom = "head" | "body";
@@ -59,6 +61,8 @@ export interface AvatarHandle {
     setConversationState? : (state: ConversationState) => void;   // React to the conversation
     setSpeechLevel?       : (level: number) => void;              // Voice loudness, 0 to 1
     setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
+    sleep?                : () => void;                           // Doze until woken (Neutral means the sleeping face meanwhile)
+    wake?                 : () => void;                           // Wake up and rest on the usual face again (does nothing when awake)
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes
@@ -90,11 +94,11 @@ const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", feat
 // Any named smiley expression can be its resting face (the catalog lists the default first)
 const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({name, emoji}) => ({label: `${emoji} ${name}`, value: name}));
 
-// Code-drawn face with expressions, gaze, and a speaking mouth (eyebrows only on the expressions that use them)
+// Code-drawn face with expressions, gaze, a speaking mouth, and sleep (eyebrows only on the expressions that use them)
 const SMILEY_AVATAR: AvatarEntry = {
     id             : "smiley",
     label          : "Smiley (2D)",
-    features       : ["gaze", "conversationState", "speechLevel"],
+    features       : ["gaze", "conversationState", "speechLevel", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
@@ -103,7 +107,7 @@ const SMILEY_AVATAR: AvatarEntry = {
 const SMILEY_BROWS_AVATAR: AvatarEntry = {
     id             : "smiley-brows",
     label          : "Smiley + eyebrows (2D)",
-    features       : ["gaze", "conversationState", "speechLevel"],
+    features       : ["gaze", "conversationState", "speechLevel", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };

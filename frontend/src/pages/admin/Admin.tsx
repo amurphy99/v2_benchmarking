@@ -1,13 +1,18 @@
-/* Admin.tsx
+/* Admin home: live and completed chat lists, plus links to the admin tools.
 --------------------------------------------------------------------------------
+`@frontend/src/pages/admin/Admin`
+
 This shows a list of all of the offline/completed chats as well as a list of all
 of the active chats. These lists are all "cards" that provide a quick 
 summary/description of the chat session and when clicked on, take you to a more 
 detailed page (different for active/inactive chats) to inspect more information 
 for that chat. Clicking on a ChatSessionCard from the live chat list takes you 
 to the "Live Chat" (AdminChat.tsx) page, and clicking on a ChatSessionCard from
-the inactive  chat list takes you to the "Inactive Chat" (AdminChatInactive.tsx) 
+the inactive  chat list takes you to the "Inactive Chat" (AdminChatInactive.tsx)
 page.
+
+Between the two lists, cards link to the Activity Instructions and Participant
+Settings pages.
 
 */
 import { useEffect, useCallback } from "react";
@@ -81,6 +86,23 @@ export function Admin() {
                         onClick={() => navigate("/admin/chat/activities")}
                     >
                         Manage Activity Instructions
+                    </button>
+                </AdminCard>
+
+                {/* Participant avatar and recording settings */}
+                <AdminCard
+                    header={
+                        <SectionHeader
+                            title    = "Participant Settings"
+                            subtitle = "Choose each participant's web avatar (Smiley, QT, or Buddy) and whether their chat audio is saved automatically."
+                        />
+                    }
+                >
+                    <button
+                        className = "px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                        onClick   = {() => navigate("/admin/participants")}
+                    >
+                        Manage Participants
                     </button>
                 </AdminCard>
 

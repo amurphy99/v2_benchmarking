@@ -1,12 +1,32 @@
+/* Run one participant chat: socket, microphone stream, and TTS playback.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/useLiveChat`
+
+The chat page starts, pauses, and ends the chat through this hook. A backend
+pause or resume (`stream_status`) stops or restarts the microphone here, and
+the page hears about both through `onChatPaused` and `onChatResumed`. The TTS
+player's `systemSpeaking` and `readOutputLevel` pass through for the avatar.
+
+*/
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient                  } from "@tanstack/react-query";
 import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
 import { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
+// What the hook gives the chat page
+interface LiveChatControls {
+    start           : () => void;     // Connect if needed, then stream the microphone and play replies
+    stop            : () => void;     // Pause: stop the microphone and drop buffered speech
+    save            : () => void;     // End the chat
+    chatEnding      : boolean;        // The backend ended the chat (the goodbye may still be playing)
+    systemSpeaking  : boolean;        // Reply speech is playing
+    readOutputLevel : () => number;   // Loudness (RMS, 0 to 1) of the reply speech playing now
+}
+
 // ================================================================================
 // Hook that handles everything involved with the chat
 // ================================================================================
-// Could expose useState flags for: connected, recording, userSpeaking, systemSpeaking.
+// Could expose more useState flags: connected, recording, userSpeaking.
 // TODO: Some of these logging utilities are outdated
 export default function useLiveChat({
     onUserUtterance,
@@ -17,6 +37,7 @@ export default function useLiveChat({
     onDebugTurn,
     onChatClosed,
     onChatPaused,      // Backend sent message telling us that the chat is paused
+    onChatResumed,     // Backend sent message telling us that the chat is listening again
     onRecordingStatus, // Backend updates the recording status (if we are saving the audio on chat end)
 } : {
     onUserUtterance   : (text    : string) => void;
@@ -27,8 +48,9 @@ export default function useLiveChat({
     onDebugTurn       ?: (turn: { role: "user" | "assistant"; text: string; state?: string; }) => void;
     onChatClosed      ?: () => void;
     onChatPaused      ?: () => void;
+    onChatResumed     ?: () => void;
     onRecordingStatus ?: (enabled: boolean) => void;
-}) {
+}): LiveChatControls {
     // Misc. setup
     const qc = useQueryClient();
 
@@ -58,7 +80,7 @@ export default function useLiveChat({
 
     // TODO: Maybe these values should be pulled from a config file somewhere...
     // Instantiate the audio player for backend-sent TTS
-    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking } = useAudioPlayer({
+    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readOutputLevel } = useAudioPlayer({
         sampleRate      : 24_000,
         numChannels     : 1,
         bitsPerSample   : 16,
@@ -81,8 +103,8 @@ export default function useLiveChat({
     // Apply backend status without sending another set_listening command back
     const onStreamStatus = (data: any) => {
         const status = data?.status;
-        if (status === "paused") { stopAudRef.current (); onChatPaused?.(); }
-        if (status === "active") { startAudRef.current();                   }
+        if (status === "paused") {  stopAudRef.current(); onChatPaused ?.(); }
+        if (status === "active") { startAudRef.current(); onChatResumed?.(); }
         // TODO: Depends on how we want this behavior to work. Should we stop talking on pause always?
         // ...
     };
@@ -126,6 +148,6 @@ export default function useLiveChat({
         qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Save invalidates chatSessions queries to force a DB refresh
     };
 
-    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing)
-    return { start, stop, save, chatEnding };
+    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing), plus the reply speech state for the avatar
+    return { start, stop, save, chatEnding, systemSpeaking, readOutputLevel };
 }

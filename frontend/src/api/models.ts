@@ -1,6 +1,13 @@
-// All TypeScript interfaces
-// Types mirror Django DB models/what the serializers return for them.
+/* TypeScript copies of what the REST serializers return.
+--------------------------------------------------------------------------------
+`@frontend/src/api/models`
 
+Field names match the DRF serializers exactly: most are snake_case, and a few
+models pass camelCase field names straight through (`UserSettings.modelChoice`).
+Nothing checks these against the backend, so a serializer change updates this
+file in the same change.
+
+*/
 // =======================================================================
 // Misc. Models
 // =======================================================================
@@ -11,6 +18,10 @@ export interface UserSettings {
   taskSubtype       : string;
   modelChoice       : string;
 }
+
+// Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
+export const AVATAR_MODEL_CHOICES = ["smiley", "qt", "buddy"] as const;
+export type  AvatarModelChoice    = (typeof AVATAR_MODEL_CHOICES)[number];
 
 export interface Reminder {
   id         : number;
@@ -88,6 +99,19 @@ export interface Profile {
   settings              : UserSettings;
   goal                  : Goal;
 }
+
+// One participant on the admin settings page (`AdminProfileSerializer`)
+export interface AdminProfile {
+    id                    : number;
+    user                  : User;
+    save_audio_by_default : boolean;             // Whether each new chat starts with its audio set to be saved
+    modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
+    chat_count            : number;              // Chats so far (demo sessions left out)
+    last_chat_at          : string | null;       // Start of the latest of those chats (null before the first)
+}
+
+// Settings staff can change for one participant (either may be sent alone)
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "modelChoice">>;
 
 export interface Access {
     id      : number;

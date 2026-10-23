@@ -1,3 +1,12 @@
+"""
+DRF serializers for profiles, settings, chat sessions, and signup.
+--------------------------------------------------------------------------------
+`backend.chat_app.api.serializers`
+
+Field names follow the model fields, including the few camelCase ones (such as
+`UserSettings.modelChoice`); `frontend/src/api/models.ts` mirrors them exactly.
+
+"""
 from rest_framework import serializers
 from ..models import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
@@ -56,7 +65,37 @@ class ProfileSerializer(serializers.ModelSerializer):
         model  = Profile
         fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "settings", "goal")
         read_only_fields = ("id", "save_audio_by_default")
-        
+
+
+# --------------------------------------------------------------------------------
+# Admin Participant Settings
+# --------------------------------------------------------------------------------
+# One participant for the admin settings page: who they are, their chat activity, and the settings staff change
+class AdminProfileSerializer(serializers.ModelSerializer):
+    user         = UserSerializer(source="account.user", read_only=True)
+    modelChoice  = serializers.ChoiceField(source="settings_user.modelChoice", choices=UserSettings.MODEL_CHOICES)
+    chat_count   = serializers.IntegerField (read_only=True)   # Annotated by `AdminProfileViewSet` (demo sessions left out)
+    last_chat_at = serializers.DateTimeField(read_only=True)   # Start of the latest of those sessions (null without one)
+
+    class Meta:
+        model            = Profile
+        fields           = ("id", "user", "save_audio_by_default", "modelChoice", "chat_count", "last_chat_at")
+        read_only_fields = ("id",)
+
+    # Save the recording default (on the profile) and the avatar (on its settings row) together
+    @transaction.atomic
+    def update(self, profile: Profile, validated_data: dict[str, object]) -> Profile:
+        # A PATCH may carry either setting alone
+        settings_fields = validated_data.pop("settings_user", {})
+        for name, value in validated_data.items():  setattr(profile,               name, value)
+        for name, value in settings_fields.items(): setattr(profile.settings_user, name, value)
+
+        # Write only the columns that were sent (an empty `update_fields` skips that save)
+        profile.save(update_fields=list(validated_data))
+        profile.settings_user.save(update_fields=list(settings_fields))
+        return profile
+
+
 class AccessSerializer(serializers.ModelSerializer):
     account     = AccountSerializer(read_only=True)
     profile     = ProfileSerializer(read_only=True)

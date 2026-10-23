@@ -1,5 +1,15 @@
-# Django Rest Framework imports
-from rest_framework                       import viewsets, generics, permissions
+"""
+REST endpoints for profiles, settings, chat sessions, and the admin tools.
+--------------------------------------------------------------------------------
+`backend.chat_app.api.views`
+
+Most views act on the logged-in user's own profile (or the one a caregiver
+reaches through `Access`) via `ProfileMixin`, and the chat-session views scope
+their lookups with `accessible_chat_sessions`. The admin views (activity
+instructions and participant settings) also require `is_staff`.
+
+"""
+from rest_framework                       import viewsets, generics, mixins, permissions
 from rest_framework.response              import Response
 from rest_framework.views                 import APIView
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
@@ -8,11 +18,12 @@ from rest_framework_simplejwt.state       import token_backend
 from rest_framework.exceptions            import PermissionDenied
 
 from django.contrib.auth import get_user_model
+from django.db.models    import Count, F, Max, Q, QuerySet
 from django.shortcuts    import get_object_or_404
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, CreateAccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, SignupPatientSerializer, SignupAccountSerializer, DownloadDataSerializer, RAGInstructionsSerializer, AdminProfileSerializer
 from  .mixins      import ProfileMixin, accessible_chat_sessions
 from ..helpers.downloadHelpers             import get_download_data
 from ..services.session_audio_storage      import create_recording_playback_url
@@ -267,8 +278,33 @@ class AccessViewSet(ProfileMixin, viewsets.ModelViewSet):
         profile = self.get_profile()
         return Access.objects.filter(profile=profile)
 
+
+# --------------------------------------------------------------------------------
+# Admin Participant Settings
+# --------------------------------------------------------------------------------
+# Let staff list every participant and change their recording default and avatar
+class AdminProfileViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    GET   /api/admin/profiles/      => every participant (patient profile), most recent chat first
+    PATCH /api/admin/profiles/<id>/ => change one participant's recording default and avatar
+    """
+    serializer_class   = AdminProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    # Every profile with its chat count and latest chat (demo sessions are hidden from admin views)
+    def get_queryset(self) -> QuerySet[Profile]:
+        real_chats = ~Q(chat_sessions__source="demo")
+        return (Profile.objects
+                .select_related("account__user", "settings_user")
+                .annotate(
+                    chat_count   = Count("chat_sessions",       filter=real_chats),
+                    last_chat_at = Max  ("chat_sessions__date", filter=real_chats),
+                )
+                .order_by(F("last_chat_at").desc(nulls_last=True), "account__user__username"))
+
+
 # ======================================================================= ===================================
-# Tokens 
+# Tokens
 # ======================================================================= ===================================
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod

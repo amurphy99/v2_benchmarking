@@ -80,9 +80,9 @@ Before writing a profile, gather:
 ## Warning: `source` is not always enough
 
 The webapp is the worked example. `source: "webapp"` does not tell you what the interface can
-do, because the avatar model is a **per-user setting** (`UserSettings.modelChoice`, chosen in
-the settings page and read at `pages/chat/Chat.tsx`). The models share no animation names at
-all:
+do, because the avatar model is a **per-user setting** (`UserSettings.modelChoice`, chosen on
+the caregiver settings page or the admin Participant Settings page at `/admin/participants`,
+and read at `pages/chat/Chat.tsx`). The models share no animation names at all:
 
 | Model | Animations |
 |---|---|
@@ -144,8 +144,8 @@ Everything lives in `capabilities/profiles.ts`.
 |---|---|---|
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
 | `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
-| `webapp` + `smiley` | Web Avatar (Smiley) | Every named expression (`Grinning Face`, `Fearful Face`, …) as emotions, 8 motion names, and the 10 moods + `Angry` in the mood section. Not yet a `UserSettings.modelChoice` option, so it only appears on `/avatar-demo` |
-| `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Also demo-only for now |
+| `webapp` + `smiley` | Web Avatar (Smiley) | Every named expression (`Grinning Face`, `Fearful Face`, …) as emotions, 8 motion names, and the 10 moods + `Angry` in the mood section. A `UserSettings.modelChoice` option, so participants can be given it |
+| `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Not a `modelChoice` option, so it only appears on `/avatar-demo` |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |
 | `qtrobot` | *(default)* | Not yet characterized |
 | anything else | *(default)* | 10 moods, no animations |

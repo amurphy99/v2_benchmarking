@@ -16,12 +16,12 @@ import { useEffect, useState             } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 // From this project
-import { AuthProvider                                                                  } from "@/context/AuthProvider";
-import { AppLayout, IsCaregiver, IsPatient, IsStaff, Protected, Unprotected            } from "@/routes";
-import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, Alert, Analysis     } from "@/pages";
-import { AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails, ChatEnd, Dashboard } from "@/pages";
-import { DaySummary, Goal, History, Practice, PracticePage, Profile, ProgressSummary   } from "@/pages";
-import { Settings, Transcript, TranscriptPlayback, WeekSummary                         } from "@/pages";
+import { AuthProvider                                                                   } from "@/context/AuthProvider";
+import { AppLayout, IsCaregiver, IsPatient, IsStaff, Protected, Unprotected             } from "@/routes";
+import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, AdminParticipants    } from "@/pages";
+import { Alert, Analysis, AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails     } from "@/pages";
+import { ChatEnd, Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile } from "@/pages";
+import { ProgressSummary, Settings, Transcript, TranscriptPlayback, WeekSummary         } from "@/pages";
 
 import Home          from "@/pages/Home";
 import Login         from "@/pages/Login";
@@ -119,6 +119,7 @@ export default function App() {
                             <Route path="/admin/chat/:id"          element={<AdminChat           />} />
                             <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive   />} />
                             <Route path="/admin/chat/activities"   element={<AdminChatActivities />} />
+                            <Route path="/admin/participants"      element={<AdminParticipants   />} />
                         </Route>
                     </Route>
 

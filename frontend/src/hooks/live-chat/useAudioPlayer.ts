@@ -1,21 +1,28 @@
-/**
- * Schedule streamed backend TTS and report optional browser playback boundaries.
- * --------------------------------------------------------------------------------
- * `frontend.src.hooks.live-chat.useAudioPlayer`
- *
- * Google TTS arrives as raw PCM chunks. The hook schedules those chunks on one Web
- * Audio timeline and reports when each persisted assistant message starts and finishes
- * playing. Cancelling a response invalidates all callbacks from the previous timeline.
- *
- * NOTE: During earlier testing, the first chunk occasionally seemed to be skipped. The
- *       exact cause has not been confirmed, so the buffering behavior remains explicit.
- *
- */
+/* Schedule streamed backend TTS and report its playback boundaries.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/live-chat/useAudioPlayer`
+
+Google TTS arrives as raw PCM chunks. The hook schedules those chunks on one Web
+Audio timeline and reports when each persisted assistant message starts and finishes
+playing. Cancelling a response invalidates all callbacks from the previous timeline.
+
+Every chunk plays through one `AnalyserNode` on its way to the speakers. The node
+passes the audio on unchanged (no delay, no extra buffering), and
+`readOutputLevel()` reads it to report how loud the speech is at that moment;
+the chat page moves the avatar's mouth with it.
+
+NOTE: During earlier testing, the first chunk occasionally seemed to be skipped. The
+      exact cause has not been confirmed, so the buffering behavior remains explicit.
+
+*/
 import { useRef, useCallback, useEffect, useState } from "react";
 
 // From this project
 import { pcmToAudioBuffer } from "@/utils/functions/audioHelpers";
 import   useLatencyLogger   from "@/hooks/useLatencyLogger";
+
+// Samples in each loudness reading (about 43 ms of speech at 24 kHz)
+const TTS_LEVEL_WINDOW_SAMPLES = 1_024;
 
 
 // ================================================================================
@@ -47,6 +54,23 @@ interface ResponsePlayback {
     startTimer : number | null;  // Timer aligned to the first chunk's scheduled start
 }
 
+// One browser audio timeline and the loudness tap every chunk plays through
+interface PlayerTimeline {
+    ctx      : AudioContext;                // Web Audio timeline the chunks are scheduled on
+    analyser : AnalyserNode;                // Pass-through tap between the chunks and the speakers
+    samples  : Float32Array<ArrayBuffer>;   // Reused buffer for one loudness reading
+}
+
+// What the hook gives its caller
+interface AudioPlayerControls {
+    startPlayer     : () => void;                                      // Open a timeline (needs a user gesture first)
+    sendAudio       : (payload: AudioChunkPayload) => Promise<void>;   // Decode and schedule one TTS chunk
+    stopPlayer      : () => void;                                      // Drop buffered audio and close the timeline
+    cancelAudio     : () => void;                                      // Drop buffered audio and open a fresh timeline
+    systemSpeaking  : boolean;                                         // Scheduled speech has not finished playing
+    readOutputLevel : () => number;                                    // Loudness (RMS, 0 to 1) of the speech playing now
+}
+
 
 // ================================================================================
 // Audio Player Hook
@@ -57,15 +81,15 @@ export function useAudioPlayer({
     bitsPerSample   = 16,
     bufferAhead     = 0.2,
     onPlaybackState = () => {},
-}: AudioPlayerOptions) {
-    /**
-     * Schedule each PCM chunk on a shared Web Audio timeline and expose controls for
-     * starting, stopping, and cancelling assistant speech.
-     */
+}: AudioPlayerOptions): AudioPlayerControls {
+    /*
+    Schedule each PCM chunk on a shared Web Audio timeline and expose controls for
+    starting, stopping, and cancelling assistant speech.
+    */
     const [systemSpeaking, setSystemSpeaking] = useState(false);
 
-    // Audio scheduling state
-    const audioContextRef = useRef<AudioContext>(null);
+    // Audio scheduling state (the timeline is null until `startPlayer` and after `stopPlayer`)
+    const playerRef       = useRef<PlayerTimeline | null>(null);
     const scheduleTimeRef = useRef<number>(0);
     const firstAudio      = useRef<boolean>(false);
 
@@ -81,11 +105,16 @@ export function useAudioPlayer({
         playbackHandlerRef.current = onPlaybackState;
     }, [onPlaybackState]);
 
-    // Create the browser audio timeline once playback is allowed to begin
+    // Create the browser audio timeline and its loudness tap once playback is allowed to begin
     const startPlayer = useCallback(() => {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new AudioContext({ sampleRate });
-            scheduleTimeRef.current = audioContextRef.current.currentTime + bufferAhead;
+        if (!playerRef.current) {
+            const ctx        = new AudioContext({ sampleRate });
+            const analyser   = ctx.createAnalyser();
+            analyser.fftSize = TTS_LEVEL_WINDOW_SAMPLES;
+            analyser.connect(ctx.destination);
+
+            playerRef.current       = {ctx, analyser, samples: new Float32Array(TTS_LEVEL_WINDOW_SAMPLES)};
+            scheduleTimeRef.current = ctx.currentTime + bufferAhead;
         }
     }, [sampleRate, bufferAhead]);
 
@@ -102,10 +131,10 @@ export function useAudioPlayer({
         }
         if ((playback.started) || (playback.startTimer !== null)) return;
 
-        const ctx = audioContextRef.current;
-        if (!ctx) return;
+        const player = playerRef.current;
+        if (!player) return;
 
-        const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1_000);
+        const delayMs = Math.max(0, (startTime - player.ctx.currentTime) * 1_000);
 
         // Ignore this timer if cancellation has replaced its playback generation
         playback.startTimer = window.setTimeout(() => {
@@ -119,8 +148,9 @@ export function useAudioPlayer({
 
     // Decode and schedule one raw backend TTS chunk
     const sendAudio = useCallback(async (payload: AudioChunkPayload) => {
-        const ctx = audioContextRef.current;
-        if (!ctx) return;
+        const player = playerRef.current;
+        if (!player) return;
+        const ctx = player.ctx;
 
         const raw = Uint8Array.from(atob(payload.b64), (character) => character.charCodeAt(0));
 
@@ -139,7 +169,7 @@ export function useAudioPlayer({
             const source     = ctx.createBufferSource();
             const generation = playbackGenerationRef.current;
             source.buffer    = audioBuffer;
-            source.connect(ctx.destination);
+            source.connect(player.analyser);   // The tap passes it on to the speakers unchanged
 
             // Mark the overall TTS player active on the first scheduled chunk
             if (!firstAudio.current) {
@@ -193,9 +223,9 @@ export function useAudioPlayer({
         });
         responsePlaybackRef.current.clear();
 
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
+        if (playerRef.current) {
+            playerRef.current.ctx.close();
+            playerRef.current = null;
         }
 
         scheduleTimeRef.current = 0;
@@ -209,5 +239,17 @@ export function useAudioPlayer({
         startPlayer();
     }, [stopPlayer, startPlayer]);
 
-    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking };
+    // Loudness (RMS, 0 to 1) of the speech playing right now (0 while no timeline is open)
+    const readOutputLevel = useCallback((): number => {
+        const player = playerRef.current;
+        if (!player) return 0;
+
+        // Root mean square of the most recent window of samples
+        player.analyser.getFloatTimeDomainData(player.samples);
+        let sumOfSquares = 0;
+        for (const sample of player.samples) sumOfSquares += sample * sample;
+        return Math.sqrt(sumOfSquares / player.samples.length);
+    }, []);
+
+    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readOutputLevel };
 }

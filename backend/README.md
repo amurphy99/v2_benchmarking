@@ -273,7 +273,9 @@ mono WAV file. The user's `Profile.save_audio_by_default` value initializes the
 save state (default setting for either saving or discarding audio at the end of
 a chat), and an admin listener may still change that state during the chat. At
 disconnect, the complete temporary WAV is persisted only when the final state
-for saving the audio is set to `True`.
+for saving the audio is set to `True`. Staff set `save_audio_by_default` for
+each participant on the admin Participant Settings page (`/admin/participants`,
+backed by `PATCH /api/admin/profiles/<id>/`).
 
 Assistant TTS is not included in the WAV. In previous iterations, it was saved
 for frontends that used TTS sourced from the backend -- we would combine the raw

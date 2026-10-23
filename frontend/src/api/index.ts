@@ -9,3 +9,4 @@ export * from "./endpoints/reminders";
 export * from "./endpoints/signup";
 export * from "./endpoints/download";
 export * from "./endpoints/raginstructions";
+export * from "./endpoints/adminProfiles";

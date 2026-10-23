@@ -1,8 +1,18 @@
+"""
+URL routes for the REST API (mounted under `/api/`).
+--------------------------------------------------------------------------------
+`backend.chat_app.api.router`
+
+ViewSets go through the DRF router; single-object endpoints, signup, and the
+JWT login routes are listed in `urlpatterns`.
+
+"""
 from rest_framework.routers         import DefaultRouter
 from django.urls import path, include
 
 from .health import health
 from .views import (
+    AdminProfileViewSet,                     # Admin participant settings
     GoalView, UserSettingsView,              # One-off endpoints
     ProfileView, SignupPatientView,          # Auth / Profile
     SignupAccountView, AccountView,          # Account views
@@ -28,6 +38,9 @@ router.register(r"chatsessions/(?P<active>\d+)/(?P<demo>\d+)", ChatSessionViewSe
 router.register(r"reminders",        ReminderViewSet, basename="reminder"        )
 router.register(r"accesses",           AccessViewSet, basename="accesses"        )
 router.register(r"rags",      RAGInstructionsViewSet, basename="rag_instructions")
+
+# Staff-only participant settings: /api/admin/profiles/ and /api/admin/profiles/<id>/
+router.register(r"admin/profiles", AdminProfileViewSet, basename="admin_profile")
 
 # --------------------------------------------------------------------------------
 # Single-object endpoints (no list) & auth go into urlpatterns

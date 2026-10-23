@@ -1,9 +1,21 @@
-import { getUserSettings, updateUserSettings } from "@/api";
-import { useUserSettings } from "@/hooks/queries/useUserSettings";
-import { toastMessage } from "@/utils/functions/toast_helper";
-import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
+/* Caregiver form for the participant's chat type, its topic, and their avatar.
+--------------------------------------------------------------------------------
+`@frontend/src/pages/settings/components/ChatTypeForm`
+
+Saves through `PUT /api/settings/` for the profile the caregiver is linked to.
+The avatar options are the same list the admin participant settings page uses
+(`AVATAR_MODEL_CHOICES`, copied from the backend's
+`UserSettings.MODEL_CHOICES`).
+
+*/
 import { useEffect, useState } from "react";
-import { Spinner } from "react-bootstrap";
+
+// From this project
+import { AVATAR_MODEL_CHOICES, getUserSettings, updateUserSettings } from "@/api";
+import { getAvatarEntry  } from "@/pages/common/avatar/avatarRegistry";
+import { useUserSettings } from "@/hooks/queries/useUserSettings";
+import { toastMessage    } from "@/utils/functions/toast_helper";
+import { borderStyle, disabledStyle, formText, h4, plainButtonStyle, plainButtonStyleDisabled, rowThree } from "@/utils/styling/sharedStyles";
 
 type TaskOptions   = "chat" | "chatTopic" | "chatImage";
 
@@ -56,8 +68,7 @@ export default function ChatTypeForm() {
             <div className={`w-1/2 ${rowThree}`}>
                 <label className={formText}>Avatar Model</label>
                 <select className={`${borderStyle}`} value={model} onChange={(e) => setModel(e.target.value)}>
-                    <option value="buddy" > Buddy Robot </option>
-                    <option value="qt" > QT Robot </option>
+                    {AVATAR_MODEL_CHOICES.map((choice: string) => <option key={choice} value={choice}>{getAvatarEntry(choice).label}</option>)}
                 </select>
             </div>
         </div>

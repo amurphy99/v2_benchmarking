@@ -18,8 +18,11 @@ export { PracticePage    } from "@/pages/practice-page/PracticePage";
 export { Settings        } from "@/pages/settings/Settings";
 export { AvatarDemo      } from "@/pages/avatar_demo/AvatarDemo";
 export { Profile         } from "@/pages/profile/Profile";
-export { Admin           } from "@/pages/admin/Admin";
-export { AdminChat       } from "@/pages/admin/AdminChat";
-export { AdminChatInactive  } from "@/pages/admin/AdminChatInactive";
+
+// Admin pages
+export { Admin               } from "@/pages/admin/Admin";
+export { AdminChat           } from "@/pages/admin/AdminChat";
+export { AdminChatInactive   } from "@/pages/admin/AdminChatInactive";
 export { AdminChatActivities } from "@/pages/admin/AdminChatActivities";
-export { TranscriptPlayback } from "@/pages/transcript_playback/TranscriptPlayback";
+export { TranscriptPlayback  } from "@/pages/transcript_playback/TranscriptPlayback";
+export { AdminParticipants   } from "@/pages/admin/AdminParticipants";

@@ -7,7 +7,7 @@ the AdminChat panel shows (`AvatarActionsGroup`, fed by the same capability
 profile). Each button hands a `RobotAction` straight to the avatar's
 `performAction`, the same path a live chat's `robot_action` frames take, so a
 behavior that works here works in a chat. Avatars with optional features (gaze,
-conversation state, speech level) also get the face controls.
+conversation state, speech level, sleep) also get the face controls.
 
 For tuning one face, the URL can pick the avatar and hold a face from the start
 (`/avatar-demo?avatar=smiley&face=Yawning Face`), so a reload after an edit
@@ -75,6 +75,7 @@ export function AvatarDemo(): ReactElement {
     const [gazePoint,         setGazePoint        ] = useState<GazePoint | null>(null);
     const [talking,           setTalking          ] = useState<boolean>(false);
     const [mouthLevel,        setMouthLevel       ] = useState<number>(0);
+    const [asleep,            setAsleep           ] = useState<boolean>(false);
 
     // What the selected avatar can do (the admin panel resolves the same profile)
     const entry        = getAvatarEntry(avatarId);
@@ -120,6 +121,7 @@ export function AvatarDemo(): ReactElement {
         setGazePoint(null);
         setTalking(false);
         setMouthLevel(0);
+        setAsleep(false);
     };
 
     // --------------------------------------------------------------------------------
@@ -136,6 +138,13 @@ export function AvatarDemo(): ReactElement {
     const changeTalking = (on: boolean): void => {
         setTalking(on);
         setMouthLevel(0);
+    };
+
+    // Doze the avatar off, or wake it with its yawn (what the chat page does as the chat stops and starts)
+    const changeAsleep = (on: boolean): void => {
+        setAsleep(on);
+        if (on) avatarRef.current?.sleep?.();
+        else    avatarRef.current?.wake?.();
     };
 
     // --------------------------------------------------------------------------------
@@ -201,6 +210,8 @@ export function AvatarDemo(): ReactElement {
                             onTalkingChange     = {changeTalking}
                             mouthLevel          = {mouthLevel}
                             onMouthLevel        = {changeMouthLevel}
+                            asleep              = {asleep}
+                            onAsleepChange      = {changeAsleep}
                         />
                     ) : null}
 

@@ -1,9 +1,10 @@
-/* Avatar demo controls for the optional handle methods: conversation state, gaze, and mouth.
+/* Demo controls for the avatars' optional handle methods.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/avatar_demo/components/FaceControlsGroup`
 
-Each section shows only when the selected avatar lists that feature, so the
-clip-based robots never show controls they would ignore.
+Conversation state, gaze, the mouth's voice level, and sleep. Each section
+shows only when the selected avatar lists that feature, so the clip-based
+robots never show controls they would ignore.
 
 */
 import type { ChangeEvent, ReactElement } from "react";
@@ -21,8 +22,8 @@ const DEMO_CONVERSATION_STATES: ConversationState[] = ["idle", "listening", "thi
 // ================================================================================
 // Face Controls
 // ================================================================================
-// Buttons, a gaze pad, and a mouth slider for the features the avatar supports
-export default function FaceControlsGroup({features, conversationState, onConversationState, gazePoint, onGaze, onClearGaze, talking, onTalkingChange, mouthLevel, onMouthLevel}: {
+// Buttons, a gaze pad, a mouth slider, and sleep buttons for the features the avatar supports
+export default function FaceControlsGroup({features, conversationState, onConversationState, gazePoint, onGaze, onClearGaze, talking, onTalkingChange, mouthLevel, onMouthLevel, asleep, onAsleepChange}: {
     // Which sections to show
     features : AvatarFeature[];   // Optional handle methods the avatar implements
 
@@ -40,6 +41,10 @@ export default function FaceControlsGroup({features, conversationState, onConver
     onTalkingChange : (talking: boolean) => void;   // Start or stop simulated speech
     mouthLevel      : number;                       // Manual voice level, 0 to 1
     onMouthLevel    : (level: number) => void;      // Set the manual voice level
+
+    // Sleep
+    asleep         : boolean;                     // The avatar was last sent to sleep
+    onAsleepChange : (asleep: boolean) => void;   // Send it to sleep, or wake it up
 }): ReactElement {
     return (
         <div className={groupDivStyle}>
@@ -101,6 +106,19 @@ export default function FaceControlsGroup({features, conversationState, onConver
                             disabled  = {talking}
                             onChange  = {(event: ChangeEvent<HTMLInputElement>) => onMouthLevel(Number(event.target.value))}
                         />
+                    </div>
+                </>
+            ) : null}
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Sleep */}
+            {/* -------------------------------------------------------------------------------- */}
+            {features.includes("sleep") ? (
+                <>
+                    <div className="mt-3 text-xs opacity-60">Sleep (the chat page dozes the avatar off while the chat is stopped)</div>
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                        <button className={btnClass(false, asleep ? "primary"   : "secondary")} onClick={() => onAsleepChange(true )}>Sleep</button>
+                        <button className={btnClass(false, asleep ? "secondary" : "primary"  )} onClick={() => onAsleepChange(false)}>Wake up</button>
                     </div>
                 </>
             ) : null}

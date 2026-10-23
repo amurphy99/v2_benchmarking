@@ -382,7 +382,7 @@ class Goal(models.Model):
 
 class UserSettings(models.Model):
     TASK_CHOICES = [("chat", "Chat"), ("chattopic", "ChatTopic"), ("chatimage", "ChatImage")]
-    MODEL_CHOICES = [("buddy", "Buddy"), ("qt", "QT")]
+    MODEL_CHOICES = [("buddy", "Buddy"), ("qt", "QT"), ("smiley", "Smiley")]   # Web avatars (`AVATAR_MODEL_CHOICES` in `frontend/src/api/models.ts` copies these)
     
     profile            = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="settings_user")
     patientViewOverall = models.BooleanField(default=True)

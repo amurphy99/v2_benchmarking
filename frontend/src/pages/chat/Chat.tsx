@@ -1,17 +1,22 @@
-/* Participant chat page: the avatar, the assistant's latest line, and chat controls.
+/* Participant chat page: the avatar, the assistant's latest line, and controls.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/chat/Chat`
 
+The avatar dozes until the chat starts and follows the conversation while it
+runs (`useChatAvatar`). The settings are re-read every time the page opens, so
+an avatar picked on the admin or caregiver page shows on the next visit.
+
 */
-import { useRef, useState } from "react";
-import { useNavigate      } from "react-router-dom";
-import { Spinner          } from "react-bootstrap";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate                 } from "react-router-dom";
+import { Spinner                     } from "react-bootstrap";
 import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
 
 // From this project
 import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
 import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
 import { Avatar          } from "../common/avatar/Avatar";
+import { useChatAvatar   } from "./useChatAvatar";
 import { useUserSettings } from "@/hooks/queries/useUserSettings";
 import   SaveChatModal     from "@/components/modals/SaveChatModal";
 import   useLiveChat       from "@/hooks/useLiveChat";
@@ -24,9 +29,12 @@ import   useLiveChat       from "@/hooks/useLiveChat";
 // TODO: Might need to add the user/token stuff to the websocket
 export function Chat() {
     const navigate = useNavigate();
-    const { data: settings, isLoading } = useUserSettings();
+    const { data: settings, isFetchedAfterMount } = useUserSettings();
     const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
     const avatarRef = useRef<AvatarHandle>(null);
+
+    // True from the participant's finished utterance until the reply starts playing (the avatar's "thinking" look)
+    const [awaitingReply, setAwaitingReply] = useState(false);
 
     // Local (frontend, view-related only) chat tracking
     const { pushMessage, session } = useLocalChatSession();
@@ -35,9 +43,10 @@ export function Chat() {
     // WebSocket Response Callbacks
     // --------------------------------------------------------------------------------
     // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
-    const onUserUtterance   = (text: string) => { 
-        pushMessage("user",      text); 
-        setBotMessage( 
+    const onUserUtterance   = (text: string) => {
+        pushMessage("user",      text);
+        setAwaitingReply(true);
+        setBotMessage(
             <div className="flex flex-row gap-2 justify-center">
                 <Spinner animation="grow" />
                 <Spinner animation="grow" />
@@ -74,7 +83,7 @@ export function Chat() {
 
 
     // Live-chat hook
-    const { start, stop, save, chatEnding } = useLiveChat({
+    const { start, stop, save, chatEnding, systemSpeaking, readOutputLevel } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores: () => {},
@@ -90,6 +99,7 @@ export function Chat() {
             navigate("/chat/end"); // navigate("/goal")
         },
         onChatPaused      : (       ) => { setRecording     (false  ); },
+        onChatResumed     : (       ) => { setRecording     (true   ); },
         onRecordingStatus : (enabled) => { setAdminRecording(enabled); },
     });
     
@@ -104,13 +114,18 @@ export function Chat() {
     const [showModal, setShowModal] = useState(false);
     const endChatModal = () => {setShowModal(true); if (!recording) { pauseChat(); } };
 
-    // Is this the avatar? idk we need comments
+    // A reply that starts playing, or a chat that stops, ends the wait for a reply
+    useEffect(() => { if (systemSpeaking || !recording) setAwaitingReply(false); }, [systemSpeaking, recording]);
+
+    // Avatar from the participant's settings (`UserSettings.modelChoice`), asleep until the chat starts
     const model = settings.modelChoice;
+    useChatAvatar(avatarRef, isFetchedAfterMount ? model : null, {running: recording, systemSpeaking, awaitingReply}, readOutputLevel);
 
     // ================================================================================
     // Return UI elements
     // ================================================================================
-    if (isLoading) { return <div>Loading...</div>; }
+    // Wait for this visit's settings (a cached copy could still name an avatar changed since)
+    if (!isFetchedAfterMount) { return <div>Loading...</div>; }
 
     const stopStyle = "flex flex-col gap-2 items-center";
     return (
