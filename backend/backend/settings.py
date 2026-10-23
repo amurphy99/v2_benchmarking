@@ -34,6 +34,7 @@ ALLOWED_HOSTS = [
     "cognibot.org",            "www.cognibot.org", 
     "deployment.cognibot.org", "www.deployment.cognibot.org",
     "sandbox.cognibot.org",    "www.sandbox.cognibot.org",
+    "sandbox1.cognibot.org",   "www.sandbox1.cognibot.org"
     "sandbox2.cognibot.org",   "www.sandbox2.cognibot.org",
     "sandbox3.cognibot.org",   "www.sandbox3.cognibot.org",
     "10.0.2.2", # for android dev
@@ -77,6 +78,7 @@ else:
     CORS_ALLOW_ALL_ORIGINS = False  # For production
     CORS_ALLOWED_ORIGINS = [
         "https://sandbox.cognibot.org",
+        "https://sandbox1.cognibot.org",
         "https://sandbox2.cognibot.org",
         "https://sandbox3.cognibot.org",
         "https://cognibot.org",
@@ -86,6 +88,7 @@ else:
     # needed for making for admin page to work with CSRF protection.
     CSRF_TRUSTED_ORIGINS = [
         "https://sandbox.cognibot.org",
+        "https://sandbox1.cognibot.org",
         "https://sandbox2.cognibot.org",
         "https://sandbox3.cognibot.org",
         "https://cognibot.org",
