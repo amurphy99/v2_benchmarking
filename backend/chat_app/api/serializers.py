@@ -9,10 +9,12 @@ Accounts are created only by staff (`AdminCreateAccountSerializer`); there is no
 public signup.
 
 """
-from rest_framework import serializers
+from rest_framework            import serializers
+from rest_framework.exceptions import PermissionDenied
 from ..models import ChatSession, SessionAudio, ChatMessage, ChatBiomarkerScore, ChatWord, Account, Profile, Access, UserSettings, Reminder, Goal, AlbumImage, RAGInstructions
 from ..helpers.downloadHelpers import get_download_data
 
+from django.conf                             import settings as django_settings
 from django.contrib.auth                     import get_user_model
 from django.contrib.auth.password_validation import validate_password as check_password_rules
 from django.contrib.auth.validators          import UnicodeUsernameValidator
@@ -74,22 +76,42 @@ class ProfileSerializer(serializers.ModelSerializer):
 # --------------------------------------------------------------------------------
 # Admin Participant Settings
 # --------------------------------------------------------------------------------
+# Logins whose password startup reapplies from the server's .env on every run
+def env_managed_usernames() -> frozenset[str]:
+    usernames = (django_settings.ADMIN_USERNAME_0, django_settings.ADMIN_USERNAME_1, django_settings.DEMO_USERNAME_0, django_settings.BUDDY_USERNAME)
+    return frozenset(username for username in usernames if username)
+
+
 # One participant for the admin settings page: who they are, their chat activity, and the settings staff change
 class AdminProfileSerializer(serializers.ModelSerializer):
-    user         = UserSerializer(source="account.user", read_only=True)
-    modelChoice  = serializers.ChoiceField(source="settings_user.modelChoice", choices=UserSettings.MODEL_CHOICES)
-    chat_count   = serializers.IntegerField (read_only=True)   # Annotated by `AdminProfileViewSet` (demo sessions left out)
-    last_chat_at = serializers.DateTimeField(read_only=True)   # Start of the latest of those sessions (null without one)
+    user              = UserSerializer(source="account.user", read_only=True)
+    modelChoice       = serializers.ChoiceField(source="settings_user.modelChoice", choices=UserSettings.MODEL_CHOICES)
+    chat_count        = serializers.IntegerField (read_only=True)               # Annotated by `AdminProfileViewSet` (demo sessions left out)
+    last_chat_at      = serializers.DateTimeField(read_only=True)               # Start of the latest of those sessions (null without one)
+    password          = serializers.CharField(write_only=True, required=False)  # New login password (staff only)
+    password_from_env = serializers.SerializerMethodField()                     # Startup resets this login's password from the .env
 
     class Meta:
         model            = Profile
-        fields           = ("id", "user", "save_audio_by_default", "language", "modelChoice", "chat_count", "last_chat_at")
+        fields           = ("id", "user", "save_audio_by_default", "language", "modelChoice", "chat_count", "last_chat_at", "password", "password_from_env")
         read_only_fields = ("id",)
 
-    # Save the recording default (on the profile) and the avatar (on its settings row) together
+    # Whether the server's .env controls this participant's password
+    def get_password_from_env(self, profile: Profile) -> bool:
+        return profile.account.user.username in env_managed_usernames()
+
+    # Only staff set passwords, and never one the server's .env controls
+    def validate_password(self, password: str) -> str:
+        if not self.context["request"].user.is_staff: raise PermissionDenied("Only staff can set passwords.")
+        if self.get_password_from_env(self.instance): raise serializers.ValidationError("This password is set in the server's .env.")
+        check_password_rules(password, user=self.instance.account.user)
+        return password
+
+    # Save the settings (on the profile and its settings row) and any new password together
     @transaction.atomic
     def update(self, profile: Profile, validated_data: dict[str, object]) -> Profile:
-        # A PATCH may carry either setting alone
+        # A PATCH may carry any setting alone, and carries a password only when one was typed
+        password        = validated_data.pop("password", None)
         settings_fields = validated_data.pop("settings_user", {})
         for name, value in validated_data.items():  setattr(profile,               name, value)
         for name, value in settings_fields.items(): setattr(profile.settings_user, name, value)
@@ -97,6 +119,11 @@ class AdminProfileSerializer(serializers.ModelSerializer):
         # Write only the columns that were sent (an empty `update_fields` skips that save)
         profile.save(update_fields=list(validated_data))
         profile.settings_user.save(update_fields=list(settings_fields))
+
+        # Replace the login password last, inside the same transaction
+        if password is not None:
+            profile.account.user.set_password(password)
+            profile.account.user.save(update_fields=["password"])
         return profile
 
 
@@ -159,23 +186,34 @@ class AdminCaregiverSerializer(serializers.ModelSerializer):
     user            = UserSerializer(read_only=True)
     participants    = serializers.SerializerMethodField()
     participant_ids = serializers.PrimaryKeyRelatedField(many=True, write_only=True, queryset=Profile.objects.all())
+    password        = serializers.CharField(write_only=True, required=False)  # New login password (sent only when one was typed)
 
     class Meta:
         model            = Account
-        fields           = ("id", "user", "participants", "participant_ids")
+        fields           = ("id", "user", "participants", "participant_ids", "password")
         read_only_fields = ("id",)
+
+    # Apply the project's password rules (`AUTH_PASSWORD_VALIDATORS`)
+    def validate_password(self, password: str) -> str:
+        check_password_rules(password, user=self.instance.user)
+        return password
 
     # Linked participants, oldest link first (the first one is what the caregiver pages show)
     def get_participants(self, account: Account) -> list[dict[str, object]]:
         links = sorted(account.account_access.all(), key=lambda access: access.id)
         return LinkedParticipantSerializer([access.profile for access in links], many=True).data
 
-    # Replace the caregiver's links with exactly the participants sent
+    # Replace the caregiver's links with exactly the participants sent, and any new password with them
     @transaction.atomic
     def update(self, account: Account, validated_data: dict[str, object]) -> Account:
         profiles = validated_data["participant_ids"]
         account.account_access.exclude(profile__in=profiles).delete()
         for profile in profiles: Access.objects.get_or_create(account=account, profile=profile)
+
+        # A password is sent only when staff typed a new one
+        if "password" in validated_data:
+            account.user.set_password(validated_data["password"])
+            account.user.save(update_fields=["password"])
         return account
 
 

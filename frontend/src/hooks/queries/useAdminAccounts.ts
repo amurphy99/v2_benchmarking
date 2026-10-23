@@ -13,12 +13,12 @@ import      { useMutation, useQueryClient    } from "@tanstack/react-query";
 import        toast                            from "react-hot-toast";
 
 // From this project
-import type { Account, AdminCaregiver, CreateAccountPayload, UpdateCaregiverLinksPayload } from "@/api";
-import      { createAccount, listAdminCaregivers, updateCaregiverLinks                   } from "@/api";
-import      { useModelQuery                                                              } from "./common";
+import type { Account, AdminCaregiver, CreateAccountPayload, UpdateCaregiverPayload } from "@/api";
+import      { createAccount, listAdminCaregivers, updateCaregiver                   } from "@/api";
+import      { useModelQuery                                                         } from "./common";
 
-// One link change: which caregiver, and their whole new set of participants
-type CaregiverLinksUpdate = {id: number; body: UpdateCaregiverLinksPayload};
+// One caregiver save: which caregiver, their whole new set of participants, and any new password
+type CaregiverUpdate = {id: number; body: UpdateCaregiverPayload};
 
 
 // --------------------------------------------------------------------------------
@@ -35,13 +35,13 @@ export function useAdminCaregivers(enabled: boolean): ReturnType<typeof useModel
     });
 }
 
-// Replace one caregiver's links, toast the outcome, and refetch both lists
-export function useUpdateCaregiverLinks(): UseMutationResult<AdminCaregiver, Error, CaregiverLinksUpdate> {
+// Save one caregiver's links and any new password, toast the outcome, and refetch both lists
+export function useUpdateCaregiver(): UseMutationResult<AdminCaregiver, Error, CaregiverUpdate> {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn : ({id, body}: CaregiverLinksUpdate): Promise<AdminCaregiver> => updateCaregiverLinks(id, body),
-        onSuccess  : (          ): void => { toast.success("Caregiver links saved"                 ); },
-        onError    : (err: Error): void => { toast.error  (`Could not save links: ${err.message}`); },
+        mutationFn : ({id, body}: CaregiverUpdate): Promise<AdminCaregiver> => updateCaregiver(id, body),
+        onSuccess  : (          ): void => { toast.success("Caregiver changes saved"               ); },
+        onError    : (err: Error): void => { toast.error  (`Could not save changes: ${err.message}`); },
         onSettled  : (          ): Promise<void> => refetchAccountLists(qc),
     });
 }
@@ -51,7 +51,7 @@ export function useCreateAccount(): UseMutationResult<Account, Error, CreateAcco
     const qc = useQueryClient();
     return useMutation({
         mutationFn : createAccount,
-        onSuccess  : (account: Account): void => { toast.success(`Created @${account.user.username}`         ); },
+        onSuccess  : (account: Account): void => { toast.success(`Created @${account.user.username}`       ); },
         onError    : (err: Error      ): void => { toast.error  (`Could not create account: ${err.message}`); },
         onSettled  : (                ): Promise<void> => refetchAccountLists(qc),
     });

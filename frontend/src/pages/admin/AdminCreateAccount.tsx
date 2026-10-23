@@ -19,9 +19,9 @@ import type { CreateAccountPayload, NewAccountRole } from "@/api";
 import      { useCreateAccount                     } from "@/hooks/queries/useAdminAccounts";
 
 // Components
-import { AdminButton   } from "./components/ui/AdminButton";
-import { AdminPage     } from "./components/ui/AdminPage";
-import { SectionHeader } from "./components/ui/SectionHeader";
+import { AdminButton     } from "./components/ui/AdminButton";
+import { AdminPage       } from "./components/ui/AdminPage";
+import { AdminPageHeader } from "./components/ui/AdminPageHeader";
 
 // One account kind staff can create, with the words the form shows for it
 type RoleOption = {value: NewAccountRole; label: string; hint: string};
@@ -76,17 +76,12 @@ export function AdminCreateAccount(): ReactElement {
     // Render
     // --------------------------------------------------------------------------------
     return (
-        <AdminPage>
-            <div className="flex flex-col gap-6 pt-6 max-w-xl">
-                {/* Back link and page title */}
-                <div className="bg-admin-panel border border-admin-border rounded-xl shadow-sm p-4">
-                    <button className="text-sm text-admin-subtext hover:text-admin-text transition-colors mb-4 w-fit cursor-pointer" onClick={() => navigate("/admin/participants")}>
-                        ← Back to Accounts
-                    </button>
-                    <SectionHeader title="Create Account" subtitle="Give the new user their username and password once it is created." />
-                </div>
+        <AdminPage contained={false}>
+            {/* Back arrow and page title (the same sticky header as the Accounts page) */}
+            <AdminPageHeader title="Create Account" subtitle="Give the new user their username and password once it is created." backTo="/admin/participants" />
 
-                <form onSubmit={onSubmit} className="bg-admin-panel border border-admin-border rounded-xl shadow-sm p-5 flex flex-col gap-5">
+            <div className="mx-auto max-w-[1400px] px-4 md:px-6 pt-6">
+                <form onSubmit={onSubmit} className="max-w-xl bg-admin-panel border border-admin-border rounded-xl shadow-sm p-5 flex flex-col gap-5">
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Account Kind */}
                     {/* -------------------------------------------------------------------------------- */}

@@ -115,6 +115,18 @@ class AdminCaregiverLinkTests(TestCase):
         linked = set(Access.objects.filter(account=self.caregiver).values_list("profile_id", flat=True))
         self.assertEqual(linked, {self.second.id})
 
+    # A password sent with the links is the one the caregiver logs in with
+    def test_update_sets_password_with_links(self) -> None:
+        self.api.force_authenticate(user=self.staff)
+        body     = {"participant_ids": [self.first.id, self.second.id], "password": "caregiver-password"}
+        response = self.api.put(self.detail_url, body, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Access.objects.filter(account=self.caregiver).count(), 2)
+
+        self.api.force_authenticate(user=None)
+        login = self.api.post(reverse("token"), {"username": "links_caregiver", "password": "caregiver-password"}, format="json")
+        self.assertEqual(login.status_code, 200)
+
     # Refuse an unknown participant and non-staff callers, changing nothing
     def test_unknown_participant_and_non_staff_are_refused(self) -> None:
         self.api.force_authenticate(user=self.staff)

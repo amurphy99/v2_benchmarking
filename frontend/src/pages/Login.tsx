@@ -18,7 +18,7 @@ export default function Login() {
     const navigate  = useNavigate();
 
     const [form,    setForm   ] = useState<FormState>({ username: "", password: "" });
-    const [loading, setLoading] = useState(false); // ToDo: I think I need to implement this somehow
+    const [loading, setLoading] = useState(false);  // A login request is running
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) =>
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -57,7 +57,7 @@ export default function Login() {
                             <div className="flex flex-col gap-2 p-4 w-3/4">
                                 <input required autoComplete="username" placeholder="Username" name="username" value={form.username} onChange={handleChange} className={loginStyle}/>
                                 <input required autoComplete="current-password" placeholder="Password" type="password"  name="password" value={form.password} onChange={handleChange} className={loginStyle}/>
-                                <button type="submit" className="btn btn-primary"> Log In </button>
+                                <button type="submit" disabled={loading} className="btn btn-primary"> {loading ? "Logging in..." : "Log In"} </button>
                             </div>
                             <p>Need an account? Ask a study administrator to create one for you.</p>
                         </div>

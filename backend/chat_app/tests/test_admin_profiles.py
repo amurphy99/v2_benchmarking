@@ -12,7 +12,7 @@ choices are refused.
 
 """
 from django.contrib.auth import get_user_model
-from django.test         import TestCase
+from django.test         import TestCase, override_settings
 from django.urls         import reverse
 
 from rest_framework.test import APIClient
@@ -109,6 +109,35 @@ class AdminProfileSettingsTests(TestCase):
         self.assertFalse(self.profile.save_audio_by_default)
         self.assertEqual(self.profile.language, "en-US")
         self.assertEqual(UserSettings.objects.get(profile=self.profile).modelChoice, "smiley")
+
+    # A password staff set is the one the participant logs in with
+    def test_staff_set_password_works_at_login(self) -> None:
+        self.api.force_authenticate(user=self.staff)
+        self.assertEqual(self.api.patch(self.detail_url, {"password": "new-password"}, format="json").status_code, 200)
+
+        self.api.force_authenticate(user=None)
+        login = self.api.post(reverse("token"), {"username": "settings_patient", "password": "new-password"}, format="json")
+        self.assertEqual(login.status_code, 200)
+
+    # A caregiver changes settings but never a password
+    def test_caregiver_cannot_set_password(self) -> None:
+        self.api.force_authenticate(user=self.caregiver)
+        self.assertEqual(self.api.patch(self.detail_url, {"password": "new-password"}, format="json").status_code, 403)
+
+        self.patient.refresh_from_db()
+        self.assertFalse(self.patient.check_password("new-password"))
+
+    # A login whose password startup reapplies from the .env is flagged and cannot be changed here
+    @override_settings(DEMO_USERNAME_0="settings_patient")
+    def test_env_managed_password_is_read_only(self) -> None:
+        self.api.force_authenticate(user=self.staff)
+        rows = {row["user"]["username"]: row for row in self.api.get(self.list_url).data}
+        self.assertTrue (rows["settings_patient"]["password_from_env"])
+        self.assertFalse(rows["settings_other"  ]["password_from_env"])
+
+        self.assertEqual(self.api.patch(self.detail_url, {"password": "new-password"}, format="json").status_code, 400)
+        self.patient.refresh_from_db()
+        self.assertFalse(self.patient.check_password("new-password"))
 
     # Count real chats only (caregivers and staff own no profile, so they never appear)
     def test_list_shows_participants_with_real_chat_counts(self) -> None:

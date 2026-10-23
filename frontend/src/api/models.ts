@@ -117,10 +117,11 @@ export interface AdminProfile {
     modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
     chat_count            : number;              // Chats so far (demo sessions left out)
     last_chat_at          : string | null;       // Start of the latest of those chats (null before the first)
+    password_from_env     : boolean;             // Startup resets their password from the server's .env (staff can't change it here)
 }
 
-// Settings staff and caregivers can change for one participant (any of them may be sent alone)
-export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "language" | "modelChoice">>;
+// Settings staff and caregivers can change for one participant (any of them may be sent alone; a password only by staff)
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "language" | "modelChoice">> & {password?: string};
 
 // --------------------------------------------------------------------------------
 // Admin Accounts
@@ -138,8 +139,8 @@ export interface AdminCaregiver {
     participants : LinkedParticipant[];   // Oldest link first (the first is what the caregiver pages show)
 }
 
-// A caregiver's whole new set of linked participants (profile IDs)
-export type UpdateCaregiverLinksPayload = {participant_ids: number[]};
+// A caregiver's whole new set of linked participants (profile IDs), and a new password when one was typed
+export type UpdateCaregiverPayload = {participant_ids: number[]; password?: string};
 
 // Kinds of login staff can create
 export type NewAccountRole = "patient" | "caregiver";

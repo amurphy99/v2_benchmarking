@@ -4,7 +4,7 @@
 
 The list is never served from cache, so the page always shows what is saved.
 A save refetches the list before it finishes, so the card already shows the
-new values when the settings modal closes.
+new values when it returns to display mode.
 
 */
 import type { UseMutationResult           } from "@tanstack/react-query";

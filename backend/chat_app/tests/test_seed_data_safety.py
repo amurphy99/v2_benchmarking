@@ -104,16 +104,20 @@ class StudyAccountSeedTests(TestCase):
             self.assertEqual(profile.language, "en-US")
             self.assertEqual(UserSettings.objects.get(profile=profile).modelChoice, "smiley")
 
-    # Keep a setting changed on the admin pages when startup seeding runs again
+    # Keep a setting and a password changed on the admin pages when startup seeding runs again
     def test_study_seeding_keeps_later_setting_changes(self) -> None:
         command = Command()
         command.setup_study_accounts(date(2026, 1, 1))
 
         username = STUDY_PARTICIPANTS[0][0]
         UserSettings.objects.filter(profile__account__user__username=username).update(modelChoice="qt")
+        user = get_user_model().objects.get(username=username)
+        user.set_password("changed-by-staff")
+        user.save(update_fields=["password"])
         command.setup_study_accounts(date(2026, 1, 1))
 
         self.assertEqual(UserSettings.objects.get(profile__account__user__username=username).modelChoice, "qt")
+        self.assertTrue(get_user_model().objects.get(username=username).check_password("changed-by-staff"))
 
     # Skip the whole group while either password is blank
     @override_settings(STUDY_PARTICIPANT_PASSWORD="")

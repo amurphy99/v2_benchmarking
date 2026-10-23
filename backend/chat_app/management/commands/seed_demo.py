@@ -209,8 +209,9 @@ class Command(BaseCommand):
         """
         Ensure one caregiver linked to three participants. Usernames are fixed above;
         both passwords come from the environment, and the group is skipped while either
-        is blank. New participants start on the model defaults (Smiley avatar, recording
-        off, English), and later changes from the admin pages survive restarts.
+        is blank. The environment passwords are set only when an account is created, so
+        a password staff change on the Accounts page survives restarts. New participants
+        start on the model defaults (Smiley avatar, recording off, English).
         """
         caregiver_password   = django_settings.STUDY_CAREGIVER_PASSWORD
         participant_password = django_settings.STUDY_PARTICIPANT_PASSWORD
@@ -226,18 +227,18 @@ class Command(BaseCommand):
             profile     = self.ensure_patient_profile(participant, days_ago)
             self.ensure_caregiver_access(caregiver, profile)
 
-    # Ensure one study login, following the environment password like the other operational accounts
+    # Ensure one study login, using the environment password only when the login is first created
     def ensure_study_user(
         self,
         username   : str,  # Fixed study username
-        password   : str,  # Password from the environment (reapplied when it changes)
+        password   : str,  # Password from the environment (set at creation only)
         first_name : str,  # Configured display first name
         last_name  : str,  # Configured display last name
     ) -> AbstractBaseUser:
         user = self.ensure_user(
             username         = username,
             password         = password,
-            refresh_password = True,
+            refresh_password = False,
             first_name       = first_name,
             last_name        = last_name,
             is_staff         = False,

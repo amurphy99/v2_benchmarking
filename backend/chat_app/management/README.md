@@ -251,13 +251,13 @@ DEMO_PASSWORD_0=...
 BUDDY_USERNAME=...     # owns an independent profile without seeded chat data
 BUDDY_PASSWORD=...
 
-STUDY_CAREGIVER_PASSWORD=...     # password for the fixed "study_caregiver" login
-STUDY_PARTICIPANT_PASSWORD=...   # one password shared by "study_participant_1" to "study_participant_3"
+STUDY_CAREGIVER_PASSWORD=...     # first password for the fixed "study_caregiver" login
+STUDY_PARTICIPANT_PASSWORD=...   # first password shared by "study_participant_1" to "study_participant_3"
 ```
 
 The seeded transcript chat is attached to the **DEMO_USERNAME_0** user's profile. Both configured admin users always get a caregiver account, plus `Access` to that profile when it exists. The Buddy user gets a separate patient profile and no seeded chat sessions. Re-running `seed_demo` can refresh the configured identity fields and environment-managed passwords, but it never deletes data linked to any of these accounts.
 
-The study usernames are fixed in [`seed_demo.py`](commands/seed_demo.py) (`STUDY_CAREGIVER`, `STUDY_PARTICIPANTS`); only their two passwords live in `.env`, and the group is skipped while either is blank. `study_caregiver` is not staff, so the Monitor pages show it only its three linked participants. New participants start on the model defaults: the Smiley avatar, recording off, and English (`en-US`). Those are only applied when a row is first created, so changes made later on the admin pages survive restarts.
+The study usernames are fixed in [`seed_demo.py`](commands/seed_demo.py) (`STUDY_CAREGIVER`, `STUDY_PARTICIPANTS`); only their two passwords live in `.env`, and the group is skipped while either is blank. Unlike the other environment accounts, those passwords are set only when an account is first created: staff change them later on the admin Accounts page, and restarts keep that change. The admin, workshop, and Buddy passwords are reapplied from `.env` on every startup, so the Accounts page shows them as read-only. `study_caregiver` is not staff, so the Monitor pages show it only its three linked participants. New participants start on the model defaults: the Smiley avatar, recording off, and English (`en-US`). Those are only applied when a row is first created, so changes made later on the admin pages survive restarts.
 
 A caregiver account may hold `Access` links to any number of participants. Staff accounts (`is_staff`) see every participant without links. Outside of seeding, staff create accounts and change caregiver links on the admin pages; there is no public signup.
 
