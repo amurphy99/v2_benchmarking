@@ -100,9 +100,10 @@ class TextToSpeechProvider:
         preserving the actual format metadata so the frontend can decode it
         correctly regardless of what the voice/API returns.
 
-        TODO: I don't think we are TRULY streaming yet... We wait until we have 
-              the full audio from Google, and then we send it to the client in
-              chunks. True streaming would need a different setup. 
+        TODO: Each call still waits for Google's full audio for its text. The
+              caller (`tts_streaming`) sends one sentence at a time, so speech
+              starts after the first sentence; true streaming would need Google's
+              streaming synthesis, which only supports Chirp 3 HD voices.
         """
         # Guard / normalize input
         text = (text or "").strip()

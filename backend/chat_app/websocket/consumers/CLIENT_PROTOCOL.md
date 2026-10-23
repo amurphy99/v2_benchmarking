@@ -542,6 +542,11 @@ audio it has buffered but not yet played. Note that `audio_chunk` carries its PC
 every chunk -- do not assume it matches the 16 kHz used for *inbound* microphone audio, since
 TTS is synthesized at a different rate.
 
+The backend synthesizes a response one sentence at a time and sends each sentence's chunks as
+soon as they are ready, so chunks arrive in bursts, possibly with a pause between sentences.
+Play each chunk as it arrives, right after the audio already queued. `sequence` counts across
+the whole response, and only the response's final chunk has `"last": true`.
+
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Minimal client                                                                   -->
 <!-- -------------------------------------------------------------------------------- -->

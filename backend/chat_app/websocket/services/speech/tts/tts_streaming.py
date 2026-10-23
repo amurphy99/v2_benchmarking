@@ -4,18 +4,19 @@ Text-to-speech (TTS) synthesized audio streaming.
 `backend.chat_app.websocket.services.speech.tts.tts_streaming`
 
 We use TTS to synthesize audio for the assistant messages here, and then we
-stream it to the frontend for playback to the user.
+stream it to the frontend for playback to the user. Each response is spoken one
+sentence at a time: a sentence's audio goes out as soon as Google returns it,
+and the next sentence is synthesized while the frontend plays it, so playback
+starts after the first sentence instead of after the whole response.
 
 NOTE: Not all of our "frontend" interfaces use this -- some just need to get the
       assistant's text response back from us and they will handle TTS on their
       own (QT Robot, Buddy Robot).
 
-TODO: Last I remembered, while we do stream the TTS result that we get back to
-      the frontend, the actual TTS *generation* is NOT streamed. So, rather than
-      making a request to the TTS provider and then passing audio chunks that we
-      receive through to the frontend (like the reverse of how we handle STT
-      streaming), we wait ~1-2 seconds for the full TTS response, and THEN send
-      the resulting chunks of audio to the frontend. This should be fixed...
+TODO: Synthesis is per sentence rather than truly streamed: each sentence still
+      waits for Google's full result before any of its audio is sent. Google's
+      streaming synthesis would start the audio after the first few words, but
+      it only supports Chirp 3 HD voices (the current voice is Chirp HD).
 
 ------
 
@@ -26,11 +27,10 @@ NOTE: Additionally, we used to attempt to combine the actual raw TTS output that
       and more, so that function has been cut.
 
 """
-import logging, asyncio, base64, json
+import asyncio, base64, json, logging, re
 logger = logging.getLogger(__name__)
 
 from asgiref.sync import sync_to_async
-from math         import ceil
 from time         import monotonic as now_ts
 from typing       import Awaitable, Callable
 
@@ -39,17 +39,27 @@ from .....services               import logging_utils as lu
 from .....services.logging_utils import RESET, BOLD, UNBOLD, TTS_MAIN
 from     .tts_google             import TextToSpeechProvider
 
-# Chunk size (bytes) of TTS audio streamed back to frontend client. 
+# Chunk size (bytes) of TTS audio streamed back to frontend client.
 CHUNK_SIZE = 8_192  # Maximum PCM bytes included in one outbound TTS WebSocket chunk
+
+# Where a response splits into sentences: after ., !, or ? (and any closing quote or bracket), or at a line break
+TTS_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\"'”’)\]])\s+|\s*\n\s*")
+
+# Shortest text synthesized on its own (a shorter sentence joins the next, which keeps "Dr." or "Oh." attached)
+TTS_MIN_PIECE_CHARS = 24
+
+# Active frontend WebSocket sender
+SendCallback = Callable[[str], Awaitable[object]]
 
 
 # ================================================================================
 # Stream a TTS audio response to the frontend in base64 chunks
 # ================================================================================
-async def synthesize_and_stream_tts(system_resp: str, send_callback: Callable[[str], Awaitable[object]], response_id: int) -> None:
+async def synthesize_and_stream_tts(system_resp: str, send_callback: SendCallback, response_id: int) -> None:
     """
-    1) Synthesize speech bytes (run sync TTS off the event loop)
-    2) Chunk + stream it to the frontend with format and response metadata
+    1) Split the response into sentences (short ones join the next)
+    2) Synthesize each one (run sync TTS off the event loop) and send its audio as
+       soon as it is ready, with format and response metadata
 
     NOTE: We include the `response_id` here when we send the data to the frontend
           so that they have the option to respond with control messages letting
@@ -57,60 +67,93 @@ async def synthesize_and_stream_tts(system_resp: str, send_callback: Callable[[s
           let's us recover utterance-level start and end timestamps that we
           could not otherwise track.
     """
-    t0 = now_ts()
+    t0       = now_ts()
+    pieces   = _speech_pieces(system_resp)
+    sender   = _AudioChunkSender(send_callback, response_id)
+    first_at = 0.0
 
-    # Synthesize speech 
+    # Synthesize and send one piece at a time
     # NOTE: This is a synchronous network call, so we run it in a thread
-    tts_provider             = TextToSpeechProvider()
-    audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(system_resp)
+    tts_provider = TextToSpeechProvider()
+    for index, piece in enumerate(pieces):
+        audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(piece)
+        await sender.add(audio_bytes, sr, ch, bps)
+        if index == 0: first_at = now_ts() - t0
 
-    # Stream audio chunks to client
-    await _stream_audio_chunks(audio_bytes, send_callback, response_id, sr, ch, bps)
+    # The response's final chunk goes out last, marked as such
+    await sender.finish()
 
     # Log upon completion
     total_time = now_ts() - t0
-    logger.info(f"{TTS_MAIN} Synthesized speech sent to frontend ({lu.CYAN}{BOLD}{total_time:.4f}s{UNBOLD}{TTS_MAIN}). {RESET}")
+    logger.info(f"{TTS_MAIN} Synthesized speech sent to frontend in {len(pieces)} piece(s) (first after {lu.CYAN}{BOLD}{first_at:.4f}s{UNBOLD}{TTS_MAIN}, all after {lu.CYAN}{BOLD}{total_time:.4f}s{UNBOLD}{TTS_MAIN}). {RESET}")
 
 
 # --------------------------------------------------------------------------------
-# Split and send audio bytes in chunks to the frontend
+# Sentence Pieces
 # --------------------------------------------------------------------------------
-async def _stream_audio_chunks(
-    audio_bytes     : bytes,                               # Complete PCM returned by Google TTS
-    send_callback   : Callable[[str], Awaitable[object]],  # Active frontend WebSocket sender
-    response_id     : int,                                 # Persisted assistant ChatMessage ID
-    sample_rate     : int,                                 # PCM samples per second
-    channels        : int,                                 # Interleaved PCM channel count
-    bits_per_sample : int,                                 # PCM sample bit depth
-) -> None:
+# Split a response into the pieces synthesized one at a time (a too-short sentence joins the next)
+def _speech_pieces(text: str) -> list[str]:
+    pieces : list[str] = []
+    pending = ""
+    for sentence in TTS_SENTENCE_BREAK.split(text.strip()):
+        pending = f"{pending} {sentence}".strip()
+        if len(pending) >= TTS_MIN_PIECE_CHARS: pieces.append(pending); pending = ""
+
+    # A short tail joins the last piece (or stands alone when it is the whole response)
+    if pending and pieces: pieces[-1] = f"{pieces[-1]} {pending}"
+    elif pending:          pieces.append(pending)
+    return pieces
+
+
+# --------------------------------------------------------------------------------
+# Numbered Audio Chunks
+# --------------------------------------------------------------------------------
+# Send one response's audio as numbered chunks, holding back the newest chunk until more audio follows it
+class _AudioChunkSender:
     """
-    NOTE: The synthesizer returns (pcm_bytes, sample_rate, num_channels, 
+    The held chunk goes out as soon as more audio arrives, or marked `last` when the
+    response ends, so the final chunk the frontend receives always carries `last`,
+    even when a later sentence fails to synthesize (it comes back with no audio).
+    `sequence` runs across the whole response.
+
+    NOTE: The synthesizer returns (pcm_bytes, sample_rate, num_channels,
           bits_per_sample) so the audio recorder can resample both channels with
           proper WAV parameters instead of guessing. This should help prevent
-          the static we hear in the playback (the user sends us audio in a 
+          the static we hear in the playback (the user sends us audio in a
           different format than TTS generates it in; we can't just combine them
           blindly).
     """
-    if not audio_bytes: return
+    def __init__(self, send_callback: SendCallback, response_id: int) -> None:
+        self.send_callback = send_callback
+        self.response_id   = response_id
+        self.sequence      = 0                                          # Number the next chunk sent gets
+        self.held          : tuple[bytes, int, int, int] | None = None  # Newest unsent chunk and its PCM format
 
-    # Chunk the audio and send each one individually
-    n_chunks = ceil(len(audio_bytes) / CHUNK_SIZE)
-    for i in range(n_chunks):
-        chunk = audio_bytes[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE]
+    # Send everything but the newest chunk of one sentence's audio
+    async def add(self, audio_bytes: bytes, sample_rate: int, channels: int, bits_per_sample: int) -> None:
+        for start in range(0, len(audio_bytes), CHUNK_SIZE):
+            if self.held is not None: await self._send(self.held, last=False)
+            self.held = (audio_bytes[start:start + CHUNK_SIZE], sample_rate, channels, bits_per_sample)
 
-        # Include everything the browser needs to schedule and identify this response
+    # Send the held chunk as the response's last one
+    async def finish(self) -> None:
+        if self.held is not None: await self._send(self.held, last=True)
+        self.held = None
+
+    # Send one chunk with everything the browser needs to schedule and identify this response
+    async def _send(self, held: tuple[bytes, int, int, int], *, last: bool) -> None:
+        chunk, sample_rate, channels, bits_per_sample = held
         payload = {
             "type": "audio_chunk",
             "data": {
                 "b64"           : base64.b64encode(chunk).decode("utf-8"),
-                "responseId"    : response_id,
+                "responseId"    : self.response_id,
                 "sampleRate"    : sample_rate,
                 "channels"      : channels,
                 "bitsPerSample" : bits_per_sample,
-                "sequence"      : i,
-                "last"          : (i == n_chunks - 1),
+                "sequence"      : self.sequence,
+                "last"          : last,
             }
         }
-
-        # Stream to the frontend
-        await send_callback(json.dumps(payload))
+        self.sequence += 1
+        await self.send_callback(json.dumps(payload))
