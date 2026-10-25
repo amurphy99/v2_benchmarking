@@ -164,10 +164,14 @@ function keyframes(t: number, frames: [number, number][]): number {
         const [endT, endValue] = frames[i];
         if (t > endT) continue;
 
-        // Smoothstep between the two frames around `t`
+        // Ease between the two frames around `t`
         const [startT, startValue] = frames[i - 1];
-        const u = (t - startT) / (endT - startT);
-        return startValue + ((endValue - startValue) * u * u * (3 - (2 * u)));
+        return startValue + ((endValue - startValue) * smoothstep((t - startT) / (endT - startT)));
     }
     return frames[frames.length - 1][1];
+}
+
+// Ease from 0 to 1 that starts and stops with zero speed
+export function smoothstep(u: number): number {
+    return u * u * (3 - (2 * u));
 }

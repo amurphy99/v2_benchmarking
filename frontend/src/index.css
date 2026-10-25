@@ -37,3 +37,10 @@
 * {
     transition: 0.2s;
 }
+
+/* Opt-out for something redrawn every animation frame (the smiley avatar's SVG):
+   under the rule above, each frame's change would trail 0.2 s behind and then
+   lurch into place when the movement stops */
+.no-transition, .no-transition * {
+    transition: none;
+}

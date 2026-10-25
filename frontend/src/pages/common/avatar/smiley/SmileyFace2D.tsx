@@ -156,7 +156,7 @@ export default function SmileyFace2D({face}: {
     // Render
     // --------------------------------------------------------------------------------
     return (
-        <svg className="h-full w-full" viewBox={viewBox} role="img" aria-label="Smiley avatar">
+        <svg className="no-transition h-full w-full" viewBox={viewBox} role="img" aria-label="Smiley avatar">
             {/* -------------------------------------------------------------------------------- */}
             {/* Gradients */}
             {/* -------------------------------------------------------------------------------- */}

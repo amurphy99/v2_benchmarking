@@ -29,7 +29,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // From this project
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
 import type { FaceMotion, MotionOffsets                                 } from "./faceMotions";
-import      { motionFor                                                 } from "./faceMotions";
+import      { motionFor, smoothstep                                     } from "./faceMotions";
 import type { FaceState                                                 } from "./faceState";
 import      { blendFace, expressionFor, SMILEY_BASE_FACE                } from "./faceState";
 
@@ -75,7 +75,7 @@ const SMILEY_BREATH_PERIOD_MS = 4_000;   // One breath in and out
 const SMILEY_BREATH_SCALE     = 0.012;   // Size change at the top of a breath
 
 // Mouth openness at full voice level
-const SMILEY_SPEECH_MOUTH_GAIN = 3.0; // was 0.9;
+const SMILEY_SPEECH_MOUTH_GAIN = 0.5; // was 0.9;
 
 // Longest step one frame may take (a tab coming back from the background would otherwise jump)
 const SMILEY_MAX_FRAME_SEC = 0.1;
@@ -243,6 +243,7 @@ export function useFaceController(
             }
 
             // 3) Gaze: the page's point, else the speech phase's look, else the conversation state's, else an idle glance near the user
+            if (playing !== null) nextGlanceAt = Math.max(nextGlanceAt, nowMs + SMILEY_GLANCE_INTERVAL_MIN_MS);   // No glance during a motion, or right after it
             if (nowMs >= nextGlanceAt) {
                 idleGaze     = (Math.random() < SMILEY_GLANCE_CENTER_CHANCE) ? SMILEY_USER_GAZE : fromUser({x: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE), y: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE)});
                 nextGlanceAt = nowMs + randomBetween(SMILEY_GLANCE_INTERVAL_MIN_MS, SMILEY_GLANCE_INTERVAL_MAX_MS);
@@ -332,9 +333,4 @@ function easeStep(ratePerSec: number, dtSec: number): number {
 // `performance.now()` can be a little later than the frame time that reads it)
 function clampRange(value: number, low: number, high: number): number {
     return Math.max(low, Math.min(high, value));
-}
-
-// Ease-in-out curve over 0 to 1
-function smoothstep(u: number): number {
-    return u * u * (3 - (2 * u));
 }
