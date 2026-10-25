@@ -9,8 +9,10 @@ Each animation frame combines several layers into one `FaceState`:
      (what "Neutral" means; the page can pick it with `setRestingExpression`,
      and between `sleep()` and `wake()` it is the sleeping face)
   2) a named motion's offsets (nod, look around, ...) on top of the expression
-  3) gaze: a point the page sets, else one picked by the conversation state,
-     else small idle glances
+  3) gaze: a point the page sets, else the speech phase's look (away at pauses
+     and over the last few words of a reply, back at the user as it finishes),
+     else one picked by the conversation state, else small idle glances. Every
+     look is measured from `SMILEY_USER_GAZE`, where the user is
   4) blinks at random gaps
   5) a slow breathing scale
   6) the mouth following the voice level the page reports
@@ -25,11 +27,11 @@ speeds live in `faceMotions.ts`, and each mood's look in `faceState.ts`.
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // From this project
-import type { AvatarHandle, ConversationState, RobotAction  } from "../avatarRegistry";
-import type { FaceMotion, MotionOffsets                     } from "./faceMotions";
-import      { motionFor                                     } from "./faceMotions";
-import type { FaceState                                     } from "./faceState";
-import      { blendFace, expressionFor, SMILEY_BASE_FACE    } from "./faceState";
+import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
+import type { FaceMotion, MotionOffsets                                 } from "./faceMotions";
+import      { motionFor                                                 } from "./faceMotions";
+import type { FaceState                                                 } from "./faceState";
+import      { blendFace, expressionFor, SMILEY_BASE_FACE                } from "./faceState";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -51,22 +53,29 @@ const SMILEY_BLINK_INTERVAL_MAX_MS   = 6_000;   // Longest gap between blinks
 const SMILEY_BLINK_DURATION_MS       =   160;   // One close-and-open
 const SMILEY_THINKING_BLINK_SLOWDOWN = 1.8;     // Blink gaps stretch by this much while thinking
 
+// Where the user is, in gaze units (every look at the user, and every look away, is measured from it)
+const SMILEY_USER_GAZE = {x: 0, y: 0};
+
 // Idle glances
 const SMILEY_GLANCE_INTERVAL_MIN_MS = 1_200;   // Shortest time between glances
 const SMILEY_GLANCE_INTERVAL_MAX_MS = 3_500;   // Longest time between glances
-const SMILEY_GLANCE_RANGE           = 0.35;    // Farthest a glance strays from center (gaze units)
-const SMILEY_GLANCE_CENTER_CHANCE   = 0.40;    // Chance a glance comes back to center
+const SMILEY_GLANCE_RANGE           = 0.35;    // Farthest a glance strays from the user (gaze units)
+const SMILEY_GLANCE_CENTER_CHANCE   = 0.40;    // Chance a glance comes back to the user
 
-// Conversation-state looks
+// Conversation-state looks (gaze offsets from the user)
 const SMILEY_THINKING_GAZE       = {x: 0.55, y: -0.55};   // Eyes drift up and to the side
 const SMILEY_LISTENING_EYE_BOOST = 0.08;                  // Extra eye size while listening
+
+// Speech-phase looks while it speaks (gaze offsets from the user; "finishing" looks straight at the user)
+const SMILEY_PAUSE_GAZE   = {x:  0.55, y: -0.50};   // Up and to the right between sentences
+const SMILEY_WRAP_UP_GAZE = {x: -0.60, y:  0.15};   // Aside (left, a little down) over the last few words
 
 // Breathing
 const SMILEY_BREATH_PERIOD_MS = 4_000;   // One breath in and out
 const SMILEY_BREATH_SCALE     = 0.012;   // Size change at the top of a breath
 
 // Mouth openness at full voice level
-const SMILEY_SPEECH_MOUTH_GAIN = 0.9;
+const SMILEY_SPEECH_MOUTH_GAIN = 3.0; // was 0.9;
 
 // Longest step one frame may take (a tab coming back from the background would otherwise jump)
 const SMILEY_MAX_FRAME_SEC = 0.1;
@@ -123,6 +132,7 @@ export function useFaceController(
     const gazeTargetRef   = useRef<GazePoint | null>(null);
     const conversationRef = useRef<ConversationState>("idle");
     const speechTargetRef = useRef<number>(0);
+    const speechPhaseRef  = useRef<SpeechPhase>("none");
 
     // --------------------------------------------------------------------------------
     // Avatar Handle
@@ -188,6 +198,7 @@ export function useFaceController(
             clearGaze            : (                        ): void => { gazeTargetRef  .current = null;   },
             setConversationState : (state: ConversationState): void => { conversationRef.current = state;  },
             setSpeechLevel       : (level: number           ): void => { speechTargetRef.current = level;  },
+            setSpeechPhase       : (phase: SpeechPhase      ): void => { speechPhaseRef .current = phase;  },
         };
     }, []);
 
@@ -198,10 +209,10 @@ export function useFaceController(
         // Loop-only state the page never touches
         let frameId      : number        = 0;
         let lastMs       : number        = performance.now();
-        let gaze         : GazePoint     = {x: 0, y: 0};
-        let idleGaze     : GazePoint     = {x: 0, y: 0};
+        let gaze         : GazePoint     = SMILEY_USER_GAZE;
+        let idleGaze     : GazePoint     = SMILEY_USER_GAZE;
         let nextGlanceAt : number        = lastMs + randomBetween(SMILEY_GLANCE_INTERVAL_MIN_MS, SMILEY_GLANCE_INTERVAL_MAX_MS);
-        let nextBlinkAt  : number        = lastMs + randomBetween(SMILEY_BLINK_INTERVAL_MIN_MS,  SMILEY_BLINK_INTERVAL_MAX_MS );
+        let nextBlinkAt  : number        = lastMs + randomBetween( SMILEY_BLINK_INTERVAL_MIN_MS,  SMILEY_BLINK_INTERVAL_MAX_MS);
         let blinkStartAt : number | null = null;
         let listening    : number        = 0;
         let speech       : number        = 0;
@@ -231,13 +242,22 @@ export function useFaceController(
                 else        offsets           = playing.motion.sample(t);
             }
 
-            // 3) Gaze: the page's point, else the conversation state's, else an idle glance
+            // 3) Gaze: the page's point, else the speech phase's look, else the conversation state's, else an idle glance near the user
             if (nowMs >= nextGlanceAt) {
-                idleGaze     = (Math.random() < SMILEY_GLANCE_CENTER_CHANCE) ? {x: 0, y: 0} : {x: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE), y: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE)};
+                idleGaze     = (Math.random() < SMILEY_GLANCE_CENTER_CHANCE) ? SMILEY_USER_GAZE : fromUser({x: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE), y: randomBetween(-SMILEY_GLANCE_RANGE, SMILEY_GLANCE_RANGE)});
                 nextGlanceAt = nowMs + randomBetween(SMILEY_GLANCE_INTERVAL_MIN_MS, SMILEY_GLANCE_INTERVAL_MAX_MS);
             }
-            const stateGaze  = (conversation === "listening") ? {x: 0, y: 0} : (conversation === "thinking") ? SMILEY_THINKING_GAZE : idleGaze;
-            const gazeTarget = gazeTargetRef.current ?? stateGaze;
+            const phase     = speechPhaseRef.current;
+            const phaseGaze =
+                (phase === "pausing"    ) ? fromUser(SMILEY_PAUSE_GAZE  ) :
+                (phase === "wrapping-up") ? fromUser(SMILEY_WRAP_UP_GAZE) :
+                (phase === "finishing"  ) ? SMILEY_USER_GAZE              :
+                                            null;
+            const stateGaze =
+                (conversation === "listening") ? SMILEY_USER_GAZE               :
+                (conversation === "thinking" ) ? fromUser(SMILEY_THINKING_GAZE) :
+                                                 idleGaze;
+            const gazeTarget = gazeTargetRef.current ?? phaseGaze ?? stateGaze;
             const gazeStep   = easeStep(SMILEY_GAZE_EASE_PER_SEC, dtSec);
             gaze = {x: gaze.x + ((gazeTarget.x - gaze.x) * gazeStep), y: gaze.y + ((gazeTarget.y - gaze.y) * gazeStep)};
 
@@ -257,7 +277,7 @@ export function useFaceController(
             // 5) Breathing, the listening look, and the voice level
             const breath          = 1 + (SMILEY_BREATH_SCALE * Math.sin((2 * Math.PI * nowMs) / SMILEY_BREATH_PERIOD_MS));
             const listeningTarget = (conversation === "listening") ? 1 : 0;
-            listening += (listeningTarget         - listening) * easeStep(SMILEY_STATE_EASE_PER_SEC,  dtSec);
+            listening += (listeningTarget         - listening) * easeStep( SMILEY_STATE_EASE_PER_SEC, dtSec);
             speech    += (speechTargetRef.current - speech   ) * easeStep(SMILEY_SPEECH_EASE_PER_SEC, dtSec);
 
             // 6) Combine the layers into the face the renderer draws
@@ -293,6 +313,11 @@ export function useFaceController(
 // --------------------------------------------------------------------------------
 // Math Helpers
 // --------------------------------------------------------------------------------
+// Gaze point at an offset from where the user is
+function fromUser(offset: GazePoint): GazePoint {
+    return {x: SMILEY_USER_GAZE.x + offset.x, y: SMILEY_USER_GAZE.y + offset.y};
+}
+
 // Uniform random number between two bounds
 function randomBetween(low: number, high: number): number {
     return low + (Math.random() * (high - low));

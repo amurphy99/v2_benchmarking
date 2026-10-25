@@ -21,22 +21,28 @@ NOTE: `AvatarActionsGroup` and `AdminPage` stay in `pages/admin/` even though
 import type { ReactElement                } from "react";
 import      { useEffect, useRef, useState } from "react";
 import      { useSearchParams             } from "react-router-dom";
+import        toast                         from "react-hot-toast";
 
 // From this project
-import      { groupDivStyle                                } from "@/hooks/chat-listener/chat-controls/styles";
-import      { getCapabilityProfile                         } from "@/pages/admin/capabilities/profiles";
-import        AvatarActionsGroup                             from "@/pages/admin/components/controlGroups/AvatarActionsGroup";
-import      { AdminPage                                    } from "@/pages/admin/components/ui/AdminPage";
-import      { Avatar                                       } from "@/pages/common/avatar/Avatar";
-import type { AvatarHandle, ConversationState, RobotAction } from "@/pages/common/avatar/avatarRegistry";
-import      { getAvatarEntry                               } from "@/pages/common/avatar/avatarRegistry";
-import type { LoggedAction                                 } from "./components/ActionLog";
-import        ActionLog                                      from "./components/ActionLog";
-import        DemoSetupGroup                                 from "./components/DemoSetupGroup";
-import        FaceControlsGroup                              from "./components/FaceControlsGroup";
-import type { GazePoint                                    } from "./components/GazePad";
-import      { DEMO_DEFAULT_DURATION_MS                     } from "./utils/durationOptions";
-import      { useSimulatedSpeech                           } from "./utils/useSimulatedSpeech";
+import      { btnClass, groupDivStyle                                   } from "@/hooks/chat-listener/chat-controls/styles";
+import      { useAudioPlayer                                            } from "@/hooks/live-chat/useAudioPlayer";
+import      { getCapabilityProfile                                      } from "@/pages/admin/capabilities/profiles";
+import        AvatarActionsGroup                                          from "@/pages/admin/components/controlGroups/AvatarActionsGroup";
+import      { AdminPage                                                 } from "@/pages/admin/components/ui/AdminPage";
+import      { Avatar                                                    } from "@/pages/common/avatar/Avatar";
+import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "@/pages/common/avatar/avatarRegistry";
+import      { getAvatarEntry                                            } from "@/pages/common/avatar/avatarRegistry";
+import      { useSpeakingAvatar                                         } from "@/pages/common/avatar/useSpeakingAvatar";
+import type { LoggedAction                                              } from "./components/ActionLog";
+import        ActionLog                                                   from "./components/ActionLog";
+import        DemoSetupGroup                                              from "./components/DemoSetupGroup";
+import        DemoSetupModal                                              from "./components/DemoSetupModal";
+import        FaceControlsGroup                                           from "./components/FaceControlsGroup";
+import type { GazePoint                                                 } from "./components/GazePad";
+import      { DEMO_DEFAULT_DURATION_MS                                  } from "./utils/durationOptions";
+import      { useSampleReply                                            } from "./utils/useSampleReply";
+import      { useSimulatedSpeech                                        } from "./utils/useSimulatedSpeech";
+import      { useSimulatedTurn                                          } from "./utils/useSimulatedTurn";
 
 // Avatar shown when the page opens
 const DEMO_DEFAULT_AVATAR_ID = "smiley";
@@ -77,12 +83,26 @@ export function AvatarDemo(): ReactElement {
     const [mouthLevel,        setMouthLevel       ] = useState<number>(0);
     const [asleep,            setAsleep           ] = useState<boolean>(false);
 
+    // Whether the Demo Setup modal is open
+    const [setupOpen, setSetupOpen] = useState<boolean>(false);
+
     // What the selected avatar can do (the admin panel resolves the same profile)
     const entry        = getAvatarEntry(avatarId);
     const capabilities = getCapabilityProfile("webapp", avatarId);
 
     // Feed simulated speech into the avatar's mouth while "talking" is on
     useSimulatedSpeech(talking, (level: number): void => { avatarRef.current?.setSpeechLevel?.(level); });
+
+    // The sample spoken reply plays through a live chat's audio player, which drives the mouth and the speech gaze
+    const [speechPhase,   setSpeechPhase  ] = useState<SpeechPhase>("none");
+    const [extraPauseSec, setExtraPauseSec] = useState<number>(0);   // Silence added to the reply's sentence break
+    const player          = useAudioPlayer({});
+    const playSampleReply = useSampleReply(player.cancelAudio, player.sendAudio);
+    useSpeakingAvatar(avatarRef, player, player.systemSpeaking, true, setSpeechPhase);
+
+    // Close the audio timeline when the page goes away
+    const stopPlayer = player.stopPlayer;
+    useEffect(() => stopPlayer, [stopPlayer]);
 
     // Hold the URL's face once the avatar is up (a 3D robot still loading its model ignores it)
     useEffect(() => {
@@ -122,6 +142,8 @@ export function AvatarDemo(): ReactElement {
         setTalking(false);
         setMouthLevel(0);
         setAsleep(false);
+        cancelTurn();
+        stopPlayer();
     };
 
     // --------------------------------------------------------------------------------
@@ -140,6 +162,20 @@ export function AvatarDemo(): ReactElement {
         setMouthLevel(0);
     };
 
+    // Play the sample reply from the start with the chosen extra pause (a missing clip shows as a toast)
+    const playSample = (freshTimeline: boolean): void => {
+        playSampleReply(extraPauseSec, freshTimeline).catch((error: Error) => toast.error(error.message));
+    };
+
+    // A simulated turn: think for a moment right after the user's last word, then reply (see `useSimulatedTurn`)
+    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, player.cancelAudio, () => playSample(false), player.systemSpeaking);
+
+    // The reply on its own ends any running turn (back to listening, so no "thinking" or "speaking" is left on)
+    const playReply = (): void => {
+        if (cancelTurn()) changeConversationState("listening");
+        playSample(true);
+    };
+
     // Doze the avatar off, or wake it with its yawn (what the chat page does as the chat stops and starts)
     const changeAsleep = (on: boolean): void => {
         setAsleep(on);
@@ -155,34 +191,46 @@ export function AvatarDemo(): ReactElement {
             {/* -------------------------------------------------------------------------------- */}
             {/* Page Header */}
             {/* -------------------------------------------------------------------------------- */}
-            <div className="pt-6">
+            {/* Title, subtitle, and setup button in one row (a wrapper div pushes the button right) */}
+            <div className="pt-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
                 <h1 className="text-2xl font-semibold">Avatar Demo</h1>
-                <p className="mt-1 text-sm text-admin-subtext">
-                    Try each avatar's behaviors without a live chat. The emotion and animation buttons are the
-                    ones the admin chat panel shows, and they send the same robot_action shape a chat does.
-                </p>
+                <p className="text-sm text-admin-subtext">Try each avatar's behaviors outside of a live chat.</p>
+                <div className="ml-auto">
+                    <button className={btnClass(false, "secondary")} onClick={() => setSetupOpen(true)}>Demo Setup</button>
+                </div>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
                 {/* -------------------------------------------------------------------------------- */}
-                {/* Avatar and Demo Setup */}
+                {/* Avatar and Face Controls */}
                 {/* -------------------------------------------------------------------------------- */}
-                {/* Stays in view on wide screens while the longer button column scrolls */}
-                <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
-                    <div className={`${groupDivStyle} h-[45vh] lg:h-[58vh]`}>
+                <div className="flex flex-col gap-4">
+                    <div className={`${groupDivStyle} h-[42vh] lg:h-[50vh]`}>
                         <Avatar model={avatarId} zoom="body" ref={avatarRef} />
                     </div>
 
-                    <DemoSetupGroup
-                        avatarId            = {avatarId}
-                        onAvatarChange      = {changeAvatar}
-                        restingOptions      = {entry.restingOptions}
-                        restingExpression   = {restingExpression}
-                        onRestingExpression = {changeRestingExpression}
-                        durationMs          = {durationMs}
-                        onDurationChange    = {setDurationMs}
-                        onReset             = {resetAvatar}
-                    />
+                    {(entry.features.length > 0) ? (
+                        <FaceControlsGroup
+                            features            = {entry.features}
+                            conversationState   = {conversationState}
+                            onConversationState = {changeConversationState}
+                            gazePoint           = {gazePoint}
+                            onGaze              = {changeGaze}
+                            onClearGaze         = {clearGaze}
+                            talking             = {talking}
+                            onTalkingChange     = {changeTalking}
+                            mouthLevel          = {mouthLevel}
+                            onMouthLevel        = {changeMouthLevel}
+                            replyPlaying        = {player.systemSpeaking}
+                            onPlayReply         = {playReply}
+                            onPlayTurn          = {startTurn}
+                            extraPauseSec       = {extraPauseSec}
+                            onExtraPause        = {setExtraPauseSec}
+                            speechPhase         = {speechPhase}
+                            asleep              = {asleep}
+                            onAsleepChange      = {changeAsleep}
+                        />
+                    ) : null}
                 </div>
 
                 {/* -------------------------------------------------------------------------------- */}
@@ -198,26 +246,25 @@ export function AvatarDemo(): ReactElement {
                         onAnimation  = {(value: string) => sendAction("animation", value)}
                     />
 
-                    {(entry.features.length > 0) ? (
-                        <FaceControlsGroup
-                            features            = {entry.features}
-                            conversationState   = {conversationState}
-                            onConversationState = {changeConversationState}
-                            gazePoint           = {gazePoint}
-                            onGaze              = {changeGaze}
-                            onClearGaze         = {clearGaze}
-                            talking             = {talking}
-                            onTalkingChange     = {changeTalking}
-                            mouthLevel          = {mouthLevel}
-                            onMouthLevel        = {changeMouthLevel}
-                            asleep              = {asleep}
-                            onAsleepChange      = {changeAsleep}
-                        />
-                    ) : null}
-
                     <ActionLog log={log} />
                 </div>
             </div>
+
+            {/* Setup controls, applied as they change */}
+            {setupOpen ? (
+                <DemoSetupModal onClose={() => setSetupOpen(false)}>
+                    <DemoSetupGroup
+                        avatarId            = {avatarId}
+                        onAvatarChange      = {changeAvatar}
+                        restingOptions      = {entry.restingOptions}
+                        restingExpression   = {restingExpression}
+                        onRestingExpression = {changeRestingExpression}
+                        durationMs          = {durationMs}
+                        onDurationChange    = {setDurationMs}
+                        onReset             = {resetAvatar}
+                    />
+                </DemoSetupModal>
+            ) : null}
         </AdminPage>
     );
 }

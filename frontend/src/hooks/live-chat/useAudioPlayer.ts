@@ -13,6 +13,8 @@ around the moment the speakers are playing (output latency included), so the
 chat page can move the avatar's mouth in step with the sound and look a little
 ahead. It only reads audio that is already scheduled, so it works the same
 whether a reply arrives all at once or a sentence at a time.
+`readSpeechRemaining()` says how long until the reply's final chunk (the one
+marked `last`) finishes playing, once that chunk is scheduled.
 
 NOTE: During earlier testing, the first chunk occasionally seemed to be skipped. The
       exact cause has not been confirmed, so the buffering behavior remains explicit.
@@ -74,19 +76,21 @@ interface LoudnessSegment {
 
 // One browser audio timeline and the loudness of everything scheduled on it
 interface PlayerTimeline {
-    ctx      : AudioContext;        // Web Audio timeline the chunks are scheduled on
-    loudness : LoudnessSegment[];   // Scheduled chunks' loudness, in play order
-    filter   : Float64Array;        // Band-pass memory at the end of the newest chunk (x1, x2, y1, y2 per stage)
+    ctx         : AudioContext;        // Web Audio timeline the chunks are scheduled on
+    loudness    : LoudnessSegment[];   // Scheduled chunks' loudness, in play order
+    filter      : Float64Array;        // Band-pass memory at the end of the newest chunk (x1, x2, y1, y2 per stage)
+    finalEndSec : number | null;       // When the current reply's final chunk stops playing (null until that chunk is scheduled)
 }
 
 // What the hook gives its caller
 interface AudioPlayerControls {
-    startPlayer        : () => void;                                              // Open a timeline (needs a user gesture first)
-    sendAudio          : (payload: AudioChunkPayload) => Promise<void>;           // Decode and schedule one TTS chunk
-    stopPlayer         : () => void;                                              // Drop buffered audio and close the timeline
-    cancelAudio        : () => void;                                              // Drop buffered audio and open a fresh timeline
-    systemSpeaking     : boolean;                                                 // Scheduled speech has not finished playing
-    readSpeechLoudness : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness heard from `fromSec` from now, per frame
+    startPlayer         : () => void;                                              // Open a timeline (needs a user gesture first)
+    sendAudio           : (payload: AudioChunkPayload) => Promise<void>;           // Decode and schedule one TTS chunk
+    stopPlayer          : () => void;                                              // Drop buffered audio and close the timeline
+    cancelAudio         : () => void;                                              // Drop buffered audio and open a fresh timeline
+    systemSpeaking      : boolean;                                                 // Scheduled speech has not finished playing
+    readSpeechLoudness  : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness heard from `fromSec` from now, per frame
+    readSpeechRemaining : () => number | null;                                     // Seconds until the reply's final audio is heard (negative after; null while unknown)
 }
 
 
@@ -127,7 +131,7 @@ export function useAudioPlayer({
     const startPlayer = useCallback(() => {
         if (!playerRef.current) {
             const ctx               = new AudioContext({ sampleRate });
-            playerRef.current       = {ctx, loudness: [], filter: new Float64Array(8)};
+            playerRef.current       = {ctx, loudness: [], filter: new Float64Array(8), finalEndSec: null};
             scheduleTimeRef.current = ctx.currentTime + bufferAhead;
         }
     }, [sampleRate, bufferAhead]);
@@ -204,6 +208,10 @@ export function useAudioPlayer({
             player.loudness.push({startSec: startTime, endSec: startTime + audioBuffer.duration, frames: vowelBandLoudness(audioBuffer.getChannelData(0), audioBuffer.sampleRate, player.filter)});
             while (player.loudness[0].endSec < ctx.currentTime - TTS_LOUDNESS_KEEP_SEC) player.loudness.shift();
 
+            // Note when the reply's final chunk ends (a chunk after that end starts a new reply, whose end isn't known yet)
+            if      (payload.last)                                                       player.finalEndSec = startTime + audioBuffer.duration;
+            else if ((player.finalEndSec !== null) && (startTime >= player.finalEndSec)) player.finalEndSec = null;
+
             // Report completion and clear speaking state after scheduled audio ends
             source.onended = () => {
                 if (generation !== playbackGenerationRef.current) return;
@@ -265,11 +273,8 @@ export function useAudioPlayer({
         const player = playerRef.current;
         if (!player) return levels;
 
-        // Context time reaching the speakers right now (until the output reports its first timestamp, the render clock stands in)
-        const stamp    = player.ctx.getOutputTimestamp();
-        const heardSec = ((stamp.contextTime !== undefined) && (stamp.performanceTime !== undefined) && (stamp.performanceTime > 0))
-            ? stamp.contextTime + ((performance.now() - stamp.performanceTime) / 1_000)
-            : player.ctx.currentTime;
+        // Walk forward from the moment reaching the speakers right now
+        const heardSec = heardTime(player.ctx);
 
         // Walk the segments in play order alongside the frames
         let index = 0;
@@ -285,7 +290,22 @@ export function useAudioPlayer({
         return levels;
     }, []);
 
-    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness };
+    // Seconds until the current reply's final audio is heard (negative once it has been; null while that end isn't known)
+    const readSpeechRemaining = useCallback((): number | null => {
+        const player = playerRef.current;
+        if ((player === null) || (player.finalEndSec === null)) return null;
+        return player.finalEndSec - heardTime(player.ctx);
+    }, []);
+
+    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness, readSpeechRemaining };
+}
+
+
+// Context time reaching the speakers right now (until the output reports its first timestamp, the render clock stands in)
+function heardTime(ctx: AudioContext): number {
+    const stamp = ctx.getOutputTimestamp();
+    if ((stamp.contextTime === undefined) || (stamp.performanceTime === undefined) || (stamp.performanceTime <= 0)) return ctx.currentTime;
+    return stamp.contextTime + ((performance.now() - stamp.performanceTime) / 1_000);
 }
 
 

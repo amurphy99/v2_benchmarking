@@ -1,16 +1,18 @@
-/* Avatar picker, resting-face picker, hold-time picker, and reset button for the avatar demo page.
+/* Avatar, resting-face, and hold-time pickers plus a reset button for the avatar demo page.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/avatar_demo/components/DemoSetupGroup`
+
+Shown inside `DemoSetupModal`, which gives it its title and frame.
 
 */
 import type { ChangeEvent, ReactElement } from "react";
 
 // From this project
-import      { btnClass, buttonSectionHeader, groupDivStyle } from "@/hooks/chat-listener/chat-controls/styles";
-import type { AvatarEntry, RestingOption                   } from "@/pages/common/avatar/avatarRegistry";
-import      { AVATARS                                      } from "@/pages/common/avatar/avatarRegistry";
-import type { DurationOption                               } from "../utils/durationOptions";
-import      { DEMO_DURATION_OPTIONS                        } from "../utils/durationOptions";
+import      { btnClass                    } from "@/hooks/chat-listener/chat-controls/styles";
+import type { AvatarEntry, RestingOption  } from "@/pages/common/avatar/avatarRegistry";
+import      { AVATARS                     } from "@/pages/common/avatar/avatarRegistry";
+import type { DurationOption              } from "../utils/durationOptions";
+import      { DEMO_DURATION_OPTIONS       } from "../utils/durationOptions";
 
 // Shared look of the two pickers
 const DEMO_SELECT_CLASS = "mt-1 w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm";
@@ -38,11 +40,9 @@ export default function DemoSetupGroup({avatarId, onAvatarChange, restingOptions
     onReset : () => void;   // Send the avatar back to Neutral
 }): ReactElement {
     return (
-        <div className={groupDivStyle}>
-            <div className={buttonSectionHeader}>Demo Setup</div>
-
+        <div>
             {/* Pickers, side by side when there is room */}
-            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {/* Avatar picker */}
                 <div>
                     <label className="block text-xs opacity-60" htmlFor="avatar-demo-picker">Avatar</label>
@@ -84,7 +84,9 @@ export default function DemoSetupGroup({avatarId, onAvatarChange, restingOptions
                         {option.label}
                     </button>
                 ))}
-                <button className={`ml-auto ${btnClass(false, "secondary")}`} onClick={onReset}>Reset to Neutral</button>
+                <div className="ml-auto">
+                    <button className={btnClass(false, "secondary")} onClick={onReset}>Reset to Neutral</button>
+                </div>
             </div>
         </div>
     );

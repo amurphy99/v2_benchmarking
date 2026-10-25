@@ -18,7 +18,9 @@ The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
 for the rest. `sleep` and `wake` let the chat page doze an avatar while the
 chat is off: while asleep, Neutral means the sleeping face, so an emotion that
-arrives still shows and the avatar then dozes off again.
+arrives still shows and the avatar then dozes off again. `setSpeechPhase` says
+where the avatar is in its own reply (talking, pausing between sentences,
+wrapping up, or just finishing), so it can look away and back like a speaker.
 
 NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
       action in a live chat is currently timed. Holding is only reachable from
@@ -46,8 +48,11 @@ export type RobotAction = {
 // What the conversation is doing, for avatars that react to it
 export type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
+// Where the avatar is in its own spoken reply ("none" when it isn't speaking)
+export type SpeechPhase = "none" | "talking" | "pausing" | "wrapping-up" | "finishing";
+
 // Optional handle methods an avatar implements
-export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "sleep";
+export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "speechGaze" | "sleep";
 
 // Framing the page asks for (avatars that always fill their box ignore it)
 export type AvatarZoom = "head" | "body";
@@ -60,6 +65,7 @@ export interface AvatarHandle {
     clearGaze?            : () => void;                           // Go back to automatic gaze
     setConversationState? : (state: ConversationState) => void;   // React to the conversation
     setSpeechLevel?       : (level: number) => void;              // Voice loudness, 0 to 1
+    setSpeechPhase?       : (phase: SpeechPhase) => void;         // Where it is in its own reply (for where it looks)
     setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
     sleep?                : () => void;                           // Doze until woken (Neutral means the sleeping face meanwhile)
     wake?                 : () => void;                           // Wake up and rest on the usual face again (does nothing when awake)
@@ -98,7 +104,7 @@ const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({nam
 const SMILEY_AVATAR: AvatarEntry = {
     id             : "smiley",
     label          : "Smiley (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "sleep"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
@@ -107,7 +113,7 @@ const SMILEY_AVATAR: AvatarEntry = {
 const SMILEY_BROWS_AVATAR: AvatarEntry = {
     id             : "smiley-brows",
     label          : "Smiley + eyebrows (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "sleep"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
