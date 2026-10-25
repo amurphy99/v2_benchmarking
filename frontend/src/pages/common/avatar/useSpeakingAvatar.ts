@@ -8,8 +8,9 @@ player (`useAudioPlayer`) the same way. On every animation frame:
   - mouth (while reply audio plays): the reply's vowel-band loudness at the
     moment the speakers play it (looking a little ahead, and smoothed with
     audio from both sides so it adds no lag), compared with the loudest moment
-    of the last third of a second. The mouth opens on each syllable and nearly
-    closes between them, whatever the voice's overall volume.
+    of the last third of a second. The mouth opens on each syllable and partly
+    closes between them (fully only at pauses), whatever the voice's overall
+    volume.
   - speech phase (only with `speechGaze` on): where the avatar is in its own
     reply, which the avatar turns into where it looks. Over the last few words
     it is "wrapping-up", from just before the end until a moment after it is
@@ -28,14 +29,14 @@ import      { useEffect, useRef } from "react";
 import      { TTS_LOUDNESS_FRAME_SEC    } from "@/hooks/live-chat/useAudioPlayer";
 import type { AvatarHandle, SpeechPhase } from "./avatarRegistry";
 
-// Mouth timing: how far ahead of the sound it moves (lips lead speech; this also covers drawing delay), and the smoothing width
-const SPEAKING_MOUTH_LEAD_SEC   = 0.06;
-const SPEAKING_MOUTH_SMOOTH_SEC = 0.02;   // Gaussian sigma
+// Mouth timing: how far ahead of the sound it moves (lips lead speech; this also covers the face's mouth easing), and the smoothing width
+const SPEAKING_MOUTH_LEAD_SEC   = 0.08;
+const SPEAKING_MOUTH_SMOOTH_SEC = 0.035;  // Gaussian sigma
 
 // Mouth opening, from how loud the voice is next to its loudest moment just before (and just after) now
 const SPEAKING_MOUTH_PEAK_BACK_SEC  = 0.35;   // How far back that reference peak looks
 const SPEAKING_MOUTH_PEAK_AHEAD_SEC = 0.06;   // ...and how far ahead
-const SPEAKING_MOUTH_RANGE_DB       = 15;     // This far below the peak reads as closed
+const SPEAKING_MOUTH_RANGE_DB       = 22;     // This far below the peak reads as closed (wider keeps quiet sounds between syllables a little open)
 const SPEAKING_MOUTH_GATE_DB        = -48;    // Quieter than this is silence (closed)
 const SPEAKING_MOUTH_CURVE          = 1.3;    // Above 1, middling loudness opens less, so syllables stand apart
 
