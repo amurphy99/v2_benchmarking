@@ -1,16 +1,18 @@
-/* Named head and eye motions the smiley avatar plays for `animation` actions.
+/* The smiley's Movements: named head and eye motions with no change to the face.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/faceMotions`
 
 A motion is a short set of offsets added on top of whatever expression is
 showing, so a nod never clears a held smile. Every motion starts and ends at
-zero offset, which is how it returns to Neutral when it finishes.
+zero offset, which is how it returns to Neutral when it finishes. The names in
+`SMILEY_MOVEMENT_NAMES` are the "Movements" category of the smiley's public
+actions (`smileyActions.ts`).
 
 Each motion's length and size are the tuning constants at the top of this file,
 and `SMILEY_MOTION_SPEED` speeds up or slows down all of them at once. A motion
 that favors one side is written once and listed a second time through
 `mirrored()`, which flips it left to right. The offset and easing helpers at the
-bottom are shared with the passive motions (`passiveMotions.ts`).
+bottom are shared with the animations and passive motions.
 
 */
 import type { FaceState } from "./faceState";
@@ -30,14 +32,13 @@ const SMILEY_LOOK_AROUND_MOTION = {durationMs: 3_200, turn: 0.80, gaze: 1.00, sh
 const SMILEY_SWAY_MOTION        = {durationMs: 1_800,                         shift: 0.18,               degrees:  8,          swings: 2};   // Whole face rocks side to side
 const SMILEY_BOUNCE_MOTION      = {durationMs:   900,                                      height: 0.30,              hops: 2           };   // Hops straight up `hops` times
 const SMILEY_HEAD_TILT_MOTION   = {durationMs: 1_600,                                                    degrees: 22                    };   // Leans to one side, holds, comes back
-const SMILEY_TILT_TURN_MOTION   = {durationMs: 2_400, turn: 0.30, gaze: 0.60, shift: 0.15,               degrees:  8                    };   // Leans a little left (sliding that way, like one side of Sway) while the eyes and head turn up and to the right
 
 
 // --------------------------------------------------------------------------------
 // Motion Types
 // --------------------------------------------------------------------------------
-// Face fields a motion moves, as offsets added to the expression
-export type MotionOffsets = Partial<Pick<FaceState, "gazeX" | "gazeY" | "turnX" | "turnY" | "tilt" | "offsetX" | "offsetY">>;
+// Face fields a motion moves, as offsets added to the expression, plus `grow`: a size change as a fraction (0.01 is 1% bigger)
+export type MotionOffsets = Partial<Pick<FaceState, "gazeX" | "gazeY" | "turnX" | "turnY" | "tilt" | "offsetX" | "offsetY"> & {grow: number}>;
 
 // One named motion: its length and its offsets over time
 export type FaceMotion = {
@@ -51,24 +52,22 @@ export type FaceMotion = {
 // ================================================================================
 // Every motion, keyed by the name an `animation` action sends
 const SMILEY_MOTIONS: Record<string, FaceMotion> = {
-    "Nod"                           : {durationMs: SMILEY_NOD_MOTION.durationMs,         sample: nod           },
-    "Shake No"                      : {durationMs: SMILEY_SHAKE_NO_MOTION.durationMs,    sample: shakeNo       },
-    "Look Left"                     : {durationMs: SMILEY_LOOK_SIDE_MOTION.durationMs,   sample: (t: number): MotionOffsets => lookToward(-1, t)},
-    "Look Right"                    : {durationMs: SMILEY_LOOK_SIDE_MOTION.durationMs,   sample: (t: number): MotionOffsets => lookToward( 1, t)},
-    "Look Around"                   : {durationMs: SMILEY_LOOK_AROUND_MOTION.durationMs, sample: lookAround    },
-    "Sway"                          : {durationMs: SMILEY_SWAY_MOTION.durationMs,        sample: sway          },
-    "Bounce"                        : {durationMs: SMILEY_BOUNCE_MOTION.durationMs,      sample: bounce        },
-    "Head Tilt"                     : {durationMs: SMILEY_HEAD_TILT_MOTION.durationMs,   sample: headTilt      },
-    "Tilt, Turn, and Look Up Right" : {durationMs: SMILEY_TILT_TURN_MOTION.durationMs,   sample: tiltTurnGlance},
-    "Tilt, Turn, and Look Up Left"  : {durationMs: SMILEY_TILT_TURN_MOTION.durationMs,   sample: mirrored(tiltTurnGlance)},
+    "Nod"         : {durationMs: SMILEY_NOD_MOTION.durationMs,         sample: nod       },
+    "Shake No"    : {durationMs: SMILEY_SHAKE_NO_MOTION.durationMs,    sample: shakeNo   },
+    "Look Left"   : {durationMs: SMILEY_LOOK_SIDE_MOTION.durationMs,   sample: (t: number): MotionOffsets => lookToward(-1, t)},
+    "Look Right"  : {durationMs: SMILEY_LOOK_SIDE_MOTION.durationMs,   sample: (t: number): MotionOffsets => lookToward( 1, t)},
+    "Look Around" : {durationMs: SMILEY_LOOK_AROUND_MOTION.durationMs, sample: lookAround},
+    "Sway"        : {durationMs: SMILEY_SWAY_MOTION.durationMs,        sample: sway      },
+    "Bounce"      : {durationMs: SMILEY_BOUNCE_MOTION.durationMs,      sample: bounce    },
+    "Head Tilt"   : {durationMs: SMILEY_HEAD_TILT_MOTION.durationMs,   sample: headTilt  },
 };
 
-// Motion names, as the admin panel and demo page offer them
-export const SMILEY_ANIMATIONS = Object.keys(SMILEY_MOTIONS);
+// Movement names, as the admin panel and demo page offer them
+export const SMILEY_MOVEMENT_NAMES = Object.keys(SMILEY_MOTIONS);
 
 // Find a motion by name, ignoring case, at the current motion speed (unknown names give undefined)
 export function motionFor(name: string): FaceMotion | undefined {
-    const key = SMILEY_ANIMATIONS.find((motion: string) => motion.toLowerCase() === name.toLowerCase());
+    const key = SMILEY_MOVEMENT_NAMES.find((motion: string) => motion.toLowerCase() === name.toLowerCase());
     if (key === undefined) return undefined;
     return {...SMILEY_MOTIONS[key], durationMs: SMILEY_MOTIONS[key].durationMs / SMILEY_MOTION_SPEED};
 }
@@ -130,21 +129,8 @@ function headTilt(t: number): MotionOffsets {
     return {tilt: SMILEY_HEAD_TILT_MOTION.degrees * keyframes(t, [[0, 0], [0.2, 1], [0.8, 1], [1, 0]])};
 }
 
-// Lean and slide left while the eyes and head turn up and to the right, hold, then come back together
-function tiltTurnGlance(t: number): MotionOffsets {
-    const amount = keyframes(t, [[0, 0], [0.2, 1], [0.8, 1], [1, 0]]);
-    return {
-        tilt    : -SMILEY_TILT_TURN_MOTION.degrees * amount,   // Negative tilt leans left
-        offsetX : -SMILEY_TILT_TURN_MOTION.shift   * amount,   // ...and the whole face slides that way
-        gazeX   :  SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes right
-        gazeY   : -SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes up
-        turnX   :  SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head right
-        turnY   : -SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head up
-    };
-}
-
 // Flip a motion left to right (the lean, head turn, gaze, and sideways shift change sides)
-function mirrored(sample: FaceMotion["sample"]): FaceMotion["sample"] {
+export function mirrored(sample: FaceMotion["sample"]): FaceMotion["sample"] {
     return (t: number): MotionOffsets => mirrorOffsets(sample(t));
 }
 

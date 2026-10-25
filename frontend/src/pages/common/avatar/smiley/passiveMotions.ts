@@ -1,4 +1,4 @@
-/* Passive head movements the smiley makes on its own, and the scheduler that plays them.
+/* Passive movements the smiley makes on its own, and the scheduler that plays them.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/passiveMotions`
 
@@ -7,14 +7,20 @@ listening. Each one lists the conversation states it plays in, how likely it is
 to be picked, and how long it runs. It is written leaning one way, and each play
 mirrors it to a random side.
 
-Motions that must never overlap share a channel. A channel plays one motion at
-a time, then rests for a random gap before picking the next one, weighted at
-random among the motions allowed in the current state. A named motion (an
-`animation` action, like a nod) holds the head channel: nothing new starts while
-it plays or for a moment after, and a passive motion already playing fades out.
-A passive motion also fades out when the conversation state changes to one it
-does not play in. Expressions never block them, so the face can still sway
-while it smiles.
+Passive movements play on channels, and different channels always overlap.
+There are two kinds:
+
+  - episodic ("head"): motions that must never overlap share one. It plays one
+    motion at a time, then rests for a random gap before picking the next one,
+    weighted at random among the motions allowed in the current state. A
+    channel marked `heldByMotions` pauses for a movement or an animation (a nod,
+    a yawn): nothing new starts while one plays or for a moment after, and a
+    passive motion already playing fades out. A passive motion also fades out
+    when the conversation state changes to one it does not play in.
+    Expressions never block them, so the face can still sway while it smiles.
+  - continuous ("breath"): one player that always runs and never rests, like
+    breathing (`breathing.ts`). The controller hands it in, since animations
+    and the page also steer it (a yawn's deep breath, a breath before speaking).
 
 Glances, blinks, and the `wander` drift are still their own layers in the
 controller (`useFaceController`); any of them could move onto a channel here.
@@ -39,12 +45,16 @@ const SMILEY_HEAD_COCK   = {durationMs: [1_800, 2_600], degrees: 11, shift: 0.02
 // --------------------------------------------------------------------------------
 // Passive Motion Types
 // --------------------------------------------------------------------------------
-// Passive motions on the same channel never overlap (a named motion holds "head")
-type PassiveChannel = "head";
+// Channels whose motions take turns (never overlapping), and channels that always play
+type EpisodicChannel   = "head";
+type ContinuousChannel = "breath";
+
+// A continuous channel's player: this frame's offsets
+export type ContinuousPlayer = (nowMs: number, dtSec: number) => MotionOffsets;
 
 // One passive motion, written leaning to the right
 type PassiveMotion = {
-    channel    : PassiveChannel;                 // Channel it plays on
+    channel    : EpisodicChannel;                // Channel it plays on
     states     : ConversationState[];            // Conversation states it may play in
     weight     : number;                         // Relative chance of being picked among the motions that may play
     durationMs : number[];                       // Shortest and longest length of one play
@@ -57,10 +67,15 @@ type PlayingPassive = {motion: PassiveMotion; startMs: number; durationMs: numbe
 // One channel's play and when it may pick the next one
 type ChannelState = {playing: PlayingPassive | null; nextAt: number};
 
-// Every passive motion
+// Episodic channels, and whether a movement or animation holds each one
+const SMILEY_EPISODIC_CHANNELS: Record<EpisodicChannel, {heldByMotions: boolean}> = {
+    head : {heldByMotions: true},
+};
+
+// Every episodic passive motion
 const SMILEY_PASSIVE_MOTIONS: PassiveMotion[] = [
     {channel: "head", states: ["listening"], weight: 3, durationMs: SMILEY_LISTEN_SWAY.durationMs, sample: listeningSway},
-    {channel: "head", states: ["listening"], weight: 1, durationMs: SMILEY_HEAD_COCK.durationMs,   sample: headCock     },
+    {channel: "head", states: ["listening"], weight: 1, durationMs: SMILEY_HEAD_COCK  .durationMs, sample: headCock     },
 ];
 
 
@@ -68,15 +83,19 @@ const SMILEY_PASSIVE_MOTIONS: PassiveMotion[] = [
 // Passive Scheduler
 // ================================================================================
 // Return a function the frame loop calls once per frame for the passive offsets to add to the face
-export function createPassiveScheduler(startMs: number): (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean) => MotionOffsets {
-    // Each channel starts with a rest
-    const channels: Record<PassiveChannel, ChannelState> = {head: {playing: null, nextAt: startMs + restMs()}};
+export function createPassiveScheduler(startMs: number, continuous: Record<ContinuousChannel, ContinuousPlayer>): (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean) => MotionOffsets {
+    // Each episodic channel starts with a rest
+    const channels: Record<EpisodicChannel, ChannelState> = {head: {playing: null, nextAt: startMs + restMs()}};
 
     return (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean): MotionOffsets => {
+        // Continuous channels always play
         let total: MotionOffsets = {};
-        for (const [channel, state] of Object.entries(channels) as [PassiveChannel, ChannelState][]) {
-            // 1) A named motion holds the head channel, and the rest after it starts once it ends
-            const held = motionPlaying && (channel === "head");
+        for (const play of Object.values(continuous)) total = addOffsets(total, play(nowMs, dtSec));
+
+        // Episodic channels take turns among their motions
+        for (const [channel, state] of Object.entries(channels) as [EpisodicChannel, ChannelState][]) {
+            // 1) A movement or animation holds the channel, and the rest after it starts once it ends
+            const held = motionPlaying && SMILEY_EPISODIC_CHANNELS[channel].heldByMotions;
             if (held) state.nextAt = Math.max(state.nextAt, nowMs + SMILEY_PASSIVE_GAP_MIN_MS);
 
             // 2) After the rest, pick one of the motions allowed now (none allowed rests again)

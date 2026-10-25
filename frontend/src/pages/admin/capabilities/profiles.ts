@@ -8,16 +8,18 @@ page's side of that contract: it decides which action buttons to show for the
 chat being monitored, based on the `source` (and, for the webapp, the
 `avatarModel`) reported in the `session_info` frame.
 
-Emotion buttons use the shared backend mood vocabulary, with confirmed client-
-specific extensions such as Buddy's admin-only "Angry". Animation buttons are
-different: they carry the frontend's own literal clip or behavior names.
+A profile is a list of titled button sections. Emotion buttons use the shared
+backend mood vocabulary, with confirmed client-specific extensions such as
+Buddy's admin-only "Angry". Animation buttons are different: they carry the
+frontend's own literal clip or behavior names. The smiley's sections are its own
+three categories of public actions (Expressions, Movements, Animations), then
+the moods.
 
 See `../FRONTEND_CAPABILITIES.md` for how to add a profile for a new robot.
 
 */
 import { buddyAnimations, qtAnimations } from "@/pages/common/avatar/AvatarUtils";
-import { SMILEY_ANIMATIONS             } from "@/pages/common/avatar/smiley/faceMotions";
-import { SMILEY_EXPRESSION_LIST        } from "@/pages/common/avatar/smiley/faceState";
+import { SMILEY_ACTION_SECTIONS        } from "@/pages/common/avatar/smiley/smileyActions";
 
 // --------------------------------------------------------------------------------
 // Types
@@ -29,11 +31,16 @@ export type ActionOption = {
     value : string;                      // Sent verbatim; the frontend maps it however it likes
 };
 
+// One titled group of buttons
+export type ActionSection = {
+    title   : string;           // Shown above the buttons
+    options : ActionOption[];   // Its buttons, in order
+};
+
+// Every button group a frontend gets, in order (an empty group is not shown)
 export type CapabilityProfile = {
-    name       : string;          // Human-readable, shown in the panel header
-    emotions   : ActionOption[];  // Mapped through the frontend's own emotion vocabulary
-    animations : ActionOption[];  // Literal clip/behavior names, driven directly
-    moods      : ActionOption[];  // LLM moods shown in their own section, for frontends whose emotions are their own face names (else empty)
+    name     : string;            // Human-readable, shown in the panel header
+    sections : ActionSection[];   // Emotions are mapped through the frontend's own vocabulary; animations are its literal names
 };
 
 // --------------------------------------------------------------------------------
@@ -58,10 +65,8 @@ const asAnimations = (labels: readonly string[]): ActionOption[] =>
 // --------------------------------------------------------------------------------
 // Fallback for any source without a specific profile (currently qtrobot)
 const DEFAULT_PROFILE: CapabilityProfile = {
-    name       : "Generic",
-    emotions   : asEmotions(LLM_MOODS),
-    animations : [],
-    moods      : [],
+    name     : "Generic",
+    sections : [{title: "Emotions", options: asEmotions(LLM_MOODS)}],
 };
 
 // Webapp avatars offer both abstract mood controls and direct animation names. Which model is
@@ -70,31 +75,25 @@ const DEFAULT_PROFILE: CapabilityProfile = {
 // page reads these same profiles, keyed by the ids in `common/avatar/avatarRegistry`.
 const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
     qt: {
-        name       : "Web Avatar (QT)",
-        emotions   : asEmotions(LLM_MOODS),
-        animations : asAnimations(Object.keys(qtAnimations)),
-        moods      : [],
+        name     : "Web Avatar (QT)",
+        sections : [{title: "Emotions", options: asEmotions(LLM_MOODS)}, {title: "Animations", options: asAnimations(Object.keys(qtAnimations))}],
     },
     buddy: {
-        name       : "Web Avatar (Buddy)",
-        emotions   : asEmotions(LLM_MOODS),
-        animations : asAnimations(Object.keys(buddyAnimations)),
-        moods      : [],
+        name     : "Web Avatar (Buddy)",
+        sections : [{title: "Emotions", options: asEmotions(LLM_MOODS)}, {title: "Animations", options: asAnimations(Object.keys(buddyAnimations))}],
     },
     // Code-drawn face, plain and with its eyebrows always showing (same buttons for both)
     smiley         : smileyProfile("Web Avatar (Smiley)"),
     "smiley-brows" : smileyProfile("Web Avatar (Smiley + eyebrows)"),
 };
 
-// Smiley buttons: every named expression, labeled with the emoji it borrows from, then its head
-// motions, then the moods on their own (each shows a random one of its expressions; Angry is admin-only)
+// Smiley buttons: its three categories of public actions (faces labeled with the emoji they borrow from), then the
+// moods on their own (each shows a random face or animation of that mood; Angry is admin-only)
 function smileyProfile(name: string): CapabilityProfile {
-    const expressions: ActionOption[] = SMILEY_EXPRESSION_LIST.map(({name: expression, emoji}) => ({label: `${emoji} ${expression}`, kind: "emotion", value: expression}));
+    const categories: ActionSection[] = SMILEY_ACTION_SECTIONS.map(({category, kind, actions}) => ({title: category, options: actions.map(({label, name: value}) => ({label, kind, value}))}));
     return {
-        name       : name,
-        emotions   : expressions,
-        animations : asAnimations(SMILEY_ANIMATIONS),
-        moods      : asEmotions([...LLM_MOODS, "Angry"]),
+        name     : name,
+        sections : [...categories, {title: "Moods (what the LLM sends; shows a matching face or animation)", options: asEmotions([...LLM_MOODS, "Angry"])}],
     };
 }
 
@@ -102,10 +101,8 @@ function smileyProfile(name: string): CapabilityProfile {
 // generic mapping, and Angry is one we specifically do not want the LLM choosing on its own.
 // TODO: Fill in Buddy's real animation/behavior names once they are confirmed on the robot.
 const BUDDYROBOT_PROFILE: CapabilityProfile = {
-    name       : "Buddy Robot",
-    emotions   : asEmotions([...LLM_MOODS, "Angry"]),
-    animations : [],
-    moods      : [],
+    name     : "Buddy Robot",
+    sections : [{title: "Emotions", options: asEmotions([...LLM_MOODS, "Angry"])}],
 };
 
 // --------------------------------------------------------------------------------

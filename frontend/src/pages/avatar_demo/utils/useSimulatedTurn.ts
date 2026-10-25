@@ -7,7 +7,8 @@ Sends the same conversation states the chat page does (`useChatAvatar`):
 the reply's audio starts, and "listening" once it ends. The reply is the sample
 reply, played exactly like its own button. The click opens the audio timeline
 (browsers only start audio from a user gesture), and the delayed reply plays
-on it.
+on it. The click also tells the avatar when the reply's voice will be heard
+(`prepareToSpeak`), so its breath in while thinking tops out right as it speaks.
 
 */
 import { useCallback, useEffect, useRef } from "react";
@@ -17,6 +18,9 @@ import type { ConversationState } from "@/pages/common/avatar/avatarRegistry";
 
 // How long the avatar thinks between the user's last word and the reply
 const DEMO_TURN_THINK_MS = 1_000;
+
+// How far ahead of the playhead the audio player schedules the first chunk (`bufferAhead` in `useAudioPlayer`)
+const DEMO_TURN_VOICE_LAG_MS = 200;
 
 // Where the turn is
 type TurnStep = "idle" | "thinking" | "waiting-for-audio" | "speaking";
@@ -28,6 +32,7 @@ type TurnStep = "idle" | "thinking" | "waiting-for-audio" | "speaking";
 // Return functions that start a turn and cancel a pending one
 export function useSimulatedTurn(
     setConversationState : (state: ConversationState) => void,   // The page's conversation-state setter (it also tells the avatar)
+    prepareToSpeak       : (inMs: number) => void,               // Tell the avatar the reply's voice comes in `inMs`
     openTimeline         : () => void,                           // Open a fresh audio timeline (called during the click)
     playReply            : () => void,                           // Play the sample reply on that timeline
     replyPlaying         : boolean,                              // The reply's audio is playing
@@ -37,8 +42,8 @@ export function useSimulatedTurn(
     const timerRef = useRef<number | null>(null);
 
     // Latest callbacks, so the timer never calls an old one
-    const callbacksRef = useRef({setConversationState, playReply});
-    useEffect(() => { callbacksRef.current = {setConversationState, playReply}; });
+    const callbacksRef = useRef({setConversationState, prepareToSpeak, playReply});
+    useEffect(() => { callbacksRef.current = {setConversationState, prepareToSpeak, playReply}; });
 
     // Follow the reply's audio: speaking once it starts, listening once it ends
     useEffect(() => {
@@ -62,6 +67,7 @@ export function useSimulatedTurn(
         openTimeline();
         stepRef.current = "thinking";
         callbacksRef.current.setConversationState("thinking");
+        callbacksRef.current.prepareToSpeak(DEMO_TURN_THINK_MS + DEMO_TURN_VOICE_LAG_MS);
         timerRef.current = window.setTimeout(() => {
             timerRef.current = null;
             stepRef.current  = "waiting-for-audio";

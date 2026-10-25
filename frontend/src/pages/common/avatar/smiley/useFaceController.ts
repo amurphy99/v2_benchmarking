@@ -1,52 +1,63 @@
-/* Drive the smiley avatar's face: expressions, motions, gaze, blinks, and speech.
+/* Drive the smiley avatar's face: its actions, gaze, blinks, breathing, and speech.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/useFaceController`
 
 Each animation frame combines several layers into one `FaceState`:
 
-  1) the expression, which moves into a new mood over a fixed short time, holds
+  1) the expression, which moves into a new face over a fixed short time, holds
      for `duration_ms` once fully shown, then moves back to the resting face
      (what "Neutral" means; the page can pick it with `setRestingExpression`,
-     and between `sleep()` and `wake()` it is the sleeping face)
-  2) a named motion's offsets (nod, look around, ...) on top of the expression,
-     plus the passive motions from `passiveMotions.ts` (a slight sway or a head
-     cock while listening), which never play during a named motion
+     and between `sleep()` and `wake()` it is the sleeping face). A timed
+     animation with a face (the yawn) shows it on top by an amount over its
+     length, while the face underneath settles to rest (mostly hidden), so it
+     fades out onto the resting face
+  2) the offsets of the movement or timed animation playing (one at a time),
+     plus the passive motions from `passiveMotions.ts`: a slight sway or a head
+     cock while listening (never during a movement or animation), and the
+     breathing (`breathing.ts`), which always plays
   3) gaze: a point the page sets, else the speech phase's look (away at pauses
      and over the last few words of a reply, back at the user as it finishes),
      else one picked by the conversation state, else small idle glances. Every
      look is measured from `SMILEY_USER_GAZE`, where the user is
   4) a slow wander around the expression's own pose, for expressions that set
-     `wander` (the thinking face): the eyes hop between nearby points, the head
+     `wander` (Ponder): the eyes hop between nearby points, the head
      turns after them more slowly, and its lean sways
   5) blinks at random gaps
-  6) a slow breathing scale
-  7) the mouth following the voice level the page reports
+  6) the mouth following the voice level the page reports
 
-The handle methods only write refs, so the page can call them as often as it
-likes; the frame loop reads them on its next tick.
+Every action arrives through `performAction` and is played by its name's
+category (`smileyActions.ts`): an expression, a movement, or an animation. The
+handle methods only write refs (or steer the breathing), so the page can call
+them as often as it likes; the frame loop reads them on its next tick.
 
-The constants below are the tuning knobs for these layers. Motion sizes and
-speeds live in `faceMotions.ts`, and each mood's look in `faceState.ts`.
+The constants below are the tuning knobs for these layers. Each face lives in
+`faceState.ts` or `faceAnimations.ts`, movement sizes and speeds in
+`faceMotions.ts`, and the breathing rhythm in `breathing.ts`.
 
 */
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // From this project
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
+import      { createBreathing                                           } from "./breathing";
+import type { FaceAnimation                                             } from "./faceAnimations";
 import type { FaceMotion, MotionOffsets                                 } from "./faceMotions";
-import      { addOffsets, motionFor, randomBetween, smoothstep          } from "./faceMotions";
+import      { addOffsets, randomBetween, smoothstep                     } from "./faceMotions";
 import type { FaceState                                                 } from "./faceState";
-import      { blendFace, expressionFor, SMILEY_BASE_FACE                } from "./faceState";
+import      { blendFace, expressionFace, fullFace                       } from "./faceState";
+import      { SMILEY_BASE_FACE, SMILEY_SLEEPING_FACE                    } from "./faceState";
 import      { createPassiveScheduler                                    } from "./passiveMotions";
+import      { resolveSmileyAction                                       } from "./smileyActions";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
 const SMILEY_EXPRESSION_OUT_MS = 400;   // Moving back to Neutral when an expression's time is up
 
-// Dozing while the chat is off, and the yawn shown on waking (names from the catalog in `faceState.ts`)
-const SMILEY_SLEEP_EXPRESSION = "Sleeping Face";
-const SMILEY_WAKE_EXPRESSION  = "Yawning Face";
-const SMILEY_WAKE_YAWN_MS     = 1_500;   // How long the yawn holds before the face settles back to rest
+// The yawn played on waking up (an animation in `faceAnimations.ts`)
+const SMILEY_WAKE_ANIMATION = "Yawn";
+
+// Share of a timed animation over which the face under its own face settles to rest
+const SMILEY_ANIMATION_SETTLE_SHARE = 0.5;
 
 // Easing rates (how quickly each layer closes the gap to its target, per second)
 const SMILEY_GAZE_EASE_PER_SEC   = 14;   // Eyes jumping to a new point
@@ -85,10 +96,6 @@ const SMILEY_WANDER_SWAY_PERIOD_MS    = 5_500;   // One sway there and back
 const SMILEY_PAUSE_GAZE   = {x:  0.55, y: -0.50};   // Up and to the right between sentences
 const SMILEY_WRAP_UP_GAZE = {x: -0.60, y:  0.15};   // Aside (left, a little down) over the last few words
 
-// Breathing
-const SMILEY_BREATH_PERIOD_MS = 4_000;   // One breath in and out
-const SMILEY_BREATH_SCALE     = 0.012;   // Size change at the top of a breath
-
 // Mouth openness at full voice level
 const SMILEY_SPEECH_MOUTH_GAIN = 0.667; // 0.42;
 
@@ -103,6 +110,9 @@ type PlayingMotion = {motion: FaceMotion; startMs: number};
 
 // One expression change: from the face showing when it started to its target, over a fixed time
 type ExpressionTransition = {from: FaceState; to: FaceState; startMs: number; lengthMs: number};
+
+// A timed animation's face: shown over the expression underneath, by its amount over its length
+type AnimationFace = {face: FaceState; amount: (t: number) => number; startMs: number; lengthMs: number};
 
 
 // ================================================================================
@@ -140,8 +150,12 @@ export function useFaceController(
         atRestRef.current     = (to === restingRef.current);
     };
 
-    // Motion playing now (null when none)
-    const motionRef = useRef<PlayingMotion | null>(null);
+    // Movement (or timed animation) playing now, and a timed animation's face (null when none)
+    const motionRef        = useRef<PlayingMotion | null>(null);
+    const animationFaceRef = useRef<AnimationFace | null>(null);
+
+    // Breathing: its rhythm, the yawn's deep breath, and the breath before speaking
+    const breathing = useMemo(createBreathing, []);
 
     // Inputs from the page
     const gazeTargetRef   = useRef<GazePoint | null>(null);
@@ -154,20 +168,42 @@ export function useFaceController(
     // --------------------------------------------------------------------------------
     // Every method only writes refs, so one handle serves the avatar's whole life
     const handle = useMemo((): AvatarHandle => {
-        // Emotions change the expression; animations start a motion (unknown values fall back to Neutral)
+        // Move to a face and hold it (for `durationMs` once fully shown, or until replaced when null), then back to Neutral
+        const showFace = (face: FaceState, durationMs: number | null, nowMs: number): void => {
+            animationFaceRef.current = null;
+            emotionStartRef .current = nowMs;
+            startTransition(face, SMILEY_EXPRESSION_IN_MS, nowMs);
+            releaseAtRef.current = ((durationMs === null) || atRestRef.current) ? null : (nowMs + SMILEY_EXPRESSION_IN_MS + durationMs);
+        };
+
+        // Play an animation: a held one like an expression, a timed one with its face, movement, and breath over its length
+        const playAnimation = (animation: FaceAnimation, durationMs: number | null, nowMs: number): void => {
+            if (animation.kind === "held") {
+                showFace(fullFace(animation.face), durationMs, nowMs);
+                return;
+            }
+            motionRef.current = {motion: {durationMs: animation.lengthMs, sample: animation.motion}, startMs: nowMs};
+            if (animation.breath !== null) breathing.take(animation.breath, nowMs);
+            if (animation.face   === null) return;   // A face-less animation leaves the face showing alone
+
+            // Its face on top, while the face underneath settles to rest (so the animation fades out onto the resting face)
+            emotionStartRef.current = nowMs;
+            releaseAtRef   .current = null;
+            startTransition(restingRef.current, animation.lengthMs * SMILEY_ANIMATION_SETTLE_SHARE, nowMs);
+            animationFaceRef.current = {face: fullFace(animation.face.changes), amount: animation.face.amount, startMs: nowMs, lengthMs: animation.lengthMs};
+        };
+
+        // Play an action by its name's category, whichever kind it came as (unknown names fall back to Neutral)
         const performAction = (action: RobotAction): void => {
-            if (action.kind === "emotion") {
-                // The hold starts once the new face is fully shown
-                const nowMs      = performance.now();
-                const durationMs = action.duration_ms ?? null;
-                emotionStartRef.current = nowMs;
-                startTransition(expressionFor(action.value, restingRef.current), SMILEY_EXPRESSION_IN_MS, nowMs);
-                releaseAtRef.current = ((durationMs === null) || atRestRef.current) ? null : (nowMs + SMILEY_EXPRESSION_IN_MS + durationMs);
-            }
-            else if (action.kind === "animation") {
-                const motion      = motionFor(action.value);
-                motionRef.current = (motion === undefined) ? null : {motion, startMs: performance.now()};
-            }
+            if ((action.kind !== "emotion") && (action.kind !== "animation")) return;   // Unknown kinds are ignored (`avatarRegistry` contract)
+
+            const nowMs      = performance.now();
+            const durationMs = action.duration_ms ?? null;
+            const resolved   = resolveSmileyAction(action.value);
+            if      (resolved === null                  ) showFace(restingRef.current, null, nowMs);
+            else if (resolved.category === "Expressions") showFace(resolved.face, durationMs, nowMs);
+            else if (resolved.category === "Movements"  ) motionRef.current = {motion: resolved.motion, startMs: nowMs};
+            else                                          playAnimation(resolved.animation, durationMs, nowMs);
         };
 
         return {
@@ -176,13 +212,14 @@ export function useFaceController(
             // Head back to the resting face now and stop any motion
             reset: (): void => {
                 startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, performance.now());
-                releaseAtRef.current = null;
-                motionRef.current    = null;
+                releaseAtRef    .current = null;
+                motionRef       .current = null;
+                animationFaceRef.current = null;
             },
 
             // Pick the face Neutral means while awake (an unknown name keeps the current one), moving to it if resting
             setRestingExpression: (value: string): void => {
-                chosenRestRef.current = expressionFor(value, chosenRestRef.current);
+                chosenRestRef.current = expressionFace(value) ?? chosenRestRef.current;
                 if (asleepRef.current) return;
 
                 const wasResting   = atRestRef.current;
@@ -190,12 +227,14 @@ export function useFaceController(
                 if (wasResting) startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, performance.now());
             },
 
-            // Doze off: Neutral means the sleeping face until `wake`, so the face settles there after any emotion
+            // Doze off: Neutral means the sleeping face until `wake` (the face settles there after any emotion), breathing slow and deep
             sleep: (): void => {
-                asleepRef   .current = true;
-                restingRef  .current = expressionFor(SMILEY_SLEEP_EXPRESSION, chosenRestRef.current);
-                releaseAtRef.current = null;
-                motionRef   .current = null;
+                asleepRef       .current = true;
+                restingRef      .current = SMILEY_SLEEPING_FACE;
+                releaseAtRef    .current = null;
+                motionRef       .current = null;
+                animationFaceRef.current = null;
+                breathing.setAsleep(true);
                 startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, performance.now());
             },
 
@@ -205,17 +244,26 @@ export function useFaceController(
 
                 asleepRef .current = false;
                 restingRef.current = chosenRestRef.current;
-                performAction({kind: "emotion", value: SMILEY_WAKE_EXPRESSION, duration_ms: SMILEY_WAKE_YAWN_MS});
+                breathing.setAsleep(false);
+                performAction({kind: "animation", value: SMILEY_WAKE_ANIMATION});
+            },
+
+            // Breathe in for speech heard in `inMs` (the gap learned from earlier turns when the page can't know)
+            prepareToSpeak: (inMs?: number): void => breathing.prepareToSpeak(performance.now(), inMs),
+
+            // Conversation state (starting to speak lets go of a breath taken for it)
+            setConversationState: (state: ConversationState): void => {
+                if ((state === "speaking") && (conversationRef.current !== "speaking")) breathing.speechStarted(performance.now());
+                conversationRef.current = state;
             },
 
             // Page-driven inputs
-            setGaze              : (x: number, y: number    ): void => { gazeTargetRef  .current = {x, y}; },
-            clearGaze            : (                        ): void => { gazeTargetRef  .current = null;   },
-            setConversationState : (state: ConversationState): void => { conversationRef.current = state;  },
-            setSpeechLevel       : (level: number           ): void => { speechTargetRef.current = level;  },
-            setSpeechPhase       : (phase: SpeechPhase      ): void => { speechPhaseRef .current = phase;  },
+            setGaze        : (x: number, y: number): void => { gazeTargetRef  .current = {x, y}; },
+            clearGaze      : (                    ): void => { gazeTargetRef  .current = null;   },
+            setSpeechLevel : (level: number       ): void => { speechTargetRef.current = level;  },
+            setSpeechPhase : (phase: SpeechPhase  ): void => { speechPhaseRef .current = phase;  },
         };
-    }, []);
+    }, [breathing]);
 
     // --------------------------------------------------------------------------------
     // Frame Loop
@@ -236,8 +284,8 @@ export function useFaceController(
         let listening    : number        = 0;
         let speech       : number        = 0;
 
-        // Passive motions (listening sways and head cocks), each channel resting between plays
-        const passive = createPassiveScheduler(lastMs);
+        // Passive motions: listening sways and head cocks (resting between plays), and the breathing (always on)
+        const passive = createPassiveScheduler(lastMs, {breath: (nowMs: number, dtSec: number): MotionOffsets => ({grow: breathing.step(nowMs, dtSec)})});
 
         // Build one frame of the face from every layer
         const tick = (nowMs: number): void => {
@@ -250,12 +298,20 @@ export function useFaceController(
                 startTransition(restingRef.current, SMILEY_EXPRESSION_OUT_MS, nowMs);
                 releaseAtRef.current = null;
             }
-            const transition      = transitionRef.current;
-            const progress        = clampRange((nowMs - transition.startMs) / transition.lengthMs, 0, 1);
-            expressionRef.current = blendFace(transition.from, transition.to, smoothstep(progress));
-            const expression      = expressionRef.current;
+            const transition = transitionRef.current;
+            const progress   = clampRange((nowMs - transition.startMs) / transition.lengthMs, 0, 1);
+            let   expression = blendFace(transition.from, transition.to, smoothstep(progress));
 
-            // 2) Motion offsets (a finished motion drops back to no offset), plus the passive motions
+            // ...with a timed animation's face on top, by its amount (dropped once it ends)
+            const animationFace = animationFaceRef.current;
+            if (animationFace !== null) {
+                const t = (nowMs - animationFace.startMs) / animationFace.lengthMs;
+                if (t < 1) expression = blendFace(expression, animationFace.face, animationFace.amount(t));
+                else       animationFaceRef.current = null;
+            }
+            expressionRef.current = expression;
+
+            // 2) Movement or timed animation offsets (one that finished drops back to no offset), plus the passive motions
             let offsets: MotionOffsets = {};
             const playing = motionRef.current;
             if (playing !== null) {
@@ -263,7 +319,7 @@ export function useFaceController(
                 if (t >= 1) motionRef.current = null;
                 else        offsets           = playing.motion.sample(t);
             }
-            offsets = addOffsets(offsets, passive(nowMs, dtSec, conversation, playing !== null));   // Passive motions on top (they hold off during a named motion)
+            offsets = addOffsets(offsets, passive(nowMs, dtSec, conversation, playing !== null));   // Passive motions on top (head ones hold off meanwhile)
 
             // 3) Gaze: the page's point, else the speech phase's look, else the conversation state's, else an idle glance near the user
             if (playing !== null) nextGlanceAt = Math.max(nextGlanceAt, nowMs + SMILEY_GLANCE_INTERVAL_MIN_MS);   // No glance during a motion, or right after it
@@ -310,8 +366,7 @@ export function useFaceController(
                 else        blink        = 1 - Math.sin(Math.PI * u);
             }
 
-            // 6) Breathing, the listening look, and the voice level
-            const breath          = 1 + (SMILEY_BREATH_SCALE * Math.sin((2 * Math.PI * nowMs) / SMILEY_BREATH_PERIOD_MS));
+            // 6) The listening look and the voice level
             const listeningTarget = (conversation === "listening") ? 1 : 0;
             listening += (listeningTarget         - listening) * easeStep( SMILEY_STATE_EASE_PER_SEC, dtSec);
             speech    += (speechTargetRef.current - speech   ) * easeStep(SMILEY_SPEECH_EASE_PER_SEC, dtSec);
@@ -330,7 +385,7 @@ export function useFaceController(
                 eyeScale      : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
                 brows         : browsAlways ? 1 : expression.brows,
                 mouthOpen     : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
-                scale         : expression.scale * breath,
+                scale         : expression.scale * (1 + (offsets.grow ?? 0)),
                 timeSec       : nowMs / 1_000,
                 expressionSec : clampRange(nowMs - emotionStartRef.current, 0, Infinity) / 1_000,
             });

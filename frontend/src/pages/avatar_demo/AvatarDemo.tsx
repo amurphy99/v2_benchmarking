@@ -10,7 +10,7 @@ behavior that works here works in a chat. Avatars with optional features (gaze,
 conversation state, speech level, sleep) also get the face controls.
 
 For tuning one face, the URL can pick the avatar and hold a face from the start
-(`/avatar-demo?avatar=smiley&face=Yawning Face`), so a reload after an edit
+(`/avatar-demo?avatar=smiley&face=Ponder`), so a reload after an edit
 lands right back on it.
 
 NOTE: `AvatarActionsGroup` and `AdminPage` stay in `pages/admin/` even though
@@ -168,7 +168,8 @@ export function AvatarDemo(): ReactElement {
     };
 
     // A simulated turn: think for a moment right after the user's last word, then reply (see `useSimulatedTurn`)
-    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, player.cancelAudio, () => playSample(false), player.systemSpeaking);
+    const prepareToSpeak          = (inMs: number): void => avatarRef.current?.prepareToSpeak?.(inMs);
+    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, prepareToSpeak, player.cancelAudio, () => playSample(false), player.systemSpeaking);
 
     // The reply on its own ends any running turn (back to listening, so no "thinking" or "speaking" is left on)
     const playReply = (): void => {

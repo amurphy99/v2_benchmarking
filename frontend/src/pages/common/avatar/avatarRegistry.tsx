@@ -14,6 +14,10 @@ Every avatar receives backend `robot_action` frames through one method,
   - an unknown value falls back to Neutral (labels match case-insensitively)
   - an unknown kind is ignored
 
+The smiley matches an action by its name in its own three categories
+(Expressions, Movements, Animations) whichever kind it came as
+(`smiley/smileyActions.ts`).
+
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
 for the rest. `sleep` and `wake` let the chat page doze an avatar while the
@@ -21,6 +25,9 @@ chat is off: while asleep, Neutral means the sleeping face, so an emotion that
 arrives still shows and the avatar then dozes off again. `setSpeechPhase` says
 where the avatar is in its own reply (talking, pausing between sentences,
 wrapping up, or just finishing), so it can look away and back like a speaker.
+`prepareToSpeak` says a reply is about to be spoken (and, when the page knows,
+how soon its voice will be heard), so the avatar can take a breath first; it
+lets go once its conversation state turns "speaking".
 
 NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
       action in a live chat is currently timed. Holding is only reachable from
@@ -69,6 +76,7 @@ export interface AvatarHandle {
     setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
     sleep?                : () => void;                           // Doze until woken (Neutral means the sleeping face meanwhile)
     wake?                 : () => void;                           // Wake up and rest on the usual face again (does nothing when awake)
+    prepareToSpeak?       : (inMs?: number) => void;              // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes

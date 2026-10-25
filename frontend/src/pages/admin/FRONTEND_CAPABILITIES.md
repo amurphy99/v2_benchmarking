@@ -29,8 +29,11 @@ The panel exposes two related but different controls:
    `Nodding Yes` button bypasses mood mapping and asks the frontend to play that named behavior.
 3. **Mood buttons (optional) list the LLM's moods on their own.** For a frontend whose emotion
    buttons are its own face names (the web smiley's `Grinning Face`, `Cold Face`, …), the moods
-   move to a third section, so an admin can still preview what the LLM's `Happy` turns into.
-   Profiles that send mood labels as their emotion buttons leave `moods` empty.
+   get a section of their own, so an admin can still preview what the LLM's `Happy` turns into.
+
+A profile is a list of titled button sections, so a frontend can group its buttons however
+suits it. The web smiley groups its own public actions into three categories (see
+[The smiley's categories](#the-smileys-categories)), then the moods.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- The two kinds                                                                    -->
@@ -88,7 +91,7 @@ and read at `pages/chat/Chat.tsx`). The models share no animation names at all:
 |---|---|
 | `buddy` | `DANCE`, `SHAKE NO`, `EMBARRASSED`, `HEAD TILT`, `NOD YES` (5 clips) |
 | `qt` | `Celebration`, `Dancing`, `Nodding Yes`, `Thinking`, … (17 clips) |
-| `smiley`, `smiley-brows` | `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt`, `Tilt, Turn, and Look Up Right`, `Tilt, Turn, and Look Up Left` (10 code-drawn motions) |
+| `smiley`, `smiley-brows` | Movements: `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions). Animations: `Ponder`, `Yawn`, `Glance Up Right`, `Glance Up Left` |
 
 The web avatars and the shared `performAction()` contract they follow live in
 `pages/common/avatar/` (`avatarRegistry.tsx`). The public `/avatar-demo` page shows each web
@@ -102,9 +105,29 @@ the same way, through `session_info` in
 
 Emotions are safe across every model because each avatar maps them itself:
 `getAnimationFromEmotion()` (`pages/common/avatar/AvatarUtils.tsx`) for QT and Buddy, and the
-expression catalog in `pages/common/avatar/smiley/faceState.ts` for the smiley (each mood picks
-one of a few iOS-emoji-style expressions at random). Only raw `animation` buttons, and the
-smiley's named-expression emotion buttons, need the model to be known.
+mood lists in `pages/common/avatar/smiley/smileyActions.ts` for the smiley (each mood picks one
+of a few iOS-emoji-style expressions or animations at random). Only raw `animation` buttons, and
+the smiley's own named actions, need the model to be known.
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- The smiley's categories                                                          -->
+<!-- -------------------------------------------------------------------------------- -->
+## The smiley's categories
+
+The web smiley sorts its own public actions into three categories
+(`pages/common/avatar/smiley/smileyActions.ts`). The lines are a guide, not a hard rule:
+
+| Category | What it is | Examples | Sent as |
+|---|---|---|---|
+| Expressions | Changes the face's shapes (eyes, mouth, brows, color), held for `duration_ms` | `Neutral Face`, `Grimacing Face` | `emotion` |
+| Movements | Moves the head and eyes, leaving the face alone, at its own length | `Nod`, `Bounce` | `animation` |
+| Animations | More than one kind of change at once: a face with movement or breath, or a combined head and eye move | `Ponder` (held), `Yawn`, `Glance Up Right` (their own length) | `animation` |
+
+The protocol's two kinds stay as they are for now (`CLIENT_PROTOCOL.md` §3.1). The smiley plays
+an action by its name, whichever kind it arrives as, so `Ponder` works as an `emotion` (the
+LLM's `Thinking` mood picks it) or an `animation`. Names are unique across the three
+categories, and never a mood's name (a `Thinking` animation would be read as the mood).
+Animation names are verbs, like the movements.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Adding a profile                                                                 -->
@@ -118,10 +141,11 @@ Everything lives in `capabilities/profiles.ts`.
 
    ```ts
    const MYROBOT_PROFILE: CapabilityProfile = {
-       name       : "My Robot",
-       emotions   : asEmotions([...LLM_MOODS, "Angry"]),
-       animations : asAnimations(["Wave", "Nod"]),
-       moods      : [],
+       name     : "My Robot",
+       sections : [
+           {title: "Emotions",   options: asEmotions([...LLM_MOODS, "Angry"])},
+           {title: "Animations", options: asAnimations(["Wave", "Nod"])},
+       ],
    };
    ```
 
@@ -144,7 +168,7 @@ Everything lives in `capabilities/profiles.ts`.
 |---|---|---|
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
 | `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
-| `webapp` + `smiley` | Web Avatar (Smiley) | Every named expression (`Grinning Face`, `Fearful Face`, …) as emotions, 8 motion names, and the 10 moods + `Angry` in the mood section. A `UserSettings.modelChoice` option, so participants can be given it |
+| `webapp` + `smiley` | Web Avatar (Smiley) | Sections for its Expressions (`Grinning Face`, `Fearful Face`, …), Movements (8 motion names), and Animations (`Ponder`, `Yawn`, `Glance Up Right`, `Glance Up Left`), then the 10 moods + `Angry`. A `UserSettings.modelChoice` option, so participants can be given it |
 | `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Not a `modelChoice` option, so it only appears on `/avatar-demo` |
 | `webapp` + `talkinghead`, `temp1`–`temp3` | *(default)* | Reserved `modelChoice` options with no avatar built yet. Avatar pickers hide them until `avatarRegistry.tsx` has an entry with that id; until then the chat page shows Smiley |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |

@@ -11,10 +11,11 @@ reason.
 
 An expression is a set of field values, so a new one is a combination of the
 existing shapes and extras: one line in `SMILEY_EXPRESSIONS`. Expressions are
-named after the iOS emoji they borrow from. Each backend mood maps to a few of
-them, and `expressionFor` picks one at random so a live chat does not show the
-same face every time. An admin (or the demo page) can also send an expression's
-own name as an emotion to show that exact face.
+named after the iOS emoji they borrow from. They are the "Expressions" category
+of the smiley's public actions: faces that only change the face's shapes. Faces
+combined with movement or breath (Ponder, Yawn) are animations
+(`faceAnimations.ts`), and the moods and the lookup that matches an incoming
+action's name to any category are in `smileyActions.ts`.
 
 "Neutral" is not a fixed face: it is whichever expression the controller is
 resting on (`Slightly Smiling Face` unless the page picks another).
@@ -245,49 +246,32 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
     "Astonished Face"                        : {emoji: "😲", face: {brows: 1, browRaise: 1, browAngle: 0.2, eyeScale: 1.35, mouthCurve: -0.4, mouthOpen: 1.0, mouthWidth: 0.55}},
     "Face with Open Eyes and Hand Over Mouth": {emoji: "🫢", face: {eyeScale: 1.3, brows: 1, browRaise: 0.9, browAngle: 0.3, mouthCurve: -0.3, mouthOpen: 0.5, mouthWidth: 0.6, handMouth: 1, handDY: 2, handTilt: -5}},
 
-    // Thinking
-    "Thinking Face"            : {emoji: "🤔", face: {brows: 1, browRaise: 0.25, browAsym: 1, browAngle: -0.1, mouthCurve: 0.05, mouthWidth: 0.55, mouthSide: -6, mouthSlant: -0.4, gazeX: -0.6, gazeY: -0.6, turnX: -0.2, turnY: -0.15, tilt: 8, wander: 1, handChin: 1}},
+    // Thinking (Ponder, with the hand on the chin, is an animation)
     "Face with Raised Eyebrow" : {emoji: "🤨", face: {brows: 1, browAsym: 0.9, browAngle: -0.2, eyeOpen: 0.85, mouthCurve: -0.1, mouthWidth: 0.6}},
 
-    // Tired
+    // Tired (Yawn is an animation)
     "Sleeping Face" : {emoji: "😴", face: {eyeArc: 1, eyeArcBend: -1, zzz: 1, mouthCurve: -0.1, mouthOpen: 0.3, mouthWidth: 0.32, tilt: -5, browRaise: -0.2}},
-    "Yawning Face"  : {emoji: "🥱", face: {eyeArc: 1, eyeArcBend: -1, mouthCurve: -0.5, mouthOpen: 1.0, mouthWidth: 0.85, tongue: 0.7, tilt: -4, browRaise: 0.3, browAngle: 0.3, handMouth: 1, handDX: 34, handDY: 30, handTilt: -30}},
 
     // Angry (admin-only, like Buddy's)
     "Angry Face"     : {emoji: "😠", face: {brows: 1, browAngle: -1, browRaise: -0.6, eyeScale: 0.85, eyeInset: 6, mouthCurve: -0.7, mouthWidth: 0.8, faceRgb: [...SMILEY_ANGRY_RGB]}},
     "Red Angry Face" : {emoji: "😡", face: {brows: 1, browAngle: -1, browRaise: -0.7, eyeScale: 0.82, eyeInset: 7, mouthCurve: -0.8, mouthWidth: 0.7, faceRgb: [...SMILEY_POUT_RGB]}},
 };
 
-// Expressions each mood picks from at random (keys are the backend's mood labels, plus admin-only
-// Angry; Neutral is not here because it means the resting expression)
-const SMILEY_MOOD_EXPRESSIONS: Record<string, string[]> = {
-    Happy     : ["Grinning Face", "Grinning Face with Big Eyes", "Grinning Face with Smiling Eyes", "Beaming Face with Smiling Eyes", "Smiling Face", "Smiling Face with Smiling Eyes", "Face with Hand Over Mouth"],
-    Love      : ["Smiling Face with Hearts", "Smiling Face with Heart-Eyes"],
-    Sad       : ["Crying Face", "Pensive Face", "Frowning Face"],
-    Grumpy    : ["Unamused Face", "Face with Rolling Eyes"],
-    Scared    : ["Fearful Face", "Anguished Face", "Grimacing Face"],
-    Sick      : ["Sick Face with Spiral Eyes", "Face with Spiral Eyes", "Cold Face"],
-    Surprised : ["Face with Open Mouth", "Astonished Face", "Face with Open Eyes and Hand Over Mouth"],
-    Thinking  : ["Thinking Face", "Face with Raised Eyebrow"],
-    Tired     : ["Sleeping Face", "Yawning Face"],
-    Angry     : ["Angry Face", "Red Angry Face"],
-};
+// Face the smiley dozes with (what Neutral means while it is asleep)
+export const SMILEY_SLEEPING_FACE = fullFace(SMILEY_EXPRESSIONS["Sleeping Face"].face);
 
 // Every named expression with its emoji, in catalog order (for building buttons and pickers)
 export const SMILEY_EXPRESSION_LIST = Object.entries(SMILEY_EXPRESSIONS).map(([name, expression]: [string, Expression]) => ({name, emoji: expression.emoji}));
 
-// Full face for a mood (a random one of its expressions) or an expression name, ignoring case.
-// "Neutral" and unknown labels give the resting face.
-export function expressionFor(label: string, restingFace: FaceState): FaceState {
-    const matches = (key: string): boolean => key.toLowerCase() === label.toLowerCase();
+// Full face from the base face and an expression's (or animation's) changes to it
+export function fullFace(changes: Partial<FaceState>): FaceState {
+    return {...SMILEY_BASE_FACE, ...changes};
+}
 
-    // A mood picks one of its expressions; an expression name picks itself
-    const mood    = Object.keys(SMILEY_MOOD_EXPRESSIONS).find(matches);
-    const choices = (mood === undefined) ? Object.keys(SMILEY_EXPRESSIONS).filter(matches) : SMILEY_MOOD_EXPRESSIONS[mood];
-    if (choices.length === 0) return restingFace;
-
-    const name = choices[Math.floor(Math.random() * choices.length)];
-    return {...SMILEY_BASE_FACE, ...SMILEY_EXPRESSIONS[name].face};
+// Full face of an expression by name, ignoring case (null for any other name)
+export function expressionFace(name: string): FaceState | null {
+    const key = Object.keys(SMILEY_EXPRESSIONS).find((expression: string) => expression.toLowerCase() === name.toLowerCase());
+    return (key === undefined) ? null : fullFace(SMILEY_EXPRESSIONS[key].face);
 }
 
 
