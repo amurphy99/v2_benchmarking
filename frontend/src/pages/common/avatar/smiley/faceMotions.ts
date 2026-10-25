@@ -9,7 +9,8 @@ zero offset, which is how it returns to Neutral when it finishes.
 Each motion's length and size are the tuning constants at the top of this file,
 and `SMILEY_MOTION_SPEED` speeds up or slows down all of them at once. A motion
 that favors one side is written once and listed a second time through
-`mirrored()`, which flips it left to right.
+`mirrored()`, which flips it left to right. The offset and easing helpers at the
+bottom are shared with the passive motions (`passiveMotions.ts`).
 
 */
 import type { FaceState } from "./faceState";
@@ -144,14 +145,7 @@ function tiltTurnGlance(t: number): MotionOffsets {
 
 // Flip a motion left to right (the lean, head turn, gaze, and sideways shift change sides)
 function mirrored(sample: FaceMotion["sample"]): FaceMotion["sample"] {
-    return (t: number): MotionOffsets => {
-        const offsets = {...sample(t)};
-        for (const key of SMILEY_MIRRORED_OFFSETS) {
-            const value = offsets[key];   // A motion moves only some fields
-            if (value !== undefined) offsets[key] = -value;
-        }
-        return offsets;
-    };
+    return (t: number): MotionOffsets => mirrorOffsets(sample(t));
 }
 
 // Back-and-forth swing that fades in and out (`cycles` full swings over the motion)
@@ -160,7 +154,7 @@ function swing(t: number, cycles: number): number {
 }
 
 // Ease between [time, value] keyframes (times ascend from 0 to 1)
-function keyframes(t: number, frames: [number, number][]): number {
+export function keyframes(t: number, frames: [number, number][]): number {
     for (let i = 1; i < frames.length; i++) {
         const [endT, endValue] = frames[i];
         if (t > endT) continue;
@@ -175,4 +169,37 @@ function keyframes(t: number, frames: [number, number][]): number {
 // Ease from 0 to 1 that starts and stops with zero speed
 export function smoothstep(u: number): number {
     return u * u * (3 - (2 * u));
+}
+
+// Uniform random number between two bounds
+export function randomBetween(low: number, high: number): number {
+    return low + (Math.random() * (high - low));
+}
+
+
+// --------------------------------------------------------------------------------
+// Offset Helpers
+// --------------------------------------------------------------------------------
+// One set of offsets flipped left to right (fields that point up or down stay as they are)
+export function mirrorOffsets(offsets: MotionOffsets): MotionOffsets {
+    const flipped = {...offsets};
+    for (const key of SMILEY_MIRRORED_OFFSETS) {
+        const value = flipped[key];   // A motion moves only some fields
+        if (value !== undefined) flipped[key] = -value;
+    }
+    return flipped;
+}
+
+// Two sets of offsets added together (a field either one leaves out counts as zero)
+export function addOffsets(a: MotionOffsets, b: MotionOffsets): MotionOffsets {
+    const sum = {...a};
+    for (const key of Object.keys(b) as (keyof MotionOffsets)[]) sum[key] = (sum[key] ?? 0) + (b[key] ?? 0);
+    return sum;
+}
+
+// Offsets scaled by one amount (0 leaves no offset, 1 keeps them as they are)
+export function scaleOffsets(offsets: MotionOffsets, amount: number): MotionOffsets {
+    const scaled = {...offsets};
+    for (const key of Object.keys(offsets) as (keyof MotionOffsets)[]) scaled[key] = (offsets[key] ?? 0) * amount;
+    return scaled;
 }

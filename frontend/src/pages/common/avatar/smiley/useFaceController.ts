@@ -8,7 +8,9 @@ Each animation frame combines several layers into one `FaceState`:
      for `duration_ms` once fully shown, then moves back to the resting face
      (what "Neutral" means; the page can pick it with `setRestingExpression`,
      and between `sleep()` and `wake()` it is the sleeping face)
-  2) a named motion's offsets (nod, look around, ...) on top of the expression
+  2) a named motion's offsets (nod, look around, ...) on top of the expression,
+     plus the passive motions from `passiveMotions.ts` (a slight sway or a head
+     cock while listening), which never play during a named motion
   3) gaze: a point the page sets, else the speech phase's look (away at pauses
      and over the last few words of a reply, back at the user as it finishes),
      else one picked by the conversation state, else small idle glances. Every
@@ -32,9 +34,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // From this project
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
 import type { FaceMotion, MotionOffsets                                 } from "./faceMotions";
-import      { motionFor, smoothstep                                     } from "./faceMotions";
+import      { addOffsets, motionFor, randomBetween, smoothstep          } from "./faceMotions";
 import type { FaceState                                                 } from "./faceState";
 import      { blendFace, expressionFor, SMILEY_BASE_FACE                } from "./faceState";
+import      { createPassiveScheduler                                    } from "./passiveMotions";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -233,6 +236,9 @@ export function useFaceController(
         let listening    : number        = 0;
         let speech       : number        = 0;
 
+        // Passive motions (listening sways and head cocks), each channel resting between plays
+        const passive = createPassiveScheduler(lastMs);
+
         // Build one frame of the face from every layer
         const tick = (nowMs: number): void => {
             const dtSec        = Math.min((nowMs - lastMs) / 1_000, SMILEY_MAX_FRAME_SEC);
@@ -249,7 +255,7 @@ export function useFaceController(
             expressionRef.current = blendFace(transition.from, transition.to, smoothstep(progress));
             const expression      = expressionRef.current;
 
-            // 2) Motion offsets (a finished motion drops back to no offset)
+            // 2) Motion offsets (a finished motion drops back to no offset), plus the passive motions
             let offsets: MotionOffsets = {};
             const playing = motionRef.current;
             if (playing !== null) {
@@ -257,6 +263,7 @@ export function useFaceController(
                 if (t >= 1) motionRef.current = null;
                 else        offsets           = playing.motion.sample(t);
             }
+            offsets = addOffsets(offsets, passive(nowMs, dtSec, conversation, playing !== null));   // Passive motions on top (they hold off during a named motion)
 
             // 3) Gaze: the page's point, else the speech phase's look, else the conversation state's, else an idle glance near the user
             if (playing !== null) nextGlanceAt = Math.max(nextGlanceAt, nowMs + SMILEY_GLANCE_INTERVAL_MIN_MS);   // No glance during a motion, or right after it
@@ -345,11 +352,6 @@ export function useFaceController(
 // Gaze point at an offset from where the user is
 function fromUser(offset: GazePoint): GazePoint {
     return {x: SMILEY_USER_GAZE.x + offset.x, y: SMILEY_USER_GAZE.y + offset.y};
-}
-
-// Uniform random number between two bounds
-function randomBetween(low: number, high: number): number {
-    return low + (Math.random() * (high - low));
 }
 
 // Fraction of the remaining gap to close this frame (frame-rate independent exponential easing)
