@@ -74,10 +74,6 @@ const SMILEY_ZZZ_HEXES    = ["#93a6ff", "#3c52cc"] as const;
 // Heart eyes: a deeper red, lit from the upper left so they look rounded (center, middle, and edge)
 const SMILEY_HEART_EYE_HEXES = ["#ff9db0", "#ee2f4d", "#930720"] as const;
 
-// Hand shading, laid out in the hand's own coordinates (fingertips at the top, wrist at the bottom)
-const SMILEY_HAND_SHADE_TOP_Y    = -50;
-const SMILEY_HAND_SHADE_BOTTOM_Y = 30;
-
 // Overlays over the top of the face (each is strong at the very top and gone by `*_END`)
 const SMILEY_FEAR_HEX  = "#6f86ff";   // Fearful blue
 const SMILEY_FEAR_END  = "50%";
@@ -131,7 +127,7 @@ export default function SmileyFace2D({face}: {
         feature  : url("feature"),
         mouth    : url("mouth"),
         tongue   : url("tongue"),
-        hand     : url("hand"),
+        hand     : [rgbString(top), rgbString(face.faceRgb), rgbString(edge)],
         skinEdge : rgbString(mixRgb(edge, [0, 0, 0], 1 - SMILEY_HAND_EDGE_SHADE)),
         heart    : url("heart"),
         heartEye : url("heartEye"),
@@ -191,13 +187,6 @@ export default function SmileyFace2D({face}: {
                     <stop offset="55%"  stopColor={SMILEY_BLUSH_HEX} stopOpacity={0.45} />
                     <stop offset="100%" stopColor={SMILEY_BLUSH_HEX} stopOpacity={0}    />
                 </radialGradient>
-
-                {/* Hands: shaded along the hand itself, in the hand's own coordinates */}
-                <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="0" y1={SMILEY_HAND_SHADE_TOP_Y} x2="0" y2={SMILEY_HAND_SHADE_BOTTOM_Y}>
-                    <stop offset="0%"   stopColor={rgbString(top)}          />
-                    <stop offset="50%"  stopColor={rgbString(face.faceRgb)} />
-                    <stop offset="100%" stopColor={rgbString(edge)}         />
-                </linearGradient>
 
                 {/* Overlays and the ground shadow */}
                 {topOverlayGradient(id("fear"),  SMILEY_FEAR_HEX,     SMILEY_FEAR_END    )}

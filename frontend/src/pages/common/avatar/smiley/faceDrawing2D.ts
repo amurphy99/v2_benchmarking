@@ -129,15 +129,15 @@ export const SMILEY_TEAR_PATH = "M 0 -2 C 0.45 -1.2 1 -0.6 1 0 A 1 1 0 0 1 -1 0 
 // Drawing Types
 // --------------------------------------------------------------------------------
 // An x, y point
-type Point = [number, number];
+export type Point = [number, number];
 
 // Fills the renderer's gradients provide to its parts (`url(#...)` strings, or a plain color)
 export type SmileyPaint = {
     feature  : string;   // Eyes, brows, closed-eye arcs, and mouth lines
     mouth    : string;   // Inside an open mouth
     tongue   : string;   // Tongue
-    hand     : string;   // Hands, shaded like the face (laid out in the hand's own coordinates)
-    skinEdge : string;   // Hand outline and creases (a plain color)
+    hand     : [string, string, string];   // Hand shading, lit top to shaded bottom (each hand lays it out down the screen)
+    skinEdge : string;                     // Hand outline and creases (a plain color)
     heart    : string;   // Floating hearts
     heartEye : string;   // Heart eyes (a deeper red)
     ice      : string;   // Icicles
