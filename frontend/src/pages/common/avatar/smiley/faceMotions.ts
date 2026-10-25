@@ -29,7 +29,7 @@ const SMILEY_LOOK_AROUND_MOTION = {durationMs: 3_200, turn: 0.80, gaze: 1.00, sh
 const SMILEY_SWAY_MOTION        = {durationMs: 1_800,                         shift: 0.18,               degrees:  8,          swings: 2};   // Whole face rocks side to side
 const SMILEY_BOUNCE_MOTION      = {durationMs:   900,                                      height: 0.30,              hops: 2           };   // Hops straight up `hops` times
 const SMILEY_HEAD_TILT_MOTION   = {durationMs: 1_600,                                                    degrees: 22                    };   // Leans to one side, holds, comes back
-const SMILEY_TILT_TURN_MOTION   = {durationMs: 2_400, turn: 0.30, gaze: 0.60,                            degrees:  8                    };   // Leans a little left while the eyes and head turn up and to the right (eyes the same amount on both axes)
+const SMILEY_TILT_TURN_MOTION   = {durationMs: 2_400, turn: 0.30, gaze: 0.60, shift: 0.15,               degrees:  8                    };   // Leans a little left (sliding that way, like one side of Sway) while the eyes and head turn up and to the right
 
 
 // --------------------------------------------------------------------------------
@@ -129,15 +129,16 @@ function headTilt(t: number): MotionOffsets {
     return {tilt: SMILEY_HEAD_TILT_MOTION.degrees * keyframes(t, [[0, 0], [0.2, 1], [0.8, 1], [1, 0]])};
 }
 
-// Lean left while the eyes and head turn up and to the right, hold, then come back together
+// Lean and slide left while the eyes and head turn up and to the right, hold, then come back together
 function tiltTurnGlance(t: number): MotionOffsets {
     const amount = keyframes(t, [[0, 0], [0.2, 1], [0.8, 1], [1, 0]]);
     return {
-        tilt  : -SMILEY_TILT_TURN_MOTION.degrees * amount,   // Negative tilt leans left
-        gazeX :  SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes right
-        gazeY : -SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes up
-        turnX :  SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head right
-        turnY : -SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head up
+        tilt    : -SMILEY_TILT_TURN_MOTION.degrees * amount,   // Negative tilt leans left
+        offsetX : -SMILEY_TILT_TURN_MOTION.shift   * amount,   // ...and the whole face slides that way
+        gazeX   :  SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes right
+        gazeY   : -SMILEY_TILT_TURN_MOTION.gaze    * amount,   // Eyes up
+        turnX   :  SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head right
+        turnY   : -SMILEY_TILT_TURN_MOTION.turn    * amount,   // Head up
     };
 }
 

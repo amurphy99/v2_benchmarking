@@ -13,9 +13,12 @@ Each animation frame combines several layers into one `FaceState`:
      and over the last few words of a reply, back at the user as it finishes),
      else one picked by the conversation state, else small idle glances. Every
      look is measured from `SMILEY_USER_GAZE`, where the user is
-  4) blinks at random gaps
-  5) a slow breathing scale
-  6) the mouth following the voice level the page reports
+  4) a slow wander around the expression's own pose, for expressions that set
+     `wander` (the thinking face): the eyes hop between nearby points, the head
+     turns after them more slowly, and its lean sways
+  5) blinks at random gaps
+  6) a slow breathing scale
+  7) the mouth following the voice level the page reports
 
 The handle methods only write refs, so the page can call them as often as it
 likes; the frame loop reads them on its next tick.
@@ -65,6 +68,15 @@ const SMILEY_GLANCE_CENTER_CHANCE   = 0.40;    // Chance a glance comes back to 
 // Conversation-state looks (gaze offsets from the user)
 const SMILEY_THINKING_GAZE       = {x: 0.55, y: -0.55};   // Eyes drift up and to the side
 const SMILEY_LISTENING_EYE_BOOST = 0.08;                  // Extra eye size while listening
+
+// Wander while an expression with `wander` is held (eyes hop near its gaze; the head follows them and sways)
+const SMILEY_WANDER_GAZE_RANGE        = 0.15;    // Farthest a hop strays from the expression's gaze (gaze units)
+const SMILEY_WANDER_INTERVAL_MIN_MS   =   700;   // Shortest time between hops
+const SMILEY_WANDER_INTERVAL_MAX_MS   = 1_800;   // Longest time between hops
+const SMILEY_WANDER_HEAD_FOLLOW       = 0.35;    // Head turn per unit of hop (the eyes move farther than the head)
+const SMILEY_WANDER_HEAD_EASE_PER_SEC = 2.5;     // How quickly the head turns after the eyes
+const SMILEY_WANDER_SWAY_DEG          = 1.5;     // Lean sway either way
+const SMILEY_WANDER_SWAY_PERIOD_MS    = 5_500;   // One sway there and back
 
 // Speech-phase looks while it speaks (gaze offsets from the user; "finishing" looks straight at the user)
 const SMILEY_PAUSE_GAZE   = {x:  0.55, y: -0.50};   // Up and to the right between sentences
@@ -213,6 +225,10 @@ export function useFaceController(
         let idleGaze     : GazePoint     = SMILEY_USER_GAZE;
         let nextGlanceAt : number        = lastMs + randomBetween(SMILEY_GLANCE_INTERVAL_MIN_MS, SMILEY_GLANCE_INTERVAL_MAX_MS);
         let nextBlinkAt  : number        = lastMs + randomBetween( SMILEY_BLINK_INTERVAL_MIN_MS,  SMILEY_BLINK_INTERVAL_MAX_MS);
+        let wanderPoint  : GazePoint     = {x: 0, y: 0};   // Hop the eyes are heading to, from the expression's gaze
+        let wanderEyes   : GazePoint     = {x: 0, y: 0};
+        let wanderHead   : GazePoint     = {x: 0, y: 0};
+        let nextWanderAt : number        = lastMs;
         let blinkStartAt : number | null = null;
         let listening    : number        = 0;
         let speech       : number        = 0;
@@ -262,7 +278,19 @@ export function useFaceController(
             const gazeStep   = easeStep(SMILEY_GAZE_EASE_PER_SEC, dtSec);
             gaze = {x: gaze.x + ((gazeTarget.x - gaze.x) * gazeStep), y: gaze.y + ((gazeTarget.y - gaze.y) * gazeStep)};
 
-            // 4) Blink: start one after a random gap (longer while thinking), then close and reopen
+            // 4) Wander: hop the eyes to a nearby point now and then, the head easing after them (scaled by the expression's `wander`)
+            if (nowMs >= nextWanderAt) {
+                wanderPoint  = {x: randomBetween(-SMILEY_WANDER_GAZE_RANGE, SMILEY_WANDER_GAZE_RANGE), y: randomBetween(-SMILEY_WANDER_GAZE_RANGE, SMILEY_WANDER_GAZE_RANGE)};
+                nextWanderAt = nowMs + randomBetween(SMILEY_WANDER_INTERVAL_MIN_MS, SMILEY_WANDER_INTERVAL_MAX_MS);
+            }
+            const eyesStep = easeStep(SMILEY_GAZE_EASE_PER_SEC,        dtSec);
+            const headStep = easeStep(SMILEY_WANDER_HEAD_EASE_PER_SEC, dtSec);
+            wanderEyes = {x: wanderEyes.x + ((wanderPoint.x - wanderEyes.x) * eyesStep), y: wanderEyes.y + ((wanderPoint.y - wanderEyes.y) * eyesStep)};
+            wanderHead = {x: wanderHead.x + ((wanderPoint.x - wanderHead.x) * headStep), y: wanderHead.y + ((wanderPoint.y - wanderHead.y) * headStep)};
+            const wander = expression.wander;
+            const sway   = SMILEY_WANDER_SWAY_DEG * Math.sin((2 * Math.PI * nowMs) / SMILEY_WANDER_SWAY_PERIOD_MS);
+
+            // 5) Blink: start one after a random gap (longer while thinking), then close and reopen
             if (nowMs >= nextBlinkAt) {
                 const slowdown = (conversation === "thinking") ? SMILEY_THINKING_BLINK_SLOWDOWN : 1;
                 blinkStartAt   = nowMs;
@@ -275,20 +303,20 @@ export function useFaceController(
                 else        blink        = 1 - Math.sin(Math.PI * u);
             }
 
-            // 5) Breathing, the listening look, and the voice level
+            // 6) Breathing, the listening look, and the voice level
             const breath          = 1 + (SMILEY_BREATH_SCALE * Math.sin((2 * Math.PI * nowMs) / SMILEY_BREATH_PERIOD_MS));
             const listeningTarget = (conversation === "listening") ? 1 : 0;
             listening += (listeningTarget         - listening) * easeStep( SMILEY_STATE_EASE_PER_SEC, dtSec);
             speech    += (speechTargetRef.current - speech   ) * easeStep(SMILEY_SPEECH_EASE_PER_SEC, dtSec);
 
-            // 6) Combine the layers into the face the renderer draws
+            // 7) Combine the layers into the face the renderer draws
             setFace({
                 ...expression,
-                gazeX         : clampRange(expression.gazeX + gaze.x + (offsets.gazeX ?? 0), -1, 1),
-                gazeY         : clampRange(expression.gazeY + gaze.y + (offsets.gazeY ?? 0), -1, 1),
-                turnX         : expression.turnX   + (offsets.turnX   ?? 0),
-                turnY         : expression.turnY   + (offsets.turnY   ?? 0),
-                tilt          : expression.tilt    + (offsets.tilt    ?? 0),
+                gazeX         : clampRange(expression.gazeX + gaze.x + (offsets.gazeX ?? 0) + (wander * wanderEyes.x), -1, 1),
+                gazeY         : clampRange(expression.gazeY + gaze.y + (offsets.gazeY ?? 0) + (wander * wanderEyes.y), -1, 1),
+                turnX         : expression.turnX   + (offsets.turnX   ?? 0) + (wander * wanderHead.x * SMILEY_WANDER_HEAD_FOLLOW),
+                turnY         : expression.turnY   + (offsets.turnY   ?? 0) + (wander * wanderHead.y * SMILEY_WANDER_HEAD_FOLLOW),
+                tilt          : expression.tilt    + (offsets.tilt    ?? 0) + (wander * sway),
                 offsetX       : expression.offsetX + (offsets.offsetX ?? 0),
                 offsetY       : expression.offsetY + (offsets.offsetY ?? 0),
                 eyeOpen       : expression.eyeOpen * blink,

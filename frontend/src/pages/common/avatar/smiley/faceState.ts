@@ -52,11 +52,12 @@ export type RGB = [number, number, number];
 // Everything a renderer needs to draw one frame of the face
 export type FaceState = {
     // Where the eyes and head point
-    gazeX : number;   // Eye direction, -1 (left) to 1 (right)
-    gazeY : number;   // Eye direction, -1 (up) to 1 (down)
-    turnX : number;   // Head turn, -1 (left) to 1 (right)
-    turnY : number;   // Head turn, -1 (up) to 1 (down)
-    tilt  : number;   // Head tilt in degrees (positive leans right)
+    gazeX  : number;   // Eye direction, -1 (left) to 1 (right)
+    gazeY  : number;   // Eye direction, -1 (up) to 1 (down)
+    turnX  : number;   // Head turn, -1 (left) to 1 (right)
+    turnY  : number;   // Head turn, -1 (up) to 1 (down)
+    tilt   : number;   // Head tilt in degrees (positive leans right)
+    wander : number;   // Slow drift around that pose while it is held (the controller moves the eyes and head), 0 to 1
 
     // Eyes
     eyeOpen    : number;   // 0 (closed) to 1 (open)
@@ -85,6 +86,8 @@ export type FaceState = {
     mouthFlatTop : number;   // Upper lip straightened between the corners (a half-circle grin), 0 to 1
     mouthTopBow  : number;   // With a flat top, how far its middle bows down into the mouth, in SVG units
     mouthShift   : number;   // Mouth moved up (negative) or down, in SVG units
+    mouthSide    : number;   // Mouth moved left (negative) or right, in SVG units
+    mouthSlant   : number;   // Mouth tipped, -1 (left corner lower) to 1 (right corner lower)
     mouthCircle  : number;   // Opening pulled into an exact circle as wide as the mouth, 0 to 1
     mouthEyeFill : number;   // Opening filled with the eyes' color instead of the dark red-brown, 0 to 1
     teethTop     : number;   // Upper teeth, 0 (none) to 1 (fill the top half of the open mouth)
@@ -124,10 +127,10 @@ export type FaceState = {
 // Number fields that blend (everything but the color and the clocks)
 type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "timeSec" | "expressionSec">;
 const FACE_NUMBER_KEYS: FaceNumberKey[] = [
-    "gazeX", "gazeY", "turnX", "turnY", "tilt",
+    "gazeX", "gazeY", "turnX", "turnY", "tilt", "wander",
     "eyeOpen", "eyeScale", "eyeInset", "eyeOval", "lidAngle", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
     "brows", "browRaise", "browAngle", "browAsym",
-    "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "mouthRound", "mouthFlatTop", "mouthTopBow", "mouthShift", "mouthCircle", "mouthEyeFill", "teethTop", "teethBottom", "teethGaps", "tongue",
+    "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "mouthRound", "mouthFlatTop", "mouthTopBow", "mouthShift", "mouthSide", "mouthSlant", "mouthCircle", "mouthEyeFill", "teethTop", "teethBottom", "teethGaps", "tongue",
     "handMouth", "handChin", "handDX", "handDY", "handTilt",
     "tear", "fearShade", "frost", "icicles", "zzz", "hearts",
     "blush", "warmEdge", "scale", "offsetX", "offsetY",
@@ -147,6 +150,7 @@ export const SMILEY_BASE_FACE: FaceState = {
     turnX         : 0,
     turnY         : 0,
     tilt          : 0,
+    wander        : 0,
     eyeOpen       : 1,
     eyeScale      : 1,
     eyeInset      : 0,
@@ -169,6 +173,8 @@ export const SMILEY_BASE_FACE: FaceState = {
     mouthFlatTop  : 0,
     mouthTopBow   : 0,
     mouthShift    : 0,
+    mouthSide     : 0,
+    mouthSlant    : 0,
     mouthCircle   : 0,
     mouthEyeFill  : 0,
     teethTop      : 0,
@@ -240,7 +246,7 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
     "Face with Open Eyes and Hand Over Mouth": {emoji: "🫢", face: {eyeScale: 1.3, brows: 1, browRaise: 0.9, browAngle: 0.3, mouthCurve: -0.3, mouthOpen: 0.5, mouthWidth: 0.6, handMouth: 1, handDY: 2, handTilt: -5}},
 
     // Thinking
-    "Thinking Face"            : {emoji: "🤔", face: {brows: 1, browAsym: 0.8, browAngle: -0.1, mouthCurve: 0.05, mouthWidth: 0.55, gazeX: -0.6, gazeY: -0.6, tilt: 8, handChin: 1}},
+    "Thinking Face"            : {emoji: "🤔", face: {brows: 1, browRaise: 0.25, browAsym: 1, browAngle: -0.1, mouthCurve: 0.05, mouthWidth: 0.55, mouthSide: -6, mouthSlant: -0.4, gazeX: -0.6, gazeY: -0.6, turnX: -0.2, turnY: -0.15, tilt: 8, wander: 1, handChin: 1}},
     "Face with Raised Eyebrow" : {emoji: "🤨", face: {brows: 1, browAsym: 0.9, browAngle: -0.2, eyeOpen: 0.85, mouthCurve: -0.1, mouthWidth: 0.6}},
 
     // Tired

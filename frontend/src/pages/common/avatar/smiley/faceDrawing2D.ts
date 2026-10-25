@@ -50,6 +50,8 @@ const SMILEY_HEART_EYE_SIZE          = 25;    // Heart eye half-width (big enoug
 
 // Eyebrows
 const SMILEY_BROW_GAP    = 9;     // Gap between the top of the eye and the brow
+const SMILEY_BROW_FOLLOW = 0.75;  // Share of the eyes' gaze shift the brows follow (1 keeps them right over the eyes)
+const SMILEY_BROW_CLEAR  = 2.5;   // Least gap between a brow's lower edge and its eye (a lowered brow stops there)
 const SMILEY_BROW_HALF_W = 15;    // Half the brow's width
 const SMILEY_BROW_ARCH   = 6;     // How far the brow's middle bows up
 const SMILEY_BROW_RAISE  = 10;    // Brow lift at a full `browRaise` or `browAsym`
@@ -61,6 +63,7 @@ const SMILEY_BROW_END_W  = 3;     // ...and at its ends
 export const SMILEY_MOUTH_OUTLINE_W = 3.2;   // Outline around an open mouth
 const SMILEY_MOUTH_HALF_W           = 44;    // Half the mouth's width
 const SMILEY_MOUTH_CURVE            = 23;    // Drop of the mouth's middle at a full smile
+const SMILEY_MOUTH_SLANT            = 6;     // Height difference between the corners at a full `mouthSlant`
 const SMILEY_MOUTH_OPEN_UP          = 16;    // Upper lip lift at a fully open mouth (flattens a grin's top edge)
 const SMILEY_MOUTH_OPEN_DOWN        = 30;    // Lower lip drop at a fully open mouth
 const SMILEY_MOUTH_WAVE             = 6;     // Wave height at a full `mouthWave`
@@ -234,19 +237,30 @@ export function heartEyeScale(face: FaceState): number {
     return SMILEY_HEART_EYE_SIZE * face.eyeScale * (0.6 + (0.4 * face.heartEyes));
 }
 
-// One tapered eyebrow, above its eye's resting spot (brows follow the head turn but not the gaze)
+// One tapered eyebrow above its eye, following most of the eye's gaze shift and never touching the eye
 export function browPath(side: number, face: FaceState): string {
-    // Height above the eye, raised together and (for `browAsym`) one side more than the other
-    const centerX = side * SMILEY_EYE_X;
-    const centerY = SMILEY_EYE_Y - openEyeRadii(face)[1] - SMILEY_BROW_GAP - ((face.browRaise + (face.browAsym * side)) * SMILEY_BROW_RAISE);
+    // 1) Over the eye's resting spot, moved with the gaze, raised together and (for `browAsym`) one side more
+    const [openRx, openRy] = openEyeRadii(face);
+    const centerX = (side * SMILEY_EYE_X) + (face.gazeX * SMILEY_GAZE_SHIFT * SMILEY_BROW_FOLLOW);
+    const centerY = SMILEY_EYE_Y + (face.gazeY * SMILEY_GAZE_SHIFT * SMILEY_BROW_FOLLOW) - openRy - SMILEY_BROW_GAP - ((face.browRaise + (face.browAsym * side)) * SMILEY_BROW_RAISE);
 
-    // Inner end (toward the nose) rises for worry and drops for anger
+    // 2) Inner end (toward the nose) rises for worry and drops for anger
     const tilt   = face.browAngle * SMILEY_BROW_TILT;
     const inner  : Point = [centerX - (side * SMILEY_BROW_HALF_W), centerY - tilt];
     const middle : Point = [centerX, centerY - SMILEY_BROW_ARCH - (0.25 * tilt)];
     const outer  : Point = [centerX + (side * SMILEY_BROW_HALF_W), centerY + (0.5 * tilt)];
     const points = quadPoints(inner, middle, outer);
-    return ribbonPath(points, taper(points.length, SMILEY_BROW_W, SMILEY_BROW_END_W));
+    const widths = taper(points.length, SMILEY_BROW_W, SMILEY_BROW_END_W);
+
+    // 3) Lift the whole brow clear of the open eye under it (a blink never moves it)
+    const eye  = eyeGeometry(side, face);
+    const lift = Math.max(0, ...points.map(([x, y]: Point, i: number): number => {
+        const across = (x - eye.cx) / openRx;
+        if (Math.abs(across) >= 1) return 0;   // Past the eye's side
+        const eyeTop = eye.cy - (openRy * Math.sqrt(1 - (across * across)));
+        return (y + (widths[i] / 2) + SMILEY_BROW_CLEAR) - eyeTop;
+    }));
+    return ribbonPath(points.map(([x, y]: Point): Point => [x, y - lift]), widths);
 }
 
 
@@ -274,7 +288,7 @@ export function mouthShape(face: FaceState): MouthShape {
     const roundness = 1 - (face.mouthRound * (1 - SMILEY_MOUTH_ROUND_EXPONENT));
 
     // 2) Smile curve, opening, and wave across the mouth (`u` runs -1 to 1)
-    const smile   = (u: number): number => curve * (1 - (u * u));
+    const smile   = (u: number): number => (curve * (1 - (u * u))) + (face.mouthSlant * SMILEY_MOUTH_SLANT * (u / 2));   // Tipped by `mouthSlant`
     const opening = (u: number): number => Math.pow(1 - Math.pow(Math.abs(u), power), roundness);
     const wave    = (u: number): number => face.mouthWave * SMILEY_MOUTH_WAVE * Math.sin(Math.PI * SMILEY_MOUTH_WAVES * (u + 1));
     const flatTop = (u: number): number => face.mouthTopBow * (1 - (u * u));

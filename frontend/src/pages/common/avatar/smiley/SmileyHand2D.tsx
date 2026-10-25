@@ -7,8 +7,8 @@ belong to the hand instead of being separate pieces:
 
   - over the mouth: the back of a raised hand (fingers together, thumb out to
     the side), like ✋. Used by 🤭, 🫢, and 🥱.
-  - on the chin: the back of a fist with the index finger raised, like ☝️.
-    Used by 🤔.
+  - on the chin: the back of a hand with the index finger raised, the other
+    fingers curled, and the thumb out to the side, like ☝️. Used by 🤔.
 
 Drawing order: a soft shadow on the face, then every part (the raised hand's
 thumb and the hand itself) stroked at twice the outline width, then every part
@@ -47,12 +47,13 @@ const SMILEY_RAISED_HAND: HandShape = {
     creases : "M -9.8 -33 L -9.8 -16 M 1.8 -34 L 1.8 -16 M 12.9 -26 L 12.9 -12",
 };
 
-// Back of a fist with the index finger raised (☝️)
+// Back of a hand with the index finger raised, the other fingers curled, and the thumb out to the left (☝️;
+// outline from the Bootstrap Icons "hand-index-thumb" icon, MIT license, scaled up and centered on the fist)
 const SMILEY_POINTING_HAND: HandShape = {
     behind  : "",
-    body    : "M -12 -50 A 6 6 0 0 1 0 -50 L 0 -14 C 2 -18 8 -18 10 -14 C 12 -17 17 -16 18 -11 C 21 -9 21 -4 20 0 "
-            + "C 21 10 18 20 8 23 C 0 26 -12 25 -16 18 C -19 12 -18 -2 -12 -10 Z",
-    creases : "",
+    body    : "M 0 -25.3 L 0 -35.1 A 6.3 6.3 0 1 0 -12.6 -35.1 L -12.6 -11.5 L -18.2 -17.2 A 5.5 5.5 0 0 0 -26.7 -10.5 L -17.8 4.5 L -13.4 13.2 A 5.4 5.4 0 0 0 -8.6 16.2 L 14.1 16.2 A 5.4 5.4 0 0 0 18.8 13.5 L 23.8 4.7 A 12.6 12.6 0 0 0 25.4 -0.3 L 26.4 -10.1 A 7.2 7.2 0 0 0 19.2 -18 L 17.1 -18 A 18.4 18.4 0 0 0 16.4 -18.9 C 15.8 -19.7 14.6 -20.9 13.3 -21.5 C 12 -22 10.2 -21.9 9.1 -21.9 L 8.6 -21.8 "
+            + "A 4.5 4.5 0 0 0 6.6 -24.1 A 9.5 9.5 0 0 0 4 -25.2 C 2.8 -25.4 1.3 -25.4 0.2 -25.3 Z",
+    creases : "M 0 -24.5 L 0 -17.6 M 7.2 -22.7 L 7.2 -15.8 M 16.2 -17.6 L 16.2 -11.2 M -12.6 -11.5 L -11.2 -7.6",
 };
 
 // Line widths
@@ -79,9 +80,9 @@ const SMILEY_MOUTH_HAND_Y        = SMILEY_MOUTH_Y;
 const SMILEY_MOUTH_HAND_TILT_DEG = -30;
 
 // Hand on the chin: fist at the left side of the chin, index finger leaning toward the cheek
-const SMILEY_CHIN_HAND_X        = -26;
-const SMILEY_CHIN_HAND_Y        = 72;
-const SMILEY_CHIN_HAND_TILT_DEG = -20;
+const SMILEY_CHIN_HAND_X        = -34;
+const SMILEY_CHIN_HAND_Y        = 82;
+const SMILEY_CHIN_HAND_TILT_DEG = -15;
 
 
 // ================================================================================

@@ -57,7 +57,7 @@ export default function SmileyMouth2D({face, paint}: {
     );
 
     return (
-        <g transform={`translate(0 ${SMILEY_MOUTH_Y + face.mouthShift})`}>
+        <g transform={`translate(${face.mouthSide} ${SMILEY_MOUTH_Y + face.mouthShift})`}>
             {/* Tapered closed-mouth line, under any small opening until the opening covers it */}
             {(mouth.lineFade > 0) ? (
                 <path d={mouth.line} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={mouth.lineFade} />
