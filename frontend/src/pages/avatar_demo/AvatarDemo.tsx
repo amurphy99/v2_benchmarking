@@ -50,6 +50,13 @@ const DEMO_DEFAULT_AVATAR_ID = "smiley";
 // Most actions the log keeps
 const DEMO_LOG_LENGTH = 10;
 
+// Commands "Think, then reply" sends when the reply's text arrives (each sent and logged on its own): a nod at its own
+// length, and a smile held until this far into the speech, then back to Neutral
+const DEMO_REPLY_CUES = [
+    {kind: "animation", value: "Nod",          intoSpeechMs: null },
+    {kind: "emotion",   value: "Smiling Face", intoSpeechMs: 1_500},
+];
+
 
 // Resting face an avatar starts on (its first option; empty for avatars without a resting picker)
 function defaultResting(avatarId: string): string {
@@ -119,9 +126,9 @@ export function AvatarDemo(): ReactElement {
         setLog((previous: LoggedAction[]) => [logged, ...previous].slice(0, DEMO_LOG_LENGTH));
     };
 
-    // Send an action the way a live chat would (with the chosen `duration_ms`, or none for "Hold")
-    const sendAction = (kind: string, value: string): void => {
-        const action: RobotAction = (durationMs === null) ? {kind, value} : {kind, value, duration_ms: durationMs};
+    // Send an action the way a live chat would (with the chosen `duration_ms`, or none for "Hold", unless it brings its own)
+    const sendAction = (kind: string, value: string, holdMs: number | null = durationMs): void => {
+        const action: RobotAction = (holdMs === null) ? {kind, value} : {kind, value, duration_ms: holdMs};
         avatarRef.current?.performAction(action);
         logAction(action);
     };
@@ -169,7 +176,8 @@ export function AvatarDemo(): ReactElement {
 
     // A simulated turn: think for a moment right after the user's last word, then reply (see `useSimulatedTurn`)
     const prepareToSpeak          = (inMs: number): void => avatarRef.current?.prepareToSpeak?.(inMs);
-    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, prepareToSpeak, player.cancelAudio, () => playSample(false), player.systemSpeaking);
+    const sendReplyCues           = (untilVoiceMs: number): void => DEMO_REPLY_CUES.forEach(({kind, value, intoSpeechMs}) => sendAction(kind, value, (intoSpeechMs === null) ? durationMs : untilVoiceMs + intoSpeechMs));
+    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, prepareToSpeak, sendReplyCues, player.cancelAudio, () => playSample(false), player.systemSpeaking);
 
     // The reply on its own ends any running turn (back to listening, so no "thinking" or "speaking" is left on)
     const playReply = (): void => {
