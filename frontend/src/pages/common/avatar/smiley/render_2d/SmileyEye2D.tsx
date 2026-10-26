@@ -1,6 +1,6 @@
 /* Draw one of the smiley's eyes and its eyebrow.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/SmileyEye2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/SmileyEye2D`
 
 The open eye, the closed-eye arc, the spiral, and the heart all sit on the same
 spot and crossfade by their amounts in the face state. The slanted eyelid is a
@@ -11,10 +11,10 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
+import type { FaceState                                                                                } from "../state/faceState";
 import type { SmileyPaint                                                                              } from "./faceDrawing2D";
 import      { SMILEY_HEART_EYE_EDGE_W, SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W } from "./faceDrawing2D";
 import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg          } from "./faceDrawing2D";
-import type { FaceState                                                                                } from "./faceState";
 
 // Heart eye outline and gloss
 const SMILEY_HEART_EYE_EDGE_HEX      = "#8a0820";

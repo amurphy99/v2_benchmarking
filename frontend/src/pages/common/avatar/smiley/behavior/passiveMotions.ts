@@ -1,6 +1,6 @@
 /* Passive movements the smiley makes on its own, and the scheduler that plays them.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/passiveMotions`
+`@frontend/src/pages/common/avatar/smiley/behavior/passiveMotions`
 
 A passive motion is a small movement nobody asked for, like a slight sway while
 listening. Each one lists the conversation states it plays in, how likely it is
@@ -26,9 +26,9 @@ Glances, blinks, and the `wander` drift are still their own layers in the
 controller (`useFaceController`); any of them could move onto a channel here.
 
 */
-import type { ConversationState } from "../avatarRegistry";
-import type { MotionOffsets     } from "./faceMotions";
-import      { addOffsets, keyframes, mirrorOffsets, randomBetween, scaleOffsets } from "./faceMotions";
+import type { ConversationState } from "../../avatarRegistry";
+import type { MotionOffsets     } from "../actions/faceMotions";
+import      { addOffsets, keyframes, mirrorOffsets, randomBetween, scaleOffsets } from "../actions/faceMotions";
 
 // Rest between two passive motions on one channel (picked at random each time)
 const SMILEY_PASSIVE_GAP_MIN_MS = 2_000;

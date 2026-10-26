@@ -105,7 +105,7 @@ the same way, through `session_info` in
 
 Emotions are safe across every model because each avatar maps them itself:
 `getAnimationFromEmotion()` (`pages/common/avatar/AvatarUtils.tsx`) for QT and Buddy, and the
-mood lists in `pages/common/avatar/smiley/smileyActions.ts` for the smiley (each mood picks one
+mood lists in `pages/common/avatar/smiley/actions/smileyActions.ts` for the smiley (each mood picks one
 of a few iOS-emoji-style expressions or animations at random). Only raw `animation` buttons, and
 the smiley's own named actions, need the model to be known.
 
@@ -115,7 +115,7 @@ the smiley's own named actions, need the model to be known.
 ## The smiley's categories
 
 The web smiley sorts its own public actions into three categories
-(`pages/common/avatar/smiley/smileyActions.ts`). The lines are a guide, not a hard rule:
+(`pages/common/avatar/smiley/actions/smileyActions.ts`). The lines are a guide, not a hard rule:
 
 | Category | What it is | Examples | Sent as |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 /* Face state for the smiley avatar: the numbers a renderer draws, and the expression catalog.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/faceState`
+`@frontend/src/pages/common/avatar/smiley/state/faceState`
 
 The controller (`useFaceController`) moves these numbers over time, and a
 renderer (`SmileyFace2D`, later a 3D one) only draws them, so a new renderer

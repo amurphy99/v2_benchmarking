@@ -1,10 +1,10 @@
 /* The smiley's public actions in three categories, and the lookup that plays an incoming one.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/smileyActions`
+`@frontend/src/pages/common/avatar/smiley/actions/smileyActions`
 
 Every name in these categories is part of the smiley's public API:
 
-  - Expressions (`faceState.ts`): faces that change the face's shapes
+  - Expressions (`state/faceState.ts`): faces that change the face's shapes
   - Movements (`faceMotions.ts`): head and eye motions that leave the face alone
   - Animations (`faceAnimations.ts`): a face combined with movement or breath
 
@@ -18,12 +18,12 @@ On the wire, `robot_action` frames still carry the protocol's two kinds
 whatever the name is and ignores the kind, so a name works under either one.
 
 */
-import type { FaceAnimation                         } from "./faceAnimations";
-import      { animationFor, SMILEY_ANIMATION_LIST   } from "./faceAnimations";
-import type { FaceMotion                            } from "./faceMotions";
-import      { motionFor, SMILEY_MOVEMENT_NAMES      } from "./faceMotions";
-import type { FaceState                             } from "./faceState";
-import      { expressionFace, SMILEY_EXPRESSION_LIST } from "./faceState";
+import type { FaceState                              } from "../state/faceState";
+import      { expressionFace, SMILEY_EXPRESSION_LIST } from "../state/faceState";
+import type { FaceAnimation                          } from "./faceAnimations";
+import      { animationFor, SMILEY_ANIMATION_LIST    } from "./faceAnimations";
+import type { FaceMotion                             } from "./faceMotions";
+import      { motionFor, SMILEY_MOVEMENT_NAMES       } from "./faceMotions";
 
 // Names each mood picks from at random (keys are the backend's mood labels, plus admin-only Angry;
 // Neutral is not here because it means the resting face)

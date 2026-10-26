@@ -31,23 +31,24 @@ handle methods only write refs (or steer the breathing), so the page can call
 them as often as it likes; the frame loop reads them on its next tick.
 
 The constants below are the tuning knobs for these layers. Each face lives in
-`faceState.ts` or `faceAnimations.ts`, movement sizes and speeds in
-`faceMotions.ts`, and the breathing rhythm in `breathing.ts`.
+`state/faceState.ts` or `actions/faceAnimations.ts`, movement sizes and
+speeds in `actions/faceMotions.ts`, and the breathing rhythm in
+`behavior/breathing.ts`.
 
 */
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // From this project
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
-import      { createBreathing                                           } from "./breathing";
-import type { FaceAnimation                                             } from "./faceAnimations";
-import type { FaceMotion, MotionOffsets                                 } from "./faceMotions";
-import      { addOffsets, randomBetween, smoothstep                     } from "./faceMotions";
-import type { FaceState                                                 } from "./faceState";
-import      { blendFace, expressionFace, fullFace                       } from "./faceState";
-import      { SMILEY_BASE_FACE, SMILEY_SLEEPING_FACE                    } from "./faceState";
-import      { createPassiveScheduler                                    } from "./passiveMotions";
-import      { resolveSmileyAction                                       } from "./smileyActions";
+import type { FaceAnimation                                             } from "./actions/faceAnimations";
+import type { FaceMotion, MotionOffsets                                 } from "./actions/faceMotions";
+import      { addOffsets, randomBetween, smoothstep                     } from "./actions/faceMotions";
+import      { resolveSmileyAction                                       } from "./actions/smileyActions";
+import      { createBreathing                                           } from "./behavior/breathing";
+import      { createPassiveScheduler                                    } from "./behavior/passiveMotions";
+import type { FaceState                                                 } from "./state/faceState";
+import      { blendFace, expressionFace, fullFace                       } from "./state/faceState";
+import      { SMILEY_BASE_FACE, SMILEY_SLEEPING_FACE                    } from "./state/faceState";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression

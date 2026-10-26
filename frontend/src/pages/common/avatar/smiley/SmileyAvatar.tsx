@@ -11,7 +11,7 @@ import      { useImperativeHandle } from "react";
 
 // From this project
 import type { AvatarHandle, AvatarZoom } from "../avatarRegistry";
-import        SmileyFace2D               from "./SmileyFace2D";
+import        SmileyFace2D               from "./render_2d/SmileyFace2D";
 import      { useFaceController        } from "./useFaceController";
 
 

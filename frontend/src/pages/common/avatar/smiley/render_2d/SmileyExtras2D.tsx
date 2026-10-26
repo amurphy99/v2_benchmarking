@@ -1,6 +1,6 @@
 /* Draw the smiley's animated extras: the tear, the sleep Zs, and the floating hearts.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/SmileyExtras2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/SmileyExtras2D`
 
 Each extra shows only while its amount in the face state is above zero, and
 animates from `face.timeSec` (see `faceDrawing2D`). Their gradient fills come
@@ -10,10 +10,10 @@ from `SmileyFace2D`.
 import type { ReactElement } from "react";
 
 // From this project
+import type { FaceState                            } from "../state/faceState";
 import type { SmileyPaint, Sprite                  } from "./faceDrawing2D";
 import      { SMILEY_HEART_PATH, SMILEY_TEAR_PATH  } from "./faceDrawing2D";
 import      { heartSprites, tearSprite, zzzSprites } from "./faceDrawing2D";
-import type { FaceState                            } from "./faceState";
 
 // Small highlight inside the tear and each heart (sizes are in the shape's own unit size)
 const SMILEY_EXTRA_SHINE_HEX     = "#ffffff";

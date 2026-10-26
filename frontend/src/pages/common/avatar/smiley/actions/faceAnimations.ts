@@ -1,6 +1,6 @@
 /* The smiley's Animations: a face combined with movement and breath.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/faceAnimations`
+`@frontend/src/pages/common/avatar/smiley/actions/faceAnimations`
 
 These are the "Animations" category of the smiley's public actions
 (`smileyActions.ts`): more than one kind of change at once. A face is written
@@ -19,10 +19,10 @@ Names are verbs, like the movements, and never a mood's name (the "Thinking"
 mood would otherwise shadow a "Thinking" animation).
 
 */
-import type { BreathPlan          } from "./breathing";
+import type { BreathPlan          } from "../behavior/breathing";
+import type { FaceState           } from "../state/faceState";
 import type { MotionOffsets       } from "./faceMotions";
 import      { keyframes, mirrored } from "./faceMotions";
-import type { FaceState           } from "./faceState";
 
 // Yawn: its length, its deep breath, how far the head tips back, and the extra lean at the widest (the way its face leans)
 const SMILEY_YAWN_MS         = 4_400;

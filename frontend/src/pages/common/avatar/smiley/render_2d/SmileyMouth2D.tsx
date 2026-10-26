@@ -1,6 +1,6 @@
 /* Draw the smiley's mouth: the closed-mouth line, or the outlined opening with its teeth and tongue.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/SmileyMouth2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/SmileyMouth2D`
 
 A closed mouth is the tapered smile line. As the mouth opens, the opening fades
 in on top of that line, and the line stays underneath until the opening covers
@@ -22,10 +22,10 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
+import type { FaceState                                                    } from "../state/faceState";
 import type { SmileyPaint                                                  } from "./faceDrawing2D";
 import      { SMILEY_MOUTH_OUTLINE_W, SMILEY_MOUTH_Y, SMILEY_RIBBON_EDGE_W } from "./faceDrawing2D";
 import      { mouthShape                                                   } from "./faceDrawing2D";
-import type { FaceState                                                    } from "./faceState";
 
 // Openness below which the opening is not drawn (the closed-mouth line covers it)
 const SMILEY_MOUTH_MIN_OPEN = 0.02;

@@ -19,7 +19,7 @@ See `../FRONTEND_CAPABILITIES.md` for how to add a profile for a new robot.
 
 */
 import { buddyAnimations, qtAnimations } from "@/pages/common/avatar/AvatarUtils";
-import { SMILEY_ACTION_SECTIONS        } from "@/pages/common/avatar/smiley/smileyActions";
+import { SMILEY_ACTION_SECTIONS        } from "@/pages/common/avatar/smiley/actions/smileyActions";
 
 // --------------------------------------------------------------------------------
 // Types

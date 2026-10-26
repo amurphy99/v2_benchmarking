@@ -1,6 +1,6 @@
 /* Draw one frame of the smiley face as SVG.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/SmileyFace2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/SmileyFace2D`
 
 A pure renderer: it draws whatever `FaceState` it is given and holds no timers
 or behavior, so a 3D renderer can replace it without touching the controller.
@@ -25,13 +25,13 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import        SmileyEye2D                                                                    from "./SmileyEye2D";
+import type { FaceState, RGB                                                               } from "../state/faceState";
 import        SmileyExtras2D                                                                 from "./SmileyExtras2D";
+import        SmileyEye2D                                                                    from "./SmileyEye2D";
 import        SmileyHand2D                                                                   from "./SmileyHand2D";
 import        SmileyMouth2D                                                                  from "./SmileyMouth2D";
 import type { SmileyPaint                                                                  } from "./faceDrawing2D";
 import      { SMILEY_FACE_R, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
-import type { FaceState, RGB                                                               } from "./faceState";
 
 // Room around the face in the viewport
 const SMILEY_VIEW_TOP    = 55;   // Above the face, for bounces and the Zs

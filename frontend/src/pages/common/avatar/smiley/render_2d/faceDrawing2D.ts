@@ -1,6 +1,6 @@
 /* Layout and SVG shape math for the 2D smiley renderer.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/faceDrawing2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/faceDrawing2D`
 
 Shared by `SmileyFace2D` and its parts (`SmileyEye2D`, `SmileyMouth2D`,
 `SmileyHand2D`, `SmileyExtras2D`). Every size is in SVG units: the face is a
@@ -16,7 +16,7 @@ The tear, the Zs, the floating hearts, and the spiral spin are animated from
 `face.timeSec`, so the renderer stays a pure function of the face it is given.
 
 */
-import type { FaceState } from "./faceState";
+import type { FaceState } from "../state/faceState";
 
 // Face layout
 export const SMILEY_FACE_R       = 100;   // Face radius

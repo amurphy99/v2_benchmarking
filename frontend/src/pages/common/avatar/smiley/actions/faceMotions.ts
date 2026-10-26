@@ -1,6 +1,6 @@
 /* The smiley's Movements: named head and eye motions with no change to the face.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/faceMotions`
+`@frontend/src/pages/common/avatar/smiley/actions/faceMotions`
 
 A motion is a short set of offsets added on top of whatever expression is
 showing, so a nod never clears a held smile. Every motion starts and ends at
@@ -15,7 +15,7 @@ that favors one side is written once and listed a second time through
 bottom are shared with the animations and passive motions.
 
 */
-import type { FaceState } from "./faceState";
+import type { FaceState } from "../state/faceState";
 
 // Plays every motion faster (above 1) or slower (below 1)
 const SMILEY_MOTION_SPEED = 1;

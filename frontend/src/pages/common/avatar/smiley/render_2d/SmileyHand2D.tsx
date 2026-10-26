@@ -1,6 +1,6 @@
 /* Draw the smiley's hand poses: a hand held over the mouth, and a hand on the chin.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/SmileyHand2D`
+`@frontend/src/pages/common/avatar/smiley/render_2d/SmileyHand2D`
 
 Each pose is an emoji-style hand drawn as one outlined silhouette, so the fingers
 belong to the hand instead of being separate pieces:
@@ -33,9 +33,9 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
+import type { FaceState          } from "../state/faceState";
 import type { Point, SmileyPaint } from "./faceDrawing2D";
-import      { SMILEY_MOUTH_Y      } from "./faceDrawing2D";
-import type { FaceState           } from "./faceState";
+import      { SMILEY_MOUTH_Y     } from "./faceDrawing2D";
 
 // One hand pose's paths, in its local coordinates
 type HandShape = {

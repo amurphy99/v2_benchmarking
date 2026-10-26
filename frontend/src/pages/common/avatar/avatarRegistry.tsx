@@ -16,7 +16,7 @@ Every avatar receives backend `robot_action` frames through one method,
 
 The smiley matches an action by its name in its own three categories
 (Expressions, Movements, Animations) whichever kind it came as
-(`smiley/smileyActions.ts`).
+(`smiley/actions/smileyActions.ts`).
 
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
@@ -39,7 +39,7 @@ import type { ReactElement, Ref } from "react";
 // From this project
 import   GltfRobotAvatar          from "./GltfRobotAvatar";
 import   SmileyAvatar             from "./smiley/SmileyAvatar";
-import { SMILEY_EXPRESSION_LIST } from "./smiley/faceState";
+import { SMILEY_EXPRESSION_LIST } from "./smiley/state/faceState";
 
 
 // --------------------------------------------------------------------------------

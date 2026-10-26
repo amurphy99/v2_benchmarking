@@ -1,6 +1,6 @@
 /* The smiley's breathing: a steady rhythm, and single breaths steered to a chosen moment.
 --------------------------------------------------------------------------------
-`@frontend/src/pages/common/avatar/smiley/breathing`
+`@frontend/src/pages/common/avatar/smiley/behavior/breathing`
 
 Breathing shows as the face growing a little on each breath in. The rhythm is a
 phase that runs one breath per period, quicker in than out. Its period and depth
@@ -21,7 +21,7 @@ The face controller plays this as the passive motions' continuous "breath"
 channel (`passiveMotions.ts`), so it runs under every other layer.
 
 */
-import { smoothstep } from "./faceMotions";
+import { smoothstep } from "../actions/faceMotions";
 
 // Rhythm while awake and while asleep (`depth` is the size change at the top of a breath, as a fraction)
 const SMILEY_BREATH_AWAKE  = {periodMs: 4_000, depth: 0.012};
