@@ -73,13 +73,18 @@ const SMILEY_ANIMATIONS: Record<string, FaceAnimation> = {
     "Ponder": {
         kind  : "held",
         emoji : "🤔",
-        face  : {brows: 1, browRaise: 0.25, browAsym: 1, browAngle: -0.1, mouthCurve: 0.05, mouthWidth: 0.55, mouthSide: -6, mouthSlant: -0.4, gazeX: -0.6, gazeY: -0.6, turnX: -0.2, turnY: -0.15, tilt: 8, wander: 1, objects: [{kind: "hand", side: "left", shape: "pointing", at: "chin", dx: -34, angle: -15}]},
+        face  : {brows: 1, browRaise: 0.25, browAsym: 1, browAngle: -0.1, mouthCurve: 0.05, mouthWidth: 0.55, mouthSide: -6, mouthSlant: -0.4, gazeX: -0.6, gazeY: -0.6, turnX: -0.2, turnY: -0.15, tilt: 8, wander: 1, 
+            objects: [{kind: "hand", side: "left", shape: "pointing", at: "chin", dx: -20, dy: 10, angle: 60}]},
     },
     "Yawn": {
         kind     : "timed",
         emoji    : "🥱",
         lengthMs : SMILEY_YAWN_MS,
-        face     : {changes: {eyeArc: 1, eyeArcBend: -1, mouthCurve: -0.5, mouthOpen: 1.0, mouthWidth: 0.85, tongue: 0.7, tilt: -4, browRaise: 0.3, browAngle: 0.3, objects: [{kind: "hand", side: "left", shape: "raised", at: "mouth", dx: 34, dy: 30, angle: -60}]}, amount: yawnAmount},
+        face     : {
+            changes: {eyeArc: 1, eyeArcBend: -1, mouthCurve: -0.5, mouthOpen: 1.0, mouthWidth: 0.85, tongue: 0.7, tilt: -4, browRaise: 0.3, browAngle: 0.3, 
+                objects: [{kind: "hand", side: "right", shape: "raised", at: "mouth", dx: 30, dy: 30, angle: -30}]}, 
+            amount: yawnAmount
+        },
         motion   : yawnTipBack,
         breath   : SMILEY_YAWN_BREATH,
     },
