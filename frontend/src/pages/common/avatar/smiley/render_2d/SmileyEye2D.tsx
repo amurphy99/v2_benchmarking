@@ -11,10 +11,11 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { FaceState                                                                                } from "../state/faceState";
-import type { SmileyPaint                                                                              } from "./faceDrawing2D";
-import      { SMILEY_HEART_EYE_EDGE_W, SMILEY_HEART_PATH, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W } from "./faceDrawing2D";
-import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg          } from "./faceDrawing2D";
+import type { FaceState                                                                       } from "../state/faceState";
+import type { SmileyPaint                                                                     } from "./faceDrawing2D";
+import      { SMILEY_HEART_EYE_EDGE_W, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W           } from "./faceDrawing2D";
+import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg } from "./faceDrawing2D";
+import      { SMILEY_HEART_PATH                                                               } from "./objectDrawing2D";
 
 // Heart eye outline and gloss
 const SMILEY_HEART_EYE_EDGE_HEX      = "#8a0820";

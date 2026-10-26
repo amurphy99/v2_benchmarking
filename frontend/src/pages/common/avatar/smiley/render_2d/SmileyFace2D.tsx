@@ -4,8 +4,10 @@
 
 A pure renderer: it draws whatever `FaceState` it is given and holds no timers
 or behavior, so a 3D renderer can replace it without touching the controller.
-Shape math lives in `faceDrawing2D`; the eyes, mouth, hands, and animated
-extras are their own parts, all filled from the gradients defined here.
+Shape math lives in `faceDrawing2D`; the eyes, mouth, and animated extras are
+their own parts, all filled from the gradients defined here. The face's objects
+(`face.objects`: hearts, then hands in front of everything) are drawn by
+`SmileyHeart2D` and `SmileyHand2D`, with their shapes in `objectDrawing2D`.
 
 The face is shaded glossy, like an iOS emoji: bright and nearly white at the
 top, the face color through the middle, and a deeper warm shade toward the
@@ -25,22 +27,22 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { FaceState, RGB                                                               } from "../state/faceState";
-import        SmileyExtras2D                                                                 from "./SmileyExtras2D";
-import        SmileyEye2D                                                                    from "./SmileyEye2D";
-import        SmileyHand2D                                                                   from "./SmileyHand2D";
-import        SmileyMouth2D                                                                  from "./SmileyMouth2D";
-import type { SmileyPaint                                                                  } from "./faceDrawing2D";
-import      { SMILEY_FACE_R, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
+import type { FaceObject, HandObject, HeartObject } from "../objects/faceObjects";
+import type { FaceState, RGB                      } from "../state/faceState";
+import        SmileyExtras2D                        from "./SmileyExtras2D";
+import        SmileyEye2D                           from "./SmileyEye2D";
+import        SmileyHand2D                          from "./SmileyHand2D";
+import        SmileyHeart2D                         from "./SmileyHeart2D";
+import        SmileyMouth2D                         from "./SmileyMouth2D";
+import type { SmileyPaint                         } from "./faceDrawing2D";
+import      { SMILEY_BLUSH_X, SMILEY_BLUSH_Y, SMILEY_FACE_R, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
 
 // Room around the face in the viewport
 const SMILEY_VIEW_TOP    = 55;   // Above the face, for bounces and the Zs
 const SMILEY_VIEW_SIDE   = 28;   // Beside the face, for sways and the hearts
 const SMILEY_VIEW_BOTTOM = 32;   // Below the face, for its shadow, icicles, and a hand on the chin
 
-// Cheeks (a soft round glow that fades to nothing at its edge)
-const SMILEY_BLUSH_X   = 60;   // Cheek distance from the center line
-const SMILEY_BLUSH_Y   = 9;    // Cheek height
+// Cheeks (a soft round glow that fades to nothing at its edge; where they sit is in `faceDrawing2D`)
 const SMILEY_BLUSH_RX  = 33;   // Cheek half-width
 const SMILEY_BLUSH_RY  = 21;   // Cheek half-height
 const SMILEY_BLUSH_HEX = "#ff6f8e";
@@ -234,17 +236,28 @@ export default function SmileyFace2D({face}: {
                     <ellipse cx={-SMILEY_BLUSH_X} cy={SMILEY_BLUSH_Y} rx={SMILEY_BLUSH_RX} ry={SMILEY_BLUSH_RY} fill={paint.blush} opacity={face.blush} />
                     <ellipse cx={ SMILEY_BLUSH_X} cy={SMILEY_BLUSH_Y} rx={SMILEY_BLUSH_RX} ry={SMILEY_BLUSH_RY} fill={paint.blush} opacity={face.blush} />
 
-                    {/* Eyes, mouth, animated extras, and the hands in front of them all */}
+                    {/* Eyes, mouth, and animated extras */}
                     <SmileyEye2D    side={-1} face={face} paint={paint} />
                     <SmileyEye2D    side={ 1} face={face} paint={paint} />
                     <SmileyMouth2D            face={face} paint={paint} />
                     <SmileyExtras2D           face={face} paint={paint} />
-                    <SmileyHand2D             face={face} paint={paint} />
+
+                    {/* Objects: hearts, then the hands in front of everything (a hand's key holds its shape while two crossfade) */}
+                    {face.objects.filter(isHeart).map((heart: HeartObject) => <SmileyHeart2D key={heart.key}                   heart={heart} timeSec={face.timeSec} paint={paint} />)}
+                    {face.objects.filter(isHand ).map((hand : HandObject ) => <SmileyHand2D  key={`${hand.key}-${hand.shape}`} hand={hand}                          paint={paint} />)}
                 </g>
             </g>
         </svg>
     );
 }
+
+
+// --------------------------------------------------------------------------------
+// Object Helpers
+// --------------------------------------------------------------------------------
+// Whether an object is a floating heart, or a hand
+function isHeart(object: FaceObject): object is HeartObject { return object.kind === "heart"; }
+function isHand (object: FaceObject): object is HandObject  { return object.kind === "hand";  }
 
 
 // --------------------------------------------------------------------------------

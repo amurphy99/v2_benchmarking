@@ -39,7 +39,7 @@ import type { ReactElement, Ref } from "react";
 // From this project
 import   GltfRobotAvatar          from "./GltfRobotAvatar";
 import   SmileyAvatar             from "./smiley/SmileyAvatar";
-import { SMILEY_EXPRESSION_LIST } from "./smiley/state/faceState";
+import { SMILEY_EXPRESSION_LIST } from "./smiley/actions/faceExpressions";
 
 
 // --------------------------------------------------------------------------------

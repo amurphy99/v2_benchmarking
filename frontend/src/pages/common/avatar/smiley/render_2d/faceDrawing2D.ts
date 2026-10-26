@@ -3,17 +3,20 @@
 `@frontend/src/pages/common/avatar/smiley/render_2d/faceDrawing2D`
 
 Shared by `SmileyFace2D` and its parts (`SmileyEye2D`, `SmileyMouth2D`,
-`SmileyHand2D`, `SmileyExtras2D`). Every size is in SVG units: the face is a
-radius-100 circle at the origin, and negative y is up. Feature positions are
-relative to the feature group, which slides with the head turn; eye shapes are
-relative to their eye's center, and mouth shapes to the mouth's center.
+`SmileyExtras2D`); the objects (hands, hearts) have their own shapes and helpers
+in `objectDrawing2D`. Every size is in SVG units: the face is a radius-100
+circle at the origin, and negative y is up. Feature positions are relative to
+the feature group, which slides with the head turn; eye shapes are relative to
+their eye's center, and mouth shapes to the mouth's center. The feature
+positions here also place the objects' named spots (`objects/faceObjects`).
 
 Brows, closed-eye arcs, and the lip line are tapered like iOS emoji strokes:
 filled outlines ("ribbons") that are thickest in the middle and thin at the
 ends, rather than lines of one width.
 
-The tear, the Zs, the floating hearts, and the spiral spin are animated from
-`face.timeSec`, so the renderer stays a pure function of the face it is given.
+The tear, the Zs, and the spiral spin are animated from the face's clocks
+(`timeSec`, `expressionSec`), so the renderer stays a pure function of the face
+it is given.
 
 */
 import type { FaceState } from "../state/faceState";
@@ -22,15 +25,17 @@ import type { FaceState } from "../state/faceState";
 export const SMILEY_FACE_R       = 100;   // Face radius
 export const SMILEY_TURN_SHIFT_X = 26;    // Feature slide at a full left or right turn
 export const SMILEY_TURN_SHIFT_Y = 20;    // Feature slide at a full up or down turn
+export const SMILEY_EYE_X        = 37;    // Eye distance from the center line
+export const SMILEY_EYE_Y        = -24;   // Eye height
 export const SMILEY_MOUTH_Y      = 38;    // Mouth corner height
+export const SMILEY_BLUSH_X      = 60;    // Cheek distance from the center line
+export const SMILEY_BLUSH_Y      = 9;     // Cheek height
 
 // Colors and line widths the parts share
 export const SMILEY_SPIRAL_STROKE_W = 3.5;         // Spiral eyes
 export const SMILEY_RIBBON_EDGE_W   = 1.2;         // Outline drawn around each ribbon so its ends come out round
 
 // Open eyes
-const SMILEY_EYE_X       = 37;     // Eye distance from the center line
-const SMILEY_EYE_Y       = -24;    // Eye height
 const SMILEY_EYE_R       = 16.1;   // Radius of a round open eye (an oval eye keeps the same area)
 const SMILEY_EYE_MIN_RY  = 1.5;    // Closed eyes stay a thin line
 const SMILEY_GAZE_SHIFT  = 16;     // Farthest the eyes move for gaze
@@ -110,19 +115,6 @@ const SMILEY_ZZZ_MIN_SIZE   = 16;    // Z size at the start and end of its rise
 const SMILEY_ZZZ_MAX_SIZE   = 34;
 const SMILEY_ZZZ_COUNT      = 3;     // Zs in the air at once
 const SMILEY_ZZZ_PERIOD_SEC = 3.0;   // One Z's rise
-
-// Floating hearts (each bobs and pulses at its own spot around the head)
-const SMILEY_HEART_SPOTS: [number, number][] = [[-96, -50], [94, -68], [98, 40]];
-const SMILEY_HEART_SIZE   = 11;    // Heart half-width
-const SMILEY_HEART_BOB    = 4;     // Bob height
-const SMILEY_HEART_BOB_HZ = 0.8;   // Bobs per second
-const SMILEY_HEART_PULSE  = 0.12;  // Size change at the top of a pulse
-
-// Heart with a half-width of 1, centered on the origin
-export const SMILEY_HEART_PATH = "M 0 0.85 C -0.3 0.6 -1 0.1 -1 -0.35 C -1 -0.85 -0.35 -1.05 0 -0.55 C 0.35 -1.05 1 -0.85 1 -0.35 C 1 0.1 0.3 0.6 0 0.85 Z";
-
-// Tear drop with a half-width of 1, its round end at the origin and its point upward
-export const SMILEY_TEAR_PATH = "M 0 -2 C 0.45 -1.2 1 -0.6 1 0 A 1 1 0 0 1 -1 0 C -1 -0.6 -0.45 -1.2 0 -2 Z";
 
 
 // --------------------------------------------------------------------------------
@@ -391,19 +383,6 @@ export function zzzSprites(face: FaceState): Sprite[] {
             y       : SMILEY_ZZZ_Y - (phase * SMILEY_ZZZ_RISE),
             size    : SMILEY_ZZZ_MIN_SIZE + (phase * (SMILEY_ZZZ_MAX_SIZE - SMILEY_ZZZ_MIN_SIZE)),
             opacity : face.zzz * Math.sin(Math.PI * phase),
-        };
-    });
-}
-
-// Hearts bobbing and pulsing at their spots around the head
-export function heartSprites(face: FaceState): Sprite[] {
-    return SMILEY_HEART_SPOTS.map(([x, y]: [number, number], i: number): Sprite => {
-        const beat = 2 * Math.PI * ((face.timeSec * SMILEY_HEART_BOB_HZ) + (i / SMILEY_HEART_SPOTS.length));
-        return {
-            x       : x,
-            y       : y + (SMILEY_HEART_BOB * Math.sin(beat)),
-            size    : SMILEY_HEART_SIZE * face.hearts * (1 + (SMILEY_HEART_PULSE * Math.sin(2 * beat))),
-            opacity : face.hearts,
         };
     });
 }

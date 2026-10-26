@@ -15,13 +15,15 @@ that favors one side is written once and listed a second time through
 bottom are shared with the animations and passive motions.
 
 */
-import type { FaceState } from "../state/faceState";
+import type { ObjectOffsets                                             } from "../objects/faceObjects";
+import      { mirrorObjectOffsets, scaleObjectOffsets, sumObjectOffsets } from "../objects/faceObjects";
+import type { FaceState                                                 } from "../state/faceState";
 
 // Plays every motion faster (above 1) or slower (below 1)
 const SMILEY_MOTION_SPEED = 1;
 
 // Offsets that point left or right, which a mirrored motion negates (up and down stay as they are)
-const SMILEY_MIRRORED_OFFSETS: (keyof MotionOffsets)[] = ["gazeX", "turnX", "tilt", "offsetX"];
+const SMILEY_MIRRORED_OFFSETS: NumberOffsetKey[] = ["gazeX", "turnX", "tilt", "offsetX"];
 
 // Length and size of each motion (turn and gaze run -1 to 1; `shift` and `height` move the
 // whole face, in face radii; `degrees` is head tilt)
@@ -37,8 +39,12 @@ const SMILEY_HEAD_TILT_MOTION   = {durationMs: 1_600,                           
 // --------------------------------------------------------------------------------
 // Motion Types
 // --------------------------------------------------------------------------------
-// Face fields a motion moves, as offsets added to the expression, plus `grow`: a size change as a fraction (0.01 is 1% bigger)
-export type MotionOffsets = Partial<Pick<FaceState, "gazeX" | "gazeY" | "turnX" | "turnY" | "tilt" | "offsetX" | "offsetY"> & {grow: number}>;
+// Face fields a motion moves, as offsets added to the expression, plus `grow` (a size change as a fraction: 0.01 is 1% bigger)
+// and `objects` (offsets for the face's objects, by key, like "hand-left")
+export type MotionOffsets = Partial<Pick<FaceState, "gazeX" | "gazeY" | "turnX" | "turnY" | "tilt" | "offsetX" | "offsetY"> & {grow: number; objects: Record<string, ObjectOffsets>}>;
+
+// The number fields of a set of offsets (everything but `objects`)
+type NumberOffsetKey = Exclude<keyof MotionOffsets, "objects">;
 
 // One named motion: its length and its offsets over time
 export type FaceMotion = {
@@ -166,26 +172,34 @@ export function randomBetween(low: number, high: number): number {
 // --------------------------------------------------------------------------------
 // Offset Helpers
 // --------------------------------------------------------------------------------
-// One set of offsets flipped left to right (fields that point up or down stay as they are)
+// One set of offsets flipped left to right (fields that point up or down stay as they are; a hand's offsets go to the other hand)
 export function mirrorOffsets(offsets: MotionOffsets): MotionOffsets {
     const flipped = {...offsets};
     for (const key of SMILEY_MIRRORED_OFFSETS) {
         const value = flipped[key];   // A motion moves only some fields
         if (value !== undefined) flipped[key] = -value;
     }
+    if (offsets.objects !== undefined) flipped.objects = mirrorObjectOffsets(offsets.objects);
     return flipped;
 }
 
 // Two sets of offsets added together (a field either one leaves out counts as zero)
 export function addOffsets(a: MotionOffsets, b: MotionOffsets): MotionOffsets {
     const sum = {...a};
-    for (const key of Object.keys(b) as (keyof MotionOffsets)[]) sum[key] = (sum[key] ?? 0) + (b[key] ?? 0);
+    for (const key of numberKeys(b)) sum[key] = (sum[key] ?? 0) + (b[key] ?? 0);
+    if (b.objects !== undefined) sum.objects = sumObjectOffsets(a.objects ?? {}, b.objects);
     return sum;
 }
 
 // Offsets scaled by one amount (0 leaves no offset, 1 keeps them as they are)
 export function scaleOffsets(offsets: MotionOffsets, amount: number): MotionOffsets {
     const scaled = {...offsets};
-    for (const key of Object.keys(offsets) as (keyof MotionOffsets)[]) scaled[key] = (offsets[key] ?? 0) * amount;
+    for (const key of numberKeys(offsets)) scaled[key] = (offsets[key] ?? 0) * amount;
+    if (offsets.objects !== undefined) scaled.objects = scaleObjectOffsets(offsets.objects, amount);
     return scaled;
+}
+
+// The number fields a set of offsets has
+function numberKeys(offsets: MotionOffsets): NumberOffsetKey[] {
+    return (Object.keys(offsets) as (keyof MotionOffsets)[]).filter((key: keyof MotionOffsets): key is NumberOffsetKey => key !== "objects");
 }

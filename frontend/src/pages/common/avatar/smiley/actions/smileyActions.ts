@@ -4,7 +4,7 @@
 
 Every name in these categories is part of the smiley's public API:
 
-  - Expressions (`state/faceState.ts`): faces that change the face's shapes
+  - Expressions (`faceExpressions.ts`): faces that change the face's shapes
   - Movements (`faceMotions.ts`): head and eye motions that leave the face alone
   - Animations (`faceAnimations.ts`): a face combined with movement or breath
 
@@ -19,9 +19,9 @@ whatever the name is and ignores the kind, so a name works under either one.
 
 */
 import type { FaceState                              } from "../state/faceState";
-import      { expressionFace, SMILEY_EXPRESSION_LIST } from "../state/faceState";
 import type { FaceAnimation                          } from "./faceAnimations";
 import      { animationFor, SMILEY_ANIMATION_LIST    } from "./faceAnimations";
+import      { expressionFace, SMILEY_EXPRESSION_LIST } from "./faceExpressions";
 import type { FaceMotion                             } from "./faceMotions";
 import      { motionFor, SMILEY_MOVEMENT_NAMES       } from "./faceMotions";
 

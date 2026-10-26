@@ -11,10 +11,11 @@ Each animation frame combines several layers into one `FaceState`:
      animation with a face (the yawn) shows it on top by an amount over its
      length, while the face underneath settles to rest (mostly hidden), so it
      fades out onto the resting face
-  2) the offsets of the movement or timed animation playing (one at a time),
-     plus the passive motions from `passiveMotions.ts`: a slight sway or a head
-     cock while listening (never during a movement or animation), and the
-     breathing (`breathing.ts`), which always plays
+  2) the offsets of the movement or timed animation playing (one at a time;
+     they can move the face's objects too, by key), plus the passive motions
+     from `passiveMotions.ts`: a slight sway or a head cock while listening
+     (never during a movement or animation), and the breathing
+     (`breathing.ts`), which always plays
   3) gaze: a point the page sets, else the speech phase's look (away at pauses
      and over the last few words of a reply, back at the user as it finishes),
      else one picked by the conversation state, else small idle glances. Every
@@ -31,7 +32,7 @@ handle methods only write refs (or steer the breathing), so the page can call
 them as often as it likes; the frame loop reads them on its next tick.
 
 The constants below are the tuning knobs for these layers. Each face lives in
-`state/faceState.ts` or `actions/faceAnimations.ts`, movement sizes and
+`actions/faceExpressions.ts` or `actions/faceAnimations.ts`, movement sizes and
 speeds in `actions/faceMotions.ts`, and the breathing rhythm in
 `behavior/breathing.ts`.
 
@@ -41,14 +42,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // From this project
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
 import type { FaceAnimation                                             } from "./actions/faceAnimations";
+import      { expressionFace, SMILEY_SLEEPING_FACE                      } from "./actions/faceExpressions";
 import type { FaceMotion, MotionOffsets                                 } from "./actions/faceMotions";
 import      { addOffsets, randomBetween, smoothstep                     } from "./actions/faceMotions";
 import      { resolveSmileyAction                                       } from "./actions/smileyActions";
 import      { createBreathing                                           } from "./behavior/breathing";
 import      { createPassiveScheduler                                    } from "./behavior/passiveMotions";
+import      { applyObjectOffsets                                        } from "./objects/faceObjects";
 import type { FaceState                                                 } from "./state/faceState";
-import      { blendFace, expressionFace, fullFace                       } from "./state/faceState";
-import      { SMILEY_BASE_FACE, SMILEY_SLEEPING_FACE                    } from "./state/faceState";
+import      { blendFace, fullFace                                       } from "./state/faceState";
+import      { SMILEY_BASE_FACE                                          } from "./state/faceState";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -382,6 +385,7 @@ export function useFaceController(
                 tilt          : expression.tilt    + (offsets.tilt    ?? 0) + (wander * sway),
                 offsetX       : expression.offsetX + (offsets.offsetX ?? 0),
                 offsetY       : expression.offsetY + (offsets.offsetY ?? 0),
+                objects       : applyObjectOffsets(expression.objects, offsets.objects ?? {}),
                 eyeOpen       : expression.eyeOpen * blink,
                 eyeScale      : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
                 brows         : browsAlways ? 1 : expression.brows,
