@@ -46,7 +46,7 @@ class ActivityChatConsumer(ChatConsumer):
     # ================================================================================
     # Modified response method
     # ================================================================================
-    async def response_method(self, context_buffer) -> dict:
+    async def response_method(self, context_buffer) -> dict[str, object]:
         """
         Wraps rag_response_fn with the closing flow.
 

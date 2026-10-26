@@ -59,7 +59,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await format_send_actions_command(self, payload)
 
     # Generate a spoken response using the standard method 
-    async def response_method(self, context_buffer: list[tuple[str, str, float]]) -> str:
+    async def response_method(self, context_buffer: list[tuple[str, str, float]]) -> str | dict[str, object]:
         # Send the resulting emotion to the client & return just the message text
         response: CognibotResponse = await get_LLM_response(context_buffer)
         await self.send_response_mood(response.response_mood)

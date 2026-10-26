@@ -24,11 +24,11 @@ def build_openai_client():
     """
     Builds a plain AsyncOpenAI client for unstructured/plain text responses.
     """
-    base = os.getenv("LLM_BASE_URL", "127.0.0.1")
+    base = os.getenv("IU_URL", "127.0.0.1")
 
     llm_url = get_full_llm_url(base)
 
-    llm_key = os.getenv("LLM_GATEWAY_TOKEN") or "SAMPLE_TOKEN"
+    llm_key = os.getenv("IU_KEY") or "SAMPLE_TOKEN"
     timeout = float(os.getenv("LLM_TIMEOUT", "20"))
 
     return AsyncOpenAI(
@@ -43,11 +43,11 @@ def build_instructor_client():
     """
     
     # For chat completions we want base like: http://host:PORT/v1
-    base = os.getenv("LLM_BASE_URL", "127.0.0.1")
+    base = os.getenv("IU_URL", "127.0.0.1")
     
     llm_url = get_full_llm_url(base)
 
-    llm_key = os.getenv("LLM_GATEWAY_TOKEN") or "SAMPLE_TOKEN"
+    llm_key = os.getenv("IU_KEY") or "SAMPLE_TOKEN"
     timeout = float(os.getenv("LLM_TIMEOUT", "20"))
 
     openai_client = AsyncOpenAI(

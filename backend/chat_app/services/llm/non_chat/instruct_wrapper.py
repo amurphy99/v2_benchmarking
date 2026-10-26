@@ -33,8 +33,8 @@ from ..endpoint import LLM_URL, API_KEY, TEMPERATURE
 class InstructWrapper:
 
     # Initialize static variables from the environment
-    API_KEY  = os.getenv("LLM_GATEWAY_TOKEN", "DEFAULT_TOKEN")
-    BASE_URL = os.getenv("LLM_BASE_URL",      "127.0.0.1"    )
+    API_KEY  = os.getenv("IU_KEY", "DEFAULT_TOKEN")
+    BASE_URL = os.getenv("IU_URL",      "127.0.0.1"    )
     FULL_URL = f"http://{BASE_URL}:8080/v1"
 
     # Initialize an asynchronous OpenAI client instance to use
