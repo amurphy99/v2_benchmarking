@@ -18,6 +18,8 @@ There are two kinds:
     passive motion already playing fades out. A passive motion also fades out
     when the conversation state changes to one it does not play in.
     Expressions never block them, so the face can still sway while it smiles.
+    A backend setup can switch them off (`auto.listening_motions`), which holds
+    them the same way.
   - continuous ("breath"): one player that always runs and never rests, like
     breathing (`breathing.ts`). The controller hands it in, since animations
     and the page also steer it (a yawn's deep breath, a breath before speaking).
@@ -83,19 +85,19 @@ const SMILEY_PASSIVE_MOTIONS: PassiveMotion[] = [
 // Passive Scheduler
 // ================================================================================
 // Return a function the frame loop calls once per frame for the passive offsets to add to the face
-export function createPassiveScheduler(startMs: number, continuous: Record<ContinuousChannel, ContinuousPlayer>): (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean) => MotionOffsets {
+export function createPassiveScheduler(startMs: number, continuous: Record<ContinuousChannel, ContinuousPlayer>): (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean, episodicOn: boolean) => MotionOffsets {
     // Each episodic channel starts with a rest
     const channels: Record<EpisodicChannel, ChannelState> = {head: {playing: null, nextAt: startMs + restMs()}};
 
-    return (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean): MotionOffsets => {
+    return (nowMs: number, dtSec: number, conversation: ConversationState, motionPlaying: boolean, episodicOn: boolean): MotionOffsets => {
         // Continuous channels always play
         let total: MotionOffsets = {};
         for (const play of Object.values(continuous)) total = addOffsets(total, play(nowMs, dtSec));
 
         // Episodic channels take turns among their motions
         for (const [channel, state] of Object.entries(channels) as [EpisodicChannel, ChannelState][]) {
-            // 1) A movement or animation holds the channel, and the rest after it starts once it ends
-            const held = motionPlaying && SMILEY_EPISODIC_CHANNELS[channel].heldByMotions;
+            // 1) A movement or animation holds the channel (and so does switching these motions off), and the rest after it starts once it ends
+            const held = (motionPlaying && SMILEY_EPISODIC_CHANNELS[channel].heldByMotions) || !episodicOn;
             if (held) state.nextAt = Math.max(state.nextAt, nowMs + SMILEY_PASSIVE_GAP_MIN_MS);
 
             // 2) After the rest, pick one of the motions allowed now (none allowed rests again)

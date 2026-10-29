@@ -16,8 +16,12 @@ On the wire, `robot_action` frames still carry the protocol's two kinds
 (`CLIENT_PROTOCOL.md` §3.1): the buttons send Expressions and moods as
 "emotion", and Movements and Animations as "animation". The smiley plays
 whatever the name is and ignores the kind, so a name works under either one.
+Backend plans (`AVATAR_PLANS.md`) name them by category instead, and
+`SMILEY_PLAN_CATALOG` is the list a plan's names are checked against.
 
 */
+import type { PlanCatalog                            } from "@/hooks/live-chat/avatarPlanFrames";
+import      { GAZE_FRAMES, PROP_NAMES                } from "@/hooks/live-chat/avatarPlanFrames";
 import type { FaceState                              } from "../state/faceState";
 import type { FaceAnimation                          } from "./faceAnimations";
 import      { animationFor, SMILEY_ANIMATION_LIST    } from "./faceAnimations";
@@ -70,6 +74,15 @@ export const SMILEY_ACTION_SECTIONS: ActionSection[] = [
     {category: "Movements",   kind: "animation", actions: SMILEY_MOVEMENT_NAMES .map((name: string)  => ({label: name,               name}))},
     {category: "Animations",  kind: "animation", actions: SMILEY_ANIMATION_LIST .map(({name, emoji}) => ({label: (emoji === null) ? name : `${emoji} ${name}`, name}))},
 ];
+
+// What a backend plan can ask of the smiley: every public name by category, the map, and every gaze frame (`AVATAR_PLANS.md` §9)
+export const SMILEY_PLAN_CATALOG: PlanCatalog = {
+    expressions : SMILEY_EXPRESSION_LIST.map(({name}: {name: string}) => name),
+    movements   : SMILEY_MOVEMENT_NAMES,
+    animations  : SMILEY_ANIMATION_LIST.map(({name, kind}: {name: string; kind: "held" | "timed"}) => ({name, kind})),
+    props       : [...PROP_NAMES],
+    gazeFrames  : [...GAZE_FRAMES],
+};
 
 // A public name, or a mood (a random one of its names), ignoring case and kind (null for anything else)
 export function resolveSmileyAction(label: string): SmileyAction | null {

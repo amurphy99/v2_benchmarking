@@ -2,8 +2,10 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/avatar_demo/components/MapTaskGroup`
 
-Shown for avatars that list the `mapTask` feature. The page remounts it when the
-avatar changes, since a newly picked avatar starts without a map.
+Shown for avatars whose plan catalog has the map. Each button runs one plan step
+(a `prop` action, `AVATAR_PLANS.md` §3.3) straight on the avatar. The page
+remounts it when the avatar changes, since a newly picked avatar starts without
+a map.
 
 */
 import type { ReactElement, RefObject } from "react";
@@ -11,10 +13,8 @@ import      { useState                } from "react";
 
 // From this project
 import      { btnClass, buttonSectionHeader, groupDivStyle } from "@/hooks/chat-listener/chat-controls/styles";
-import type { AvatarHandle, MapTaskConfig                  } from "@/pages/common/avatar/avatarRegistry";
-
-// Settings the map is held with (raise it while thinking, glance at it while listening, eyes on the map)
-const DEMO_MAP_CONFIG: MapTaskConfig = {raiseWhen: "thinking", listenGlances: true, eyesOnMap: true};
+import type { PropAction                                   } from "@/hooks/live-chat/avatarPlanFrames";
+import type { AvatarHandle                                 } from "@/pages/common/avatar/avatarRegistry";
 
 // Each section's small label
 const DEMO_SECTION_LABEL = "text-xs opacity-60";
@@ -30,10 +30,13 @@ export default function MapTaskGroup({avatarRef}: {
     // Whether the avatar was last handed the map
     const [holding, setHolding] = useState<boolean>(false);
 
+    // Move the map with one `prop` step
+    const moveMap = (prop: PropAction): void => { avatarRef.current?.runPlanStep?.({prop}); };
+
     // Hand it the map, or take it away
     const changeHolding = (on: boolean): void => {
         setHolding(on);
-        avatarRef.current?.setMapTask?.(on ? DEMO_MAP_CONFIG : null);
+        moveMap({hold: on ? "map" : null, raise: null, move_ms: null});
     };
 
     return (
@@ -54,8 +57,8 @@ export default function MapTaskGroup({avatarRef}: {
                 <div>
                     <div className={DEMO_SECTION_LABEL}>Raise or lower it</div>
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                        <button className={btnClass(!holding, "secondary")} disabled={!holding} onClick={() => avatarRef.current?.mapCue?.({cue: "raise"})}>Raise</button>
-                        <button className={btnClass(!holding, "secondary")} disabled={!holding} onClick={() => avatarRef.current?.mapCue?.({cue: "lower"})}>Lower</button>
+                        <button className={btnClass(!holding, "secondary")} disabled={!holding} onClick={() => moveMap({raise: 1, move_ms: null})}>Raise</button>
+                        <button className={btnClass(!holding, "secondary")} disabled={!holding} onClick={() => moveMap({raise: 0, move_ms: null})}>Lower</button>
                     </div>
                 </div>
             </div>

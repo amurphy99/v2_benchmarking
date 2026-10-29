@@ -41,7 +41,11 @@ rest.
  ├── behavior/                 # Things the avatar does on its own
  │   ├── passiveMotions.ts     # Passive motions on channels (listening sway, head cock; breathing's channel)
  │   ├── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
- │   └── mapTask.ts            # The Map Task map: holding it, raising and lowering it
+ │   ├── gaze.ts               # Where the eyes and head point: automatic looks, and plans' looks and poses
+ │   └── mapTask.ts            # The Map Task map: picked up or put away, raised or lowered
+ │
+ ├── plans/
+ │   └── smileyStepRunner.ts   # One backend plan step, each action through the face controller's levers
  │
  ├── objects/
  │   └── faceObjects.ts        # Objects (hands, hearts): face spots, placement, blending, animation offsets
@@ -89,14 +93,23 @@ Outside this folder:
    2. **Offsets:** the movement or timed animation playing (one at a time),
       plus the passive motions: a sway or head cock while listening (never
       during a movement or animation) and breathing (always).
-   3. **Gaze**, by priority: a point the page set → the speech phase's look →
-      the conversation state's look → small idle glances around the user.
-   4. **Wander:** a slow drift for faces that set `wander` (Ponder).
-   5. **Blinks**, at random gaps.
+   3. **The map** (`behavior/mapTask.ts`), when it is held: how far into view,
+      and how far raised.
+   4. **Gaze** (`behavior/gaze.ts`), by priority: a point the page set → a
+      backend plan's look (a point on the user, the screen, or the map, a scan,
+      or a trace) → the speech phase's look → the conversation state's look →
+      small idle glances around the user. Faces that set `wander` (Ponder) add
+      a slow drift, and a plan can hold the head in a pose.
+   5. **Blinks**, at random gaps or when a plan asks.
    6. **Listening look and mouth:** slightly bigger eyes while listening, and the
       voice level the page reports.
    7. **Combine** into one `FaceState`, including the objects (with any
       animation offsets applied).
+
+   Backend plans (`../AVATAR_PLANS.md`, a draft) reach these layers through
+   `runPlanStep`, one step at a time (`plans/smileyStepRunner.ts`), and a setup
+   through `applySetup` picks the resting face and which automatic behaviors
+   run.
 3. **The renderer draws it** (`render_2d/SmileyFace2D.tsx`). Anything animated
    in the drawing (the tear's drip, the Zs, a heart's bob) is worked out from the
    face's clocks (`timeSec`, `expressionSec`), so drawing stays a pure function.

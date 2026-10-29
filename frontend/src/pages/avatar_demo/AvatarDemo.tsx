@@ -245,7 +245,7 @@ export function AvatarDemo(): ReactElement {
                     ) : null}
 
                     {/* Map Task map (a new avatar starts without one, so the group starts fresh with it) */}
-                    {entry.features.includes("mapTask") ? <MapTaskGroup key={avatarId} avatarRef={avatarRef} /> : null}
+                    {(entry.plans?.props.includes("map") === true) ? <MapTaskGroup key={avatarId} avatarRef={avatarRef} /> : null}
                 </div>
 
                 {/* -------------------------------------------------------------------------------- */}

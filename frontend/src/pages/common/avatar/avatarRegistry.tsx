@@ -22,6 +22,10 @@ The smiley matches an action by its name in its own three categories
 only that far from the resting face. It is not on the wire yet, so only the
 avatar demo passes it for now.
 
+`runPlanStep` and `applySetup` carry the backend's avatar plans and setups
+(`AVATAR_PLANS.md`, a draft), which `plans/useAvatarPlans` runs for an avatar
+whose entry lists the names it can run (`plans`).
+
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
 for the rest. `sleep` and `wake` let the chat page doze an avatar while the
@@ -41,9 +45,11 @@ NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
 import type { ReactElement, Ref } from "react";
 
 // From this project
-import   GltfRobotAvatar          from "./GltfRobotAvatar";
-import   SmileyAvatar             from "./smiley/SmileyAvatar";
-import { SMILEY_EXPRESSION_LIST } from "./smiley/actions/faceExpressions";
+import type { AvatarSetup, PlanCatalog, StepActions } from "@/hooks/live-chat/avatarPlanFrames";
+import        GltfRobotAvatar                         from "./GltfRobotAvatar";
+import        SmileyAvatar                            from "./smiley/SmileyAvatar";
+import      { SMILEY_EXPRESSION_LIST                } from "./smiley/actions/faceExpressions";
+import      { SMILEY_PLAN_CATALOG                   } from "./smiley/actions/smileyActions";
 
 
 // --------------------------------------------------------------------------------
@@ -63,19 +69,7 @@ export type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 export type SpeechPhase = "none" | "talking" | "pausing" | "wrapping-up" | "finishing";
 
 // Optional handle methods an avatar implements
-export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "speechGaze" | "sleep" | "mapTask";
-
-// How an avatar holding a Map Task map behaves (each setting can change between test conditions)
-export type MapTaskConfig = {
-    raiseWhen     : "thinking" | "cue";   // Raise the map on its own as it starts thinking, or only on a cue
-    listenGlances : boolean;              // Glance down at the map now and then while listening
-    eyesOnMap     : boolean;              // Scan, lock on, and trace on the map (off: it looks at the map's middle)
-};
-
-// What to do with the map (snake_case, so a cue can go over the wire unchanged)
-export type MapCue =
-    | {cue: "raise"}    // Raise it to search
-    | {cue: "lower"};   // Lower it and look back at the user
+export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "speechGaze" | "sleep";
 
 // Framing the page asks for (avatars that always fill their box ignore it)
 export type AvatarZoom = "head" | "body";
@@ -93,8 +87,8 @@ export interface AvatarHandle {
     sleep                ? : (                                       ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
     wake                 ? : (                                       ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
     prepareToSpeak       ? : (inMs?:  number                         ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
-    setMapTask           ? : (config: MapTaskConfig | null           ) => void;       // Hold a Map Task map with these settings (null puts it away)
-    mapCue               ? : (cue:    MapCue                         ) => void;       // Do something with the map it holds
+    runPlanStep          ? : (actions: StepActions                   ) => number;     // Do one backend plan step's actions now, returning how long they take (`AVATAR_PLANS.md`)
+    applySetup           ? : (setup:   AvatarSetup | null            ) => void;       // Take the session's settings from the backend (null clears them)
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes
@@ -112,6 +106,7 @@ export type AvatarEntry = {
     label          : string;                                 // Name shown in avatar pickers
     features       : AvatarFeature[];                        // Optional handle methods it implements
     restingOptions : RestingOption[];                        // Faces it can rest on, default first (empty without `setRestingExpression`)
+    plans          : PlanCatalog | null;                     // Names a backend plan can use with it (null: it can't run plans)
     render         : (props: AvatarProps) => ReactElement;   // Builds the avatar element
 };
 
@@ -120,8 +115,8 @@ export type AvatarEntry = {
 // Avatars
 // ================================================================================
 // Clip-based 3D models of the two physical robots
-const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
-const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
+const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], restingOptions: [], plans: null, render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
+const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], restingOptions: [], plans: null, render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
 
 // Any named smiley expression can be its resting face (the catalog lists the default first)
 const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({name, emoji}) => ({label: `${emoji} ${name}`, value: name}));
@@ -130,8 +125,9 @@ const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({nam
 const SMILEY_AVATAR: AvatarEntry = {
     id             : "smiley",
     label          : "Smiley (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep", "mapTask"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
+    plans          : SMILEY_PLAN_CATALOG,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
 
@@ -139,8 +135,9 @@ const SMILEY_AVATAR: AvatarEntry = {
 const SMILEY_BROWS_AVATAR: AvatarEntry = {
     id             : "smiley-brows",
     label          : "Smiley + eyebrows (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep", "mapTask"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
+    plans          : SMILEY_PLAN_CATALOG,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
 
