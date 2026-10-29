@@ -18,6 +18,10 @@ The smiley matches an action by its name in its own three categories
 (Expressions, Movements, Animations) whichever kind it came as
 (`smiley/actions/smileyActions.ts`).
 
+`performAction` also takes an optional `strength` (0 to 1): an expression shown
+only that far from the resting face. It is not on the wire yet, so only the
+avatar demo passes it for now.
+
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
 for the rest. `sleep` and `wake` let the chat page doze an avatar while the
@@ -78,19 +82,19 @@ export type AvatarZoom = "head" | "body";
 
 // Methods every avatar exposes through its `ref`
 export interface AvatarHandle {
-    performAction          : (action: RobotAction          ) => void;       // Act out one backend action
-    reset                  : (                             ) => void;       // Return to Neutral now
-    setGaze              ? : (x: number, y: number         ) => void;       // Look toward a point (-1 to 1 each)
-    clearGaze            ? : (                             ) => void;       // Go back to automatic gaze
-    setConversationState ? : (state: ConversationState     ) => void;       // React to the conversation
-    setSpeechLevel       ? : (level: number                ) => void;       // Voice loudness, 0 to 1
-    setSpeechPhase       ? : (phase: SpeechPhase           ) => void;       // Where it is in its own reply (for where it looks)
-    setRestingExpression ? : (value: string                ) => void;       // Face that "Neutral" means (one of `restingOptions`)
-    sleep                ? : (                             ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
-    wake                 ? : (                             ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
-    prepareToSpeak       ? : (inMs?:  number               ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
-    setMapTask           ? : (config: MapTaskConfig | null ) => void;       // Hold a Map Task map with these settings (null puts it away)
-    mapCue               ? : (cue:    MapCue               ) => void;       // Do something with the map it holds
+    performAction          : (action: RobotAction, strength?: number ) => void;       // Act out one backend action (`strength`, 0-1, shows an expression partway from the resting face)
+    reset                  : (                                       ) => void;       // Return to Neutral now
+    setGaze              ? : (x: number, y: number                   ) => void;       // Look toward a point (-1 to 1 each)
+    clearGaze            ? : (                                       ) => void;       // Go back to automatic gaze
+    setConversationState ? : (state: ConversationState               ) => void;       // React to the conversation
+    setSpeechLevel       ? : (level: number                          ) => void;       // Voice loudness, 0 to 1
+    setSpeechPhase       ? : (phase: SpeechPhase                     ) => void;       // Where it is in its own reply (for where it looks)
+    setRestingExpression ? : (value: string                          ) => void;       // Face that "Neutral" means (one of `restingOptions`)
+    sleep                ? : (                                       ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
+    wake                 ? : (                                       ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
+    prepareToSpeak       ? : (inMs?:  number                         ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
+    setMapTask           ? : (config: MapTaskConfig | null           ) => void;       // Hold a Map Task map with these settings (null puts it away)
+    mapCue               ? : (cue:    MapCue                         ) => void;       // Do something with the map it holds
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes

@@ -53,7 +53,8 @@ import      { createMapTask                         } from "./behavior/mapTask";
 import      { createPassiveScheduler                } from "./behavior/passiveMotions";
 import      { applyObjectOffsets, fadeHands         } from "./objects/faceObjects";
 import type { FaceState                             } from "./state/faceState";
-import      { blendFace, fullFace, SMILEY_BASE_FACE } from "./state/faceState";
+import      { blendFace, faceAtStrength, fullFace   } from "./state/faceState";
+import      { SMILEY_BASE_FACE                      } from "./state/faceState";
 import type { AvatarHandle, ConversationState, MapCue, MapTaskConfig, RobotAction, SpeechPhase } from "../avatarRegistry";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
@@ -204,14 +205,14 @@ export function useFaceController(
         };
 
         // Play an action by its name's category, whichever kind it came as (unknown names fall back to Neutral)
-        const performAction = (action: RobotAction): void => {
+        const performAction = (action: RobotAction, strength: number = 1): void => {
             if ((action.kind !== "emotion") && (action.kind !== "animation")) return;   // Unknown kinds are ignored (`avatarRegistry` contract)
 
             const nowMs      = performance.now();
             const durationMs = action.duration_ms ?? null;
             const resolved   = resolveSmileyAction(action.value);
             if      (resolved === null                  ) showFace(restingRef.current, null, nowMs);
-            else if (resolved.category === "Expressions") showFace(resolved.face, durationMs, nowMs);
+            else if (resolved.category === "Expressions") showFace(faceAtStrength(restingRef.current, resolved.face, strength), durationMs, nowMs);
             else if (resolved.category === "Movements"  ) motionRef.current = {motion: resolved.motion, startMs: nowMs};
             else                                          playAnimation(resolved.animation, durationMs, nowMs);
         };

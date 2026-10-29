@@ -4,7 +4,8 @@
 
 The open eye, the closed-eye arc, the spiral, and the heart all sit on the same
 spot and crossfade by their amounts in the face state. The slanted eyelid is a
-clip that cuts the top off the open eye, so it works over any face color.
+clip that cuts the top off the open eye, and a squint's lower lid is another
+that cuts off its bottom, so both work over any face color.
 
 */
 import type { ReactElement } from "react";
@@ -32,8 +33,10 @@ export default function SmileyEye2D({side, face, paint}: {
     face  : FaceState;     // Combined face for this frame
     paint : SmileyPaint;   // Gradient fills from `SmileyFace2D`
 }): ReactElement {
-    // Eyelid clip id, unique per eye on the page (React's ids may hold characters `url(#...)` rejects)
-    const lidClipId = `smiley-lid-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    // Eyelid clip ids, unique per eye on the page (React's ids may hold characters `url(#...)` rejects)
+    const baseId         = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+    const lidClipId      = `smiley-lid-${baseId}`;
+    const lowerLidClipId = `smiley-lower-lid-${baseId}`;
 
     // The open eye fades out as any other eye style fades in
     const eye         = eyeGeometry(side, face);
@@ -47,11 +50,16 @@ export default function SmileyEye2D({side, face, paint}: {
             ) : null}
 
             <g transform={`translate(${eye.cx} ${eye.cy})`}>
-                {/* Open eye, with the eyelid's slant cutting off its top */}
+                {/* Open eye, with the eyelid's slant cutting off its top and a squint's lower lid its bottom */}
                 <clipPath id={lidClipId}>
                     <rect x={-2 * eye.rx} y={eye.lidEdgeY} width={4 * eye.rx} height={4 * eye.ry} transform={`rotate(${eye.lidDeg} 0 ${eye.lidEdgeY})`} />
                 </clipPath>
-                <ellipse rx={eye.rx} ry={eye.ry} fill={paint.feature} clipPath={`url(#${lidClipId})`} opacity={openOpacity} />
+                <clipPath id={lowerLidClipId}>
+                    <rect x={-2 * eye.rx} y={-2 * eye.ry} width={4 * eye.rx} height={eye.lowerLidY + (2 * eye.ry)} />
+                </clipPath>
+                <g clipPath={`url(#${lowerLidClipId})`}>
+                    <ellipse rx={eye.rx} ry={eye.ry} fill={paint.feature} clipPath={`url(#${lidClipId})`} opacity={openOpacity} />
+                </g>
 
                 {/* Tapered closed-eye arc */}
                 {(face.eyeArc > 0) ? (

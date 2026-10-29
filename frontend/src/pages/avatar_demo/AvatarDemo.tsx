@@ -77,9 +77,10 @@ export function AvatarDemo(): ReactElement {
     const startAvatarId  = getAvatarEntry(searchParams.get("avatar") ?? DEMO_DEFAULT_AVATAR_ID).id;
     const startFace      = searchParams.get("face");
 
-    // Selected avatar, the hold time every action sends (held when the URL names a face), and the actions sent so far
+    // Selected avatar, the hold time and strength every action sends (held when the URL names a face), and the actions sent so far
     const [avatarId,   setAvatarId  ] = useState<string>(startAvatarId);
     const [durationMs, setDurationMs] = useState<number | null>((startFace === null) ? DEMO_DEFAULT_DURATION_MS : null);
+    const [strength,   setStrength  ] = useState<number>(1);
     const [log,        setLog       ] = useState<LoggedAction[]>([]);
     const avatarRef = useRef<AvatarHandle>(null);
     const logIdRef  = useRef<number>(0);
@@ -122,17 +123,17 @@ export function AvatarDemo(): ReactElement {
     // Robot Actions
     // --------------------------------------------------------------------------------
     // Record one action at the top of the log
-    const logAction = (action: RobotAction): void => {
-        const logged: LoggedAction = {...action, id: logIdRef.current, sentAt: Date.now()};
+    const logAction = (action: RobotAction, sentStrength: number = 1): void => {
+        const logged: LoggedAction = {...action, id: logIdRef.current, sentAt: Date.now(), strength: sentStrength};
         logIdRef.current += 1;
         setLog((previous: LoggedAction[]) => [logged, ...previous].slice(0, DEMO_LOG_LENGTH));
     };
 
-    // Send an action the way a live chat would (with the chosen `duration_ms`, or none for "Hold", unless it brings its own)
+    // Send an action the way a live chat would (with the chosen `duration_ms`, or none for "Hold", unless it brings its own), at the chosen strength
     const sendAction = (kind: string, value: string, holdMs: number | null = durationMs): void => {
         const action: RobotAction = (holdMs === null) ? {kind, value} : {kind, value, duration_ms: holdMs};
-        avatarRef.current?.performAction(action);
-        logAction(action);
+        avatarRef.current?.performAction(action, strength);
+        logAction(action, strength);
     };
 
     // Return to Neutral at once
@@ -275,6 +276,8 @@ export function AvatarDemo(): ReactElement {
                         onRestingExpression = {changeRestingExpression}
                         durationMs          = {durationMs}
                         onDurationChange    = {setDurationMs}
+                        strength            = {strength}
+                        onStrengthChange    = {setStrength}
                         onReset             = {resetAvatar}
                     />
                 </DemoSetupModal>

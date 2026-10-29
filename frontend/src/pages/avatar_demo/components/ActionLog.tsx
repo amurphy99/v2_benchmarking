@@ -13,8 +13,8 @@ import type { RobotAction                        } from "@/pages/common/avatar/a
 // How often hold countdowns refresh
 const DEMO_LOG_TICK_MS = 200;
 
-// One sent action, with a log id and when it was sent (`kind: "reset"` marks the Reset button)
-export type LoggedAction = RobotAction & {id: number; sentAt: number};
+// One sent action, with a log id, when it was sent, and its strength (`kind: "reset"` marks the Reset button)
+export type LoggedAction = RobotAction & {id: number; sentAt: number; strength: number};
 
 
 // --------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export default function ActionLog({log}: {
                         <li key={entry.id} className="flex items-baseline justify-between gap-3">
                             <span>
                                 <span className="font-mono text-xs opacity-60">{new Date(entry.sentAt).toLocaleTimeString([], {hour12: false})}</span>
-                                {" "}<b>{entry.value}</b>{" "}<span className="opacity-60">({entry.kind})</span>
+                                {" "}<b>{entry.value}</b>{" "}<span className="opacity-60">({entry.kind}){((entry.kind === "emotion") && (entry.strength < 1)) ? ` at ${Math.round(entry.strength * 100)}%` : ""}</span>
                             </span>
                             <span className="text-right text-xs opacity-70">{actionStatus(entry, entry.id === latestMoodId, nowMs)}</span>
                         </li>

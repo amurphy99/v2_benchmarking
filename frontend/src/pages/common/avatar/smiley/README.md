@@ -40,7 +40,8 @@ rest.
  │
  ├── behavior/                 # Things the avatar does on its own
  │   ├── passiveMotions.ts     # Passive motions on channels (listening sway, head cock; breathing's channel)
- │   └── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
+ │   ├── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
+ │   └── mapTask.ts            # The Map Task map: holding it, raising and lowering it
  │
  ├── objects/
  │   └── faceObjects.ts        # Objects (hands, hearts): face spots, placement, blending, animation offsets
@@ -52,6 +53,7 @@ rest.
      ├── SmileyExtras2D.tsx    # The tear and the sleep Zs
      ├── SmileyHand2D.tsx      # One hand object
      ├── SmileyHeart2D.tsx     # One floating heart object
+     ├── SmileyMap2D.tsx       # The Map Task map and the fists holding it
      ├── faceDrawing2D.ts      # Face layout and shape math (eyes, brows, mouth, extras)
      └── objectDrawing2D.ts    # Object shapes (hands, heart, tear), placement, and lighting
 ```
@@ -144,8 +146,14 @@ backend and the admin panel send them by name.
   animations.
 * **Rules for names:** unique across the three categories, and never the same
   as a mood (a `Thinking` animation would be read as the `Thinking` mood).
-  Expressions are named after the iOS emoji they borrow from; animations and
-  movements are verbs.
+  Expressions are named after the iOS emoji they borrow from (a look no emoji
+  has is named after the look: `Furrowed Brow`, `Squinting Face`, `Wide-Eyed`);
+  animations and movements are verbs.
+* **Strength:** `performAction(action, strength)` shows an expression only
+  partway (0 to 1) from the resting face. Its shapes and tints move partway,
+  while its on-or-off parts (brows, eye styles, the tear, the Zs, the icicles,
+  objects) show fully (`faceAtStrength` in `state/faceState.ts`). No backend
+  frame carries it yet; the demo's Demo Setup has a picker.
 * **Adding one:** an expression or movement is one table entry; an animation is
   one entry (held: just a face; timed: a length, a face amount over time, a
   motion, and an optional breath). Buttons appear automatically.

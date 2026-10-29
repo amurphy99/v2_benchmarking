@@ -5,7 +5,9 @@
 An expression is a set of face field values (changes to the base face in
 `state/faceState.ts`), so a new one is a combination of the existing shapes and
 extras: one line in `SMILEY_EXPRESSIONS`. Expressions are named after the iOS
-emoji they borrow from. They are the "Expressions" category of the smiley's
+emoji they borrow from; a look no emoji has (Furrowed Brow, Squinting Face,
+Wide-Eyed) is named after the look, with the nearest emoji as its label. They
+are the "Expressions" category of the smiley's
 public actions. Faces combined with movement or breath (Ponder, Yawn) are
 animations (`faceAnimations.ts`), and the moods and the lookup that matches an
 incoming action's name to any category are in `smileyActions.ts`.
@@ -90,9 +92,12 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
     "Face with Open Mouth"                   : {emoji: "😮", face: {eyeOval: SMILEY_EYE_CIRCLE, eyeScale: 1.2, mouthOpen: 0.75, mouthWidth: 0.45, mouthCircle: 1, mouthEyeFill: 1, browRaise: 0.6}},
     "Astonished Face"                        : {emoji: "😲", face: {brows: 1, browRaise: 1, browAngle: 0.2, eyeScale: 1.35, mouthCurve: -0.4, mouthOpen: 1.0, mouthWidth: 0.55}},
     "Face with Open Eyes and Hand Over Mouth": {emoji: "🫢", face: {eyeScale: 1.3, brows: 1, browRaise: 0.9, browAngle: 0.3, mouthCurve: -0.3, mouthOpen: 0.5, mouthWidth: 0.6, objects: [{kind: "hand", side: "left", shape: "raised", at: "mouth", dy: 2, angle: -35}]}},
+    "Wide-Eyed"                              : {emoji: "😳", face: {eyeScale: 1.22, eyeOval: SMILEY_EYE_SLIGHT_OVAL, browRaise: 0.65, browAngle: 0.15, mouthCurve: 0.3}},
 
-    // Thinking (Ponder, with the hand on the chin, is an animation)
+    // Thinking and focusing (Ponder, with the hand on the chin, is an animation)
     "Face with Raised Eyebrow" : {emoji: "🤨", face: {brows: 1, browAsym: 0.9, browAngle: -0.2, eyeOpen: 0.85, mouthCurve: -0.1, mouthWidth: 0.6}},
+    "Furrowed Brow"            : {emoji: "🧐", face: {brows: 1, browRaise: -0.5, browAngle: -0.55, browPinch: 6, squint: 0.3, eyeOpen: 0.92, mouthCurve: 0.05, mouthWidth: 0.75}},
+    "Squinting Face"           : {emoji: "😑", face: {squint: 0.6, eyeOpen: 0.85, browRaise: -0.3, browAngle: -0.2, mouthCurve: 0.15, mouthWidth: 0.8}},
 
     // Tired (Yawn is an animation)
     "Sleeping Face" : {emoji: "😴", face: {eyeArc: 1, eyeArcBend: -1, zzz: 1, mouthCurve: -0.1, mouthOpen: 0.3, mouthWidth: 0.32, tilt: -5, browRaise: -0.2}},

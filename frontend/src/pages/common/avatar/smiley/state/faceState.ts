@@ -50,6 +50,7 @@ export type FaceState = {
     eyeInset   : number;   // Eyes moved toward the center line, in SVG units (the brows stay put)
     eyeOval    : number;   // How much taller than wide an open eye is: 0 is a circle (see `SMILEY_EYE_*` in `actions/faceExpressions.ts`)
     lidAngle   : number;   // Eyelid slant, -1 (angry) to 1 (worried)
+    squint     : number;   // Lower lids pushed up into the eyes, 0 to 1 (a peering look)
     eyeArc     : number;   // Closed-eye arcs in place of the open eyes, 0 to 1
     eyeArcBend : number;   // Arc shape, 1 (smiling ^ ^, higher bows more) to -1 (sleeping)
     spiral     : number;   // Dizzy spiral eyes in place of the open eyes, 0 to 1
@@ -60,6 +61,7 @@ export type FaceState = {
     browRaise : number;   // Both brows, -1 (lowered) to 1 (raised)
     browAngle : number;   // Slant, -1 (angry, inner ends down) to 1 (worried, inner ends up)
     browAsym  : number;   // One brow up and the other down, -1 (left up) to 1 (right up)
+    browPinch : number;   // Brows drawn toward the center line, in SVG units (a furrow; the eyes stay put)
 
     // Mouth
     mouthCurve   : number;   // -1 (frown) to 1 (smile)
@@ -115,12 +117,15 @@ export type FaceChanges = Partial<Omit<FaceState, "objects" | "map" | "mapRaise"
 type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "objects" | "map" | "mapRaise" | "timeSec" | "expressionSec">;
 const FACE_NUMBER_KEYS: FaceNumberKey[] = [
     "gazeX", "gazeY", "turnX", "turnY", "tilt", "wander",
-    "eyeOpen", "eyeScale", "eyeInset", "eyeOval", "lidAngle", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
-    "brows", "browRaise", "browAngle", "browAsym",
+    "eyeOpen", "eyeScale", "eyeInset", "eyeOval", "lidAngle", "squint", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
+    "brows", "browRaise", "browAngle", "browAsym", "browPinch",
     "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "mouthRound", "mouthFlatTop", "mouthTopBow", "mouthShift", "mouthSide", "mouthSlant", "mouthCircle", "mouthEyeFill", "teethTop", "teethBottom", "teethGaps", "tongue",
     "tear", "fearShade", "frost", "icicles", "zzz",
     "blush", "warmEdge", "scale", "offsetX", "offsetY",
 ];
+
+// Parts a face shows fully at any strength (shown halfway, a brow or a tear looks like a ghost)
+const FACE_FULL_STRENGTH_KEYS: FaceNumberKey[] = ["brows", "eyeArc", "spiral", "heartEyes", "tear", "zzz", "icicles"];
 
 
 // ================================================================================
@@ -139,6 +144,7 @@ export const SMILEY_BASE_FACE: FaceState = {
     eyeInset      : 0,
     eyeOval       : SMILEY_EYE_OVAL,
     lidAngle      : 0,
+    squint        : 0,
     eyeArc        : 0,
     eyeArcBend    : 1,
     spiral        : 0,
@@ -147,6 +153,7 @@ export const SMILEY_BASE_FACE: FaceState = {
     browRaise     : 0,
     browAngle     : 0,
     browAsym      : 0,
+    browPinch     : 0,
     mouthCurve    : 0.35,
     mouthOpen     : 0,
     mouthWidth    : 1,
@@ -200,4 +207,12 @@ export function blendFace(from: FaceState, to: FaceState, t: number): FaceState 
     const face: FaceState = {...to, faceRgb: [mix(from.faceRgb[0], to.faceRgb[0]), mix(from.faceRgb[1], to.faceRgb[1]), mix(from.faceRgb[2], to.faceRgb[2])], objects: blendObjects(from.objects, to.objects, t)};
     for (const key of FACE_NUMBER_KEYS) face[key] = mix(from[key], to[key]);
     return face;
+}
+
+// A face shown only `strength` of the way from another: its shapes and tints move partway, while its on-or-off
+// parts (brows, eye styles, the tear, the Zs, the icicles, and its objects) show as they do at full strength
+export function faceAtStrength(from: FaceState, face: FaceState, strength: number): FaceState {
+    const partway: FaceState = {...blendFace(from, face, strength), objects: face.objects};
+    for (const key of FACE_FULL_STRENGTH_KEYS) partway[key] = face[key];
+    return partway;
 }
