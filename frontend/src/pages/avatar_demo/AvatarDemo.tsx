@@ -7,7 +7,8 @@ the AdminChat panel shows (`AvatarActionsGroup`, fed by the same capability
 profile). Each button hands a `RobotAction` straight to the avatar's
 `performAction`, the same path a live chat's `robot_action` frames take, so a
 behavior that works here works in a chat. Avatars with optional features (gaze,
-conversation state, speech level, sleep) also get the face controls.
+conversation state, speech level, sleep) also get the face controls, and the
+Smiley gets the Map Task controls.
 
 For tuning one face, the URL can pick the avatar and hold a face from the start
 (`/avatar-demo?avatar=smiley&face=Ponder`), so a reload after an edit
@@ -39,6 +40,7 @@ import        DemoSetupGroup                                              from "
 import        DemoSetupModal                                              from "./components/DemoSetupModal";
 import        FaceControlsGroup                                           from "./components/FaceControlsGroup";
 import type { GazePoint                                                 } from "./components/GazePad";
+import        MapTaskGroup                                                from "./components/MapTaskGroup";
 import      { DEMO_DEFAULT_DURATION_MS                                  } from "./utils/durationOptions";
 import      { useSampleReply                                            } from "./utils/useSampleReply";
 import      { useSimulatedSpeech                                        } from "./utils/useSimulatedSpeech";
@@ -240,6 +242,9 @@ export function AvatarDemo(): ReactElement {
                             onAsleepChange      = {changeAsleep}
                         />
                     ) : null}
+
+                    {/* Map Task map (a new avatar starts without one, so the group starts fresh with it) */}
+                    {entry.features.includes("mapTask") ? <MapTaskGroup key={avatarId} avatarRef={avatarRef} /> : null}
                 </div>
 
                 {/* -------------------------------------------------------------------------------- */}

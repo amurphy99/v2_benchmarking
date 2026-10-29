@@ -9,6 +9,8 @@ renderer reuses every expression and behavior unchanged. Every field is a number
 spirals, hearts), teeth, and the extras are crossfade amounts for the same
 reason. The one exception is `objects`, the hands and hearts the face shows:
 each is placed by its face and blends by its own rules (`objects/faceObjects`).
+The Map Task map's two numbers (`map`, `mapRaise`) never blend either: no named
+face sets them, and the controller's map layer fills them in every frame.
 
 Every named face starts from `SMILEY_BASE_FACE` and lists only what it changes
 (`FaceChanges`, turned into a full face by `fullFace`): the expressions
@@ -81,6 +83,10 @@ export type FaceState = {
     // Objects on and around the face (hands, floating hearts), each placed and faded in by its own numbers
     objects : FaceObject[];
 
+    // The Map Task map, held in front of the body (set by the controller's map layer, never by a face)
+    map      : number;   // How far into view it is held, 0 (put away below the frame) to 1
+    mapRaise : number;   // 0 (lowered to the chin) to 1 (raised to just under the eyes)
+
     // Extras
     tear      : number;   // Tear drop running down one cheek, 0 to 1
     fearShade : number;   // Blue shading over the top of the face, 0 to 1
@@ -103,10 +109,10 @@ export type FaceState = {
 };
 
 // What a named face writes: changes to the base face, with its objects placed by spot (`objects/faceObjects`)
-export type FaceChanges = Partial<Omit<FaceState, "objects">> & {objects?: ObjectPlacement[]};
+export type FaceChanges = Partial<Omit<FaceState, "objects" | "map" | "mapRaise">> & {objects?: ObjectPlacement[]};
 
-// Number fields that blend (everything but the color, the objects, and the clocks)
-type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "objects" | "timeSec" | "expressionSec">;
+// Number fields that blend (everything but the color, the objects, the map, and the clocks)
+type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "objects" | "map" | "mapRaise" | "timeSec" | "expressionSec">;
 const FACE_NUMBER_KEYS: FaceNumberKey[] = [
     "gazeX", "gazeY", "turnX", "turnY", "tilt", "wander",
     "eyeOpen", "eyeScale", "eyeInset", "eyeOval", "lidAngle", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
@@ -159,6 +165,8 @@ export const SMILEY_BASE_FACE: FaceState = {
     teethGaps     : 0,
     tongue        : 0,
     objects       : [],
+    map           : 0,
+    mapRaise      : 0,
     tear          : 0,
     fearShade     : 0,
     frost         : 0,

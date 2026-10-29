@@ -25,6 +25,9 @@ Each animation frame combines several layers into one `FaceState`:
      turns after them more slowly, and its lean sways
   5) blinks at random gaps
   6) the mouth following the voice level the page reports
+  7) the Map Task map, while the page has the avatar hold one (`mapTask.ts`):
+     held in front of the body, raised and lowered (the face's own hands fade
+     out while it holds the map)
 
 Every action arrives through `performAction` and is played by its name's
 category (`smileyActions.ts`): an expression, a movement, or an animation. The
@@ -40,18 +43,18 @@ speeds in `actions/faceMotions.ts`, and the breathing rhythm in
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // From this project
-import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "../avatarRegistry";
-import type { FaceAnimation                                             } from "./actions/faceAnimations";
-import      { expressionFace, SMILEY_SLEEPING_FACE                      } from "./actions/faceExpressions";
-import type { FaceMotion, MotionOffsets                                 } from "./actions/faceMotions";
-import      { addOffsets, randomBetween, smoothstep                     } from "./actions/faceMotions";
-import      { resolveSmileyAction                                       } from "./actions/smileyActions";
-import      { createBreathing                                           } from "./behavior/breathing";
-import      { createPassiveScheduler                                    } from "./behavior/passiveMotions";
-import      { applyObjectOffsets                                        } from "./objects/faceObjects";
-import type { FaceState                                                 } from "./state/faceState";
-import      { blendFace, fullFace                                       } from "./state/faceState";
-import      { SMILEY_BASE_FACE                                          } from "./state/faceState";
+import type { FaceAnimation                         } from "./actions/faceAnimations";
+import      { expressionFace, SMILEY_SLEEPING_FACE  } from "./actions/faceExpressions";
+import type { FaceMotion, MotionOffsets             } from "./actions/faceMotions";
+import      { addOffsets, randomBetween, smoothstep } from "./actions/faceMotions";
+import      { resolveSmileyAction                   } from "./actions/smileyActions";
+import      { createBreathing                       } from "./behavior/breathing";
+import      { createMapTask                         } from "./behavior/mapTask";
+import      { createPassiveScheduler                } from "./behavior/passiveMotions";
+import      { applyObjectOffsets, fadeHands         } from "./objects/faceObjects";
+import type { FaceState                             } from "./state/faceState";
+import      { blendFace, fullFace, SMILEY_BASE_FACE } from "./state/faceState";
+import type { AvatarHandle, ConversationState, MapCue, MapTaskConfig, RobotAction, SpeechPhase } from "../avatarRegistry";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -161,6 +164,9 @@ export function useFaceController(
     // Breathing: its rhythm, the yawn's deep breath, and the breath before speaking
     const breathing = useMemo(createBreathing, []);
 
+    // The Map Task map, while the page has the avatar hold one
+    const mapTask = useMemo(createMapTask, []);
+
     // Inputs from the page
     const gazeTargetRef   = useRef<GazePoint | null>(null);
     const conversationRef = useRef<ConversationState>("idle");
@@ -261,13 +267,17 @@ export function useFaceController(
                 conversationRef.current = state;
             },
 
+            // Hold the Map Task map with these settings (null puts it away), and act on its cues
+            setMapTask : (config: MapTaskConfig | null): void => mapTask.configure(config, performance.now()),
+            mapCue     : (cue:    MapCue              ): void => mapTask.cue      (cue,    performance.now()),
+
             // Page-driven inputs
             setGaze        : (x: number, y: number): void => { gazeTargetRef  .current = {x, y}; },
             clearGaze      : (                    ): void => { gazeTargetRef  .current = null;   },
             setSpeechLevel : (level: number       ): void => { speechTargetRef.current = level;  },
             setSpeechPhase : (phase: SpeechPhase  ): void => { speechPhaseRef .current = phase;  },
         };
-    }, [breathing]);
+    }, [breathing, mapTask]);
 
     // --------------------------------------------------------------------------------
     // Frame Loop
@@ -375,7 +385,10 @@ export function useFaceController(
             listening += (listeningTarget         - listening) * easeStep( SMILEY_STATE_EASE_PER_SEC, dtSec);
             speech    += (speechTargetRef.current - speech   ) * easeStep(SMILEY_SPEECH_EASE_PER_SEC, dtSec);
 
-            // 7) Combine the layers into the face the renderer draws
+            // 7) The map in hand
+            const map = mapTask.step(nowMs);
+
+            // 8) Combine the layers into the face the renderer draws (its own hands fade out while it holds the map)
             setFace({
                 ...expression,
                 gazeX         : clampRange(expression.gazeX + gaze.x + (offsets.gazeX ?? 0) + (wander * wanderEyes.x), -1, 1),
@@ -385,12 +398,14 @@ export function useFaceController(
                 tilt          : expression.tilt    + (offsets.tilt    ?? 0) + (wander * sway),
                 offsetX       : expression.offsetX + (offsets.offsetX ?? 0),
                 offsetY       : expression.offsetY + (offsets.offsetY ?? 0),
-                objects       : applyObjectOffsets(expression.objects, offsets.objects ?? {}),
+                objects       : fadeHands(applyObjectOffsets(expression.objects, offsets.objects ?? {}), 1 - map.held),
                 eyeOpen       : expression.eyeOpen * blink,
                 eyeScale      : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
                 brows         : browsAlways ? 1 : expression.brows,
                 mouthOpen     : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
                 scale         : expression.scale * (1 + (offsets.grow ?? 0)),
+                map           : map.held,
+                mapRaise      : map.raise,
                 timeSec       : nowMs / 1_000,
                 expressionSec : clampRange(nowMs - emotionStartRef.current, 0, Infinity) / 1_000,
             });
@@ -400,7 +415,7 @@ export function useFaceController(
         // Run until the avatar unmounts
         frameId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frameId);
-    }, [browsAlways]);
+    }, [browsAlways, mapTask]);
 
     return {face, handle};
 }

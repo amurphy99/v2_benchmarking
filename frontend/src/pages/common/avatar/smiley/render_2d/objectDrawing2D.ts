@@ -69,6 +69,15 @@ export const SMILEY_HAND_SHAPES: Record<HandShapeName, HandShape> = {
         creases : "M 0 -24.5 L 0 -17.6 M 7.2 -22.7 L 7.2 -15.8 M 16.2 -17.6 L 16.2 -11.2 M -12.6 -11.5 L -11.2 -7.6",
         bounds  : [-27.3, -41.4, 26.4, 16.2],
     },
+
+    // Back of a cartoon fist gripping an edge to its right (the Map Task map's sides): rounded, with one crease where
+    // the curled fingers tuck in and no fingers drawn
+    fist: {
+        behind  : "",
+        body    : "M -12 -3 C -12 -10 -7 -14 0 -14 C 7 -14 12.5 -10 12.5 -3 C 12.5 5 9 13 1 13.5 C -6 14 -12 8 -12 -3 Z",
+        creases : "M 4.5 -8.5 C 8.5 -4.5 8.5 3 5 7",
+        bounds  : [-12, -14, 12.5, 13.6],
+    },
 };
 
 // Heart with a half-width of 1, centered on the origin (the floating hearts and the heart eyes)

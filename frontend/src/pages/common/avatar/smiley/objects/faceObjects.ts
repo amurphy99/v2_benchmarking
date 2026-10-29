@@ -21,6 +21,10 @@ key and shape: a match blends, so the same hand with the same shape slides to
 its new spot, and an object in only one of the faces fades out or in where it
 is. Animations move objects by key (`applyObjectOffsets`).
 
+The Map Task map's fists use the hand shapes too, but the map draws them itself
+(`render_2d/SmileyMap2D`). While it holds the map, the face's own hands fade out
+(`fadeHands`).
+
 The spots reuse the 2D layout's feature positions (`render_2d/faceDrawing2D`).
 
 */
@@ -55,8 +59,8 @@ const SMILEY_FACE_SPOTS: Record<FaceSpot, [number, number]> = {
 // --------------------------------------------------------------------------------
 // Object Types
 // --------------------------------------------------------------------------------
-// Hand shapes (drawn in `render_2d/objectDrawing2D`)
-export type HandShapeName = "raised" | "pointing";
+// Hand shapes (drawn in `render_2d/objectDrawing2D`; the fists hold the Map Task map)
+export type HandShapeName = "raised" | "pointing" | "fist";
 
 // Where any object goes: a spot, plus an offset (face units), an angle (degrees), and a size (times its kind's size)
 type Placement = {at: FaceSpot; dx?: number; dy?: number; angle?: number; scale?: number};
@@ -104,6 +108,11 @@ export function applyObjectOffsets(objects: FaceObject[], offsets: Record<string
         if (move === undefined) return object;
         return {...object, x: object.x + (move.dx ?? 0), y: object.y + (move.dy ?? 0), angle: object.angle + (move.angle ?? 0), scale: object.scale + (move.scale ?? 0)};
     });
+}
+
+// Objects with every hand showing only `share` as much (the hearts are left alone)
+export function fadeHands(objects: FaceObject[], share: number): FaceObject[] {
+    return objects.map((object: FaceObject): FaceObject => (object.kind === "hand") ? {...object, amount: object.amount * share} : object);
 }
 
 

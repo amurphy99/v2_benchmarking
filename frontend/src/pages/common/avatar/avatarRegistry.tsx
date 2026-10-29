@@ -59,24 +59,38 @@ export type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 export type SpeechPhase = "none" | "talking" | "pausing" | "wrapping-up" | "finishing";
 
 // Optional handle methods an avatar implements
-export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "speechGaze" | "sleep";
+export type AvatarFeature = "gaze" | "conversationState" | "speechLevel" | "speechGaze" | "sleep" | "mapTask";
+
+// How an avatar holding a Map Task map behaves (each setting can change between test conditions)
+export type MapTaskConfig = {
+    raiseWhen     : "thinking" | "cue";   // Raise the map on its own as it starts thinking, or only on a cue
+    listenGlances : boolean;              // Glance down at the map now and then while listening
+    eyesOnMap     : boolean;              // Scan, lock on, and trace on the map (off: it looks at the map's middle)
+};
+
+// What to do with the map (snake_case, so a cue can go over the wire unchanged)
+export type MapCue =
+    | {cue: "raise"}    // Raise it to search
+    | {cue: "lower"};   // Lower it and look back at the user
 
 // Framing the page asks for (avatars that always fill their box ignore it)
 export type AvatarZoom = "head" | "body";
 
 // Methods every avatar exposes through its `ref`
 export interface AvatarHandle {
-    performAction         : (action: RobotAction) => void;        // Act out one backend action
-    reset                 : () => void;                           // Return to Neutral now
-    setGaze?              : (x: number, y: number) => void;       // Look toward a point (-1 to 1 each)
-    clearGaze?            : () => void;                           // Go back to automatic gaze
-    setConversationState? : (state: ConversationState) => void;   // React to the conversation
-    setSpeechLevel?       : (level: number) => void;              // Voice loudness, 0 to 1
-    setSpeechPhase?       : (phase: SpeechPhase) => void;         // Where it is in its own reply (for where it looks)
-    setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
-    sleep?                : () => void;                           // Doze until woken (Neutral means the sleeping face meanwhile)
-    wake?                 : () => void;                           // Wake up and rest on the usual face again (does nothing when awake)
-    prepareToSpeak?       : (inMs?: number) => void;              // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
+    performAction          : (action: RobotAction          ) => void;       // Act out one backend action
+    reset                  : (                             ) => void;       // Return to Neutral now
+    setGaze              ? : (x: number, y: number         ) => void;       // Look toward a point (-1 to 1 each)
+    clearGaze            ? : (                             ) => void;       // Go back to automatic gaze
+    setConversationState ? : (state: ConversationState     ) => void;       // React to the conversation
+    setSpeechLevel       ? : (level: number                ) => void;       // Voice loudness, 0 to 1
+    setSpeechPhase       ? : (phase: SpeechPhase           ) => void;       // Where it is in its own reply (for where it looks)
+    setRestingExpression ? : (value: string                ) => void;       // Face that "Neutral" means (one of `restingOptions`)
+    sleep                ? : (                             ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
+    wake                 ? : (                             ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
+    prepareToSpeak       ? : (inMs?:  number               ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
+    setMapTask           ? : (config: MapTaskConfig | null ) => void;       // Hold a Map Task map with these settings (null puts it away)
+    mapCue               ? : (cue:    MapCue               ) => void;       // Do something with the map it holds
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes
@@ -112,7 +126,7 @@ const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({nam
 const SMILEY_AVATAR: AvatarEntry = {
     id             : "smiley",
     label          : "Smiley (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep", "mapTask"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
@@ -121,7 +135,7 @@ const SMILEY_AVATAR: AvatarEntry = {
 const SMILEY_BROWS_AVATAR: AvatarEntry = {
     id             : "smiley-brows",
     label          : "Smiley + eyebrows (2D)",
-    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep", "mapTask"],
     restingOptions : SMILEY_RESTING_OPTIONS,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
