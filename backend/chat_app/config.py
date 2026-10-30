@@ -1,11 +1,17 @@
-# ================================================================================ 
-# Setup
-# ================================================================================
-# Load Packages
+"""
+Live-chat and LLM settings, and the LLM clients the chats share.
+--------------------------------------------------------------------------------
+`backend.chat_app.config`
+
+Read once at startup. `USE_LLM=false` swaps the hosted live-chat model for the
+dummy one (`services/llm/dummy_LLM.py`) for local testing.
+
+"""
 import os, warnings, logging
 from .services.llm.langchain_wrapper import CustomChatModel
 from .services.llm.instructor_client import build_instructor_client, build_openai_client
 
+# Quiet TensorFlow's startup logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # --------------------------------------------------------------------------------
@@ -19,20 +25,12 @@ INSTRUCTOR_MODEL_NAME = os.getenv("LLM_NAME", "gemma-4-31B-it")  # model name fo
 # --------------------------------------------------------------------------------
 # Live-Chat Response Generation
 # --------------------------------------------------------------------------------
-LIVE_CHAT_RESPONSE_MODES          = ("single_stage", "active_listening")                    # Supported standard-chat response pipelines
-LIVE_CHAT_RESPONSE_MODE           = os.getenv("LIVE_CHAT_RESPONSE_MODE", "single_stage")    # Response pipeline selected once during backend startup
-ACTIVE_LISTENING_GRACE_SEC        = 0.8                                                     # Extra silence allowed after an incomplete-turn assessment
-ACTIVE_LISTENING_TIMEOUT_SEC      = 15.0                                                    # Maximum duration of each active-listening LLM request
-ACTIVE_LISTENING_MAX_RETRIES      = 1                                                       # Additional attempts allowed after a failed structured response
-ACTIVE_LISTENING_RETRY_DELAY_SEC  = 0.5                                                     # Delay between active-listening request attempts
-ACTIVE_LISTENING_ASSESSMENT_TEMP  = 0.1                                                     # Low-variance temperature used for turn assessment
-ACTIVE_LISTENING_RESPONSE_TEMP    = 0.5                                                     # Temperature used to generate the spoken response
-
-# Reject invalid response modes during startup instead of waiting for a chat connection
-if LIVE_CHAT_RESPONSE_MODE not in LIVE_CHAT_RESPONSE_MODES:
-    raise ValueError(f"Unsupported LIVE_CHAT_RESPONSE_MODE: {LIVE_CHAT_RESPONSE_MODE!r}")
-if (not USE_LLM) and (LIVE_CHAT_RESPONSE_MODE != "single_stage"):
-    raise ValueError("USE_LLM=false is supported only with LIVE_CHAT_RESPONSE_MODE=single_stage")
+ACTIVE_LISTENING_GRACE_SEC       = 0.8   # Extra silence allowed after an incomplete-turn assessment
+ACTIVE_LISTENING_TIMEOUT_SEC     = 15.0  # Maximum duration of each active-listening LLM request
+ACTIVE_LISTENING_MAX_RETRIES     = 1     # Additional attempts allowed after a failed structured response
+ACTIVE_LISTENING_RETRY_DELAY_SEC = 0.5   # Delay between active-listening request attempts
+ACTIVE_LISTENING_ASSESSMENT_TEMP = 0.1   # Low-variance temperature used for turn assessment
+ACTIVE_LISTENING_RESPONSE_TEMP   = 0.5   # Temperature used to generate the spoken response
 
 # --------------------------------------------------------------------------------
 # LLM Parameters
@@ -113,8 +111,8 @@ try:
     prosody_model_path       = current_path + f"{rf_model_path}/prosody_rf_v1.pkl"
 
     # Use the hosted endpoint unless local testing explicitly selects the dummy
-    if USE_LLM:  from .services.llm.live_chat.cognibot_api import CognibotAPI as LLMClass
-    else:        from .services.llm.live_chat.dummy_LLM    import DummyLLM    as LLMClass
+    if USE_LLM:  from .websocket.harnesses.unguided.cognibot_api import CognibotAPI as LLMClass
+    else:        from .services.llm.dummy_LLM                    import DummyLLM    as LLMClass
        
     # Setup the LLM
     llm = LLMClass(base_url="10.128.0.20", api_key="SAMPLE_TOKEN")

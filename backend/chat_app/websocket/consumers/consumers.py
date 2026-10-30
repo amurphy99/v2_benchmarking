@@ -15,9 +15,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
 # From this project
-from ...services                           import logging_utils as lu 
+from ...services                           import logging_utils as lu
 from ...services.db_services               import ChatService
-from ...services.llm.chat_utilities        import get_LLM_response
+from  ..harnesses.registry                 import ChatTypeRejected, build_harness
 from  ..services.bg_helpers                import fire_and_log
 from  ..services.chatHelpers               import ChatHandler
 from  ..services.chat_state                import StagedUtteranceBuffer
@@ -26,44 +26,22 @@ from  ..services.speech.stt.speechProvider import SpeechToTextProvider
 from chat_app.websocket.services.speech.audio_recorder import SessionAudioRecorder
 from chat_app.services.session_audio_storage             import delete_recording
 
-# For if we are using the "active-listening" respons emode
-from ...config import LIVE_CHAT_RESPONSE_MODE
-from ...services.llm.live_chat.active_listening.response_engine import get_active_listening_engine
-from ...services.llm.live_chat.cognibot_api                     import CognibotResponse
-
 # Consumer-specific utilities
 from .utils   .logging      import ChatConsumerLogging as log
-from .utils   .groups       import claim_primary_connection, join_chat_consumer_groups, leave_all_groups, format_send_actions_command, PRIMARY_REPLACED_CLOSE_CODE
+from .utils   .groups       import claim_primary_connection, join_chat_consumer_groups, leave_all_groups, PRIMARY_REPLACED_CLOSE_CODE
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 
+# Close code for an unknown `chat_type`, `condition`, or `variant` (`CLIENT_PROTOCOL.md` §1)
+CHAT_TYPE_REJECTED_CLOSE_CODE = 4005
+
 
 # ================================================================================
-# ChatConsumer 
+# ChatConsumer
 # ================================================================================
 class ChatConsumer(AsyncJsonWebsocketConsumer):
-    # Helps us decide what behavior to use in other areas ("standard" | "activity")
-    # TODO: Could probably just use this as an argument in close_session for the DB save
-    CHAT_TYPE = "standard"
-
     # How many recent messages to keep for the LLM
-    MAX_CONTEXT = 30  
-
-    # --------------------------------------------------------------------------------
-    # Helpers for responding to the user
-    # --------------------------------------------------------------------------------
-    # Send a "mood" response to the frontend client (so the robots can emote)
-    # The mood label is passed through untouched; frontends map it to their own capabilities
-    async def send_response_mood(self, mood: str) -> None:
-        payload = {"data": {"kind": "emotion", "value": mood}}
-        await format_send_actions_command(self, payload)
-
-    # Generate a spoken response using the standard method 
-    async def response_method(self, context_buffer: list[tuple[str, str, float]]) -> str:
-        # Send the resulting emotion to the client & return just the message text
-        response: CognibotResponse = await get_LLM_response(context_buffer)
-        await self.send_response_mood(response.response_mood)
-        return response.message
+    MAX_CONTEXT = 30
 
     # ================================================================================
     # Connect
@@ -74,14 +52,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._close_scheduled = False
         self.user             = self.scope.get("user")
         self.source           = self.scope.get("source", "unknown")
+        self.harness          = None
         self.session          = None
         self.session_id       = None
         self.context_buffer   = []
         self.stt_provider     = None
         self.primary_group    = None
-
-        # Define the response generation method to be used in the chat
-        self.response_method = self.response_method
 
         # --------------------------------------------------------------------------------
         # 1) Authenticate before accepting connection
@@ -92,10 +68,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if self.source == "unknown":
             await self.close(code=4002); return
 
-        # Standard chats opt into the alternate engine only through startup configuration
-        if (self.CHAT_TYPE == "standard") and (LIVE_CHAT_RESPONSE_MODE == "active_listening"):
-            self._turn_response_engine = get_active_listening_engine()
-        
+        # Build the requested chat type's harness (the `ws/chat/activity/` route fixes the type)
+        chat_type = self.scope["url_route"]["kwargs"].get("chat_type", self.scope["chat_type"])
+        try: self.harness = build_harness(self, chat_type, self.scope["condition"], self.scope["variant"])
+        except ChatTypeRejected as exc:
+            logger.warning(f"{lu.CC_MAIN} Refused a chat connection: {exc}.{lu.RESET}")
+            await self.close(code=CHAT_TYPE_REJECTED_CLOSE_CODE); return
+
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
         # Configuration based on the source platform for the chat
         self.use_backend_STT = (self.source == "webapp")  # Send the user text to the frontend so it can see it too
@@ -121,8 +100,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 name=f"connect::close-stale-session-{closed['id']}",
             )
 
-        # Load the most recent active session for this user
-        self.session    = await db_s2a(ChatService.get_or_create_active_session)(self.user, source=self.source)
+        # Load the most recent active session for this user (it records which chat type runs)
+        self.session = await db_s2a(ChatService.get_or_create_active_session)(
+            self.user,
+            source    = self.source,
+            chat_type = self.harness.NAME,
+            condition = self.harness.condition,
+            variant   = self.harness.variant,
+        )
         self.session_id = self.session.id
 
         # Load existing messages
@@ -162,8 +147,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await claim_primary_connection(self)
 
         # Log the successful connection
-        log.log_connect_done(self.user, self.session.id, 
-                             config={"backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode})
+        log.log_connect_done(self.user, self.session.id,
+                             config={"chat_type": self.harness.NAME, "condition": self.harness.condition, "variant": self.harness.variant,
+                                     "backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode})
     
     # ================================================================================
     # Disconnect
@@ -331,7 +317,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # --------------------------------------------------------------------------------
     # Speak supplied text independently of STT/staged-response coordination
     # --------------------------------------------------------------------------------
-    def speak_response(self, response: str | dict[str, object] | None) -> asyncio.Task:
+    def speak_response(self, response: str) -> asyncio.Task:
         # Cancel a pending (generic) response task if there is one
         pending = getattr(self, "_pending_response_task", None)
         if (pending is not None) and (not pending.done()): pending.cancel()
@@ -340,8 +326,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         previous = getattr(self, "_manual_response_task", None)
         if (previous is not None) and (not previous.done()): previous.cancel()
 
-        # Begin the new response task 
-        task = fire_and_log(ChatHandler.respond_to_user(self.context_buffer, self, use_response=response), name="chat::manual_response")
+        # Begin the new response task
+        task = fire_and_log(ChatHandler.respond_to_user(self, response), name="chat::manual_response")
         self._manual_response_task = task
         return task
 
@@ -372,8 +358,5 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._response_lock            = asyncio.Lock()             # Gives one response task ownership of staged text
 
         # Chat status tracking (not always used)
-        self.streaming_active      = False     # True while STT stream is active (paused state)
-        self._tts_streaming        = False     # True while audio chunks are actively being sent to the frontend
-        self._pending_action       = None      # Tracks pending user-initiated action ("end_chat" | None)
-        self._turn_response_engine = None      # Optional response engine supplied at connect (active listening or activity)
-        self._dialogue_state       = "normal"  # Active-listening state ("normal" | "awaiting_end_confirmation")
+        self.streaming_active = False  # True while STT stream is active (paused state)
+        self._tts_streaming   = False  # True while audio chunks are actively being sent to the frontend

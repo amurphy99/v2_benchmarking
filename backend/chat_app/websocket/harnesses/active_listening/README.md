@@ -1,15 +1,14 @@
-# Active-Listening Response Mode
+# Active-Listening Chat Type
 
-Added `active_listening` mode as an optional response method for standard live chats.
-It uses a small structured assessment call before generating the spoken assistant
-response. The old "default" mode is now referred to as `single_stage` mode and is still
-the default option. **This mode is still experimental**, so leaving deployed versions
-in `single_stage` mode.
+`active_listening` is a chat type that uses a small structured assessment call before
+generating the spoken assistant response. The `unguided` chat type (the default) still
+uses the original single-stage model. **This chat type is still experimental**, so
+deployed clients that send no `chat_type` stay on `unguided`.
 
-To select the chat mode, change the `.env` file once during backend startup. So either:
+A client selects it per connection with the `chat_type` query parameter (see
+`../README.md`):
 ```text
-LIVE_CHAT_RESPONSE_MODE=single_stage
-LIVE_CHAT_RESPONSE_MODE=active_listening
+wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listening
 ```
 > **NOTE:** This is still a work on progress, not ready to be used for real versions yet. 
 > See the dropdown below (under "Experimental Status/Notes") for more information.
@@ -40,10 +39,11 @@ that text + the user's continuation. Explicit `reply_now` command requests skip 
 additional incomplete-turn grace period because the caller has directly requested an LLM
 response.
 
-**No modifications to the consumer are required by this chat mode.** Pause and end-chat
+**No modifications to the consumer are required by this chat type.** Pause and end-chat
 decisions are proposed by `ResponseOutcome` (object containing a combination of outputs
-from both models). This prevents a canceled generation attempt from leaving the chat
-paused or waiting for an end-chat confirmation that was never delivered.
+from both models; defined in `../base.py`), and the harness enters its next dialogue state
+only once the exchange is saved. This prevents a canceled generation attempt from leaving
+the chat paused or waiting for an end-chat confirmation that was never delivered.
 
 <!-- -------------------------------------------------------------------------------- -->
 ## End-Chat Confirmation
@@ -67,7 +67,8 @@ never close a chat.
 ## Files
 <!-- -------------------------------------------------------------------------------- -->
 
-- `response_models.py`: structured stage models, dialogue values, and `ResponseOutcome`.
+- `harness.py`: the chat type's harness; keeps one connection's dialogue state.
+- `response_models.py`: structured stage models and dialogue values.
 - `prompts.py`: system prompts and message construction for each stage.
 - `active_listening_api.py`: shared structured-generation client and bounded retry logic.
 - `response_engine.py`: routing, grace-period behavior, fallbacks, and process-wide engine.

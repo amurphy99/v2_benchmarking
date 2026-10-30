@@ -1,11 +1,12 @@
 """
 Wrapper class for live-chat LLM calls using structured generation.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.live_chat.cognibot_api`
+`backend.chat_app.websocket.harnesses.unguided.cognibot_api`
 
 Provides a CognibotAPI instance that accepts a message history and returns a
-structured CognibotResponse (thought + message + behavior) via the shared LLM 
-endpoint.
+structured CognibotResponse (thought + message + behavior) via the shared LLM
+endpoint. It is the unguided chat type's reply model, and the active-listening
+chat type's fallback.
 
 """
 import logging, asyncio, time
@@ -15,22 +16,15 @@ logger = logging.getLogger(__name__)
 import instructor
 from openai   import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError
-from typing   import Literal
 
 # From this project
-from ....services import logging_utils as lu
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN, BRIGHT_MAGENTA
 from ....config                 import PROMPT, DEVICE_CONTEXT
+from ....services               import logging_utils as lu
+from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN, BRIGHT_MAGENTA
+from   ..avatar                 import ResponseMood
 
 # Shared endpoint config
-from ..endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE
-
-
-# --------------------------------------------------------------------------------
-# Emotions and/or gestures available to the robots
-# --------------------------------------------------------------------------------
-# TODO: Add these to the response model
-ResponseMood = Literal["Neutral", "Grumpy", "Happy", "Love", "Sad", "Scared", "Sick", "Surprised", "Thinking", "Tired"]
+from ....services.llm.endpoint import LLM_URL, API_KEY, MODEL_NAME, TEMPERATURE
 
 
 # ================================================================================

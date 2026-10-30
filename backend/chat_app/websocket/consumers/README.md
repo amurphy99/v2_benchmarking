@@ -2,7 +2,7 @@
 
 Code in the `consumers/` directory handles all live WebSocket connections used by a chat. Here we connect frontend transports to shared audio, transcription, command, response, persistence, and biomarker behavior while keeping frontend-specific (webapp vs. robot vs. other) decisions out of those pipelines.
 
-This `README` covers the standard and activity chat consumers plus the admin listener. The internal RAG implementation code is outside of scope for this; the activity consumer only supplies a different response engine to the otherwise shared response flow.
+This `README` covers the primary chat consumer and the admin listener. What differs between chat types (unguided, active listening, the activity) lives in each chat type's harness instead, in `../harnesses/` (see its `README.md`); the consumer only builds the harness and asks it for each reply.
 
 > **Looking for the primary-client wire format?** [`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md)
 > is the contract used by the web chat, mobile clients, and physical robots. It also defines
@@ -18,8 +18,8 @@ The routes are defined in `backend/chat_app/websocket/routing.py`:
 
 | Endpoint | Consumer | Purpose |
 |---|---|---|
-| `ws/chat/`                     | `ChatConsumer`         | Primary web app or robot chat connection |
-| `ws/chat/activity/`            | `ActivityChatConsumer` | Primary activity chat using a specialized response method |
+| `ws/chat/`                     | `ChatConsumer`         | Primary web app or robot chat connection (`chat_type` picks the chat type) |
+| `ws/chat/activity/`            | `ChatConsumer`         | Older route that always runs the `activity` chat type |
 | `ws/chat/<session_id>/listen/` | `ChatListenerConsumer` | Admin monitoring and control connection |
 
 The primary consumer owns the live chat session. Listener consumers observe that
@@ -39,9 +39,6 @@ session through Channels groups and can relay canonical commands to the primary.
 +├── chat_listener.py
  │   Listener connection lifecycle, initial database state, live monitoring, and
  │   command relay into the primary consumer's control group.
- │
-+├── chat_activities.py
- │   ChatConsumer specialization that supplies the response engine for activity/RAG chats.
  │
 +├── handlers/
 +│   ├── ws_events.py
@@ -68,6 +65,8 @@ session through Channels groups and can relay canonical commands to the primary.
 
 Related code outside this directory:
 
+- `harnesses/` holds what differs between chat types: each one's replies, prompts, LLM
+  clients, and dialogue state.
 - `services/chatHelpers.py` coordinates staged utterances, cancellation, LLM responses,
   response commits, and TTS.
 - `services/chat_state.py` keeps staged transcript text and word timestamps together.
@@ -88,11 +87,14 @@ Related code outside this directory:
 
 1. Initialize response, task, and connection state before accepting the socket.
 2. Authenticate the user and identify the frontend source.
-3. Select source-dependent STT, TTS, and automatic-response settings.
-4. Close stale active sessions, then create the new active `ChatSession`.
-5. Build the bounded in-memory `context_buffer` used for LLM calls.
-6. Join the session room and control Channels groups.
-7. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer.
+3. Build the harness for the requested `chat_type`, `condition`, and `variant`, refusing an
+   unknown name with `4005`.
+4. Select source-dependent STT, TTS, and automatic-response settings.
+5. Close stale active sessions, then create the new active `ChatSession`, recording its chat
+   type, condition, and variant.
+6. Build the bounded in-memory `context_buffer` used for LLM calls.
+7. Join the session room and control Channels groups.
+8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer.
 
 The consumer instance is the owner of per-connection mutable state. Processing modules
 operate on that state but do not create a parallel session object.
@@ -196,7 +198,7 @@ When automatic responses are enabled, ChatHandler starts a cancellable response 
 ```text
 Finalized utterance
     -> staged snapshot
-    -> configured standard pipeline or activity response engine
+    -> the chat type's harness (`harness.generate`)
     -> atomic message exchange commit
     -> primary and listener text delivery
     -> optional TTS
@@ -208,27 +210,27 @@ generation succeeds, the commit is shielded from cancellation so database and in
 state cannot be left half-updated.
 
 <!-- -------------------------------------------------------------------------------- -->
-<!-- Current Intent Detection                                                         -->
+<!-- Chat Types and Intent Detection                                                  -->
 <!-- -------------------------------------------------------------------------------- -->
-## Current Intent Detection
+## Chat Types and Intent Detection
 
-`services/behavior/intent_detection.py` runs before normal response calls in the default
-`single_stage` mode, which is the only path with no response engine. Activity/RAG chats
-supply their own engine (`services/llm/live_chat/activity_response_engine.py`), so they
-skip the regex intents and end through their own closing flow instead.
+`ChatHandler` asks the connection's harness for every reply (`harness.generate`) and
+applies the `ResponseOutcome` it returns the same way for every chat type. A reply's
+state change, listening pause, and close happen only once its exchange is saved
+(`harness.committed` takes the state), so a reply cancelled by newer speech changes
+nothing. See `../harnesses/README.md` for the chat types and how to add one.
 
-It can return scripted pause/end-chat responses instead of invoking `response_method`.
-Its pause action calls the shared `processing.stream.set_streaming_active()` operation,
-so disabling, moving, or replacing regex intent detection later does not require another
-stream-control implementation.
+The `unguided` chat type (the default) checks each user turn for spoken end-chat and
+pause requests with regular expressions (`harnesses/unguided/intents.py`) before calling
+the LLM. A match returns a scripted reply instead. Its pause goes through the shared
+`processing.stream.set_streaming_active()` operation, like every other pause.
 
-Standard chats can be set to use the `active_listening` response generation method via
-the `.env` file. In this mode, we respond with two calls, the first one performing a
-structured turn assessment, whcih is where we check for "user intent" regarding things
+The `active_listening` chat type responds with two calls: the first performs a
+structured turn assessment, which is where we check for "user intent" regarding things
 such as pausing or ending the chat. After the first stage model finishes, we use it to
 add additional context for a second model call which generates the actual spoken
-response to the user. See `services/llm/live_chat/active_listening/README.md` for more
-information.
+response to the user. See `harnesses/active_listening/README.md` for more information.
+The `activity` chat type skips these intents and ends through its own closing flow.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- `reply_now` Audio Barrier                                                        -->
@@ -405,6 +407,5 @@ closes the underlying chat session.
 - Put STT/TTS provider internals under `services/speech/`.
 - Keep database transactions in `ChatService`, with consumer-side commit/publication
   coordination in `processing/messages.py`.
-- Keep activity/RAG differences behind `ActivityChatConsumer.response_method` and its
-  response-engine adapter unless a change explicitly requires modifying that separate
-  subsystem.
+- Put behavior that differs between chat types in that chat type's harness
+  (`../harnesses/`), never in the consumer, `ChatHandler`, or the frame routers.

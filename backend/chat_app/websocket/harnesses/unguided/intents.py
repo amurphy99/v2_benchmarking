@@ -1,29 +1,27 @@
 """
 Regex-based intent detection for user-initiated end-chat and pauses.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.behavior.intent_detection`
+`backend.chat_app.websocket.harnesses.unguided.intents`
 
-Called before every LLM attempt in a chat that has no response engine, which
-means standard chats in the default `single_stage` mode. Returns a scripted
-response (and whether to close the connection after) so the rest of the response
-code runs normally.
+The unguided harness checks every staged user turn here before it calls the LLM.
+A match gets a scripted reply, and the dialogue state or listening pause that goes
+with it comes back in the outcome, so it applies only once that reply is saved.
 
 TODO: Pause needs to communicate with the frontend chat page and the listener page
 
 """
 from __future__ import annotations
+from typing     import Literal
 
 import logging, re
 logger = logging.getLogger(__name__)
 
 # From this project
-from ....services                   import logging_utils as lu 
-from ....services.logging_utils     import RESET, BOLD, UNBOLD, ORANGE
-from ...consumers.processing.stream import set_streaming_active
+from ....services.logging_utils import RESET, BOLD, UNBOLD, ORANGE
+from   ..base                   import ResponseOutcome
 
-# Import the class for type checking
-from typing import TYPE_CHECKING
-if TYPE_CHECKING: from ...consumers.consumers import ChatConsumer
+# Whether the last saved reply asked the user to confirm ending the chat
+IntentState = Literal["normal", "awaiting_end_confirmation"]
 
 
 # --------------------------------------------------------------------------------
@@ -117,55 +115,45 @@ def _matches_with_negation_check(text: str, patterns: list) -> bool:
 # ================================================================================
 # Check for "end_chat" or "pause_chat" intent in the user's message
 # ================================================================================
-async def handle_user_intent(consumer: ChatConsumer, text: str) -> tuple[str | None, bool]:
+def scripted_outcome(text: str, state: IntentState) -> ResponseOutcome | None:
     """
-    Check which case we are in to decide which regex strings to check for.
-    Update the consumers '_pending_action' and decide how to respond based on the results.
+    Check which case we are in to decide which regex strings to check for, and return
+    the scripted reply for it (None lets the LLM reply instead).
 
-    Returns (scripted_response, close_after).
-
-    Scripted responses are preset responses depending on the scenario, and close after is
-    a boolean letting the ChatHandler know if we should close the session (only if the 
-    user confirms they want to end the chat).
+    The outcome carries the state to enter and whether to stop listening, instead of
+    changing them here. `ChatHandler` applies them once the reply is saved, so a reply
+    cancelled by newer speech changes nothing.
     """
-    # Get the 'action' status of the consumer
-    pending_action = getattr(consumer, "_pending_action", None)
-
     # --------------------------------------------------------------------------------
     # Waiting for the user to confirm or deny ending the chat
     # --------------------------------------------------------------------------------
-    if pending_action == "end_chat":
+    if state == "awaiting_end_confirmation":
         # Case A: User confirms we should end the chat
         if _check_affirmation(text):
             logger.info(f"{ORANGE}[Intent] User {BOLD}confirms{UNBOLD} they wish to end the chat.{RESET}")
-            consumer._pending_action = None
-            return MSG_END_GOODBYE, True   # close_after = True
-        
+            return ResponseOutcome(message=MSG_END_GOODBYE, state="normal", close_after=True)
+
         # Case B: User does not confirm they wish to end the chat
         if _check_denial(text):
             logger.info(f"{ORANGE}[Intent] User {BOLD}denies{UNBOLD} they wish to end the chat.{RESET}")
-            consumer._pending_action = None
-            return MSG_END_CANCEL, False
-        
-        # Case C: User says something unrelated; clear the pending action and let the LLM respond normally
+            return ResponseOutcome(message=MSG_END_CANCEL, state="normal")
+
+        # Case C: User says something unrelated; the LLM replies normally, which drops the request
         logger.info(f"{ORANGE}[Intent] User {BOLD}does not confirm{UNBOLD} they wish to end the chat.{RESET}")
-        consumer._pending_action = None
-        return None, False
-    
+        return None
+
     # --------------------------------------------------------------------------------
     # "Normal" mode: scan for the users intent
     # --------------------------------------------------------------------------------
     # Case A: User indicates they want to END the chat
     if _check_end_intent(text):
         logger.info(f"{ORANGE}[Intent] User indicates they wish to {BOLD}END{UNBOLD} the chat (checking for confirmation).{RESET}")
-        consumer._pending_action = "end_chat"
-        return MSG_END_CONFIRM, False
-    
-    # Case B: User indicates they want to PAUSE the chat
+        return ResponseOutcome(message=MSG_END_CONFIRM, state="awaiting_end_confirmation")
+
+    # Case B: User indicates they want to PAUSE the chat (applied once the reply is saved)
     if _check_pause_intent(text):
         logger.info(f"{ORANGE}[Intent] User indicates they wish to {BOLD}PAUSE{UNBOLD} the chat.{RESET}")
-        await set_streaming_active(consumer, active=False)  # stops STT + notifies frontend client and ChatListener
-        return MSG_PAUSE, False
+        return ResponseOutcome(message=MSG_PAUSE, pause_listening=True)
 
     # Return default response if none of our pre-programmed intents were detected
-    return None, False
+    return None

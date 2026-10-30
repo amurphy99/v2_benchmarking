@@ -123,6 +123,12 @@ class ChatSession(models.Model):
     source  = models.CharField    (max_length=32, choices=SOURCE_CHOICES, default="webapp")
     date    = models.DateTimeField(auto_now_add=True)
 
+    # Chat type that ran, its cue set, and its task content (names in `websocket/harnesses/`)
+    # ("" when the chat type has none, and on sessions from before chat types were recorded)
+    chat_type = models.CharField(max_length=32, blank=True, default="")
+    condition = models.CharField(max_length=32, blank=True, default="")
+    variant   = models.CharField(max_length=32, blank=True, default="")
+
     # TODO: Future field for what LLM version was used
     llmVersion = models.CharField(max_length=255, default="phi3_finetuned")
 

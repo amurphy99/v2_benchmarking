@@ -44,7 +44,7 @@ export type CapabilityProfile = {
 };
 
 // --------------------------------------------------------------------------------
-// The LLM's emotion vocabulary (backend `ResponseMood`, cognibot_api.py)
+// The LLM's emotion vocabulary (backend `ResponseMood`, harnesses/avatar.py)
 // --------------------------------------------------------------------------------
 // Safe protocol floor for an interface we have not profiled yet: these are the values
 // the LLM already sends unprompted. A compliant client maps the moods it supports and

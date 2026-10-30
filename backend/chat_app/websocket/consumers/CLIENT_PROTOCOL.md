@@ -68,7 +68,7 @@ Use `ws://localhost:...` only during local development. Production clients must 
 Because the access token is carried in the query string, reverse proxies and application logs
 must redact the `token` parameter. Non-browser robot clients should avoid logging the full URL.
 
-Both query parameters are parsed by `chat_app/services/middleware.py`. The trailing slash
+The query parameters are parsed by `chat_app/services/middleware.py`. The trailing slash
 on `ws/chat/` is required by the route regex in `websocket/routing.py`.
 
 `source` **must** be one of these exact (lowercased) values -- anything else is coerced to
@@ -103,6 +103,32 @@ What each setting means for you:
   reply.) This is only the *starting* value -- either side can change it later with
   `set_response_mode`.
 
+### Step 4 (optional): Choose a chat type
+
+Three more query parameters pick what kind of chat runs. All three are optional, and a client
+that sends none of them gets the `unguided` chat, exactly as before they existed.
+
+```text
+wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listening
+```
+
+| Parameter | Values | Default |
+|---|---|---|
+| `chat_type` | `unguided` \| `active_listening` \| `activity` | `unguided` |
+| `condition` | One of the chat type's cue sets | The chat type's first one |
+| `variant`   | One of the chat type's task contents (a map, a scenario) | The chat type's first one |
+
+- `unguided` -- open conversation. Spoken end-chat and pause requests are recognized by fixed
+  phrases (section 3.7).
+- `active_listening` -- an LLM assessment of each user turn shapes the reply. Experimental.
+- `activity` -- the memory activity. `ws/chat/activity/` is an older route for this chat type
+  and ignores `chat_type`.
+
+None of these three has conditions or variants yet, so sending `condition` or `variant` with
+them is refused. Values are exact (they are not lowercased the way `source` is). The chat
+type, condition, and variant are saved with the session. The list lives in
+`websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.
+
 ### Close codes
 
 | Code | Meaning |
@@ -111,6 +137,7 @@ What each setting means for you:
 | `4001` | Not authenticated -- token missing, expired, or invalid |
 | `4002` | Unrecognized `source` query parameter |
 | `4004` | This primary connection was replaced by a newer connection for the same user |
+| `4005` | Unrecognized `chat_type`, or a `condition` or `variant` the chat type doesn't have |
 
 `4003` / `4404` only apply to the admin listener endpoint, not to the primary chat socket.
 The listener closes with `4404` when the session does not exist, and with `4003` when the
@@ -326,7 +353,7 @@ mood or from an admin pressing a button:
   driving your robot directly. Play it as-is.
 
 **Emotion values.** The LLM is constrained to exactly this set
-(`services/llm/live_chat/cognibot_api.py`, `ResponseMood`):
+(`websocket/harnesses/avatar.py`, `ResponseMood`):
 
 ```text
 Neutral | Grumpy | Happy | Love | Sad | Scared | Sick | Surprised | Thinking | Tired
@@ -503,12 +530,14 @@ Sent when the *user* ended the chat conversationally -- they said something like
 and then confirmed. The backend sends the goodbye line as a normal `llm_response` first,
 then sends `chat_ended` and closes the socket with code `1000`.
 
-The intent phrases live in `services/behavior/intent_detection.py`. The flow is a two-step
+In `unguided` chats the intent phrases live in `websocket/harnesses/unguided/intents.py`;
+`active_listening` chats recognize the same requests with the LLM. The flow is a two-step
 confirmation: the first trigger gets `"Okay, are you sure that's all for our chat?"`, and
 only an affirmative reply produces the goodbye plus close.
 
-Activity chats (`ws/chat/activity/`) do not use these phrases. They send the same
-`chat_ended` frame, in the same order, when the activity's own closing flow finishes.
+Activity chats (`chat_type=activity`, or `ws/chat/activity/`) do not use these phrases. They
+send the same `chat_ended` frame, in the same order, when the activity's own closing flow
+finishes.
 
 A robot should let the goodbye finish speaking before tearing down its UI, and should not
 treat the subsequent close as an error.
@@ -709,9 +738,9 @@ Things most likely to trip up a new client:
    automatic response. They do not cancel a response explicitly requested with `reply_now`.
 9. **`control_state` never reaches a primary client.** It broadcasts to admin listeners only.
    Read control state from the `state` field of your own `command_ack`s. (Section 3.6)
-10. **Only the primary chat socket is described here.** `ws/chat/activity/` uses this exact
-    same protocol with a different response engine behind it, so a client written to this
-    document works against both.
+10. **Only the primary chat socket is described here.** Every chat type, including the
+    older `ws/chat/activity/` route, uses this exact same protocol with a different chat
+    type behind it, so a client written to this document works against all of them.
 11. **Audio must be streamed as it is captured, never sent in one burst.** Holding the
     user's speech back until a reply is wanted pushes the end of long turns into the next
     reply and breaks word timestamps. Send `reply_now` on the same socket as the audio, the
@@ -726,10 +755,11 @@ Things most likely to trip up a new client:
 
 | What | File |
 |---|---|
-| Auth + `source` parsing, allowed sources | `chat_app/services/middleware.py` |
+| Auth, `source`, and chat-type parsing; allowed sources | `chat_app/services/middleware.py` |
 | JWT endpoints and lifetimes | `chat_app/api/router.py`, `backend/settings.py` |
 | WebSocket routes | `chat_app/websocket/routing.py` |
-| Connect/disconnect, source config, mood send | `websocket/consumers/consumers.py` |
+| Connect/disconnect, source config | `websocket/consumers/consumers.py` |
+| Chat types, with their conditions and variants | `websocket/harnesses/registry.py` |
 | Inbound type routing, `transcription`, command envelope | `consumers/handlers/ws_events.py` |
 | Listener-originated commands and acks | `consumers/handlers/ch_events.py` |
 | Command vocabulary, ack body, control state | `consumers/processing/commands.py` |
@@ -742,6 +772,6 @@ Things most likely to trip up a new client:
 | `tts_playback` validation | `consumers/processing/playback.py` |
 | `audio_data` validation | `consumers/processing/audio.py` |
 | `audio_chunk` | `websocket/services/speech/tts/tts_streaming.py` |
-| Mood vocabulary (`ResponseMood`) | `chat_app/services/llm/live_chat/cognibot_api.py` |
-| End/pause intent phrases | `websocket/services/behavior/intent_detection.py` |
+| Mood vocabulary (`ResponseMood`) and mood send | `websocket/harnesses/avatar.py` |
+| End/pause intent phrases | `websocket/harnesses/unguided/intents.py` |
 | Admin action buttons per frontend | `frontend/src/pages/admin/FRONTEND_CAPABILITIES.md` |

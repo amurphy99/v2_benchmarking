@@ -1,7 +1,7 @@
 """
 Prompt construction for each of the active-listening response stages.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.live_chat.active_listening.prompts`
+`backend.chat_app.websocket.harnesses.active_listening.prompts`
 
 Each stage receives the standard message history under along with a specific
 system prompt. The first-stage assessment is passed to the response stage as
@@ -12,7 +12,7 @@ from __future__ import annotations
 from pydantic   import BaseModel
 
 # From this project
-from .....config import DEVICE_CONTEXT
+from ....config import DEVICE_CONTEXT
 
 
 # ================================================================================

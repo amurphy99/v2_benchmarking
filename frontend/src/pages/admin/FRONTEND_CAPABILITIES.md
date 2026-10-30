@@ -72,7 +72,7 @@ Before writing a profile, gather:
    Neutral  Grumpy  Happy  Love  Sad  Scared  Sick  Surprised  Thinking  Tired
    ```
 
-   This is `ResponseMood` in `backend/chat_app/services/llm/live_chat/cognibot_api.py` and is
+   This is `ResponseMood` in `backend/chat_app/websocket/harnesses/avatar.py` and is
    the authoritative list. **This mapping lives on the robot, not here.** The admin panel sends
    the abstract mood label; the robot chooses the corresponding face or behavior.
 5. **Anything runtime-variable.** See the warning below.

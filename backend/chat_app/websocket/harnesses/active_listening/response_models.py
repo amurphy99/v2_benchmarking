@@ -1,22 +1,22 @@
 """
-Structured models and internal outcomes for active-listening responses.
+Structured models for the active-listening generation stages.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.live_chat.active_listening.response_models`
+`backend.chat_app.websocket.harnesses.active_listening.response_models`
 
 Here are definitions of the Pydantic models for each generation step.
 
 """
-from __future__  import annotations
-from pydantic    import BaseModel, ConfigDict, Field, model_validator
-from dataclasses import dataclass
-from typing      import Literal, Self
+from __future__ import annotations
+from typing     import Literal, Self
 
 import logging
 logger = logging.getLogger(__name__)
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 # From this project
-from   ..cognibot_api  import ResponseMood
-from ....logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from   ..avatar                 import ResponseMood
 
 
 # --------------------------------------------------------------------------------
@@ -28,8 +28,7 @@ TurnState         = Literal["complete", "incomplete", "word_search", "unclear"] 
 TranscriptClarity = Literal["clear", "uncertain", "likely_error"]                                               # Text-only estimate of transcript coherence
 ResponseStrategy  = Literal["normal", "wait", "backchannel", "suggest_word", "clarify"]                         # Route used by the spoken-response stage
 EndDecision       = Literal["confirm", "cancel", "unclear"]                                                     # Resolution of a pending end-chat request
-DialogueState     = Literal["normal", "awaiting_end_confirmation"]                                              # Consumer-owned active-listening state
-ResponseTrigger   = Literal["automatic", "reply_now"]                                                           # Event that requested the response attempt
+DialogueState     = Literal["normal", "awaiting_end_confirmation"]                                              # Dialogue state the active-listening harness keeps
 
 
 # ================================================================================
@@ -89,22 +88,6 @@ class SpokenResponse(BaseModel):
 
     response_plan : str = Field(..., min_length=1, max_length=300, description="A brief response plan, not detailed hidden reasoning.")
     message       : str = Field(..., min_length=1, max_length=600, description="The concise spoken response to the user.")
-
-
-# --------------------------------------------------------------------------------
-# Return response text and proposed chat effects without mutating consumer state
-# --------------------------------------------------------------------------------
-@dataclass(frozen=True, slots=True)
-class ResponseOutcome:
-    """
-    The WebSocket response coordinator applies these effects only after the matching
-    staged user turn and assistant response have been committed successfully.
-    """
-    message             : str
-    robot_mood          : ResponseMood
-    next_dialogue_state : DialogueState = "normal"
-    pause_listening     : bool          = False
-    close_after         : bool          = False
 
 
 # ================================================================================

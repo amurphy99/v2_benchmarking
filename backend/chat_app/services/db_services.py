@@ -45,10 +45,24 @@ class ChatService:
     """
     @staticmethod
     @transaction.atomic
-    def get_or_create_active_session(user, *, source="webapp"):
+    def get_or_create_active_session(
+        user,              # Account opening the chat
+        *,
+        source    : str,   # Client that opened it (`ALLOWED_SOURCES`)
+        chat_type : str,   # Chat type its harness runs
+        condition : str,   # Cue set ("" when the chat type has none)
+        variant   : str,   # Task content ("" when the chat type has none)
+    ) -> ChatSession:
         """ Returns the single active ChatSession for the user or creates one if needed. """
         profile = get_profile(user)
-        session, created = (ChatSession.objects.select_for_update().get_or_create(profile=profile, source=source, is_active=True))
+        session, created = ChatSession.objects.select_for_update().get_or_create(
+            profile   = profile,
+            source    = source,
+            chat_type = chat_type,
+            condition = condition,
+            variant   = variant,
+            is_active = True,
+        )
         return session
 
     # Load the patient's initial recording preference for a newly connected session

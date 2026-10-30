@@ -1,11 +1,12 @@
 """
 Route active-listening assessments into safe chat response outcomes.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.live_chat.active_listening.response_engine`
+`backend.chat_app.websocket.harnesses.active_listening.response_engine`
 
-The 'engine' isn't attached to any specific WebSocket or chat state. A single 
-instance is reused across standard chat connections so its API client is not
-recreated for every WebSocket.
+The 'engine' isn't attached to any specific WebSocket or chat state. A single
+instance is reused across active-listening chat connections so its API client is
+not recreated for every WebSocket. Each connection's harness (`harness.py`) keeps
+its own dialogue state and passes it in.
 
 NOTE: For more information about the design and how it works, check the README
       markdown file in this directory.
@@ -24,19 +25,19 @@ logger = logging.getLogger(__name__)
 from collections.abc import Awaitable, Callable
 
 # From this project
-from .....config               import ACTIVE_LISTENING_GRACE_SEC
-from   ...chat_utilities       import get_LLM_response, prepare_LLM_messages
-from    ..cognibot_api         import DEFAULT_RESPONSE, CognibotResponse, ResponseMood
-from     .active_listening_api import ActiveListeningAPI, ActiveListeningAPIError
-from     .response_models      import DialogueState, EndConfirmation, ResponseOutcome, ResponseStrategy, ResponseTrigger, TurnAssessment
+from ....config                      import ACTIVE_LISTENING_GRACE_SEC
+from ....services.llm.chat_utilities import get_LLM_response, prepare_LLM_messages
+from   ..avatar                      import ResponseMood
+from   ..base                        import ChatContext, MoodPublisher, ResponseOutcome, ResponseTrigger
+from   ..unguided.cognibot_api       import DEFAULT_RESPONSE, CognibotResponse
+from    .active_listening_api        import ActiveListeningAPI, ActiveListeningAPIError
+from    .response_models             import DialogueState, EndConfirmation, ResponseStrategy, TurnAssessment
 
 
 # --------------------------------------------------------------------------------
 # Hardcoded configuration
 # --------------------------------------------------------------------------------
 # Response types
-ChatContext    = list[tuple[str, str, float]]                                # Timestamped role/content turns passed through the live-chat coordinator
-MoodPublisher  = Callable[[ResponseMood], Awaitable[None]]                   # Cancellable callback for publishing an early robot expression
 LegacyResponse = Callable[[ChatContext], Awaitable[CognibotResponse | str]]  # Existing generator used when turn assessment is unavailable
 
 # Scripted responses and fallbacks
@@ -48,7 +49,7 @@ MSG_DEFAULT_CLARIFY     = "I'm not sure I heard that correctly. Could you say it
 MSG_DEFAULT_RESUME      = "Okay, let's keep talking. What would you like to talk about?"  # Safe fallback after an end request is withdrawn
 MSG_DEFAULT_GOODBYE     = "Alright, it was great talking with you. Take care!"            # Safe fallback after an end request is confirmed
 
-# Process-wide engine reused by every standard active-listening chat
+# Process-wide engine reused by every active-listening chat
 _active_listening_engine: ActiveListeningEngine | None = None
 
 
@@ -111,9 +112,9 @@ class ActiveListeningEngine:
         # 1c) If the user's intent was to end or pause the chat => skip the stage 2 model
         #     (control responses are deterministic/hardcoded, no need to generate text)
         if assessment.user_intent == "end_chat":
-            return ResponseOutcome(message=MSG_END_CONFIRM, robot_mood=assessment.robot_mood, next_dialogue_state="awaiting_end_confirmation")
+            return ResponseOutcome(message=MSG_END_CONFIRM, state="awaiting_end_confirmation")
         if assessment.user_intent == "pause_chat":
-            return ResponseOutcome(message=MSG_PAUSE,       robot_mood=assessment.robot_mood, pause_listening=True)
+            return ResponseOutcome(message=MSG_PAUSE,       pause_listening=True)
 
         # --------------------------------------------------------------------------------
         # 2) Generate a response to the user using our stage 2 model: "SpokenResponse"
@@ -132,7 +133,7 @@ class ActiveListeningEngine:
 
         # 2c) Only once the waiting period (and the window to cancel this response) has
         #     passed do we return the response message.
-        return ResponseOutcome(message=message, robot_mood=assessment.robot_mood)
+        return ResponseOutcome(message=message)
 
 
     # --------------------------------------------------------------------------------
@@ -151,12 +152,12 @@ class ActiveListeningEngine:
         except ActiveListeningAPIError:
             logger.exception("Active-listening end confirmation failed; leaving the request unresolved.")
             await publish_mood("Thinking")
-            return ResponseOutcome(message=MSG_END_UNCLEAR, robot_mood="Thinking", next_dialogue_state="awaiting_end_confirmation")
+            return ResponseOutcome(message=MSG_END_UNCLEAR, state="awaiting_end_confirmation")
 
         # It was unclear if the user's response confirmed or denied their desire to end the chat
         if confirmation.decision == "unclear":
             await publish_mood("Thinking")
-            return ResponseOutcome(message=MSG_END_UNCLEAR, robot_mood="Thinking", next_dialogue_state="awaiting_end_confirmation")
+            return ResponseOutcome(message=MSG_END_UNCLEAR, state="awaiting_end_confirmation")
 
         # User confirms that they do wish to end the chat, so we reply with one final closing message
         if confirmation.decision == "confirm":
@@ -174,7 +175,7 @@ class ActiveListeningEngine:
 
         await publish_mood(mood)
         message = await self._generate_message(history, confirmation, directive, fallback=fallback)
-        return ResponseOutcome(message=message, robot_mood=mood, close_after=close)
+        return ResponseOutcome(message=message, state="normal", close_after=close)
 
     # --------------------------------------------------------------------------------
     # Fallback response generation using the previous single-stage model
@@ -189,11 +190,11 @@ class ActiveListeningEngine:
         # Cognibot API responses include a mood that we can send to the frontend
         if isinstance(response, CognibotResponse):
             await publish_mood(response.response_mood)
-            return ResponseOutcome(message=response.message, robot_mood=response.response_mood)
+            return ResponseOutcome(message=response.message)
 
         # In case we got a response with a different schema
         await publish_mood("Neutral")
-        return ResponseOutcome(message=str(response), robot_mood="Neutral")
+        return ResponseOutcome(message=str(response))
     
     # --------------------------------------------------------------------------------
     # Generates spoken responses using our stage 2 model: "SpokenResponse"

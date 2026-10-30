@@ -424,21 +424,21 @@ a new reply, its two sentences numbered the way the backend will number them
 
 Paths are under `backend/chat_app/`.
 
-1. **A chat type that uses plans.** Chat types are separate consumers, routed
-   by socket path (`websocket/routing.py`: `ws/chat/` is `ChatConsumer`, with
-   `CHAT_TYPE = "standard"`; `ws/chat/activity/` is `ActivityChatConsumer`). A
-   consumer can supply a response engine (`_turn_response_engine`, returning a
-   `ResponseOutcome`), as the active-listening engine and
-   `ActivityResponseEngine` do. The chat page picks the socket path from its chat
-   mode (`chatMode` in `frontend/src/pages/chat/Chat.tsx`), so a new chat type
-   needs a mode there too.
+1. **A chat type that uses plans.** Each chat type is a harness
+   (`websocket/harnesses/`, see its README), picked per connection with the
+   `chat_type` query parameter, and its `generate` returns a `ResponseOutcome`
+   for every reply. The chat page still picks only the socket path from its chat
+   mode (`chatMode` in `frontend/src/pages/chat/Chat.tsx`; `ws/chat/activity/` is
+   the older route for `chat_type=activity`), so a new chat type needs a mode
+   there that sends `chat_type`.
 2. **Setup, then only plans.** Send `avatar_setup` when the client connects,
    then drive the avatar only with plans. No `robot_action` in that chat: an LLM
    mood or an admin button would cut the running plan short.
 3. **One send function for avatar frames** that drops anything made for a
    superseded turn, a general version of `ChatHandler._publish_response_mood`
-   (`websocket/services/chatHelpers.py`), which drops a mood once
-   `consumer._stt_progress_revision` has moved on.
+   (`websocket/services/chatHelpers.py`), which drops an automatic reply's mood
+   once `consumer._stt_progress_revision` has moved on (newer speech never cancels
+   a `reply_now` reply, so its mood always goes out).
 4. **Reply timing as it is today.** `llm_response` goes out when the exchange
    commits (`ChatHandler._commit_response`), with `responseId` set to the
    assistant message's id. TTS starts after that

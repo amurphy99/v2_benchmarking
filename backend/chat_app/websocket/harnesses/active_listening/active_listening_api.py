@@ -1,7 +1,7 @@
 """
 Structured LLM client for each active-listening generation stage.
 --------------------------------------------------------------------------------
-`backend.chat_app.services.llm.live_chat.active_listening.active_listening_api`
+`backend.chat_app.websocket.harnesses.active_listening.active_listening_api`
 
 One asynchronous client is reused by the stateless response engine. This module
 only performs requests when a stage method is awaited; importing or constructing
@@ -26,15 +26,15 @@ import instructor, asyncio, logging, time
 logger = logging.getLogger(__name__)
 
 # From this project
-from .....config import (
+from ....config import (
     ACTIVE_LISTENING_TIMEOUT_SEC, ACTIVE_LISTENING_MAX_RETRIES,
     ACTIVE_LISTENING_RETRY_DELAY_SEC, ACTIVE_LISTENING_ASSESSMENT_TEMP,
     ACTIVE_LISTENING_RESPONSE_TEMP,
 )
-from  ...endpoint         import LLM_URL, API_KEY, MODEL_NAME
-from ....logging_utils    import RESET, BOLD, UNBOLD, LLM_MAIN
-from     .prompts         import build_assessment_messages, build_confirmation_messages, build_response_messages
-from     .response_models import EndConfirmation, SpokenResponse, TurnAssessment, log_end_confirmation, log_spoken_response, log_turn_assessment
+from ....services.llm.endpoint  import LLM_URL, API_KEY, MODEL_NAME
+from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from    .prompts                import build_assessment_messages, build_confirmation_messages, build_response_messages
+from    .response_models        import EndConfirmation, SpokenResponse, TurnAssessment, log_end_confirmation, log_spoken_response, log_turn_assessment
 
 
 # Structured model returned by one generic request
