@@ -25,6 +25,9 @@ NOTE: You don't need to send a timestamp with the message -- all timestamps are
       marked from the backend to keep a single relative timeframe. These events
       fill the assistant ChatMessage's normal `start_ts` and `end_ts` fields.
 
+Each accepted event is also passed to the chat type's harness, whose cues can time
+the user's silence from the end of the reply.
+
 """
 from __future__  import annotations
 from typing      import TYPE_CHECKING
@@ -66,3 +69,7 @@ async def handle_playback_event(consumer: ChatConsumer, data: dict[str, object])
     # 4) Log a warning if the response ID did not match any entry for this session
     if not updated:
         logger.warning(f"{CC_MAIN} Ignoring playback event for an unrelated assistant response.{RESET}")
+        return
+
+    # 5) Let the chat type's harness hear that the reply's audio started or finished
+    consumer.harness.on_playback(response_id, state)

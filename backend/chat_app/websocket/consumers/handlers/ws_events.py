@@ -21,10 +21,12 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
 
 # Handling incoming payloads
+from ...harnesses.base       import FinalUtterance
 from ...services.chatHelpers import ChatHandler
 from  ..processing.audio     import ingest_audio_payload
 from  ..processing.commands  import dispatch_command
 from  ..processing.playback  import handle_playback_event
+from  ..processing.speech    import handle_final
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
@@ -73,9 +75,13 @@ async def handle_transcription_message(consumer: ChatConsumer, data: dict[str, o
         return
 
     # Normalize transport data before passing an explicit utterance into ChatHandler
+    text      = transcript.strip()
     timestamp = data.get("time", time.time())
     if not isinstance(timestamp, (int, float)): timestamp = time.time()
-    await ChatHandler.stage_and_schedule(consumer, transcript.strip(), float(timestamp), words=None)
+
+    # The harness hears the utterance first, as it does for backend STT
+    handle_final(consumer, FinalUtterance(text=text, words=()))
+    await ChatHandler.stage_and_schedule(consumer, text, float(timestamp), words=None)
 
 # --------------------------------------------------------------------------------
 # [CONTROL] Validate & handle incoming client commands (e.g., `reply_now`)

@@ -278,7 +278,8 @@ boundaries so the assistant message gets accurate `start_ts` / `end_ts` in the d
 
 Do **not** send a timestamp -- all timing is stamped on the backend so everything shares one
 clock. Skipping these messages entirely is fine and fully supported; it just means the
-assistant messages have no audible-interval timing.
+assistant messages have no audible-interval timing, and a chat type that times the user's
+silence after a reply can only start timing it from the user's own speech.
 
 This is worth wiring up on Buddy eventually, since it is the only way the backend learns how
 long the robot actually spent speaking.

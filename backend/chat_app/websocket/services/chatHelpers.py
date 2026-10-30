@@ -257,6 +257,25 @@ class ChatHandler:
                     )
                 return msg
 
+    # --------------------------------------------------------------------------------
+    # Harness-started turns (a re-prompt, an opening line)
+    # --------------------------------------------------------------------------------
+    @staticmethod
+    def request_harness_turn(consumer: ChatConsumer) -> asyncio.Task[str | None] | None:
+        """
+        Start a reply the chat type's harness asked for, through the same lock,
+        cancellation, and commit as every other reply. It answers any staged speech, or
+        speaks on its own when nothing is staged, and newer speech cancels it like an
+        automatic reply. Returns None, starting nothing, while another reply owns the
+        turn or the chat is closing; the harness can ask again later.
+        """
+        replies = (consumer._pending_response_task, consumer._reply_now_task, consumer._manual_response_task)
+        if consumer._close_scheduled or any((task is not None) and (not task.done()) for task in replies): return None
+
+        consumer._pending_response_trigger = "harness"
+        consumer._pending_response_task    = fire_and_log(ChatHandler._execute_response(consumer, trigger="harness"), name="chat::harness_turn")
+        return consumer._pending_response_task
+
     # ================================================================================
     # Cancellable Response Task (body)
     # ================================================================================
@@ -275,38 +294,44 @@ class ChatHandler:
         Generate and commit a response from one immutable staged-utterance snapshot.
 
         Cancellation leaves the snapshot staged so automatic or forced-reply retry logic
-        can include it with any speech that arrived later.
+        can include it with any speech that arrived later. A harness turn may run with
+        nothing staged; its reply is then saved on its own.
         """
+        # --------------------------------------------------------------------------------
+        # 1) Build LLM Context (using staged text)
+        # --------------------------------------------------------------------------------
+        # Get a snapshot of the staged text (keep for accumulation if canceled)
+        # We do NOT clear it from the consumer until we know the full response was successful
+        staged_snapshot = consumer._staged_utterances.snapshot()
+
+        # Combine the staged text
+        combined_text  = " ".join(item.text for item in staged_snapshot)
+        combined_ts    = now_ts()
+        combined_words = [word for item in staged_snapshot for word in item.words]
+
+        # Only a harness turn replies with nothing staged (a re-prompt, or an opening line)
+        if (not combined_text.strip()) and (trigger != "harness"): return
+
+        # Build LLM context with staged message -- without modifying 'context_buffer' yet
+        temp_context = list(consumer.context_buffer)
+        if staged_snapshot: temp_context.append(("user", combined_text, combined_ts))
+
+        # A mood is checked against the STT revision this attempt started from
+        response_revision = consumer._stt_progress_revision
+        attempt = TurnAttempt(
+            context      = temp_context,
+            user_text    = combined_text,
+            trigger      = trigger,
+            publish_mood = lambda mood: ChatHandler._publish_response_mood(consumer, mood, trigger, response_revision),
+        )
+        consumer.harness.on_reply_started(attempt)
+
+        # On cancellation the staged utterances stay staged; they accumulate for the next attempt
+        commit_task = None
         try:
-            # --------------------------------------------------------------------------------
-            # 1) Build LLM Context (using staged text)
-            # --------------------------------------------------------------------------------
-            # Get a snapshot of the staged text (keep for accumulation if canceled)
-            # We do NOT clear it from the consumer until we know the full response was successful
-            staged_snapshot = consumer._staged_utterances.snapshot()
-
-            # Combine the staged text
-            combined_text  = " ".join(item.text for item in staged_snapshot)
-            combined_ts    = now_ts()
-            combined_words = [word for item in staged_snapshot for word in item.words]
-
-            if not combined_text.strip(): return
-
-            # Build LLM context with staged message -- without modifying 'context_buffer' yet
-            temp_context = list(consumer.context_buffer) + [("user", combined_text, combined_ts)]
-
             # --------------------------------------------------------------------------------
             # 2) Get the reply from the chat type's harness (this is the primary cancellation window)
             # --------------------------------------------------------------------------------
-            # A mood is checked against the STT revision this attempt started from
-            response_revision = consumer._stt_progress_revision
-            attempt = TurnAttempt(
-                context      = temp_context,
-                user_text    = combined_text,
-                trigger      = trigger,
-                publish_mood = lambda mood: ChatHandler._publish_response_mood(consumer, mood, trigger, response_revision),
-            )
-
             # The harness proposes text and effects without changing the consumer
             response_outcome = await consumer.harness.generate(attempt)
             system_resp      = response_outcome.message
@@ -360,8 +385,10 @@ class ChatHandler:
 
             return system_resp
 
-        # Staged utterances are intentionally NOT cleared; they accumulate for the next response attempt
-        except asyncio.CancelledError: raise
+        # Tell the harness the reply was cancelled (once its commit started, the exchange is saved)
+        except asyncio.CancelledError:
+            consumer.harness.on_reply_cancelled(attempt, saved=(commit_task is not None))
+            raise
 
     # --------------------------------------------------------------------------------
     # Send a mood to the frontend (if we have it before the spoken text result)
@@ -374,11 +401,11 @@ class ChatHandler:
         response_revision : int,              # STT revision when the reply attempt started
     ) -> None:
         """
-        Newer speech cancels an automatic reply, so its mood is dropped once the STT
-        revision has moved. Speech never cancels a `reply_now` reply, so that mood
-        always goes out with it.
+        Newer speech cancels every reply except a `reply_now` one, so any other reply's
+        mood is dropped once the STT revision has moved. A `reply_now` reply plays
+        anyway, so its mood always goes out with it.
         """
-        if (trigger == "automatic") and (response_revision != consumer._stt_progress_revision): return
+        if (trigger != "reply_now") and (response_revision != consumer._stt_progress_revision): return
         await send_mood(consumer, mood)
 
     # --------------------------------------------------------------------------------
@@ -396,12 +423,14 @@ class ChatHandler:
         response_outcome : ResponseOutcome,          # Harness reply, with the effects to apply once it is saved
     ) -> ChatMessage:
         # Save the matching turn atomically, then publish it before consuming its staged prefix
-        user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
+        # (a harness turn with nothing staged saves only its reply)
+        if staged_snapshot: user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
+        else:               user_msg, assistant_msg = None, await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
         consumer._staged_utterances.consume(staged_snapshot)
         consumer.last_response = system_resp
 
         # Let the harness enter the state this reply proposed, now that its exchange is durable
-        consumer.harness.committed(response_outcome)
+        consumer.harness.on_reply_saved(response_outcome)
 
         # Send the already-persisted assistant response to the primary frontend
         await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_msg.id}))
@@ -409,6 +438,9 @@ class ChatHandler:
         # Apply the reversible stream effect after publishing its acknowledgement message
         if response_outcome.pause_listening:
             await set_streaming_active(consumer, active=False)
+
+        # A reply with no user turn has no words or biomarkers to process
+        if user_msg is None: return assistant_msg
 
         # Save word timestamps and derive biomarkers in supervised session tasks
         if (combined_words) and (user_msg):

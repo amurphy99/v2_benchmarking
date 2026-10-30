@@ -146,6 +146,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # traffic. Any older primary socket for this user is closed with a dedicated code.
         await claim_primary_connection(self)
 
+        # The chat type's harness starts once its session and STT are ready
+        await self.harness.start()
+
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id,
                              config={"chat_type": self.harness.NAME, "condition": self.harness.condition, "variant": self.harness.variant,
@@ -164,6 +167,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Shut down the STT provider
         if getattr(self, "stt_provider", None): self.stt_provider.shutdown()
+
+        # Stop the harness's cues so none of their timers starts a turn during teardown
+        harness = getattr(self, "harness", None)
+        if harness is not None:
+            try: harness.stop()
+            except Exception: logger.exception(f"{lu.CC_MAIN} Failed to stop the chat type's harness.{lu.RESET}")
 
         # Notify listeners that the user has disconnected
         try: await self._broadcast_stream_status("ended")
@@ -349,7 +358,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Response task state
         self._staged_utterances        = StagedUtteranceBuffer()    # Utterances received since the last successful assistant response 
         self._pending_response_task    = None                       # Current 'asyncio.Task' for '_execute_response'
-        self._pending_response_trigger = None                       # "automatic" or "reply_now" for cancellation policy
+        self._pending_response_trigger = None                       # "automatic", "reply_now", or "harness" for cancellation policy
         self._manual_response_task     = None                       # Current admin-supplied or repeated response task
         self._reply_now_task           = None                       # Coordinator retaining a forced-reply request across retries
         self._reply_now_generation     = 0                          # Newer reply requests supersede older queue boundaries

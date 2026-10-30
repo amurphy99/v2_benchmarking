@@ -55,6 +55,8 @@ session through Channels groups and can relay canonical commands to the primary.
  │   │   Validates optional assistant playback timestamps from primary frontends.
 +│   ├── commands.py
  │   │   Defines canonical commands, applies their behavior, and builds ack bodies.
++│   ├── speech.py
+ │   │   Hands each interim and final result to reply cancellation and the chat type's harness.
 +│   └── stream.py
  │       Starts/stops backend STT and publishes the confirmed listening state.
  │
@@ -66,7 +68,7 @@ session through Channels groups and can relay canonical commands to the primary.
 Related code outside this directory:
 
 - `harnesses/` holds what differs between chat types: each one's replies, prompts, LLM
-  clients, and dialogue state.
+  clients, dialogue state, and cues (which hear every stage of a turn).
 - `services/chatHelpers.py` coordinates staged utterances, cancellation, LLM responses,
   response commits, and TTS.
 - `services/chat_state.py` keeps staged transcript text and word timestamps together.
@@ -95,6 +97,7 @@ Related code outside this directory:
 6. Build the bounded in-memory `context_buffer` used for LLM calls.
 7. Join the session room and control Channels groups.
 8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer.
+9. Claim the user's primary connection, then start the harness (`harness.start()`).
 
 The consumer instance is the owner of per-connection mutable state. Processing modules
 operate on that state but do not create a parallel session object.
@@ -117,7 +120,7 @@ Frontend JSON
 | Type | Destination | Purpose |
 |---|---|---|
 | `audio_data` | `processing.audio.ingest_audio_payload` | Ingest one small PCM audio chunk |
-| `transcription` | `ChatHandler.stage_and_schedule` | Stage direct frontend text |
+| `transcription` | `processing.speech.handle_final`, then `ChatHandler.stage_and_schedule` | Let the harness hear direct frontend text, then stage it |
 | `command` | `processing.commands.dispatch_command` | Execute a canonical control command |
 | `tts_playback` | `processing.playback.handle_playback_event` | Store optional assistant playback timing |
 | `overlapped_speech` | `ws_events.handle_overlap` | Track a frontend overlap notification |
@@ -147,14 +150,19 @@ Primary frontend
 
 Google results have two paths:
 
-- Interim results are never staged as user text. The progress tracker compares transcript
-  and timing progress; only genuinely advancing speech cancels a pending response.
-- Final results include finalized text and, when available, word timestamps. They are
-  scheduled onto the main event loop through `ChatHandler.stage_and_schedule()`.
+- Interim results are never staged as user text. Each one goes to
+  `processing.speech.handle_interim()` on the main event loop. The progress tracker
+  compares transcript and timing progress; only genuinely advancing speech cancels a
+  pending response, and then the chat type's harness hears the interim.
+- Final results include finalized text and, when available, word timestamps. The harness
+  hears each one first (`processing.speech.handle_final()`), queued in order with the
+  interims, and then it is scheduled onto the main event loop through
+  `ChatHandler.stage_and_schedule()`.
 
-A direct frontend `transcription` reaches the same staging method without Google word
+A direct frontend `transcription` reaches the same two steps without Google word
 timestamps. Both paths therefore share accumulation and trigger-aware cancellation behavior:
 continued speech cancels automatic responses, but not an accepted `reply_now` response.
+`../harnesses/README.md` lists every turn event a harness hears.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Session Recording                                                                -->
@@ -380,13 +388,14 @@ whole callback task remains background work relative to response delivery.
 `ChatConsumer.disconnect()` performs shutdown in dependency order:
 
 1. Mark the connection as closing and shut down the STT provider.
-2. Broadcast the ended stream state.
-3. Cancel and await connection-owned response coordinator tasks.
-4. Flush any staged user text that never received a response.
-5. Finalize or discard the temporary user-only WAV according to the recording toggle.
-6. Attach `SessionAudio` metadata, mark the session inactive, then schedule slower analysis.
-7. Leave every Channels group.
-8. Clear model/session references and reset per-session response state.
+2. Stop the harness, so none of its cues' timers starts a turn during teardown.
+3. Broadcast the ended stream state.
+4. Cancel and await connection-owned response coordinator tasks.
+5. Flush any staged user text that never received a response.
+6. Finalize or discard the temporary user-only WAV according to the recording toggle.
+7. Attach `SessionAudio` metadata, mark the session inactive, then schedule slower analysis.
+8. Leave every Channels group.
+9. Clear model/session references and reset per-session response state.
 
 `ChatListenerConsumer.disconnect()` only leaves its groups. A listener never owns or
 closes the underlying chat session.

@@ -128,7 +128,7 @@ class UnguidedIntentTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(outcome.message, MSG_END_CONFIRM)
         self.assertEqual(self.harness.state, "normal")
-        self.harness.committed(outcome)
+        self.harness.on_reply_saved(outcome)
         self.assertEqual(self.harness.state, "awaiting_end_confirmation")
 
     # After the confirmation question, "yes" says goodbye and closes, and "no" resumes
