@@ -1,4 +1,4 @@
-/* Simulate a chat turn: the user just finished, the avatar thinks, then replies.
+/* Simulate a chat turn: the user just finished, the avatar thinks, and replies.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/avatar_demo/utils/useSimulatedTurn`
 
@@ -25,8 +25,9 @@ import { useCallback, useEffect, useRef } from "react";
 import type { ConversationState } from "@/pages/common/avatar/avatarRegistry";
 
 // How long the avatar thinks (the LLM working) before the reply's text arrives, and the text's wait for its first audio
-const DEMO_TURN_THINK_MS = 1_000;
-const DEMO_TURN_SYNTH_MS =   500;
+// (the example plans' replies wait the same)
+const        DEMO_TURN_THINK_MS = 1_000;
+export const DEMO_TURN_SYNTH_MS =   500;
 
 // How far ahead of the playhead the audio player schedules the first chunk (`bufferAhead` in `useAudioPlayer`)
 const DEMO_TURN_VOICE_LAG_MS = 200;

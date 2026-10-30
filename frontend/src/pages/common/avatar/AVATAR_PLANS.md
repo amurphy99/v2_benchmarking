@@ -7,9 +7,11 @@ Smiley avatar can do and what the client can observe, so the backend can be buil
 it. Once the backend side is settled it moves into
 `backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md`.
 
-> **Status:** nothing sends or reads these frames yet; the frontend is being built to this
-> draft. The existing pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and
-> every client and chat type that doesn't use plans keeps working exactly as it does today.
+> **Status:** the avatar demo page (`/avatar-demo`) runs these frames, playing the backend's
+> part with example plans; the chat page doesn't read them yet, and the backend sends none.
+> The existing pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and every
+> client and chat type that doesn't use plans keeps working exactly as it does today. For how
+> the frontend runs a plan, and what the backend needs, see `README.md` beside this file.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Overview                                                                         -->

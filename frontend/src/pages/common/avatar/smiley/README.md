@@ -12,6 +12,9 @@ shows up in three places:
   its named actions.
 * **The public avatar demo** (`/avatar-demo`): every behavior, with no backend.
 
+For how the avatars are driven overall (the page, `robot_action`, and backend
+plans, end to end), see `../README.md`; this file covers the Smiley itself.
+
 The code is split so that **behavior** (what the face is doing over time) and
 **drawing** (turning one frame's numbers into SVG) never mix. The controller
 produces one `FaceState` per frame, and the 2D renderer only draws it, so a
@@ -283,6 +286,13 @@ objects: [{kind: "heart", at: "center", dx: -96, dy: -50, scale: 1, bob: 4, puls
   "Think, then reply" simulates a full turn: thinking, then the reply's text
   arrives (a breath in, plus a Nod and a Smiling Face sent as separate
   commands, the smile lasting into the speech), then the sample reply.
+* **Try plans with the example buttons.** Example Plans and the Map Task group
+  send `avatar_setup` and `avatar_plan` frames on a timer, through the same
+  checks and scheduler a chat uses (`pages/avatar_demo/utils/planExamples.ts`),
+  and play the sample reply when an example needs one. The log shows how each
+  run ended: finished, cancelled, or rejected with the reason. A Map Task
+  example turns on the Map Task setup, which gives the conversation state to the
+  plans (the face controls' state buttons stop working); "Put it away" clears it.
 * **Checks:** `npm run build` in `frontend/` catches syntax and import errors.
   There is no frontend test suite, so check behavior on the demo page.
 

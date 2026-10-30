@@ -9,12 +9,18 @@ import      { useEffect, useState } from "react";
 // From this project
 import      { buttonSectionHeader, groupDivStyle } from "@/hooks/chat-listener/chat-controls/styles";
 import type { RobotAction                        } from "@/pages/common/avatar/avatarRegistry";
+import type { ExampleRunEnd                      } from "../utils/usePlanExamples";
 
 // How often hold countdowns refresh
 const DEMO_LOG_TICK_MS = 200;
 
-// One sent action, with a log id, when it was sent, and its strength (`kind: "reset"` marks the Reset button)
-export type LoggedAction = RobotAction & {id: number; sentAt: number; strength: number};
+// One sent action (`kind: "reset"` marks the Reset button, and `kind: "plan"` an example plan)
+export type LoggedAction = RobotAction & {
+    id          : number;
+    sentAt      : number;                      // When it was sent (`Date.now()` ms)
+    strength    : number;
+    planStatus? : "running" | ExampleRunEnd;   // An example plan's run: still running, or how it ended
+};
 
 
 // --------------------------------------------------------------------------------
@@ -58,6 +64,11 @@ export default function ActionLog({log}: {
 
 // Describe where one sent action stands now
 function actionStatus(entry: LoggedAction, isLatestMood: boolean, nowMs: number): string {
+    // An example plan: running, or how its run ended
+    if (typeof entry.planStatus === "string") return entry.planStatus;
+    if (entry.planStatus !== undefined)       return `rejected: ${entry.planStatus.rejected}`;
+
+    // A reset, a movement or animation, or an emotion another one replaced
     if (entry.kind === "reset")   return "back to Neutral";
     if (entry.kind !== "emotion") return "plays once";
     if (!isLatestMood)            return "replaced";

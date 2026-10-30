@@ -13,7 +13,8 @@ back, and the other feedback each plan asks for.
 The page tells it about the replies (the audio player's marks, plus each
 `llm_response` as it arrives) and about every `robot_action`, which counts as a
 newer plan. `setup` is the session's latest setup: once there is one, the
-backend owns the conversation state and the page stops guessing it.
+backend owns the conversation state and the page stops guessing it, until
+`clearSetup` forgets it (at the end of a session).
 
 */
 import type { RefObject                                         } from "react";
@@ -45,6 +46,7 @@ export type ReplyFeed = {
 export type AvatarPlans = {
     runPlan         : (plan: AvatarPlan) => void;       // A checked plan arrived
     applySetup      : (setup: AvatarSetup) => void;     // A checked setup arrived
+    clearSetup      : () => void;                       // Forget the session's setup (the session ended)
     noteRobotAction : () => void;                       // A `robot_action` arrived (it drops the running plan's waiting steps)
     noteReplyText   : (responseId: number) => void;     // A reply's `llm_response` arrived
     setup           : AvatarSetup | null;               // The session's latest setup (null until one arrives)
@@ -68,7 +70,7 @@ export function useAvatarPlans(
     const feedbackRef = useRef(onFeedback);
     const repliesRef  = useRef(replies);
     useEffect(() => { feedbackRef.current = onFeedback; }, [onFeedback]);
-    useEffect(() => { repliesRef.current  = replies;    }, [replies]);
+    useEffect(() => { repliesRef.current  = replies;    }, [replies   ]);
 
     // When each reply's text arrived (joined to the player's marks)
     const textAtRef = useRef<Map<number, number>>(new Map());
@@ -81,8 +83,8 @@ export function useAvatarPlans(
     // --------------------------------------------------------------------------------
     // Steps go to whichever avatar is mounted when they run (none, between avatars, does nothing)
     const scheduler = useMemo(() => createPlanScheduler(
-        (actions: StepActions): number => avatarRef.current?.runPlanStep?.(actions) ?? 0,
-        (feedback: AvatarFeedback): void => feedbackRef.current(feedback),
+        (actions:  StepActions   ): number => avatarRef.current?.runPlanStep?.(actions) ?? 0,
+        (feedback: AvatarFeedback): void   => feedbackRef.current(feedback),
     ), [avatarRef]);
 
     // Every frame: run the steps that are due, and hold the next reply's audio for any step that asked
@@ -114,17 +116,24 @@ export function useAvatarPlans(
         scheduler.tick(nowMs, marks);
     }, [catalog, scheduler]);
 
-    // Check a setup's names, then keep it as the session's setup
+    // Check a setup's names, apply it now (before any plan after it), and keep it as the session's
     const applySetup = useCallback((next: AvatarSetup): void => {
         const problem = (catalog === null) ? "this avatar can't take a setup" : checkSetupNames(next, catalog);
         if (problem !== null) {
             feedbackRef.current({id: null, event: "rejected", reason: problem});
             return;
         }
+        avatarRef.current?.applySetup?.(next);
         setSetup(next);
-    }, [catalog]);
+    }, [avatarRef, catalog]);
 
-    // The avatar takes the latest setup, and so does a newly picked one as it mounts
+    // Forget the session's setup (the avatar's own behaviors and the page's state count again)
+    const clearSetup = useCallback((): void => {
+        avatarRef.current?.applySetup?.(null);
+        setSetup(null);
+    }, [avatarRef]);
+
+    // A newly picked avatar takes the session's setup as it mounts
     useEffect(() => {
         if (setup !== null) avatarRef.current?.applySetup?.(setup);
     }, [avatarRef, avatarModel, setup]);
@@ -140,7 +149,7 @@ export function useAvatarPlans(
         }
     }, []);
 
-    return {runPlan, applySetup, noteRobotAction: scheduler.cancel, noteReplyText, setup};
+    return {runPlan, applySetup, clearSetup, noteRobotAction: scheduler.cancel, noteReplyText, setup};
 }
 
 

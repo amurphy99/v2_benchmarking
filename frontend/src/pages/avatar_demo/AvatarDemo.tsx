@@ -7,8 +7,11 @@ the AdminChat panel shows (`AvatarActionsGroup`, fed by the same capability
 profile). Each button hands a `RobotAction` straight to the avatar's
 `performAction`, the same path a live chat's `robot_action` frames take, so a
 behavior that works here works in a chat. Avatars with optional features (gaze,
-conversation state, speech level, sleep) also get the face controls, and the
-Smiley gets the Map Task controls.
+conversation state, speech level, sleep) also get the face controls. Avatars
+that run backend plans get example plans to try, sent through the same checks
+and scheduler a chat uses (`utils/usePlanExamples`), and the Smiley gets the
+Map Task's map and examples. The log shows everything sent, and how each
+example plan ended.
 
 For tuning one face, the URL can pick the avatar and hold a face from the start
 (`/avatar-demo?avatar=smiley&face=Ponder`), so a reload after an edit
@@ -34,23 +37,23 @@ import      { Avatar                                                    } from "
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase } from "@/pages/common/avatar/avatarRegistry";
 import      { getAvatarEntry                                            } from "@/pages/common/avatar/avatarRegistry";
 import      { useSpeakingAvatar                                         } from "@/pages/common/avatar/useSpeakingAvatar";
-import type { LoggedAction                                              } from "./components/ActionLog";
 import        ActionLog                                                   from "./components/ActionLog";
 import        DemoSetupGroup                                              from "./components/DemoSetupGroup";
 import        DemoSetupModal                                              from "./components/DemoSetupModal";
 import        FaceControlsGroup                                           from "./components/FaceControlsGroup";
 import type { GazePoint                                                 } from "./components/GazePad";
 import        MapTaskGroup                                                from "./components/MapTaskGroup";
+import        PlanExamplesGroup                                           from "./components/PlanExamplesGroup";
 import      { DEMO_DEFAULT_DURATION_MS                                  } from "./utils/durationOptions";
+import type { PlanExample                                               } from "./utils/planExamples";
+import      { useActionLog                                              } from "./utils/useActionLog";
+import      { usePlanExamples                                           } from "./utils/usePlanExamples";
 import      { useSampleReply                                            } from "./utils/useSampleReply";
 import      { useSimulatedSpeech                                        } from "./utils/useSimulatedSpeech";
 import      { useSimulatedTurn                                          } from "./utils/useSimulatedTurn";
 
 // Avatar shown when the page opens
 const DEMO_DEFAULT_AVATAR_ID = "smiley";
-
-// Most actions the log keeps
-const DEMO_LOG_LENGTH = 10;
 
 // Commands "Think, then reply" sends when the reply's text arrives (each sent and logged on its own): a nod at its own
 // length, and a smile held until this far into the speech, then back to Neutral
@@ -77,13 +80,15 @@ export function AvatarDemo(): ReactElement {
     const startAvatarId  = getAvatarEntry(searchParams.get("avatar") ?? DEMO_DEFAULT_AVATAR_ID).id;
     const startFace      = searchParams.get("face");
 
-    // Selected avatar, the hold time and strength every action sends (held when the URL names a face), and the actions sent so far
+    // Selected avatar, and each action's hold time and strength (held when the URL names a face)
     const [avatarId,   setAvatarId  ] = useState<string>(startAvatarId);
     const [durationMs, setDurationMs] = useState<number | null>((startFace === null) ? DEMO_DEFAULT_DURATION_MS : null);
     const [strength,   setStrength  ] = useState<number>(1);
-    const [log,        setLog       ] = useState<LoggedAction[]>([]);
-    const avatarRef = useRef<AvatarHandle>(null);
-    const logIdRef  = useRef<number>(0);
+    const avatarRef  = useRef<AvatarHandle>(null);
+    const replyIdRef = useRef<number>(0);   // Each sample reply played is a new reply
+
+    // Everything sent so far (actions, resets, and example plans with how each run ended)
+    const {log, logAction, logExample, endExample, clearLog} = useActionLog();
 
     // Face inputs the page drives (a newly picked avatar starts from these defaults too)
     const [restingExpression, setRestingExpression] = useState<string>(defaultResting(startAvatarId));
@@ -122,38 +127,37 @@ export function AvatarDemo(): ReactElement {
     // --------------------------------------------------------------------------------
     // Robot Actions
     // --------------------------------------------------------------------------------
-    // Record one action at the top of the log
-    const logAction = (action: RobotAction, sentStrength: number = 1): void => {
-        const logged: LoggedAction = {...action, id: logIdRef.current, sentAt: Date.now(), strength: sentStrength};
-        logIdRef.current += 1;
-        setLog((previous: LoggedAction[]) => [logged, ...previous].slice(0, DEMO_LOG_LENGTH));
-    };
-
-    // Send an action the way a live chat would (with the chosen `duration_ms`, or none for "Hold", unless it brings its own), at the chosen strength
+    // Send an action as a live chat would, with the chosen hold (none for "Hold") and strength
+    // (a caller may pass its own hold; like any newer command, it cuts a running example short)
     const sendAction = (kind: string, value: string, holdMs: number | null = durationMs): void => {
         const action: RobotAction = (holdMs === null) ? {kind, value} : {kind, value, duration_ms: holdMs};
+        examples.noteRobotAction();
         avatarRef.current?.performAction(action, strength);
         logAction(action, strength);
     };
 
-    // Return to Neutral at once
+    // Return to Neutral at once (cutting a running example plan short)
     const resetAvatar = (): void => {
+        examples.noteRobotAction();
         avatarRef.current?.reset();
         logAction({kind: "reset", value: "Neutral"});
     };
 
-    // Switch avatars (the new one mounts fresh, so the page's inputs go back to their defaults)
+    // Switch avatars: stop what's playing, and reset the page's inputs and setup (it mounts fresh)
     const changeAvatar = (id: string): void => {
+        cancelTurn();
+        examples.stop();
+        examples.clearSetup();
+        stopPlayer();
+
         setAvatarId(id);
-        setLog([]);
+        clearLog();
         setRestingExpression(defaultResting(id));
         setConversationState("idle");
         setGazePoint(null);
         setTalking(false);
         setMouthLevel(0);
         setAsleep(false);
-        cancelTurn();
-        stopPlayer();
     };
 
     // --------------------------------------------------------------------------------
@@ -172,20 +176,33 @@ export function AvatarDemo(): ReactElement {
         setMouthLevel(0);
     };
 
-    // Play the sample reply from the start with the chosen extra pause (a missing clip shows as a toast)
-    const playSample = (freshTimeline: boolean): void => {
-        playSampleReply(extraPauseSec, freshTimeline).catch((error: Error) => toast.error(error.message));
+    // A new reply's `responseId`
+    const nextReplyId = (): number => {
+        replyIdRef.current += 1;
+        return replyIdRef.current;
+    };
+
+    // Play the sample reply as this reply, with the chosen extra pause (a missing clip shows a toast)
+    const playSample = (freshTimeline: boolean, responseId: number): void => {
+        playSampleReply(extraPauseSec, freshTimeline, responseId).catch((error: Error) => toast.error(error.message));
     };
 
     // A simulated turn: think for a moment right after the user's last word, then reply (see `useSimulatedTurn`)
     const prepareToSpeak          = (inMs: number): void => avatarRef.current?.prepareToSpeak?.(inMs);
     const sendReplyCues           = (untilVoiceMs: number): void => DEMO_REPLY_CUES.forEach(({kind, value, intoSpeechMs}) => sendAction(kind, value, (intoSpeechMs === null) ? durationMs : untilVoiceMs + intoSpeechMs));
-    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, prepareToSpeak, sendReplyCues, player.cancelAudio, () => playSample(false), player.systemSpeaking);
+    const {startTurn, cancelTurn} = useSimulatedTurn(changeConversationState, prepareToSpeak, sendReplyCues, player.cancelAudio, () => playSample(false, nextReplyId()), player.systemSpeaking);
 
-    // The reply on its own ends any running turn (back to listening, so no "thinking" or "speaking" is left on)
+    // The reply alone ends any turn or example (back to listening, leaving no thinking or speaking on)
     const playReply = (): void => {
+        examples.stop();
         if (cancelTurn()) changeConversationState("listening");
-        playSample(true);
+        playSample(true, nextReplyId());
+    };
+
+    // A simulated turn ends any running example first
+    const playTurn = (): void => {
+        examples.stop();
+        startTurn();
     };
 
     // Doze the avatar off, or wake it with its yawn (what the chat page does as the chat stops and starts)
@@ -193,6 +210,24 @@ export function AvatarDemo(): ReactElement {
         setAsleep(on);
         if (on) avatarRef.current?.sleep?.();
         else    avatarRef.current?.wake?.();
+    };
+
+    // --------------------------------------------------------------------------------
+    // Example Plans
+    // --------------------------------------------------------------------------------
+    // Sent through a chat's own checks and scheduler (each run is logged with how it ended)
+    const examples = usePlanExamples(avatarRef, avatarId, player, {nextId: nextReplyId, play: (responseId: number) => playSample(false, responseId)}, changeConversationState, endExample);
+
+    // Run one (a simulated turn ends first, back to listening)
+    const runExample = (example: PlanExample): void => {
+        if (cancelTurn()) changeConversationState("listening");
+        examples.run(example, logExample(example.name));
+    };
+
+    // Forget the Map Task setup: the page's own conversation state and resting face count again
+    const clearSetup = (): void => {
+        examples.clearSetup();
+        avatarRef.current?.setRestingExpression?.(restingExpression);
     };
 
     // --------------------------------------------------------------------------------
@@ -235,7 +270,7 @@ export function AvatarDemo(): ReactElement {
                             onMouthLevel        = {changeMouthLevel}
                             replyPlaying        = {player.systemSpeaking}
                             onPlayReply         = {playReply}
-                            onPlayTurn          = {startTurn}
+                            onPlayTurn          = {playTurn}
                             extraPauseSec       = {extraPauseSec}
                             onExtraPause        = {setExtraPauseSec}
                             speechPhase         = {speechPhase}
@@ -244,8 +279,8 @@ export function AvatarDemo(): ReactElement {
                         />
                     ) : null}
 
-                    {/* Map Task map (a new avatar starts without one, so the group starts fresh with it) */}
-                    {(entry.plans?.props.includes("map") === true) ? <MapTaskGroup key={avatarId} avatarRef={avatarRef} /> : null}
+                    {/* Map Task map and examples (avatars whose plans can hold the map) */}
+                    {(entry.plans?.props.includes("map") === true) ? <MapTaskGroup onRun={runExample} onClearSetup={clearSetup} setupOn={examples.setupOn} /> : null}
                 </div>
 
                 {/* -------------------------------------------------------------------------------- */}
@@ -260,6 +295,9 @@ export function AvatarDemo(): ReactElement {
                         onEmotion    = {(value: string) => sendAction("emotion",   value)}
                         onAnimation  = {(value: string) => sendAction("animation", value)}
                     />
+
+                    {/* Example plans (avatars that run plans) */}
+                    {(entry.plans !== null) ? <PlanExamplesGroup onRun={runExample} /> : null}
 
                     <ActionLog log={log} />
                 </div>

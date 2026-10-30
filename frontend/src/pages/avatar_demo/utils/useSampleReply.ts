@@ -7,23 +7,29 @@ should be able to do?") was made once with the backend's own Google TTS voice
 and lives in `frontend/public/audio/`, so Vite and nginx serve it as a plain
 static file. Playing it slices the WAV's PCM into the backend's chunk size and
 hands each chunk to `sendAudio` with `sequence` and `last`, exactly as a live
-reply arrives, so the mouth and the speech gaze run on the real code path.
+reply arrives, so the mouth and the speech gaze run on the real code path. Each
+play is its own reply (the caller picks its `responseId`, as each live reply has
+its own), and its chunks number the clip's two sentences the way the backend
+will (`AVATAR_PLANS.md` §10), so plan steps timed to a sentence can be tried.
 An optional extra pause adds silence in the middle of the clip's sentence
 break, so the pause behavior can be tried at different lengths.
 
 */
 import { useCallback, useRef } from "react";
 
-// Saved clip, the chunk size the backend sends (`CHUNK_SIZE` in `tts_streaming.py`), and the id the clip plays under
+// Saved clip, and the chunk size the backend sends (`CHUNK_SIZE` in `tts_streaming.py`)
 const DEMO_SAMPLE_REPLY_URL   = "/audio/sample_reply.wav";
 const DEMO_SAMPLE_CHUNK_BYTES = 8_192;
-const DEMO_SAMPLE_RESPONSE_ID = 1;
+
+// Where the clip's second sentence's voice starts (`sentence` 2 from the chunk holding it on)
+// (the way the backend will number them, `AVATAR_PLANS.md` §10)
+const DEMO_SAMPLE_SENTENCE_2_AT_SEC = 1.52;
 
 // Middle of the clip's silence between its two sentences (0.96 to 1.52 s), where an extra pause goes
 const DEMO_SAMPLE_PAUSE_AT_SEC = 1.24;
 
 // One chunk as `useAudioPlayer().sendAudio` takes it
-type SampleChunk = {b64: string; responseId: number; sampleRate: number; channels: number; bitsPerSample: number; sequence: number; last: boolean};
+type SampleChunk = {b64: string; responseId: number; sampleRate: number; channels: number; bitsPerSample: number; sequence: number; last: boolean; sentence: number};
 
 // The clip's raw PCM and its format
 type SampleAudio = {pcm: Uint8Array; sampleRate: number; channels: number; bitsPerSample: number};
@@ -36,11 +42,11 @@ type SampleAudio = {pcm: Uint8Array; sampleRate: number; channels: number; bitsP
 export function useSampleReply(
     cancelAudio : () => void,                               // The player's "drop buffered audio and open a fresh timeline"
     sendAudio   : (chunk: SampleChunk) => Promise<void>,    // The player's chunk scheduler
-): (extraPauseSec: number, freshTimeline?: boolean) => Promise<void> {
+): (extraPauseSec: number, freshTimeline: boolean, responseId: number) => Promise<void> {
     // The clip, fetched on the first play
     const audioRef = useRef<SampleAudio | null>(null);
 
-    return useCallback(async (extraPauseSec: number, freshTimeline: boolean = true): Promise<void> => {
+    return useCallback(async (extraPauseSec: number, freshTimeline: boolean, responseId: number): Promise<void> => {
         // A fresh timeline first, while the click still counts as a user gesture (a delayed play reuses one opened at its click)
         if (freshTimeline) cancelAudio();
 
@@ -60,11 +66,13 @@ export function useSampleReply(
         pcm.set(clip.subarray(0, cutAt));
         pcm.set(clip.subarray(cutAt), cutAt + silenceBytes);
 
-        // Send it the way the backend does
-        const count = Math.ceil(pcm.length / DEMO_SAMPLE_CHUNK_BYTES);
+        // Send it as the backend does, numbering its sentences (2 from the chunk where its voice starts)
+        const count    = Math.ceil(pcm.length / DEMO_SAMPLE_CHUNK_BYTES);
+        const secondAt = Math.round((DEMO_SAMPLE_SENTENCE_2_AT_SEC + extraPauseSec) * sampleRate) * frameBytes;
         for (let i = 0; i < count; i++) {
-            const bytes = pcm.subarray(i * DEMO_SAMPLE_CHUNK_BYTES, (i + 1) * DEMO_SAMPLE_CHUNK_BYTES);
-            await sendAudio({b64: btoa(String.fromCharCode(...bytes)), responseId: DEMO_SAMPLE_RESPONSE_ID, sampleRate, channels, bitsPerSample, sequence: i, last: i === count - 1});
+            const bytes    = pcm.subarray(i * DEMO_SAMPLE_CHUNK_BYTES, (i + 1) * DEMO_SAMPLE_CHUNK_BYTES);
+            const sentence = (((i + 1) * DEMO_SAMPLE_CHUNK_BYTES) > secondAt) ? 2 : 1;
+            await sendAudio({b64: btoa(String.fromCharCode(...bytes)), responseId, sampleRate, channels, bitsPerSample, sequence: i, last: i === count - 1, sentence});
         }
     }, [cancelAudio, sendAudio]);
 }

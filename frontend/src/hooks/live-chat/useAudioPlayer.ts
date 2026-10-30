@@ -16,6 +16,13 @@ whether a reply arrives all at once or a sentence at a time.
 `readSpeechRemaining()` says how long until the reply's final chunk (the one
 marked `last`) finishes playing, once that chunk is scheduled.
 
+For backend plans timed to a reply (`pages/common/avatar/AVATAR_PLANS.md` §4),
+`readReplyTimeline()` gives each recent reply's moments in page time (its first
+audio heard, each numbered sentence's, and its end; see `replyMoments`), and
+`holdNextReply()` delays the next reply's first audio, so a step that asked for
+more lead than the buffer gives gets it. The hold stays 0, and changes nothing,
+unless a plan asks.
+
 NOTE: During earlier testing, the first chunk occasionally seemed to be skipped. The
       exact cause has not been confirmed, so the buffering behavior remains explicit.
 
@@ -23,8 +30,10 @@ NOTE: During earlier testing, the first chunk occasionally seemed to be skipped.
 import { useRef, useCallback, useEffect, useState } from "react";
 
 // From this project
-import { pcmToAudioBuffer } from "@/utils/functions/audioHelpers";
-import   useLatencyLogger   from "@/hooks/useLatencyLogger";
+import        useLatencyLogger                                         from "@/hooks/useLatencyLogger";
+import      { pcmToAudioBuffer                                       } from "@/utils/functions/audioHelpers";
+import type { ReplyRecord, ScheduledReply                            } from "./replyMoments";
+import      { cutOffReplies, heardTime, noteReplyChunk, replyMoments } from "./replyMoments";
 
 // Loudness record for the avatar's mouth: the length of one frame
 export const TTS_LOUDNESS_FRAME_SEC = 0.01;
@@ -51,6 +60,7 @@ interface AudioChunkPayload {
     bitsPerSample? : number;   // PCM sample bit depth
     sequence?      : number;   // Zero-based chunk position in the response
     last?          : boolean;  // Whether this is the response's final chunk
+    sentence?      : number;   // 1-based sentence of the response (a draft field, `AVATAR_PLANS.md` §10; not sent yet)
 }
 
 interface AudioPlayerOptions {
@@ -91,6 +101,9 @@ interface AudioPlayerControls {
     systemSpeaking      : boolean;                                                 // Scheduled speech has not finished playing
     readSpeechLoudness  : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness heard from `fromSec` from now, per frame
     readSpeechRemaining : () => number | null;                                     // Seconds until the reply's final audio is heard (negative after; null while unknown)
+    readReplyTimeline   : () => readonly ScheduledReply[];                         // The latest replies' moments, oldest first
+    readAudioLeadMs     : () => number;                                            // How far ahead of being heard a reply's first audio is scheduled
+    holdNextReply       : (ms: number) => void;                                    // Delay the next reply's first audio this long (0 for none)
 }
 
 
@@ -119,6 +132,10 @@ export function useAudioPlayer({
     const playbackGenerationRef = useRef<number>(0);
     const responsePlaybackRef   = useRef<Map<number, ResponsePlayback>>(new Map());
     const playbackHandlerRef    = useRef(onPlaybackState);
+
+    // Recent replies' moments, and the next reply's hold (both for plan steps timed to a reply)
+    const repliesRef   = useRef<ReplyRecord[]>([]);
+    const replyHoldRef = useRef<number>(0);
 
     const { ttsStart, ttsEnd } = useLatencyLogger();
 
@@ -183,17 +200,27 @@ export function useAudioPlayer({
             );
 
             // Schedule this chunk directly after everything already buffered
-            const startTime  = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead);
+            // (a new reply's first chunk waits out any hold a plan asked for)
+            const replyId    = (typeof payload.responseId === "number") ? payload.responseId : null;
+            const newReply   = (replyId !== null) && !repliesRef.current.some((reply: ReplyRecord) => reply.responseId === replyId);
+            const holdSec    = newReply ? (replyHoldRef.current / 1_000) : 0;
+            const startTime  = Math.max(scheduleTimeRef.current, ctx.currentTime + bufferAhead + holdSec);
             const source     = ctx.createBufferSource();
             const generation = playbackGenerationRef.current;
             source.buffer    = audioBuffer;
             source.connect(ctx.destination);
 
             // Mark the overall TTS player active on the first scheduled chunk
+            // (after a held reply's hold, so speaking still starts `bufferAhead` before the voice)
             if (!firstAudio.current) {
                 firstAudio.current = true;
-                ttsStart();
-                setSystemSpeaking(true);
+                const markSpeaking = (): void => {
+                    if (generation !== playbackGenerationRef.current) return;
+                    ttsStart();
+                    setSystemSpeaking(true);
+                };
+                if (holdSec > 0) window.setTimeout(markSpeaking, holdSec * 1_000);
+                else             markSpeaking();
             }
             if (typeof payload.responseId === "number") {
                 schedulePlaybackStart(payload.responseId, startTime, generation);
@@ -211,6 +238,9 @@ export function useAudioPlayer({
             // Note when the reply's final chunk ends (a chunk after that end starts a new reply, whose end isn't known yet)
             if      (payload.last)                                                       player.finalEndSec = startTime + audioBuffer.duration;
             else if ((player.finalEndSec !== null) && (startTime >= player.finalEndSec)) player.finalEndSec = null;
+
+            // ...and the reply's moments in page time, for reply-timed plan steps
+            if (replyId !== null) noteReplyChunk(repliesRef.current, replyId, payload.sentence, payload.last === true, startTime, startTime + audioBuffer.duration, ctx);
 
             // Report completion and clear speaking state after scheduled audio ends
             source.onended = () => {
@@ -246,6 +276,7 @@ export function useAudioPlayer({
     // Cancel buffered audio and invalidate callbacks from its playback generation
     const stopPlayer = useCallback(() => {
         playbackGenerationRef.current += 1;
+        cutOffReplies(repliesRef, performance.now());
         responsePlaybackRef.current.forEach((playback) => {
             if (playback.startTimer !== null) window.clearTimeout(playback.startTimer);
         });
@@ -297,15 +328,20 @@ export function useAudioPlayer({
         return player.finalEndSec - heardTime(player.ctx);
     }, []);
 
-    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness, readSpeechRemaining };
-}
+    // The latest replies' moments in page time, oldest first
+    const readReplyTimeline = useCallback((): readonly ScheduledReply[] => repliesRef.current.map(replyMoments), []);
 
+    // How far ahead of being heard a reply's first audio is scheduled
+    // (the buffer, plus the speakers' latency once there is a timeline)
+    const readAudioLeadMs = useCallback((): number => {
+        const player = playerRef.current;
+        return 1_000 * (bufferAhead + ((player === null) ? 0 : (player.ctx.currentTime - heardTime(player.ctx))));
+    }, [bufferAhead]);
 
-// Context time reaching the speakers right now (until the output reports its first timestamp, the render clock stands in)
-function heardTime(ctx: AudioContext): number {
-    const stamp = ctx.getOutputTimestamp();
-    if ((stamp.contextTime === undefined) || (stamp.performanceTime === undefined) || (stamp.performanceTime <= 0)) return ctx.currentTime;
-    return stamp.contextTime + ((performance.now() - stamp.performanceTime) / 1_000);
+    // How long the next reply's first audio waits
+    const holdNextReply = useCallback((ms: number): void => { replyHoldRef.current = ms; }, []);
+
+    return { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness, readSpeechRemaining, readReplyTimeline, readAudioLeadMs, holdNextReply };
 }
 
 
