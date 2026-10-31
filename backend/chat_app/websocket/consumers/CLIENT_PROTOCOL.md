@@ -114,7 +114,7 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
 
 | Parameter | Values | Default |
 |---|---|---|
-| `chat_type` | `unguided` \| `active_listening` \| `activity` | `unguided` |
+| `chat_type` | `unguided` \| `active_listening` \| `activity` \| `map_task` | `unguided` |
 | `condition` | One of the chat type's cue sets | The chat type's first one |
 | `variant`   | One of the chat type's task contents (a map, a scenario) | The chat type's first one |
 
@@ -123,9 +123,12 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
 - `active_listening` -- an LLM assessment of each user turn shapes the reply. Experimental.
 - `activity` -- the memory activity. `ws/chat/activity/` is an older route for this chat type
   and ignores `chat_type`.
+- `map_task` -- the Map Task. The user gives directions from their map, and the avatar follows
+  them on its own map, which differs in places. `variant` picks the map: `demo` (the default) is
+  a made-up test map. It has no spoken end-chat or pause; the client ends the chat.
 
-None of these three has conditions or variants yet, so sending `condition` or `variant` with
-them is refused. Values are exact (they are not lowercased the way `source` is). The chat
+Only `map_task` takes a `variant` so far, and no chat type has conditions yet. Sending
+`condition`, or a `variant` the chat type doesn't have, is refused. Values are exact (they are not lowercased the way `source` is). The chat
 type, condition, and variant are saved with the session. The list lives in
 `websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.
 
@@ -538,7 +541,8 @@ only an affirmative reply produces the goodbye plus close.
 
 Activity chats (`chat_type=activity`, or `ws/chat/activity/`) do not use these phrases. They
 send the same `chat_ended` frame, in the same order, when the activity's own closing flow
-finishes.
+finishes. Map Task chats (`chat_type=map_task`) don't recognize them either, and never send
+`chat_ended`.
 
 A robot should let the goodbye finish speaking before tearing down its UI, and should not
 treat the subsequent close as an error.

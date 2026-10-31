@@ -18,27 +18,20 @@ TODO: How/where to add the extra arguments for disabling "thinking"?
 
 """
 from __future__ import annotations
-from openai     import AsyncOpenAI
 from pydantic   import BaseModel
-from typing     import TypeVar
 
-import instructor, asyncio, logging, time
-logger = logging.getLogger(__name__)
+import time
 
 # From this project
-from ....config import (
+from ....services.llm.structured_api import StructuredAPI
+from    .config                      import (
     ACTIVE_LISTENING_TIMEOUT_SEC, ACTIVE_LISTENING_MAX_RETRIES,
     ACTIVE_LISTENING_RETRY_DELAY_SEC, ACTIVE_LISTENING_ASSESSMENT_TEMP,
     ACTIVE_LISTENING_RESPONSE_TEMP,
 )
-from ....services.llm.endpoint  import LLM_URL, API_KEY, MODEL_NAME
-from ....services.logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
-from    .prompts                import build_assessment_messages, build_confirmation_messages, build_response_messages
-from    .response_models        import EndConfirmation, SpokenResponse, TurnAssessment, log_end_confirmation, log_spoken_response, log_turn_assessment
+from    .prompts                     import build_assessment_messages, build_confirmation_messages, build_response_messages
+from    .response_models             import EndConfirmation, SpokenResponse, TurnAssessment, log_end_confirmation, log_spoken_response, log_turn_assessment
 
-
-# Structured model returned by one generic request
-ResponseT = TypeVar("ResponseT", bound=BaseModel)  # Structured model returned by one generic request
 
 # Custom "Active-Listening" API error
 class ActiveListeningAPIError(RuntimeError):
@@ -48,32 +41,26 @@ class ActiveListeningAPIError(RuntimeError):
 # ================================================================================
 # Active-Listening API
 # ================================================================================
-class ActiveListeningAPI:
+class ActiveListeningAPI(StructuredAPI):
     """
     This helps run all 3 of the "assessment", "response", and "confirmation"
-    model calls.
+    model calls. Requests and their retries go through the shared `StructuredAPI`.
 
     NOTE: Using a shorter retry policy here than in the original live-chat mode
           because having multiple stages needing to retry can make latency
           snowball...
-    
+
     """
+    NAME  = "Active-listening"
+    ERROR = ActiveListeningAPIError
+
     # Initialize a single reusable asynchronous structured-generation client
-    def __init__(
-        self,
-        model           : str   = MODEL_NAME,                         # Hosted model used by every active-listening stage
-        timeout_sec     : float = ACTIVE_LISTENING_TIMEOUT_SEC,       # Per-request endpoint timeout
-        max_retries     : int   = ACTIVE_LISTENING_MAX_RETRIES,       # Additional attempts after the initial request
-        retry_delay_sec : float = ACTIVE_LISTENING_RETRY_DELAY_SEC,   # Delay between retry attempts
-    ) -> None:
-        self.model           = model
-        self.max_retries     = max_retries
-        self.retry_delay_sec = retry_delay_sec
-        self.client          = instructor.from_openai(
-            AsyncOpenAI(base_url=LLM_URL, api_key=API_KEY, timeout=timeout_sec),
-            mode=instructor.Mode.JSON_SCHEMA, # mode=instructor.Mode.JSON,
+    def __init__(self) -> None:
+        super().__init__(
+            timeout_sec     = ACTIVE_LISTENING_TIMEOUT_SEC,
+            max_retries     = ACTIVE_LISTENING_MAX_RETRIES,
+            retry_delay_sec = ACTIVE_LISTENING_RETRY_DELAY_SEC,
         )
-        logger.info(f"{LLM_MAIN}[LLM] {BOLD}ActiveListeningAPI{UNBOLD} initialized. URL: {LLM_URL}, model: {BOLD}{self.model}{RESET}")
 
     # --------------------------------------------------------------------------------
     # Classify conversation state and response strategy for the latest user turn
@@ -119,36 +106,3 @@ class ActiveListeningAPI:
         t1 = time.monotonic()
         log_end_confirmation(response, t0, t1)
         return response
-
-    # ================================================================================
-    # General request wrapper that all responses run through
-    # ================================================================================
-    async def _request(
-        self,
-        *,
-        label          : str,                     # Stage name printed in the logs
-        response_model : type[ResponseT],         # Pydantic schema Instructor must return
-        messages       : list[dict[str, str]],    # Complete system and conversation messages
-        temperature    : float,                   # Sampling temperature for this stage
-    ) -> ResponseT:
-        last_error : Exception | None = None
-
-        # Attempt to get a response from the backend a set number of times
-        for attempt in range(self.max_retries + 1):
-            try:
-                response: ResponseT = await self.client.chat.completions.create(
-                    model          = self.model,
-                    response_model = response_model,
-                    messages       = messages,
-                    temperature    = temperature,
-                )
-                return response
-
-            # Handle retry logic
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"{LLM_MAIN}[LLM] Active-listening {label} failed (attempt {attempt + 1}/{self.max_retries + 1}): {exc!r}{RESET}")
-                if attempt < self.max_retries: await asyncio.sleep(self.retry_delay_sec)
-
-        # If we exhausted all retries, return the custom error
-        raise ActiveListeningAPIError(f"Active-listening {label} failed after all attempts") from last_error

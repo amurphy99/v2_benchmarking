@@ -105,6 +105,9 @@ class ChatHarness(ABC):
     # Dialogue state every chat starts in (`on_reply_saved` replaces it on the instance)
     state : object = None
 
+    # Unspoken assistant line the LLM context starts with (None starts it empty)
+    CONTEXT_OPENER : str | None = "How can I help you today?"
+
     # Keep the connection this harness serves, the options it was picked with, and its cues
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         self.consumer        = consumer

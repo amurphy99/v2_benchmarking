@@ -15,6 +15,7 @@ from typing     import TYPE_CHECKING
 from .active_listening.harness import ActiveListeningHarness
 from .activity.harness         import ActivityHarness
 from .base                     import ChatHarness
+from .map_task.harness         import MapTaskHarness
 from .unguided.harness         import UnguidedHarness
 
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
@@ -24,6 +25,7 @@ CHAT_TYPES: dict[str, type[ChatHarness]] = {
     UnguidedHarness       .NAME : UnguidedHarness,
     ActiveListeningHarness.NAME : ActiveListeningHarness,
     ActivityHarness       .NAME : ActivityHarness,
+    MapTaskHarness        .NAME : MapTaskHarness,
 }
 
 # Chat type a client gets when it sends no `chat_type`

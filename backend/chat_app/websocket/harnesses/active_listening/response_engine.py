@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 from collections.abc import Awaitable, Callable
 
 # From this project
-from ....config                      import ACTIVE_LISTENING_GRACE_SEC
 from ....services.llm.chat_utilities import get_LLM_response, prepare_LLM_messages
 from   ..avatar                      import ResponseMood
 from   ..base                        import ChatContext, MoodPublisher, ResponseOutcome, ResponseTrigger
 from   ..unguided.cognibot_api       import DEFAULT_RESPONSE, CognibotResponse
 from    .active_listening_api        import ActiveListeningAPI, ActiveListeningAPIError
+from    .config                      import ACTIVE_LISTENING_GRACE_SEC
 from    .response_models             import DialogueState, EndConfirmation, ResponseStrategy, TurnAssessment
 
 

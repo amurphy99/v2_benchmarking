@@ -49,8 +49,9 @@ condition, and variant are saved on the `ChatSession`.
 | `unguided` | Open conversation (the default). Spoken end-chat and pause requests get scripted replies; everything else goes to the single-stage LLM | none | none |
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
+| `map_task` | The Map Task: the user gives directions, and the avatar follows them on its own map (see its README) | none yet | `demo` |
 
-None of these three uses cues yet.
+None of these uses cues yet.
 
 ```diff
 +harnesses/
@@ -68,8 +69,13 @@ None of these three uses cues yet.
  │   ├── harness.py               # Keeps one connection's dialogue state; the engine does the rest
  │   └── ...
  │
-+└── activity/
-     └── harness.py               # Wraps the RAG pipeline that still lives in `websocket/services/`
++├── activity/
+ │   └── harness.py               # Wraps the RAG pipeline that still lives in `websocket/services/`
+ │
++└── map_task/                    # The avatar as instruction follower (see its README)
+     ├── harness.py               # Reads each turn, replies through its route's pipeline, and moves the avatar
+     ├── maps/                    # One map file per variant
+     └── ...
 ```
 
 <br>

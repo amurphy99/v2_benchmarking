@@ -23,16 +23,6 @@ THIS_LANGUAGE = "en-US"
 INSTRUCTOR_MODEL_NAME = os.getenv("LLM_NAME", "gemma-4-31B-it")  # model name for the Instructor client
 
 # --------------------------------------------------------------------------------
-# Live-Chat Response Generation
-# --------------------------------------------------------------------------------
-ACTIVE_LISTENING_GRACE_SEC       = 0.8   # Extra silence allowed after an incomplete-turn assessment
-ACTIVE_LISTENING_TIMEOUT_SEC     = 15.0  # Maximum duration of each active-listening LLM request
-ACTIVE_LISTENING_MAX_RETRIES     = 1     # Additional attempts allowed after a failed structured response
-ACTIVE_LISTENING_RETRY_DELAY_SEC = 0.5   # Delay between active-listening request attempts
-ACTIVE_LISTENING_ASSESSMENT_TEMP = 0.1   # Low-variance temperature used for turn assessment
-ACTIVE_LISTENING_RESPONSE_TEMP   = 0.5   # Temperature used to generate the spoken response
-
-# --------------------------------------------------------------------------------
 # LLM Parameters
 # --------------------------------------------------------------------------------
 MAX_LENGTH = 128 # 256

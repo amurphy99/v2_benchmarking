@@ -72,6 +72,7 @@ never close a chat.
 - `prompts.py`: system prompts and message construction for each stage.
 - `active_listening_api.py`: shared structured-generation client and bounded retry logic.
 - `response_engine.py`: routing, grace-period behavior, fallbacks, and process-wide engine.
+- `config.py`: request limits, temperatures, and the grace period.
 
 > **NOTE:** The first-stage assessment is internal context. **It is not added to the chat history.**
 

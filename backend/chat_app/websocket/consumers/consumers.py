@@ -119,7 +119,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.context_buffer = [(m.role, m.content, m.ts.timestamp()) for m in recent]
         
         # Adding one default message at the start of the chat every time (so I have a reference timestamp before every user message)
-        self.context_buffer = [("assistant", "How can I help you today?", time.time())] + self.context_buffer
+        # (the chat type's harness picks the line, or leaves it out)
+        if self.harness.CONTEXT_OPENER is not None:
+            self.context_buffer = [("assistant", self.harness.CONTEXT_OPENER, time.time())] + self.context_buffer
 
         # --------------------------------------------------------------------------------
         # 3) Finish setup (groups & STT)

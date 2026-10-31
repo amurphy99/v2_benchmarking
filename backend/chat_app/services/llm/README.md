@@ -8,6 +8,7 @@ llm/
  ├── dummy_LLM.py               # Dummy LLM class for offline testing
  ├── endpoint.py                # Help handle API keys and query locations
  ├── llama_api.py               # Legacy LLM wrapper for prompt-formatted live chats
+ ├── structured_api.py          # Retrying structured-output client the chat types' LLM calls share
  │
 +└── non_chat/                  # Utilities for non-chat LLM calls
      ├── instruct_wrapper.py    # Structure generation wrapper class 
@@ -23,3 +24,8 @@ its harness in `websocket/harnesses/` (see that README). `chat_utilities.get_LLM
 is the single-stage reply the `unguided` chat type uses, through the client `config.py`
 creates: `CognibotAPI` (`websocket/harnesses/unguided/cognibot_api.py`), or `DummyLLM`
 when `USE_LLM=false`.
+
+`structured_api.StructuredAPI` sends one instructor request (JSON_SCHEMA mode) and retries it
+a set number of times before raising its subclass's own error type. A request can also ask the
+endpoint to skip the model's thinking (`thinking=False`). The `active_listening` and `map_task`
+API clients subclass it.
