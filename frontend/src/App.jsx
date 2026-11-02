@@ -21,6 +21,7 @@ import { AuthProvider                                                           
 import { AppLayout, HomeRedirect, IsCaregiver, IsPatient, IsStaff, Protected, Unprotected } from "@/routes";
 import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, AdminCreateAccount     } from "@/pages";
 import { AdminParticipants                                                                } from "@/pages";
+import { AdminRobotView                                                                   } from "@/pages";  // Experimental Buddy media
 import { Alert, Analysis, AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails       } from "@/pages";
 import { ChatEnd, Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile   } from "@/pages";
 import { ProgressSummary, Settings, Transcript, TranscriptPlayback, WeekSummary           } from "@/pages";
@@ -98,6 +99,9 @@ export default function App() {
                             <Route path="/admin/chat/:id"          element={<AdminChat         />} />
                             <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
                             <Route path="/admin/participants"      element={<AdminParticipants />} />
+
+                            {/* Experimental Buddy media (see backend/chat_app/websocket/experimental/buddy/README.md) */}
+                            <Route path="/admin/chat/:id/robot"    element={<AdminRobotView    />} />
                         </Route>
 
                         {/* Patients and caregivers */}

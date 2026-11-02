@@ -26,8 +26,8 @@ On a wide screen the page fits the window and only the panels scroll; on a
 narrow one everything stacks and the page itself scrolls.
 
 */
-import { useState, useRef } from "react";
-import { useParams        } from "react-router-dom";
+import { useState, useRef         } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 // Hooks for the WebSocket connection and the commands sent through it
 import   useChatListener    from "@/hooks/chat-listener/useChatListener";
@@ -50,6 +50,7 @@ import { SessionHeader      } from "./components/admin_header/SessionHeader";
 import { ChatMessages       } from "./components/common/ChatMessages";
 import { AdminControlsPanel } from "./components/AdminControlsPanel";
 import { LiveSidePanel      } from "./components/LiveSidePanel";
+import { AdminButton        } from "./components/ui/AdminButton";  // Experimental Buddy media (Robot view link)
 
 // Misc. Helpers
 import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/data_utils/adminChatSamples";
@@ -128,6 +129,10 @@ export function AdminChat() {
     // `avatarModel` only matters for the webapp, where the avatar is a per-user setting.
     const capabilities = getCapabilityProfile(sessionInfo?.source, sessionInfo?.avatarModel);
 
+    // Experimental Buddy media: link to the robot view (see backend/chat_app/websocket/experimental/buddy/README.md)
+    const navigate        = useNavigate();
+    const robotViewButton = (sessionInfo?.source === "buddyrobot") ? <AdminButton size="sm" variant="outline" onClick={() => navigate(`/admin/chat/${id}/robot`)}>Robot view</AdminButton> : null;
+
     // ================================================================================
     // UI Components
     // ================================================================================
@@ -147,6 +152,7 @@ export function AdminChat() {
                 messageCount  = {session.messages.length}
                 streamStatus  = {streamStatus}
                 inactive_chat = {false}
+                rightActions  = {robotViewButton}
             />
 
             {/* -------------------------------------------------------------------------------- */}

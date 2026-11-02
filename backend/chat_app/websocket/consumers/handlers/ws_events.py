@@ -28,6 +28,9 @@ from  ..processing.commands  import dispatch_command
 from  ..processing.playback  import handle_playback_event
 from  ..processing.speech    import handle_final
 
+# Experimental Buddy media (see websocket/experimental/buddy/README.md)
+from ...experimental.buddy import primary_hooks as buddy_hooks
+
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 MAX_TRANSCRIPT_CHARS = 20_000  # Maximum direct transcription length accepted from a frontend
@@ -92,13 +95,14 @@ async def handle_client_command(consumer: ChatConsumer, data: dict[str, object])
     # Validate the command envelope & dispatch the command
     payload = data.get("data", {}) or {}
     if not isinstance(payload, dict): payload = {}
-    ack = await dispatch_command(
+    ack = buddy_hooks.handle_primary_command(consumer, payload) or await dispatch_command(  # Experimental Buddy media hook (`set_input_mode`)
         consumer, payload, reply_now_metadata={
             "origin"          : "primary_client",
             "requested_by_id" : getattr(getattr(consumer, "user", None), "id", None),
             "received_at"     : received_at,
         },
     )
+    buddy_hooks.add_primary_ack_fields(consumer, ack)  # Experimental Buddy media (see websocket/experimental/buddy/README.md)
 
     # Send an acknowledgement back through the same socket & broadcast the confirmed control state
     await consumer.send_json({"type": "command_ack", "data": ack})
