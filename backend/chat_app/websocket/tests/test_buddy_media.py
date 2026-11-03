@@ -32,13 +32,23 @@ SOCKET_TIMEOUT_SEC = 5
 # Stand-in JPEG bytes (the backend never decodes the image)
 FAKE_JPEG = b"\xff\xd8 test image \xff\xd9"
 
-# A valid `media_start` body
-MEDIA_START = {"protocol_version": 1, "client_run_id": "run-1", "video": {"encoding": "jpeg", "max_width": 640, "max_height": 480, "fps": 1}, "telemetry_hz": 5}
+# The `media_start` body Buddy sends
+MEDIA_START = {"protocol_version": 1}
+
+
+# State Buddy reports in every ack
+def robot_state(media_session_id: str) -> dict:
+    return {
+        "media_session_id" : media_session_id,
+        "video"            : {"requested_fps": 5.0, "effective_fps": 5.0, "measured_fps": None, "width": None, "height": None, "frames_sent": 0, "frames_dropped": 0},
+        "head"             : {"available": True, "busy": False, "pitch_deg": 0.0, "yaw_deg": 0.0},
+        "last_error"       : None,
+    }
 
 
 # Build one `BMV1` image message
 def image_message(media_session_id: str) -> bytes:
-    header = json.dumps({"media_session_id": media_session_id, "seq": 1, "encoding": "jpeg", "width": 640, "height": 480, "payload_bytes": len(FAKE_JPEG)}).encode()
+    header = json.dumps({"media_session_id": media_session_id, "seq": 1, "encoding": "jpeg", "width": 640, "height": 480, "rotation_deg": None, "mirrored": None}).encode()
     return b"BMV1" + len(header).to_bytes(4, "big") + header + FAKE_JPEG
 
 
@@ -135,6 +145,12 @@ class BuddyChatTestCase(TransactionTestCase):
             if isinstance(message, bytes): continue
             frame = json.loads(message)
             if frame["type"] == frame_type: return frame.get("data")
+
+    # Read until the backend sends one named command
+    async def next_command(self, socket: WebsocketCommunicator, name: str) -> dict:
+        while True:
+            command = await self.next_frame(socket, "command")
+            if command["name"] == name: return command
 
     # Read until an image arrives
     async def next_image(self, socket: WebsocketCommunicator) -> bytes:
@@ -286,10 +302,39 @@ class MediaSocketTests(BuddyChatTestCase):
 
         media_session_id = await self.start_media(media)
         heartbeat        = await self.next_frame(media, "command")
-        state            = {"media_session_id": media_session_id, "state_revision": 1, "robot_elapsed_ms": 100_000, "last_error": None}
+        state            = robot_state(media_session_id)
         await media.send_json_to({"type": "command_ack", "data": {"id": heartbeat["id"], "name": "get_media_state", "ok": True, "message": None, "state": state}})
         status = await self.next_frame(viewer, "media_status")
         await self.close_all(viewer, media, primary)
 
         self.assertEqual(heartbeat["name"], "get_media_state")
         self.assertEqual(status["state"], state)
+
+    # --------------------------------------------------------------------------------
+    # Head Moves
+    # --------------------------------------------------------------------------------
+    # A viewer's head move reaches Buddy, and Buddy's ack returns under the viewer's ID
+    async def test_head_move_round_trip(self) -> None:
+        primary, connection_id, session_id = await self.open_probed_primary()
+        media,  _, _ = await self.open_media (connection_id, self.robot_user)
+        viewer, _, _ = await self.open_viewer(session_id,    self.staff)
+        media_session_id = await self.start_media(media)
+
+        await viewer.send_json_to({"type": "command", "data": {"id": "move-1", "name": "move_head", "data": {"direction": "left"}}})
+        move = await self.next_command(media, "move_head")
+        await media.send_json_to({"type": "command_ack", "data": {"id": move["id"], "name": "move_head", "ok": False, "message": "Head is busy", "state": robot_state(media_session_id)}})
+        ack = await self.next_ack(viewer, "move-1")
+        await self.close_all(viewer, media, primary)
+
+        self.assertEqual(move["data"], {"direction": "left"})
+        self.assertEqual((ack["ok"], ack["message"]), (False, "Head is busy"))
+
+    # With Video off there is no media socket, so the viewer's head move is refused
+    async def test_head_move_without_video_is_refused(self) -> None:
+        primary, _, session_id = await self.open_probed_primary()
+        viewer, _, _ = await self.open_viewer(session_id, self.staff)
+        await viewer.send_json_to({"type": "command", "data": {"id": "move-1", "name": "move_head", "data": {"direction": "up"}}})
+        ack = await self.next_ack(viewer, "move-1")
+        await self.close_all(viewer, primary)
+
+        self.assertEqual((ack["ok"], ack["message"]), (False, "Robot video is off"))

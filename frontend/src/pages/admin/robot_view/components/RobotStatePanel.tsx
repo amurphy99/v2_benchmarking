@@ -1,18 +1,18 @@
-/* Robot media state at a glance: connection, camera, head, input mode, and errors.
+/* Robot media state at a glance: connections, camera, input mode, and errors.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/robot_view/components/RobotStatePanel`
 
 Experimental (see `backend/chat_app/websocket/experimental/buddy/README.md`).
 Built for informal testing on the robot. Each card covers one part of the setup,
-so a failure points to the robot, the backend, or this page. The full state and
-capabilities Buddy sent are at the bottom as raw JSON.
+so a failure points to the robot, the backend, or this page. The full state Buddy
+sent is at the bottom as raw JSON. The head's pose is in `HeadControls`.
 
 */
 import type { ReactElement } from "react";
 
 // From this project
-import type { MediaSession, MediaStatus } from "../mediaFrames";
-import      { formatValue, pathValue     } from "../mediaFrames";
+import type { MediaSession, RobotState } from "../mediaFrames";
+import      { formatValue              } from "../mediaFrames";
 
 // Input mode the primary chat socket reported (null until the robot's probe)
 export type InputModeState = {
@@ -30,22 +30,18 @@ type StateCard = {
 // ================================================================================
 // Robot State Panel
 // ================================================================================
-// Cards of connection, camera, head, and error state, then the raw JSON
-export default function RobotStatePanel({connected, latencyMs, session, status, inputMode}: {
+// Cards of connection, camera, and error state, then the raw JSON
+export default function RobotStatePanel({connected, latencyMs, session, robotState, inputMode}: {
     // This page's viewer socket
     connected : boolean;         // Viewer socket is open
     latencyMs : number | null;   // Round trip to the backend
 
     // Robot media and chat state
-    session   : MediaSession;              // Robot media socket's lifecycle
-    status    : MediaStatus    | null;     // Newest robot state and capabilities
-    inputMode : InputModeState | null;     // From the primary chat socket's control state
+    session    : MediaSession;              // Robot media socket's lifecycle
+    robotState : RobotState     | null;     // State from Buddy's newest ack (null until the first heartbeat)
+    inputMode  : InputModeState | null;     // From the primary chat socket's control state
 }): ReactElement {
-    const state        = (status !== null) ? status.state        : null;
-    const capabilities = (status !== null) ? status.capabilities : null;
-
-    // One robot-state value by path, ready to show
-    const at = (...keys: string[]): string => formatValue(pathValue(state, ...keys));
+    const video = robotState?.video;
 
     // --------------------------------------------------------------------------------
     // Cards
@@ -63,24 +59,15 @@ export default function RobotStatePanel({connected, latencyMs, session, status, 
         {
             title : "Camera",
             rows  : [
-                ["FPS requested / effective / measured", `${at("video", "requested_fps")} / ${at("video", "effective_fps")} / ${at("video", "measured_fps")}`],
-                ["Size",                                 `${at("video", "width")} × ${at("video", "height")}`                                                ],
-                ["Frames sent / dropped",                `${at("video", "frames_sent")} / ${at("video", "frames_dropped")}`                                  ],
-            ],
-        },
-        {
-            title : "Head",
-            rows  : [
-                ["Available / busy", `${at("head", "available")} / ${at("head", "busy")}`  ],
-                ["Pitch / yaw (°)",  `${at("head", "pitch_deg")} / ${at("head", "yaw_deg")}`],
-                ["Pose age (ms)",    at("head", "pose_age_ms")                              ],
-                ["Fault",            at("head", "fault")                                    ],
+                ["FPS requested / effective / measured", `${formatValue(video?.requested_fps)} / ${formatValue(video?.effective_fps)} / ${formatValue(video?.measured_fps)}`],
+                ["Size",                                 `${formatValue(video?.width)} × ${formatValue(video?.height)}`                                                      ],
+                ["Frames sent / dropped",                `${formatValue(video?.frames_sent)} / ${formatValue(video?.frames_dropped)}`                                        ],
             ],
         },
         {
             title : "Errors",
             rows  : [
-                ["Robot's last error", at("last_error")],
+                ["Last dropped-frame reason", formatValue(robotState?.last_error)],
             ],
         },
     ];
@@ -108,11 +95,7 @@ export default function RobotStatePanel({connected, latencyMs, session, status, 
             <section className="rounded-xl border border-admin-border bg-admin-panel shadow-sm px-3 py-2 text-xs">
                 <details>
                     <summary className="cursor-pointer text-admin-subtext">Raw state</summary>
-                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-admin-text">{JSON.stringify(state, null, 2)}</pre>
-                </details>
-                <details className="mt-2">
-                    <summary className="cursor-pointer text-admin-subtext">Raw capabilities</summary>
-                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-admin-text">{JSON.stringify(capabilities, null, 2)}</pre>
+                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-admin-text">{JSON.stringify(robotState, null, 2)}</pre>
                 </details>
             </section>
         </div>

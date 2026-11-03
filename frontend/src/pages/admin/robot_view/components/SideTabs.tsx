@@ -1,4 +1,4 @@
-/* Side column of the robot page: robot state, telemetry, avatar actions, biomarkers.
+/* Side column of the robot page: tabs for robot, telemetry, avatar, biomarkers.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/robot_view/components/SideTabs`
 

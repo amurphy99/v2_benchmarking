@@ -3,8 +3,8 @@
 `@frontend/src/pages/admin/robot_view/components/VideoFeed`
 
 Experimental (see `backend/chat_app/websocket/experimental/buddy/README.md`).
-Shows the newest image the robot sent. Before the first image, and after the
-camera stops, a message says what the camera is waiting for, so a problem during
+Shows the newest image the robot sent. Before the first image, and after Video
+turns off, a message says what the camera is waiting for, so a problem during
 testing is visible without reading the backend logs.
 
 */
@@ -28,8 +28,7 @@ const EMPTY_MESSAGE: Record<MediaSessionStatus, string> = {
     none      : "Camera not connected. Turn on Video on the robot.",
     connected : "Robot connected. Waiting for its camera to start.",
     ready     : "Camera started. Waiting for the first image.",
-    stopped   : "Camera stopped on the robot.",
-    ended     : "Camera disconnected.",
+    ended     : "Camera off. Video was turned off on the robot, or the chat ended.",
 };
 
 // Pill color for each camera status
@@ -37,7 +36,6 @@ const STATUS_VARIANT: Record<MediaSessionStatus, PillVariant> = {
     none      : "offline",
     connected : "accent",
     ready     : "live",
-    stopped   : "paused",
     ended     : "offline",
 };
 

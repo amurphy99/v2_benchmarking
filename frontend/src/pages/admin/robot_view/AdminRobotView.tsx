@@ -1,4 +1,4 @@
-/* Robot view: the live chat monitor plus the robot's camera and telemetry.
+/* Robot view: live chat monitor plus the robot's camera, telemetry, and head.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/robot_view/AdminRobotView`
 
@@ -6,7 +6,7 @@ Experimental (see `backend/chat_app/websocket/experimental/buddy/README.md`).
 Opened from the Robot view link on a Buddy session's monitor page. It has the
 monitor page's transcript, chat controls, avatar actions, and biomarkers over the
 same listener socket, and opens a second socket for the robot's media: the camera
-image, telemetry, and robot state.
+image, telemetry, robot state, and the head's look buttons.
 
 NOTE: The listener wiring is copied from `AdminChat.tsx` on purpose, so the
       experiment leaves that page untouched. If this graduates, both pages
@@ -36,6 +36,7 @@ import      { ChatMessages       } from "@/pages/admin/components/common/ChatMes
 import        AvatarActionsGroup   from "@/pages/admin/components/controlGroups/AvatarActionsGroup";
 
 // Robot view
+import        HeadControls       from "./components/HeadControls";
 import type { InputModeState } from "./components/RobotStatePanel";
 import        RobotStatePanel    from "./components/RobotStatePanel";
 import type { SideTab        } from "./components/SideTabs";
@@ -48,7 +49,7 @@ import      { useMediaViewer } from "./useMediaViewer";
 // ================================================================================
 // Admin Robot View
 // ================================================================================
-// Monitor a robot's live chat and watch its camera and telemetry
+// Monitor a robot's live chat, watch its camera and telemetry, and turn its head
 export function AdminRobotView(): ReactElement {
     // Session info, messages, and biomarker scores from the listener socket
     const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
@@ -107,12 +108,17 @@ export function AdminRobotView(): ReactElement {
         {
             id      : "robot",
             label   : "Robot",
-            content : <RobotStatePanel connected={media.connected} latencyMs={media.latencyMs} session={media.session} status={media.status} inputMode={inputMode} />,
+            content : (
+                <div className="flex flex-col gap-3">
+                    <HeadControls    connected={media.connected} session={media.session} robotState={media.robotState} headMove={media.headMove} onMove={media.moveHead} />
+                    <RobotStatePanel connected={media.connected} session={media.session} robotState={media.robotState} latencyMs={media.latencyMs} inputMode={inputMode} />
+                </div>
+            ),
         },
         {
             id      : "telemetry",
             label   : "Telemetry",
-            content : <TelemetryPanel telemetry={media.telemetry} droppedTotal={media.droppedTotal} capabilities={(media.status !== null) ? media.status.capabilities : null} />,
+            content : <TelemetryPanel telemetry={media.telemetry} />,
         },
         {
             id      : "avatar",
@@ -168,7 +174,7 @@ export function AdminRobotView(): ReactElement {
                     </div>
                 </div>
 
-                {/* Side column: robot state, telemetry, avatar actions, biomarkers */}
+                {/* Side column: head and robot state, telemetry, avatar actions, biomarkers */}
                 <SideTabs tabs={tabs} />
             </main>
         </div>

@@ -1,12 +1,12 @@
 # Speech System // Buddy Media (Experimental) <br> `backend/chat_app/websocket/experimental/buddy/..`
 
-Backend support for Buddy's media experiments (the Android contract dated October 31,
-2026). There are two parts:
+Backend support for Buddy's media experiments (Buddy's media protocol, the Android side
+as of November 2, 2026). There are two parts:
 
 1. **Input mode on the primary chat socket.** Buddy can switch between its own SDK speech
    recognizer (`sdk`) and streaming its microphone to our Google STT (`backend`).
 2. **A second "media" socket.** It carries Buddy's camera images and sensor telemetry to
-   a new admin page, the **Robot view**.
+   a new admin page, the **Robot view**, and that page's head moves back to Buddy.
 
 This is **tentative code, kept apart from the rest of the system**. The shared chat code
 only calls into it from a few marked lines (see [Hooks in existing files](#hooks-in-existing-files)),
@@ -16,8 +16,8 @@ and a client that never uses it (the web app, QT) behaves exactly as before.
 messages field by field; it forwards them as sent. The one check it keeps is about
 access: who may see a participant's camera.
 
-Head control (`set_head_pose`, `stop_head`) and remote FPS changes are **not built
-yet**. They are Stage 2, after the camera works on the robot.
+Head control is five fixed look moves (`move_head`: up, down, left, right, center).
+Remote FPS changes are **not built**.
 
 <br>
 
@@ -30,15 +30,19 @@ yet**. They are Stage 2, after the camera works on the robot.
 2. On the admin dashboard, open the live chat. A Buddy session's monitor page has a
    **Robot view** button in its header, which opens `/admin/chat/<id>/robot`.
 3. Turn on **Video** on Buddy. The camera area changes from "Camera not connected" to
-   images about once a second. The **Robot** tab shows connection, camera, head, and
-   error state, and the **Telemetry** tab shows the newest reading from each sensor.
-4. Turn on **Audio** on Buddy. The Robot tab's input mode becomes `backend (revision 1)`,
+   images several times a second (Buddy aims for 5). The **Robot** tab shows connection,
+   camera, and error state, and the **Telemetry** tab shows the newest reading from each
+   sensor.
+4. In the Robot tab's **Head** card, press a look button. The card shows Buddy's answer
+   (`started`, or why it refused, such as `Head is busy`), and the pose updates with the
+   next heartbeat. The angle signs are not yet checked on the robot.
+5. Turn on **Backend ASR** on Buddy. The Robot tab's input mode becomes `backend (revision 1)`,
    and the user's speech now comes from our STT. Try this in manual response mode first
    (**Pause Auto**, then **Reply Now**). Buddy keeps streaming while it speaks, so in
    automatic mode it may hear and answer itself.
 
 Each step logs a `[BuddyMedia]` line in `docker logs backend` (connects, refusals with
-their close code, start, stop, the first image).
+their close code, start, the first image, head moves, and the close).
 
 <br>
 
@@ -51,8 +55,8 @@ their close code, start, stop, the first image).
 +experimental/buddy/
 +├── config.py            # Capability names, heartbeat interval, close codes, and the log tag
 +├── primary_hooks.py     # Input mode and probe-ack fields on the primary socket; which socket is a chat's media socket
-+├── media_consumer.py    # BuddyMediaConsumer: Buddy's media socket
-+└── viewer_consumer.py   # MediaViewerConsumer: the admin page's media socket
++├── media_consumer.py    # BuddyMediaConsumer: Buddy's media socket, and head moves sent to it
++└── viewer_consumer.py   # MediaViewerConsumer: the admin page's media socket, and its head moves
 ```
 
 The frontend half is `frontend/src/pages/admin/robot_view/`, and the tests are
@@ -111,16 +115,23 @@ wss://<host>/ws/buddy-media/?token=<access>&source=buddyrobot&primary_connection
 
 **Handshake.** Buddy sends `media_start`, and the ack's `state` is
 `{protocol_version: 1, media_session_id, chat_session_id, primary_connection_id, status: "ready"}`.
-`media_stop` acks `status: "stopped"`. The `media_start` body's settings are not used.
+Its body is not used. Buddy stops by closing the socket with `1000`; it sends no
+`media_stop`, and any other command is acked `Unknown command`.
 
 **Heartbeat.** Buddy turns media off after 3 s without a command from the backend. So
 while media runs, the backend sends `get_media_state` every second (IDs `hb-1`, `hb-2`,
 …). The state in each answer goes to viewers.
 
-**Forwarding.** Images go to viewers byte for byte. `media_status` and heartbeat answers
-update the newest state, which goes to viewers as `media_status`. Buddy leaves out its
-capabilities when they are unchanged, so the last ones are kept. `telemetry` goes to
-viewers as sent. Other message types are logged and ignored.
+**Head moves.** A viewer's `move_head` goes to Buddy as
+`{"id": "head-<n>", "name": "move_head", "data": {"direction": "<up|down|left|right|center>"}}`.
+The backend picks the ID (pages' own IDs could repeat), remembers which viewer asked, and
+sends Buddy's ack back to that viewer alone under the viewer's ID. Buddy checks the
+direction and whether the head is busy.
+
+**Forwarding.** Images go to viewers byte for byte, and `telemetry` as the text Buddy
+sent. Every ack Buddy sends (heartbeat or head move) carries its state, which becomes the
+newest state and goes to viewers as `media_status`. Other message types are logged and
+ignored.
 
 **Ending.** The media socket hears the chat connection's existing
 `stream_status: "ended"` broadcast on the monitor group. When it arrives, the socket
@@ -141,10 +152,15 @@ session's owner, and caregivers linked to the participant. Its close codes are `
 | Frame | When |
 |---|---|
 | Binary `BMV1` | Every image Buddy sent |
-| `media_session` | `{status, media_session_id}`; `status` is `none` (no media socket), `connected`, `ready`, `stopped`, or `ended` |
-| `media_status` | `{state, capabilities}`, Buddy's newest |
-| `telemetry` | Every batch, as Buddy sent it |
+| `media_session` | `{status, media_session_id}`; `status` is `none` (no media socket), `connected`, `ready`, or `ended` |
+| `media_status` | `{state}`, from Buddy's newest ack |
+| `telemetry` | Every telemetry message, as Buddy sent it |
+| `command_ack` | Buddy's answer to this viewer's `move_head`, under the page's `id`. The backend itself refuses other names (`Unknown command: <name>`) and moves while Video is off (`Robot video is off`), with `state: null` |
 | `pong` | Reply to the page's `ping`, which also stops nginx from closing a quiet socket |
+
+The page sends `ping` and
+`{"type": "command", "data": {"id": "<page id>", "name": "move_head", "data": {"direction": "left"}}}`.
+Anyone who may watch may move the head; there is no control lock.
 
 On joining, a viewer gets the current media session and Buddy's newest state right away.
 
@@ -155,12 +171,12 @@ On joining, a viewer gets the current media session and Buddy's newest state rig
 <!-- -------------------------------------------------------------------------------- -->
 ## What Buddy's code needs
 
-Nothing has to change on the robot. Buddy already does these four things, and the
-backend relies on them:
+Buddy already does these four things, and the backend relies on them:
 
 1. Sends `get_control_state` on the chat socket before opening the media socket. That
    ack carries the `primary_connection_id`.
-2. Answers every `get_media_state` heartbeat with an ack that carries `state`.
+2. Answers every backend command (`get_media_state`, `move_head`) with one ack that
+   carries its `state`.
 3. Sends no `transcription` in `backend` mode and no audio in `sdk` mode. The backend does
    not filter either one.
 4. Puts an `id` on every command it sends.
@@ -175,7 +191,7 @@ Where the backend does less than the contract describes:
   check rather than replaying the first ack.
 - **Backend-mode `ok: true` means the backend is accepting audio.** A Google stream
   failure shows up in the backend logs, not in the ack.
-- **No head or FPS commands yet (Stage 2).** Any `command_result` is ignored.
+- **No FPS command.** `move_head` is the only control.
 
 <br>
 

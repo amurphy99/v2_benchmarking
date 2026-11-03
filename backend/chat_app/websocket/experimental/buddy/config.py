@@ -3,9 +3,9 @@ Capability names, timing, close codes, and log tag for the Buddy media experimen
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.experimental.buddy.config`
 
-Values come from Buddy's media contract (October 31, 2026). The log tag lives
-here instead of `logging_utils.py` so the experiment touches no shared module; it
-moves there if this graduates.
+Values come from Buddy's media protocol (the Android side as of November 2, 2026).
+The log tag lives here instead of `logging_utils.py` so the experiment touches no
+shared module; it moves there if this graduates.
 
 """
 from ....services import logging_utils as lu
