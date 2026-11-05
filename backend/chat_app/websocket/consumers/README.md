@@ -225,7 +225,7 @@ state cannot be left half-updated.
 `ChatHandler` asks the connection's harness for every reply (`harness.generate`) and
 applies the `ResponseOutcome` it returns the same way for every chat type. A reply's
 state change, listening pause, and close happen only once its exchange is saved
-(`harness.committed` takes the state), so a reply cancelled by newer speech changes
+(`harness.on_reply_saved` takes the state), so a reply cancelled by newer speech changes
 nothing. See `../harnesses/README.md` for the chat types and how to add one.
 
 The `unguided` chat type (the default) checks each user turn for spoken end-chat and
@@ -239,6 +239,11 @@ such as pausing or ending the chat. After the first stage model finishes, we use
 add additional context for a second model call which generates the actual spoken
 response to the user. See `harnesses/active_listening/README.md` for more information.
 The `activity` chat type skips these intents and ends through its own closing flow.
+It generates against an attempt-local deep copy; scenario
+changes, goal evidence, histories, counters, and closing flags become current only
+in `on_reply_saved`. Planner and response-agent calls remain sequential. See
+[`../harnesses/activity/README.md`](../harnesses/activity/README.md) for runtime
+behavior, provisional policies, and Docker verification instructions.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- `reply_now` Audio Barrier                                                        -->

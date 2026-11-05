@@ -48,7 +48,7 @@ condition, and variant are saved on the `ChatSession`.
 |---|---|---|---|
 | `unguided` | Open conversation (the default). Spoken end-chat and pause requests get scripted replies; everything else goes to the single-stage LLM | none | none |
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
-| `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
+| `activity` | The memory activity: structured response plans, goal evidence, and controlled closing (see its README) | none | none |
 | `map_task` | The Map Task: the user gives directions, and the avatar follows them on its own map (see its README) | none yet | `demo` |
 
 None of these uses cues yet.
@@ -70,7 +70,13 @@ None of these uses cues yet.
  │   └── ...
  │
 +├── activity/
- │   └── harness.py               # Wraps the RAG pipeline that still lives in `websocket/services/`
+ │   ├── harness.py               # Generates against a state copy; adopts it after saving
+ │   ├── pipeline.py              # Sequential planner/responder coordination
+ │   ├── runtime.py               # Goal-evidence and transition validation
+ │   ├── state_specs.py           # Temporary manually authored goals and turn limits
+ │   ├── repository.py            # Reads ordered instructions from the main database
+ │   ├── closing.py               # Controlled summary and final-question workflow
+ │   └── history.py               # Relocated conversation-history utilities
  │
 +└── map_task/                    # The avatar as instruction follower (see its README)
      ├── harness.py               # Reads each turn, replies through its route's pipeline, and moves the avatar
@@ -203,28 +209,37 @@ The harness then switches it on for one condition only, in its `__init__`:
 <br>
 
 <!-- -------------------------------------------------------------------------------- -->
-<!-- Still to Move                                                                    -->
+<!-- Activity Pipeline                                                               -->
 <!-- -------------------------------------------------------------------------------- -->
-## Still to move into this structure
+## Activity pipeline
 
-The `activity` chat type wraps code written before harnesses existed. To finish
-moving it:
+The activity harness generates against a deep copy of the connection's
+state and returns it in `ResponseOutcome.state`. `on_reply_saved()` adopts the
+proposal after the exchange is saved. Cancelled generation therefore discards
+scenario changes, goal evidence, histories, counters, and closing flags together.
+A saved response can still have its audio interrupted.
 
-- Move its modules here from `websocket/services/`: `ragChatHelpers.py`,
-  `ragChatHelpersMultiAgent.py`, `utils/chatUtils.py`, `utils/jsonParsingUtils.py`,
-  and `behavior/activity_chat_close.py`.
-- `rag_state` advances while the pipeline generates, before the exchange is saved,
-  so a cancelled reply can move the activity on by a turn the user never heard. The
-  next state should come back in `ResponseOutcome.state` instead.
-- The pipeline returns dicts (`text`, `close_after`, `close_session`, `_llm_log`)
-  that `ActivityHarness` translates. It could return a `ResponseOutcome` itself.
-- `handle_closing_turn` takes the whole consumer only to read `context_buffer`.
-- It reaches the LLM through `services/llm/instructor_client.py` (`LLM_BASE_URL`,
-  `LLM_GATEWAY_TOKEN`), while the other chat types use `services/llm/endpoint.py`
-  (`IU_URL`, `IU_KEY`).
-- The chat page reaches it through `ws/chat/activity/` (`chatMode` in
-  `frontend/src/pages/chat/Chat.tsx`). Once the page sends `chat_type`, that route
-  can go, if no robot uses it.
+The planner and responder currently live in `websocket/agents/`. Each owns an
+editable prompt and accepts an injected client and model. The activity pipeline
+coordinates them sequentially and imports them from that shared package. The
+planner's `ResponsePlan` carries guidance, goal evidence, transition proposals,
+and `updated_memory: PlannerMemory`. Working memory is held in `planner_memory`.
+
+`state_specs.py` supplies manually authored required goals and per-state saved-turn
+limits. The runtime accepts grounded evidence and records skipped goals when a
+user declines or a turn limit is reached. These policies are provisional and need
+conversation testing; a matching quote alone does not prove semantic fulfillment.
+
+Closing remains a Python-controlled workflow entered through virtual
+`close_session`. It takes explicit context and attempt-local state, and does not
+require an `end_conversation` database row. The existing `ws/chat/activity/` route
+remains supported. Clients are configured through `services/llm/instructor_client.py`
+using `IU_URL`, `IU_KEY`, and `LLM_NAME`.
+
+See [activity/README.md](activity/README.md) for runtime behavior, provisional
+testing settings, known limitations, and Docker test commands. The implementation
+roadmap and progress history are kept in
+[ACTIVITY_PIPELINE_REFACTOR_PLAN.md](../../../../ACTIVITY_PIPELINE_REFACTOR_PLAN.md).
 
 Left as they are for now: the `taskType` and `taskSubtype` fields on `UserSettings`
 and `ChatSession`, which the settings page's chat-type form sets. They are separate

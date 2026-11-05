@@ -19,8 +19,10 @@ llm/
          └── chat_risks.py      # Assess if there were any caregiver-relevant risk signals during a chat
 ```
 
-Each chat type's own LLM code (its prompts, response models, and API clients) lives with
-its harness in `websocket/harnesses/` (see that README). `chat_utilities.get_LLM_response`
+Most chat types' own LLM code (their prompts, response models, and API clients) lives with
+their harnesses in `websocket/harnesses/` (see that README). The activity's
+planner and responder live in `websocket/agents/`, with orchestration and state
+validation in `websocket/harnesses/activity/`. `chat_utilities.get_LLM_response`
 is the single-stage reply the `unguided` chat type uses, through the client `config.py`
 creates: `CognibotAPI` (`websocket/harnesses/unguided/cognibot_api.py`), or `DummyLLM`
 when `USE_LLM=false`.
@@ -29,3 +31,12 @@ when `USE_LLM=false`.
 a set number of times before raising its subclass's own error type. A request can also ask the
 endpoint to skip the model's thinking (`thinking=False`). The `active_listening` and `map_task`
 API clients subclass it.
+
+The activity agent classes each own an editable prompt and accept an injected
+client/model. They currently use the existing Instructor and plain clients from
+`config.py`, with six- and twelve-second outer request deadlines respectively.
+Those deadlines and token limits are provisional testing settings. These agents
+do not currently subclass `StructuredAPI`; they retain the existing client's
+Instructor mode. The pipeline awaits the planner's structured result before
+calling the responder. `PlannerMemory` describes the session working memory in
+`ResponsePlan.updated_memory`; accepted turns store it under `planner_memory`.

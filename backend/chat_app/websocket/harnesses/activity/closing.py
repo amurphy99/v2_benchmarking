@@ -12,15 +12,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from pydantic import BaseModel
 
 from chat_app import config as cf
 from chat_app.services import logging_utils as lu
-from chat_app.websocket.services.utils.chatUtils import organize_full_conversation
-
-if TYPE_CHECKING:
-    from chat_app.websocket.consumers.consumers import ChatConsumer
+from .history import organize_full_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -185,14 +182,15 @@ def _fallback_final_turn(user_text: str) -> _FinalTurnResult:
     )
 
 async def _interpret_final_turn(
-    consumer: ChatConsumer,
+    context_buffer: list[tuple[str, str, float]],
     user_text: str,
+    rag_state: dict,
     *,
     trace_id: str,
 ) -> _FinalTurnResult:
     """Classify the last message and draft one brief, relevant reply."""
 
-    chat_state = consumer.rag_state.get("_chat_state")
+    chat_state = rag_state.get("_chat_state")
     full_context = (
         organize_full_conversation(chat_state) if chat_state else ""
     )
@@ -200,7 +198,7 @@ async def _interpret_final_turn(
     # _chat_state does not contain the final few turns in the closing exchanges.
     closing_context = "\n".join(
         f"{role}: {text}"
-        for role, text, _ in consumer.context_buffer[-4:]
+        for role, text, _ in context_buffer[-4:]
     )
 
     full_context = f"{full_context}\n{closing_context}".strip()
@@ -254,7 +252,7 @@ async def _interpret_final_turn(
 # =============================================================================
 
 async def handle_closing_turn(
-    consumer: ChatConsumer,
+    context_buffer: list[tuple[str, str, float]],
     user_text: str,
     rag_state: dict,
     *,
@@ -299,7 +297,7 @@ async def handle_closing_turn(
     # -------------------------------------------------------------------------
     if rag_state.get("awaiting_final_response"):
         result = await _interpret_final_turn(
-            consumer, user_text, trace_id=trace_id
+            context_buffer, user_text, rag_state, trace_id=trace_id,
         )
         rag_state["awaiting_final_response"] = False
 
@@ -316,7 +314,7 @@ async def handle_closing_turn(
     # -------------------------------------------------------------------------
     if rag_state.get("awaiting_question"):
         result = await _interpret_final_turn(
-            consumer, user_text, trace_id=trace_id
+            context_buffer, user_text, rag_state, trace_id=trace_id,
         )
         rag_state["awaiting_question"] = False
         reply = result.reply.strip() or _FINAL_UNCLEAR
