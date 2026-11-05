@@ -1,0 +1,18 @@
+{
+    "description": "Made up for testing: the avatar demo page's map (frontend/src/pages/avatar_demo/utils/sampleMap.ts), plus a castle only the giver has. Nothing on it comes from the HCRC Map Task corpus.",
+    "follower": {
+        "start": [0.30, 0.66],
+        "landmarks": [
+            {"id": "bridge", "label": "bridge", "at": [0.14, 0.14]},
+            {"id": "lake",   "label": "lake",   "at": [0.84, 0.16], "also_called": ["pond"], "radius": 0.07},
+            {"id": "rock",   "label": "rock",   "at": [0.60, 0.36], "also_called": ["boulder"]},
+            {"id": "bus",    "label": "bus",    "at": [0.74, 0.66]},
+            {"id": "tree",   "label": "tree",   "at": [0.48, 0.88]}
+        ]
+    },
+    "giver": {
+        "image": null,
+        "landmark_names": ["bridge", "lake", "rock", "bus", "tree", "castle"],
+        "route": [[0.30, 0.66], [0.66, 0.60], [0.60, 0.42], [0.36, 0.30], [0.14, 0.20]]
+    }
+}

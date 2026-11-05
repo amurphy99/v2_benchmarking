@@ -12,6 +12,9 @@ shows up in three places:
   its named actions.
 * **The public avatar demo** (`/avatar-demo`): every behavior, with no backend.
 
+For how the avatars are driven overall (the page, `robot_action`, and backend
+plans, end to end), see `../README.md`; this file covers the Smiley itself.
+
 The code is split so that **behavior** (what the face is doing over time) and
 **drawing** (turning one frame's numbers into SVG) never mix. The controller
 produces one `FaceState` per frame, and the 2D renderer only draws it, so a
@@ -40,7 +43,12 @@ rest.
  │
  ├── behavior/                 # Things the avatar does on its own
  │   ├── passiveMotions.ts     # Passive motions on channels (listening sway, head cock; breathing's channel)
- │   └── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
+ │   ├── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
+ │   ├── gaze.ts               # Where the eyes and head point: automatic looks, and plans' looks and poses
+ │   └── mapTask.ts            # The Map Task map: picked up or put away, raised or lowered
+ │
+ ├── plans/
+ │   └── smileyStepRunner.ts   # One backend plan step, each action through the face controller's levers
  │
  ├── objects/
  │   └── faceObjects.ts        # Objects (hands, hearts): face spots, placement, blending, animation offsets
@@ -52,6 +60,7 @@ rest.
      ├── SmileyExtras2D.tsx    # The tear and the sleep Zs
      ├── SmileyHand2D.tsx      # One hand object
      ├── SmileyHeart2D.tsx     # One floating heart object
+     ├── SmileyMap2D.tsx       # The Map Task map and the fists holding it
      ├── faceDrawing2D.ts      # Face layout and shape math (eyes, brows, mouth, extras)
      └── objectDrawing2D.ts    # Object shapes (hands, heart, tear), placement, and lighting
 ```
@@ -87,14 +96,23 @@ Outside this folder:
    2. **Offsets:** the movement or timed animation playing (one at a time),
       plus the passive motions: a sway or head cock while listening (never
       during a movement or animation) and breathing (always).
-   3. **Gaze**, by priority: a point the page set → the speech phase's look →
-      the conversation state's look → small idle glances around the user.
-   4. **Wander:** a slow drift for faces that set `wander` (Ponder).
-   5. **Blinks**, at random gaps.
+   3. **The map** (`behavior/mapTask.ts`), when it is held: how far into view,
+      and how far raised.
+   4. **Gaze** (`behavior/gaze.ts`), by priority: a point the page set → a
+      backend plan's look (a point on the user, the screen, or the map, a scan,
+      or a trace) → the speech phase's look → the conversation state's look →
+      small idle glances around the user. Faces that set `wander` (Ponder) add
+      a slow drift, and a plan can hold the head in a pose.
+   5. **Blinks**, at random gaps or when a plan asks.
    6. **Listening look and mouth:** slightly bigger eyes while listening, and the
       voice level the page reports.
    7. **Combine** into one `FaceState`, including the objects (with any
       animation offsets applied).
+
+   Backend plans (`../AVATAR_PLANS.md`, a draft) reach these layers through
+   `runPlanStep`, one step at a time (`plans/smileyStepRunner.ts`), and a setup
+   through `applySetup` picks the resting face and which automatic behaviors
+   run.
 3. **The renderer draws it** (`render_2d/SmileyFace2D.tsx`). Anything animated
    in the drawing (the tear's drip, the Zs, a heart's bob) is worked out from the
    face's clocks (`timeSec`, `expressionSec`), so drawing stays a pure function.
@@ -144,8 +162,14 @@ backend and the admin panel send them by name.
   animations.
 * **Rules for names:** unique across the three categories, and never the same
   as a mood (a `Thinking` animation would be read as the `Thinking` mood).
-  Expressions are named after the iOS emoji they borrow from; animations and
-  movements are verbs.
+  Expressions are named after the iOS emoji they borrow from (a look no emoji
+  has is named after the look: `Furrowed Brow`, `Squinting Face`, `Wide-Eyed`);
+  animations and movements are verbs.
+* **Strength:** `performAction(action, strength)` shows an expression only
+  partway (0 to 1) from the resting face. Its shapes and tints move partway,
+  while its on-or-off parts (brows, eye styles, the tear, the Zs, the icicles,
+  objects) show fully (`faceAtStrength` in `state/faceState.ts`). No backend
+  frame carries it yet; the demo's Demo Setup has a picker.
 * **Adding one:** an expression or movement is one table entry; an animation is
   one entry (held: just a face; timed: a length, a face amount over time, a
   motion, and an optional breath). Buttons appear automatically.
@@ -262,6 +286,13 @@ objects: [{kind: "heart", at: "center", dx: -96, dy: -50, scale: 1, bob: 4, puls
   "Think, then reply" simulates a full turn: thinking, then the reply's text
   arrives (a breath in, plus a Nod and a Smiling Face sent as separate
   commands, the smile lasting into the speech), then the sample reply.
+* **Try plans with the example buttons.** Example Plans and the Map Task group
+  send `avatar_setup` and `avatar_plan` frames on a timer, through the same
+  checks and scheduler a chat uses (`pages/avatar_demo/utils/planExamples.ts`),
+  and play the sample reply when an example needs one. The log shows how each
+  run ended: finished, cancelled, or rejected with the reason. A Map Task
+  example turns on the Map Task setup, which gives the conversation state to the
+  plans (the face controls' state buttons stop working); "Put it away" clears it.
 * **Checks:** `npm run build` in `frontend/` catches syntax and import errors.
   There is no frontend test suite, so check behavior on the demo page.
 

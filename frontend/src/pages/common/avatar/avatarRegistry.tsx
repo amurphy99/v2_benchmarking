@@ -18,6 +18,14 @@ The smiley matches an action by its name in its own three categories
 (Expressions, Movements, Animations) whichever kind it came as
 (`smiley/actions/smileyActions.ts`).
 
+`performAction` also takes an optional `strength` (0 to 1): an expression shown
+only that far from the resting face. It is not on the wire yet, so only the
+avatar demo passes it for now.
+
+`runPlanStep` and `applySetup` carry the backend's avatar plans and setups
+(`AVATAR_PLANS.md`, a draft), which `plans/useAvatarPlans` runs for an avatar
+whose entry lists the names it can run (`plans`).
+
 The optional handle methods are driven by the page, not the WebSocket. Each
 avatar lists the ones it implements in `features`, and pages hide the controls
 for the rest. `sleep` and `wake` let the chat page doze an avatar while the
@@ -37,9 +45,11 @@ NOTE: The backend fills in `duration_ms: 3000` when an action has none, so every
 import type { ReactElement, Ref } from "react";
 
 // From this project
-import   GltfRobotAvatar          from "./GltfRobotAvatar";
-import   SmileyAvatar             from "./smiley/SmileyAvatar";
-import { SMILEY_EXPRESSION_LIST } from "./smiley/actions/faceExpressions";
+import type { AvatarSetup, PlanCatalog, StepActions } from "@/hooks/live-chat/avatarPlanFrames";
+import        GltfRobotAvatar                         from "./GltfRobotAvatar";
+import        SmileyAvatar                            from "./smiley/SmileyAvatar";
+import      { SMILEY_EXPRESSION_LIST                } from "./smiley/actions/faceExpressions";
+import      { SMILEY_PLAN_CATALOG                   } from "./smiley/actions/smileyActions";
 
 
 // --------------------------------------------------------------------------------
@@ -66,17 +76,19 @@ export type AvatarZoom = "head" | "body";
 
 // Methods every avatar exposes through its `ref`
 export interface AvatarHandle {
-    performAction         : (action: RobotAction) => void;        // Act out one backend action
-    reset                 : () => void;                           // Return to Neutral now
-    setGaze?              : (x: number, y: number) => void;       // Look toward a point (-1 to 1 each)
-    clearGaze?            : () => void;                           // Go back to automatic gaze
-    setConversationState? : (state: ConversationState) => void;   // React to the conversation
-    setSpeechLevel?       : (level: number) => void;              // Voice loudness, 0 to 1
-    setSpeechPhase?       : (phase: SpeechPhase) => void;         // Where it is in its own reply (for where it looks)
-    setRestingExpression? : (value: string) => void;              // Face that "Neutral" means (one of `restingOptions`)
-    sleep?                : () => void;                           // Doze until woken (Neutral means the sleeping face meanwhile)
-    wake?                 : () => void;                           // Wake up and rest on the usual face again (does nothing when awake)
-    prepareToSpeak?       : (inMs?: number) => void;              // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
+    performAction          : (action: RobotAction, strength?: number ) => void;       // Act out one backend action (`strength`, 0-1, shows an expression partway from the resting face)
+    reset                  : (                                       ) => void;       // Return to Neutral now
+    setGaze              ? : (x: number, y: number                   ) => void;       // Look toward a point (-1 to 1 each)
+    clearGaze            ? : (                                       ) => void;       // Go back to automatic gaze
+    setConversationState ? : (state: ConversationState               ) => void;       // React to the conversation
+    setSpeechLevel       ? : (level: number                          ) => void;       // Voice loudness, 0 to 1
+    setSpeechPhase       ? : (phase: SpeechPhase                     ) => void;       // Where it is in its own reply (for where it looks)
+    setRestingExpression ? : (value: string                          ) => void;       // Face that "Neutral" means (one of `restingOptions`)
+    sleep                ? : (                                       ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
+    wake                 ? : (                                       ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
+    prepareToSpeak       ? : (inMs?:  number                         ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
+    runPlanStep          ? : (actions: StepActions                   ) => number;     // Do one backend plan step's actions now, returning how long they take (`AVATAR_PLANS.md`)
+    applySetup           ? : (setup:   AvatarSetup | null            ) => void;       // Take the session's settings from the backend (null clears them)
 }
 
 // One face an avatar can rest on: the name shown in the picker, and the value its handle takes
@@ -94,6 +106,7 @@ export type AvatarEntry = {
     label          : string;                                 // Name shown in avatar pickers
     features       : AvatarFeature[];                        // Optional handle methods it implements
     restingOptions : RestingOption[];                        // Faces it can rest on, default first (empty without `setRestingExpression`)
+    plans          : PlanCatalog | null;                     // Names a backend plan can use with it (null: it can't run plans)
     render         : (props: AvatarProps) => ReactElement;   // Builds the avatar element
 };
 
@@ -102,8 +115,8 @@ export type AvatarEntry = {
 // Avatars
 // ================================================================================
 // Clip-based 3D models of the two physical robots
-const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
-const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], restingOptions: [], render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
+const QT_AVATAR    : AvatarEntry = {id: "qt",    label: "QT Robot (3D)",    features: [], restingOptions: [], plans: null, render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="qt"    {...props} />};
+const BUDDY_AVATAR : AvatarEntry = {id: "buddy", label: "Buddy Robot (3D)", features: [], restingOptions: [], plans: null, render: (props: AvatarProps): ReactElement => <GltfRobotAvatar model="buddy" {...props} />};
 
 // Any named smiley expression can be its resting face (the catalog lists the default first)
 const SMILEY_RESTING_OPTIONS: RestingOption[] = SMILEY_EXPRESSION_LIST.map(({name, emoji}) => ({label: `${emoji} ${name}`, value: name}));
@@ -114,6 +127,7 @@ const SMILEY_AVATAR: AvatarEntry = {
     label          : "Smiley (2D)",
     features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
+    plans          : SMILEY_PLAN_CATALOG,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar {...props} />,
 };
 
@@ -123,6 +137,7 @@ const SMILEY_BROWS_AVATAR: AvatarEntry = {
     label          : "Smiley + eyebrows (2D)",
     features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
     restingOptions : SMILEY_RESTING_OPTIONS,
+    plans          : SMILEY_PLAN_CATALOG,
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
 

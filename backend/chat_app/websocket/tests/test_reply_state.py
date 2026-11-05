@@ -147,8 +147,9 @@ class SpeechFlushTests(unittest.IsolatedAsyncioTestCase):
 
         stage_patch  = patch.object(ChatHandler, "stage_and_schedule", new=stage)
         client_patch = patch("chat_app.websocket.services.speech.stt.speechProvider.speech.SpeechClient")
-        stage_patch.start(); client_patch.start()
-        self.addCleanup(stage_patch.stop); self.addCleanup(client_patch.stop)
+        final_patch  = patch("chat_app.websocket.services.speech.stt.speechProvider.handle_final")  # No harness hears these finals
+        stage_patch.start(); client_patch.start(); final_patch.start()
+        self.addCleanup(stage_patch.stop); self.addCleanup(client_patch.stop); self.addCleanup(final_patch.stop)
 
         self.consumer = type("WeakConsumer", (), {})()  # The provider only keeps a weakref to it
         self.provider = SpeechToTextProvider(consumer=self.consumer, loop=asyncio.get_running_loop())

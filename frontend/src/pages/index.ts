@@ -27,3 +27,4 @@ export { AdminChatActivities } from "@/pages/admin/AdminChatActivities";
 export { TranscriptPlayback  } from "@/pages/transcript_playback/TranscriptPlayback";
 export { AdminParticipants   } from "@/pages/admin/AdminParticipants";
 export { AdminCreateAccount  } from "@/pages/admin/AdminCreateAccount";
+export { AdminRobotView      } from "@/pages/admin/robot_view/AdminRobotView";  // Experimental Buddy media

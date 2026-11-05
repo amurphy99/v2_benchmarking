@@ -536,7 +536,7 @@ async def rag_response_fn(
         "current_scenario": current,
         "next_scenario": "",  # frontend doesn’t need this at the moment
         "close_session": rag_state["current_scenario"] == CLOSE_SESSION_STATE, # frontend or robot can use this to trigger session closure
-        # LLM metadata for LLMTurnLog (used by ActivityChatConsumer, not the frontend) ---
+        # LLM metadata for LLMTurnLog (used by ActivityHarness, not the frontend) ---
         "_llm_log": {
             "turn_index"              : rag_state.get("_turn_index", 0),
             "state_before"            : current,

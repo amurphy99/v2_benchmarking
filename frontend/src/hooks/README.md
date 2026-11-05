@@ -20,7 +20,11 @@ TODO:
  │
  ├── live-chat/                  # The main chat page for users
  │   ├── useLocalChatSessions.tx # Frontend compatible models for chat objects
- │   └── useChatSocket.ts        # Hook for connecting to backend ChatConsumer
+ │   ├── useChatSocket.ts        # Hook for connecting to backend ChatConsumer
+ │   ├── useAudioPlayer.ts       # Plays streamed TTS; loudness for the avatar's mouth; reply timing for plans
+ │   ├── replyMoments.ts         # When each reply's audio is heard (start, sentences, end)
+ │   ├── avatarPlanFrames.ts     # Avatar plan frame types (`pages/common/avatar/README.md`)
+ │   ├── avatarPlanChecks.ts     # Checks avatar plan and setup frames on arrival
  │   └── ...
  │
  ├── chat-listener/          # The admin chat monitor page 

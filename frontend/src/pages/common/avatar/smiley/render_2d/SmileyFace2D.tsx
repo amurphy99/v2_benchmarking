@@ -6,8 +6,11 @@ A pure renderer: it draws whatever `FaceState` it is given and holds no timers
 or behavior, so a 3D renderer can replace it without touching the controller.
 Shape math lives in `faceDrawing2D`; the eyes, mouth, and animated extras are
 their own parts, all filled from the gradients defined here. The face's objects
-(`face.objects`: hearts, then hands in front of everything) are drawn by
+(`face.objects`: hearts, then hands in front of the features) are drawn by
 `SmileyHeart2D` and `SmileyHand2D`, with their shapes in `objectDrawing2D`.
+The Map Task map (`SmileyMap2D`) is in front of everything. It is held by the
+body, so it sits outside the head's group (the head tilts and turns behind it)
+and is clipped to the frame.
 
 The face is shaded glossy, like an iOS emoji: bright and nearly white at the
 top, the face color through the middle, and a deeper warm shade toward the
@@ -33,6 +36,7 @@ import        SmileyExtras2D                        from "./SmileyExtras2D";
 import        SmileyEye2D                           from "./SmileyEye2D";
 import        SmileyHand2D                          from "./SmileyHand2D";
 import        SmileyHeart2D                         from "./SmileyHeart2D";
+import        SmileyMap2D                           from "./SmileyMap2D";
 import        SmileyMouth2D                         from "./SmileyMouth2D";
 import type { SmileyPaint                         } from "./faceDrawing2D";
 import      { SMILEY_BLUSH_X, SMILEY_BLUSH_Y, SMILEY_FACE_R, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
@@ -142,8 +146,9 @@ export default function SmileyFace2D({face}: {
     // --------------------------------------------------------------------------------
     // Layout
     // --------------------------------------------------------------------------------
-    // Viewport around the face
-    const viewBox = `${-(SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${-(SMILEY_FACE_R + SMILEY_VIEW_TOP)} ${2 * (SMILEY_FACE_R + SMILEY_VIEW_SIDE)} ${(2 * SMILEY_FACE_R) + SMILEY_VIEW_TOP + SMILEY_VIEW_BOTTOM}`;
+    // Viewport around the face (the map is clipped to it)
+    const view    = {x: -(SMILEY_FACE_R + SMILEY_VIEW_SIDE), y: -(SMILEY_FACE_R + SMILEY_VIEW_TOP), width: 2 * (SMILEY_FACE_R + SMILEY_VIEW_SIDE), height: (2 * SMILEY_FACE_R) + SMILEY_VIEW_TOP + SMILEY_VIEW_BOTTOM};
+    const viewBox = `${view.x} ${view.y} ${view.width} ${view.height}`;
 
     // Shadow follows the face's size, and shrinks and fades as the face lifts off the ground
     const lift          = Math.max(0, -face.offsetY);
@@ -198,6 +203,11 @@ export default function SmileyFace2D({face}: {
                     <stop offset="0%"   stopColor={SMILEY_SHADOW_HEX} stopOpacity={SMILEY_SHADOW_OPACITY} />
                     <stop offset="100%" stopColor={SMILEY_SHADOW_HEX} stopOpacity={0}                     />
                 </radialGradient>
+
+                {/* The frame (a box taller than the frame would otherwise show more of the map below it) */}
+                <clipPath id={id("view")}>
+                    <rect x={view.x} y={view.y} width={view.width} height={view.height} />
+                </clipPath>
             </defs>
 
             {/* -------------------------------------------------------------------------------- */}
@@ -247,6 +257,16 @@ export default function SmileyFace2D({face}: {
                     {face.objects.filter(isHand ).map((hand : HandObject ) => <SmileyHand2D  key={`${hand.key}-${hand.shape}`} hand={hand}                          paint={paint} />)}
                 </g>
             </g>
+
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Map Task Map */}
+            {/* -------------------------------------------------------------------------------- */}
+            {/* Held by the body: in front of the face but outside its group, so the head tilts and turns behind it */}
+            {(face.map > 0) ? (
+                <g clipPath={url("view")}>
+                    <SmileyMap2D face={face} paint={paint} />
+                </g>
+            ) : null}
         </svg>
     );
 }

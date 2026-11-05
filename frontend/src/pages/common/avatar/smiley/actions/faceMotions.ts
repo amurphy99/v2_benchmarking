@@ -12,7 +12,8 @@ Each motion's length and size are the tuning constants at the top of this file,
 and `SMILEY_MOTION_SPEED` speeds up or slows down all of them at once. A motion
 that favors one side is written once and listed a second time through
 `mirrored()`, which flips it left to right. The offset and easing helpers at the
-bottom are shared with the animations and passive motions.
+bottom are shared with the animations, the passive motions, the gaze, the map,
+and the face controller.
 
 */
 import type { ObjectOffsets                                             } from "../objects/faceObjects";
@@ -202,4 +203,33 @@ export function scaleOffsets(offsets: MotionOffsets, amount: number): MotionOffs
 // The number fields a set of offsets has
 function numberKeys(offsets: MotionOffsets): NumberOffsetKey[] {
     return (Object.keys(offsets) as (keyof MotionOffsets)[]).filter((key: keyof MotionOffsets): key is NumberOffsetKey => key !== "objects");
+}
+
+
+// --------------------------------------------------------------------------------
+// Easing Helpers
+// --------------------------------------------------------------------------------
+// One amount easing from where it was to a target over a set time (smoothed, so it starts and stops gently)
+export type Ease = {from: number; to: number; startMs: number; lengthMs: number};
+
+// Ease toward a new target from wherever the amount is now (one already heading there keeps going)
+export function easeToward(ease: Ease, to: number, lengthMs: number, nowMs: number): Ease {
+    return (ease.to === to) ? ease : {from: easeAt(ease, nowMs), to, startMs: nowMs, lengthMs};
+}
+
+// Where an ease is now (one with no length is already there)
+export function easeAt(ease: Ease, nowMs: number): number {
+    if (ease.lengthMs <= 0) return ease.to;
+    return ease.from + ((ease.to - ease.from) * smoothstep(clampRange((nowMs - ease.startMs) / ease.lengthMs, 0, 1)));
+}
+
+// Fraction of the remaining gap to close this frame (frame-rate independent exponential easing)
+export function easeStep(ratePerSec: number, dtSec: number): number {
+    return 1 - Math.exp(-ratePerSec * dtSec);
+}
+
+// Keep a value inside a range (gaze layers can add up past the eye's range, and a click's
+// `performance.now()` can be a little later than the frame time that reads it)
+export function clampRange(value: number, low: number, high: number): number {
+    return Math.max(low, Math.min(high, value));
 }

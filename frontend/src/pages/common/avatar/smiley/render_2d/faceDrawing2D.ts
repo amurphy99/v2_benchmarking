@@ -42,6 +42,7 @@ const SMILEY_GAZE_SHIFT  = 16;     // Farthest the eyes move for gaze
 const SMILEY_TURN_NARROW = 0.35;   // Narrowing of the eye nearer the edge at a full turn
 const SMILEY_LID_MAX_DEG = 28;     // Eyelid slant at a full `lidAngle`
 const SMILEY_LID_DEPTH   = 0.55;   // How far a full slant cuts into the eye, as a fraction of its height
+const SMILEY_SQUINT_LIFT = 0.45;   // How far a full squint pushes the lower lid up, as a fraction of the open eye's height
 
 // Other eye styles
 const SMILEY_EYE_ARC_HALF_W          = 15;    // Half-width of a closed-eye arc
@@ -143,12 +144,13 @@ export type Sprite = {x: number; y: number; size: number; opacity: number};
 
 // One open eye's center, size, and eyelid cut
 export type EyeGeometry = {
-    cx       : number;   // Eye center, in the feature group
-    cy       : number;
-    rx       : number;   // Eye half-width and half-height
-    ry       : number;
-    lidDeg   : number;   // Eyelid slant
-    lidEdgeY : number;   // Eyelid's lower edge, relative to the eye center
+    cx        : number;   // Eye center, in the feature group
+    cy        : number;
+    rx        : number;   // Eye half-width and half-height
+    ry        : number;
+    lidDeg    : number;   // Eyelid slant
+    lidEdgeY  : number;   // Eyelid's lower edge, relative to the eye center
+    lowerLidY : number;   // Lower lid's edge, relative to the eye center (at the open eye's bottom without a squint, so a blink never moves it)
 };
 
 // Every shape of the mouth, around its center
@@ -180,12 +182,13 @@ export function eyeGeometry(side: number, face: FaceState): EyeGeometry {
     const ry       = Math.max(openRy * face.eyeOpen * (1 - face.eyeArc), SMILEY_EYE_MIN_RY);
 
     return {
-        cx       : (side * (SMILEY_EYE_X - face.eyeInset)) + (face.gazeX * SMILEY_GAZE_SHIFT),
-        cy       : SMILEY_EYE_Y + (face.gazeY * SMILEY_GAZE_SHIFT),
-        rx       : rx,
-        ry       : ry,
-        lidDeg   : side * face.lidAngle * SMILEY_LID_MAX_DEG,
-        lidEdgeY : -ry + (Math.abs(face.lidAngle) * 2 * ry * SMILEY_LID_DEPTH),
+        cx        : (side * (SMILEY_EYE_X - face.eyeInset)) + (face.gazeX * SMILEY_GAZE_SHIFT),
+        cy        : SMILEY_EYE_Y + (face.gazeY * SMILEY_GAZE_SHIFT),
+        rx        : rx,
+        ry        : ry,
+        lidDeg    : side * face.lidAngle * SMILEY_LID_MAX_DEG,
+        lidEdgeY  : -ry + (Math.abs(face.lidAngle) * 2 * ry * SMILEY_LID_DEPTH),
+        lowerLidY : openRy * (1 - (2 * SMILEY_SQUINT_LIFT * face.squint)),
     };
 }
 
@@ -231,9 +234,9 @@ export function heartEyeScale(face: FaceState): number {
 
 // One tapered eyebrow above its eye, following most of the eye's gaze shift and never touching the eye
 export function browPath(side: number, face: FaceState): string {
-    // 1) Over the eye's resting spot, moved with the gaze, raised together and (for `browAsym`) one side more
+    // 1) Over the eye's resting spot (drawn in by `browPinch`), moved with the gaze, raised together and (for `browAsym`) one side more
     const [openRx, openRy] = openEyeRadii(face);
-    const centerX = (side * SMILEY_EYE_X) + (face.gazeX * SMILEY_GAZE_SHIFT * SMILEY_BROW_FOLLOW);
+    const centerX = (side * (SMILEY_EYE_X - face.browPinch)) + (face.gazeX * SMILEY_GAZE_SHIFT * SMILEY_BROW_FOLLOW);
     const centerY = SMILEY_EYE_Y + (face.gazeY * SMILEY_GAZE_SHIFT * SMILEY_BROW_FOLLOW) - openRy - SMILEY_BROW_GAP - ((face.browRaise + (face.browAsym * side)) * SMILEY_BROW_RAISE);
 
     // 2) Inner end (toward the nose) rises for worry and drops for anger

@@ -9,6 +9,10 @@ New chat-response flow:
 - If they start speaking again before our response is ready however, then we cancel the response task
 - Then we go back to our "listening" state again
 
+Every interim and final result goes to `consumers/processing/speech.py` on the
+chat's event loop, in the order Google returned them, so the chat type's harness
+hears the same speech the reply pipeline does.
+
 """
 import logging, asyncio, threading, weakref
 logger = logging.getLogger(__name__)
@@ -27,10 +31,12 @@ from google.cloud import speech
 from .....services import logging_utils as lu
 from .....services.logging_utils import RESET, BOLD, UNBOLD, STT_MAIN
 
-from ...chatHelpers  import ChatHandler
-from ...bg_helpers   import threadsafe_fire_and_log as thread_FL
-from   .audio_queue  import AudioBarrier, AudioChunk, AudioInputQueue
-from   .stream_state import InterimProgressTracker
+from ....consumers.processing.speech import handle_final, handle_interim
+from ....harnesses.base              import FinalUtterance, InterimSpeech
+from  ...bg_helpers                  import threadsafe_fire_and_log as thread_FL
+from  ...chatHelpers                 import ChatHandler
+from    .audio_queue                 import AudioBarrier, AudioChunk, AudioInputQueue
+from    .stream_state                import InterimProgressTracker
 
 # Constants
 SAMPLE_RATE   = 16_000   # Required input sample rate for the Google recognition stream
@@ -290,23 +296,16 @@ class SpeechToTextProvider:
         return barrier
 
 
-    # --------------------------------------------------------------------------------
-    # Handle meaningful interim progress on the consumer event loop
-    # --------------------------------------------------------------------------------
-    def _note_interim_progress(self, consumer: Any) -> None:
-        # Invalidates the current response snapshot and logs *only* if there was an actual cancellation
-        if ChatHandler.note_stt_progress(consumer):
-            logger.info(f"{STT_MAIN} Interim speech progress: cancelling pending response. {RESET}")
-
     # ================================================================================
     # Handles responses from the Google Cloud STT API
     # ================================================================================
     def _listen_responses(self, responses: Iterable[Any], staged: list[Future]) -> None:
         """
-        Routes genuinely advancing interim results to response cancellation, as well
-        as staging final results with their word-level timestamps. Text that was repeated
-        do to glitches or same-length reinterpretations of the same audio do not cancel
-        a pending response.
+        Hands every interim and final result to the chat's event loop, and stages
+        final results with their word-level timestamps. Only genuinely advancing
+        interims count as new speech (which cancels a pending automatic response);
+        text that was repeated due to glitches or same-length reinterpretations of the
+        same audio does not.
         TODO: Need to double check the logic on the repeated-text thing...
         """
         for response in responses:
@@ -323,11 +322,17 @@ class SpeechToTextProvider:
                     transcript = result.alternatives[0].transcript.strip()
                     if not transcript: continue
 
-                    # Repeated/revised interims for the same audio do not invalidate a
-                    # response; only meaningful timing/transcript progress does
                     consumer = self._consumer()
-                    if (consumer is not None) and self._interim_progress.has_new_speech(result, transcript):
-                        self._loop.call_soon_threadsafe(self._note_interim_progress, consumer)
+                    if consumer is None: continue
+
+                    # Repeated/revised interims for the same audio are not new speech
+                    speech = InterimSpeech(
+                        text       = transcript,
+                        new_speech = self._interim_progress.has_new_speech(result, transcript),
+                        stability  = result.stability,
+                        ended_at   = self._stream_start_dt + result.result_end_time,
+                    )
+                    self._loop.call_soon_threadsafe(handle_interim, consumer, speech)
 
                     # Never actually process interim results as a transcription
                     continue
@@ -355,7 +360,9 @@ class SpeechToTextProvider:
                 # Log the resulting transcription
                 logger.info(f"{STT_MAIN} Final transcription: \"{transcript}\" ({BOLD}{len(words)} words{UNBOLD}) {RESET}")
 
-                # 4) Schedule the finalized utterance on the ChatConsumer event loop
+                # 4) Let the harness hear the utterance, then stage it on the ChatConsumer event loop
+                #    (both are queued from here, so the harness hears it in order with the interims)
+                self._loop.call_soon_threadsafe(handle_final, consumer, FinalUtterance(text=transcript, words=tuple(words)))
                 t_sched = now_ts()
                 fut = thread_FL(
                     self._loop, ChatHandler.stage_and_schedule(consumer, transcript, wall_ts(), words),

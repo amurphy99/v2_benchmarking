@@ -72,7 +72,7 @@ Before writing a profile, gather:
    Neutral  Grumpy  Happy  Love  Sad  Scared  Sick  Surprised  Thinking  Tired
    ```
 
-   This is `ResponseMood` in `backend/chat_app/services/llm/live_chat/cognibot_api.py` and is
+   This is `ResponseMood` in `backend/chat_app/websocket/harnesses/avatar.py` and is
    the authoritative list. **This mapping lives on the robot, not here.** The admin panel sends
    the abstract mood label; the robot chooses the corresponding face or behavior.
 5. **Anything runtime-variable.** See the warning below.
@@ -95,7 +95,8 @@ and read at `pages/chat/Chat.tsx`). The models share no animation names at all:
 
 The web avatars and the shared `performAction()` contract they follow live in
 `pages/common/avatar/` (`avatarRegistry.tsx`). The public `/avatar-demo` page shows each web
-avatar beside the same buttons this panel would show for it.
+avatar beside the same buttons this panel would show for it. How the avatars are driven
+overall, including the backend plans the Smiley can run, is in `pages/common/avatar/README.md`.
 
 So the backend sends `avatarModel` alongside `source` in the `session_info` frame, and
 `getCapabilityProfile()` takes both. If a future interface has any capability that varies at

@@ -92,8 +92,8 @@ const SMILEY_ANIMATIONS: Record<string, FaceAnimation> = {
     "Glance Up Left"  : {kind: "timed", emoji: null, lengthMs: SMILEY_GLANCE_UP.lengthMs, face: null, motion: mirrored(glanceUp), breath: null},
 };
 
-// Every animation with its emoji, in catalog order (for building buttons)
-export const SMILEY_ANIMATION_LIST = Object.entries(SMILEY_ANIMATIONS).map(([name, animation]: [string, FaceAnimation]) => ({name, emoji: animation.emoji}));
+// Every animation with its emoji and kind, in catalog order (for building buttons and the plan catalog)
+export const SMILEY_ANIMATION_LIST = Object.entries(SMILEY_ANIMATIONS).map(([name, animation]: [string, FaceAnimation]) => ({name, emoji: animation.emoji, kind: animation.kind}));
 
 // Find an animation by name, ignoring case (unknown names give undefined)
 export function animationFor(name: string): FaceAnimation | undefined {

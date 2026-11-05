@@ -35,12 +35,14 @@ const SMILEY_BREATH_EASE_PER_SEC = 0.5;   // How quickly the period and depth mo
 const SMILEY_BREATH_MAX_HOLD_MS      = 2_500;   // A breath held for a release lets go after this long anyway
 const SMILEY_BREATH_RELEASE_AFTER_MS =   200;   // A release before the top lets the breath in run on this long (the voice starts about then)
 
-// Breath before speaking
-const SMILEY_SPEECH_BREATH_PEAK      = 0.022;   // Size change at the top (a little deeper than a resting breath)
-const SMILEY_SPEECH_BREATH_MIN_IN_MS =   250;   // Shortest breath in, however soon the voice comes
-const SMILEY_SPEECH_BREATH_EARLY_MS  =    50;   // How long before the voice the breath tops out
-const SMILEY_SPEECH_EXHALE_MS        = 2_500;   // Breath out as it starts talking (speech uses that air)
-const SMILEY_SPEECH_VOICE_LAG_MS     =   200;   // "speaking" turns on this long before the voice is heard (`bufferAhead` in `useAudioPlayer`)
+// Breath before speaking: its size and breath out (also a plan's breath when it leaves them out)
+export const SMILEY_SPEECH_BREATH_PEAK = 0.022;   // Size change at the top (a little deeper than a resting breath)
+export const SMILEY_SPEECH_EXHALE_MS   = 2_500;   // Breath out as it starts talking (speech uses that air)
+
+// ...and its timing
+const SMILEY_SPEECH_BREATH_MIN_IN_MS = 250;   // Shortest breath in, however soon the voice comes
+const SMILEY_SPEECH_BREATH_EARLY_MS  =  50;   // How long before the voice the breath tops out
+const SMILEY_SPEECH_VOICE_LAG_MS     = 200;   // "speaking" turns on this long before the voice is heard (`bufferAhead` in `useAudioPlayer`)
 
 // Learned gap from `prepareToSpeak` to "speaking", for pages that can't say when the voice comes
 const SMILEY_SPEECH_GAP_START_MS = 600;     // Guess before the first measured turn
