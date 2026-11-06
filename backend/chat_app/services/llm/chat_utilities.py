@@ -13,8 +13,6 @@ from ...config         import PROMPT, MAX_LENGTH
 from ...config         import llm as query_llm
 from  ..logging_utils  import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG
 
-from  ..chat_info.emotionHelpers import classify_emotion_with_vader
-
 # Response to return upon LLM request errors
 ERROR_UTTERANCE = "I'm sorry, I encountered an error while processing your request."
 

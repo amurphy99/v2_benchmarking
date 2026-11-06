@@ -8,7 +8,6 @@ dummy one (`services/llm/dummy_LLM.py`) for local testing.
 
 """
 import os, warnings, logging
-from .services.llm.langchain_wrapper import CustomChatModel
 from .services.llm.instructor_client import build_instructor_client, build_openai_client
 
 # Quiet TensorFlow's startup logging
@@ -110,7 +109,8 @@ try:
     RAG_METHOD = "instructor" # "legacy" or "instructor" (maybe we can make this configurable env variable later)
 
     if RAG_METHOD == "legacy":
-        # Initialize LangChain wrapper for the our fine-tuned phi3 model
+        # Initialize LangChain wrapper for the our fine-tuned phi3 model (only this mode needs langchain)
+        from .services.llm.langchain_wrapper import CustomChatModel
         llm_lc_wrapper = CustomChatModel(llm, max_tokens=128, stop=["<|end|>", "\n"], echo=False) if USE_LLM else None
         logger.info("LangChain LLM wrapper initialized successfully")
     else:
