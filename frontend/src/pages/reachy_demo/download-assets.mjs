@@ -10,13 +10,20 @@
  * - Omit the unrelated Microduck companion.
  * - Add cleanup methods for React unmounting.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const demoDir = dirname(fileURLToPath(import.meta.url));
 const frontendDir = fileURLToPath(new URL("../../../", import.meta.url));
 const publicDir = join(frontendDir, "public/reachy-demo");
+
+// Deployment supplies a persistent VM directory. Local runs use .cache,
+// which is already excluded by the frontend's .dockerignore.
+const cacheDir =
+    process.env.REACHY_ASSET_CACHE_DIR ||
+    join(frontendDir, ".cache", "reachy-downloads");
 
 const spaceRevision = "bdcac3f73e9b7def1a71ee03d2ca7a858fd0004b";
 const emotionRevision = "873ae49f0b89114b7e535eff0c1f7560d21d9357";
@@ -28,6 +35,22 @@ const emotionUrl =
     `https://huggingface.co/datasets/pollen-robotics/reachy-mini-emotions-library/resolve/${emotionRevision}`;
 
 async function get(url) {
+    // The URL includes the pinned upstream revision. Changing that revision
+    // automatically selects a new cache entry.
+    const key = createHash("sha256").update(url).digest("hex");
+    const cachePath = join(cacheDir, `${key}.bin`);
+
+    try {
+        const cached = await readFile(cachePath);
+        if (cached.length > 0) {
+            return new Response(cached);
+        }
+    } catch (error) {
+        // A missing entry needs downloading. Other filesystem errors should
+        // stop preparation instead of silently bypassing the cache.
+        if (error.code !== "ENOENT") throw error;
+    }
+
     const response = await fetch(url, {
         signal: AbortSignal.timeout(60_000),
     });
@@ -36,7 +59,23 @@ async function get(url) {
         throw new Error(`Download failed (${response.status}): ${url}`);
     }
 
-    return response;
+    // Read the complete response before caching it. A failed or interrupted
+    // download must not leave an entry that a later deployment will reuse.
+    const content = Buffer.from(await response.arrayBuffer());
+
+    if (content.length === 0) {
+        throw new Error(`Empty download: ${url}`);
+    }
+
+    await mkdir(cacheDir, { recursive: true });
+
+    // Rename only after writing finishes. Interrupted temporary files are
+    // ignored by subsequent runs.
+    const temporaryPath = `${cachePath}.${process.pid}.tmp`;
+    await writeFile(temporaryPath, content);
+    await rename(temporaryPath, cachePath);
+
+    return new Response(content);
 }
 
 async function save(path, content) {

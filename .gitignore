@@ -87,3 +87,6 @@ backend/chat_app/websocket/biomarkers/models/altered_grammar/*
 # Prosody
 backend/chat_app/websocket/biomarkers/models/prosody/*
 !backend/chat_app/websocket/biomarkers/models/prosody/.gitkeep
+
+#others
+ACTIVITY_PIPELINE_REFACTOR_PLAN.md
