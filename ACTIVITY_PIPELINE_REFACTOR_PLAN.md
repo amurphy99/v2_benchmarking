@@ -1,346 +1,151 @@
-# Activity pipeline refactor plan
+# Activity Pipeline Refactor Plan
 
-Recorded on November 5, 2026. The previous planning response is reproduced verbatim below. Later clarifications and progress are recorded separately after it.
+Last updated: November 5, 2026.
 
----
+## Status and next priorities
 
-**I would keep the existing harness architecture and refactor the activity pipeline underneath it in stages.** Your ideas are feasible, but they involve three different systems: live conversation control, background memory processing, and activity authoring. Giving each a clear contract will make them easier to build and evaluate.
+Stages 1–2 are implemented. The repository owner reports that the focused Docker
+suite completed with OK results; the final summary has not been independently
+reviewed. Real-model conversation quality and latency remain to be evaluated.
 
-I reviewed the current implementation and your [sample activity instructions](/Users/adnansadi/GitHub/TG-Data-Preprocess/memory_activity.json). No files were changed.
-
-One distinction will help throughout: keep **harness** for the Python component that runs a chat type; call the generated task definitions **state specifications**, and call tone/persona settings **behavior policies**. Those serve different purposes, even when the same activity uses all three.
-
-I would approach the refactor in this order:
-
-| Stage | Main change | Completion criterion |
+| Stage | Feature | Status |
 |---|---|---|
-| 1 | Stabilize activity state and closing | Cancelled replies cannot advance the activity |
-| 2 | Introduce structured goals and plans | You can inspect why a goal is complete or a transition occurred |
-| 3 | Separate planning from responding; add scheduling | Responses proceed without waiting for a planner |
-| 4 | Add reusable, versioned activity definitions | Multiple activities can share states without sharing progress |
-| 5 | Add the state-specification creator and admin viewer | Instruction edits produce validated, traceable definitions |
-| 6 | Add persistent user memories and migrate embeddings | Memories survive retries and retrieve correctly per participant |
-| 7 | Add activity switching | A session can change activities while retaining its context |
+| 1 | Safe state commits and controlled closing | Implemented |
+| 2 | Structured goals, evidence, plans, and reply limits | Implemented; conversation tuning remains |
+| 3 | Response-priority scheduling and background planning | Next development stage |
+| 4 | Reusable, versioned activity definitions | Planned |
+| 5 | State-specification compiler and admin tools | Planned |
+| 6 | Persistent participant memories and embedding migration | Planned |
+| 7 | Activity switching within a session | Planned |
 
-Memory work can proceed alongside stages 4–5 once reliable background jobs exist.
+Next priorities:
 
-**1. Make the existing activity state safe before introducing background planning.**
+1. Try representative memory conversations and review goal completion, repeated
+   questions, timeout exits, and closing behavior using the real model.
+2. Capture a baseline for response latency and planner cost.
+3. Design the shared request scheduler and finalized-turn background planner.
 
-Currently, the planner modifies `rag_state` before response generation and persistence. Introducing interim planning on top of that would allow incomplete speech to change the authoritative conversation state.
+Detailed test meanings belong in
+[test_activity_pipeline.py](backend/chat_app/websocket/tests/test_activity_pipeline.py).
+Runtime behavior, provisional settings, limitations, and Docker commands belong in
+[the activity README](backend/chat_app/websocket/harnesses/activity/README.md).
 
-The first refactor should establish this rule:
+## Stage 1 — Safe state commits and closing
 
-> Agents propose changes. The runtime validates and applies them at defined boundaries.
+**Implemented:** Activity generation runs against a deep copy of state. Histories,
+planner memory, goals, counters, and closing flags become current only after the
+exchange is saved. Closing receives explicit context/state, and the old RAG helpers
+and inactive activity consumer have been removed or relocated.
 
-The existing `ResponseOutcome.state` and `on_reply_saved()` mechanism already provide a useful foundation. Move activity generation toward returning a proposed next state instead of mutating the current one.
+**Follow-up:** Evaluate interruption and closing in actual conversations,
+particularly a final reply interrupted during audio playback. Closing currently
+starts on the next user turn after the closing decision.
 
-Also make the timing explicit: does a transition happen before this reply, after this reply, or after the user answers it? Today, the pipeline loads the current state’s instructions, allows the planner to select another state, and then generates using the original instructions plus the planner’s guidance. That leaves the responder with potentially conflicting directions.
+## Stage 2 — Structured conversation control
 
-There are three immediate fixes worth including:
+**Implemented:** Separate planner/responder classes and prompts; typed
+`ResponsePlan` and `PlannerMemory`; actor-specific goals with quoted evidence;
+minimum/maximum saved-reply counts; explicit transition and skipped-goal reasons;
+and role-based planner/responder metrics.
 
-- The closing-handler state-access bug discussed earlier.
-- The unconditional advancement after three turns. Your sample sometimes calls for three to five turns, and required goals may still be incomplete.
-- Conflicting closing behavior: your `end_conversation` specification says goodbye and prohibits new questions, while the subsequent closing handler offers a summary and invites further questions.
+**Follow-up:** Tune goal wording and reply limits. Review repeated questions,
+complete topic-option presentation, service-error replies consuming turn budgets,
+and timeout exits that enter a discussion without a selected topic. Quote matching
+establishes textual grounding; semantic goal fulfillment still depends on the model.
 
-These changes belong primarily in [the activity pipeline](/Users/adnansadi/GitHub/v2_benchmarking/backend/chat_app/websocket/services/ragChatHelpersMultiAgent.py:369), [ActivityHarness](/Users/adnansadi/GitHub/v2_benchmarking/backend/chat_app/websocket/harnesses/activity/harness.py:44), and the closing handler.
+## Stage 3 — Response-priority scheduling and background planning
 
-**2. Replace vague guidance with explicit goals, evidence, and response plans.**
+**Goal:** Start live responses without waiting for a fresh planner call.
 
-Your concern about skipped sub-goals is well founded. A prose instruction such as “acknowledge the user, ask about interests, and transition naturally” leaves several independent decisions implicit.
+- Add shared request admission: live responses first, speculative planning next,
+  offline processing last. Bound background work and preserve fairness.
+- Introduce background planning from finalized observations before using interim
+  STT. Responses consume the latest compatible completed plan, with a current-state
+  fallback when no suitable plan exists.
+- Add debounced interim planning with one replaceable observation per session.
+  Version results against transcript/state/activity revisions and reject stale work.
+- Keep interim conclusions provisional; they cannot advance committed state.
+- Verify IU serving priorities and cancellation support. Deferring queued work
+  does not pause running inference; assess reserved capacity or separate deployments.
+- Evaluate latency, quality, cost, and concurrency against the sequential baseline.
 
-Separate three kinds of requirement:
+## Stage 4 — Reusable, versioned activity definitions
 
-| Requirement | Example | Evidence needed |
-|---|---|---|
-| Assistant obligation | Present all three memory-topic options | The assistant response contains those options |
-| User-dependent goal | User selects a memory topic | A finalized user statement identifies a choice |
-| Repeated response rule | Address a direct question before asking another | Checked for each applicable turn |
+**Goal:** Compose activities from shared state definitions with independent progress.
 
-This distinction matters because “asked a question” and “received an answer” are different achievements. Likewise, acknowledging the user is usually a recurring obligation rather than a state goal completed once forever.
+- Add state revisions, activity versions/bindings, explicit transition graphs,
+  and entry prerequisites. Pin definitions for running activities.
+- Persist activity runs, state visits, and goal evidence. Separate required,
+  optional, conditional, and recurring obligations.
+- Remove hardcoded activity selection from instruction editing. Use known profile/
+  session information to avoid repeated introductions or name requests.
+- Compose persona, activity, state, and agent-role behavior policies with clear
+  precedence. Retain specialized Python engines such as the map task.
 
-For your `initiate_memory_activity` state, a specification could conceptually contain:
+## Stage 5 — State-specification compiler and admin tools
 
-```json
-{
-  "state_key": "memory.offer_topics",
-  "response_rules": [
-    "acknowledge_latest_contribution",
-    "keep_invitation_optional"
-  ],
-  "goals": [
-    {
-      "id": "present_topic_options",
-      "actor": "assistant",
-      "required": true,
-      "options": ["cars", "early_communication", "moon_landing"]
-    },
-    {
-      "id": "select_topic",
-      "actor": "user",
-      "required": true
-    }
-  ],
-  "transitions": [
-    {
-      "target": "memory.discuss_topic",
-      "requires": ["present_topic_options", "select_topic"]
-    }
-  ]
-}
-```
+**Goal:** Convert authored instructions into reviewable declarative contracts.
 
-That is an illustrative shape; the exact schema should follow a small working prototype.
+- Add a compiler agent producing validated goals, evidence rules, actions, and
+  transitions. Generate data rather than executable Python.
+- Recompile through a shared write service when instructions change. Use durable,
+  idempotent jobs tied to source revisions; stale jobs cannot overwrite newer work.
+- Validate output before publication and retain the last valid published version.
+- Provide admin inspection of source, generated contracts, errors, and revisions.
 
-Track progress separately from the definition: goal ID, status, supporting message IDs, and any skip reason. Useful statuses include pending, satisfied, declined, and skipped. A user who declines an activity should have an explicit exit path.
+## Stage 6 — Participant memories and embeddings
 
-Some checks can be deterministic. For example, render the three topic choices from structured data so none can be omitted. Other checks, such as whether an acknowledgment appropriately reflects an emotion, still need model judgment. Require evidence and evaluate those judgments; a structured checkbox alone does not establish correctness.
+**Goal:** Extract grounded memories after chats and retrieve relevant context later.
 
-For the planner-to-responder handoff, replace the single guidance string with compact fields such as:
+- Reuse the persisted transcript and existing post-chat summary. Store canonical
+  memories in the main database with participant ownership and source evidence.
+- Separate profile facts, preferences, dated events, and summaries from topic
+  categories such as sports, hobbies, relationships, work, food, travel, and daily life.
+- Preserve observation/event dates, uncertainty, corrections, and source/content
+  modalities. A planned event must not become confirmed attendance.
+- Use reliable extraction/indexing jobs, deduplication, and ownership filters.
+- Introduce an embedding-provider interface. Verify the exact IU model and modality
+  support before adopting Gemma embeddings; route availability alone is insufficient.
+- Backfill a separate versioned index from source content, evaluate retrieval, and
+  switch with rollback support. Never mix MiniLM and new-model vector spaces.
+- Treat the separate vector database as a derived projection, not the canonical
+  memory store. This work can overlap Stages 4–5 once durable jobs exist.
 
-- Current state and targeted goal IDs.
-- Specific user fact to acknowledge.
-- Direct question to answer.
-- Information or options to include.
-- One suggested follow-up.
-- Previously covered material to avoid repeating.
-- Proposed transition and supporting evidence.
+## Stage 7 — Activity switching
 
-For a small model, render these into short, concrete instructions. The responder should receive the current state’s relevant requirements and a few useful facts, rather than the entire activity specification.
+**Goal:** Change activities within a session while preserving context.
 
-**3. Move the planner off the response path, then add interim planning.**
+- Support explicit requests and accepted activity offers through a validated handoff.
+- Suspend/finish the source run, stop its tasks/cues, and reject late planner results.
+- Start the target at an eligible state using known participant information.
+- Record activity segments and define resume behavior, including specialized-task
+  frontend requirements. A single session-level chat type cannot represent this history.
 
-Your proposed background observer is feasible. The inputs you mean here are **interim STT transcripts**. The existing harness hooks already receive these events.
+## Architecture and implementation notes
 
-I would implement this in two milestones: asynchronous planning from finalized turns first, followed by speculative planning from interims.
+- Agents propose changes; trusted runtime code validates and commits them.
+- Keep Python harnesses, declarative state specifications, and behavior policies
+  distinct. A shared agent base class is not currently necessary.
+- Use role-based names: `PlannerAgent`, `PlannerMemory`, `ResponseAgent`,
+  `planner_memory`, and planner/responder metric prefixes.
+- The live activity is fixed to `memory_activity`; instructions come directly from
+  the main database. The existing vector store contains instruction embeddings.
+- Preserve the controlled closing workflow. The live database has no
+  `end_conversation` state; historical sample instructions are not authoritative.
+- A local migration now includes the missing language/session fields. Chat-app
+  migrations are excluded by `.gitignore`; their reproducible distribution remains
+  an infrastructure concern.
 
-```mermaid
-flowchart LR
-    I[Interim speech] --> P[Background planner]
-    P --> V[Versioned advisory plan]
-    F[Final text or reply request] --> R[Responder]
-    V --> R
-    S[Current state and goals] --> R
-    R --> C[Save exchange and apply validated effects]
-    C --> P
-```
+Source locations:
 
-At response time, the runtime captures the newest **compatible completed plan**. If none exists, the responder uses the current state specification and final user text immediately. A planner call should not become a prerequisite for responding again.
-
-Compatibility needs more than a timestamp. A plan should identify its activity run, definition version, state version, and transcript revision. A plan based on “I like football…” must be discarded or qualified if the user continues “…but I don’t follow it anymore.”
-
-For interims:
-
-- Keep one latest observation per session, replacing older observations.
-- Debounce meaningful transcript changes and limit planner launch frequency.
-- Avoid accumulating a queue of every interim transcript.
-- Treat interim conclusions as provisional.
-- Reconcile them against finalized speech before accepting goal completion or transitions.
-
-Your response-priority requirement needs control at two levels:
-
-| Level | What it can do |
+| Area | Location |
 |---|---|
-| Application scheduler | Prioritize waiting responses; defer or discard speculative work |
-| Inference server | Control requests already executing and competing for model capacity |
+| Activity state, coordination, goals, history, closing | [harnesses/activity/](backend/chat_app/websocket/harnesses/activity) |
+| Agent prompts and output contracts | [agents/](backend/chat_app/websocket/agents) |
+| Shared reply/cancellation coordination | [chatHelpers.py](backend/chat_app/websocket/services/chatHelpers.py) |
+| Database definitions | [models.py](backend/chat_app/models.py) |
+| Post-chat processing | [db_services.py](backend/chat_app/services/db_services.py) |
 
-**A priority queue cannot by itself pause a running model request.** Cancelling an asyncio task or HTTP request also does not establish that the server stopped inference. For IU, verify whether the gateway supports request priorities and cancellation, and whether those reach the serving engine.
-
-I would use these workload classes: live responses first, speculative planning second, and offline extraction/compilation last. Stop admitting background work when responses are waiting, and keep background requests short and bounded. If stronger latency isolation is needed, reserve serving capacity or run the planner on a separate deployment.
-
-An `asyncio.PriorityQueue` is reasonable for a single-process prototype. Multiple Django workers require coordination through a shared dispatcher or serving-layer scheduler. Also preserve fairness among participants: one session should not monopolize response capacity.
-
-**4. Separate reusable definitions from activity membership and runtime progress.**
-
-Your state-reuse idea is good, but shared state names should not imply shared completion.
-
-The current [`RAGInstructions` model](/Users/adnansadi/GitHub/v2_benchmarking/backend/chat_app/models.py:469) combines the state definition, activity membership, and ordering. I would gradually separate these concepts:
-
-| Concept | Purpose |
-|---|---|
-| State template and revision | Reusable definition such as `rapport.smalltalk` |
-| Activity version | A particular published activity configuration |
-| Activity-state binding | Which state revision an activity uses, with local settings |
-| Transition | Allowed movement between states |
-| Activity run | One execution within a chat session |
-| State visit and goal progress | What happened during that execution |
-
-Use stable identifiers rather than interpreting display names. Your sample already demonstrates the value: it references `comparing_past_with_present`, but defines `connecting_past_with_present`.
-
-Pin versions for running conversations. Editing a shared state should create a revision that activities can adopt deliberately; it should not silently change a session halfway through.
-
-For introductions, use entry conditions and session/profile information. Your app already stores participant names. A greeting state can ask for a preferred name only when needed, and an activity started midway through a session can enter after the introduction.
-
-The admin/API needs attention too: [instruction creation currently hardcodes `memory_activity`](/Users/adnansadi/GitHub/v2_benchmarking/backend/chat_app/api/views.py:148). That must become an explicit selection or binding before the UI can manage several activities properly.
-
-**5. Build the state-specification creator after proving the runtime manually.**
-
-I would first hand-author a structured version of a few memory-activity states. That lets you validate what the interpreter needs before asking an LLM to produce it.
-
-Then implement your creator as an authoring agent that generates **declarative JSON consumed by trusted Python code**. Its output can describe goals, evidence requirements, response constraints, and allowed transitions.
-
-The editing flow should be:
-
-> Save instruction revision → enqueue compilation → generate specification → validate → save matching revision → publish according to admin policy.
-
-Validation should check referenced states, required fields, allowed actions, and incompatible requirements. Instruction text should be treated as source material; it cannot override the compiler’s output schema or validation rules.
-
-Keep source and compiled versions together. A slow job for revision 3 must never overwrite a completed revision 4. The admin should show the original instructions, generated goals/transitions, validation errors, and revision history.
-
-Use one shared write service for regeneration, since instructions can be edited through multiple API/admin paths. A callback on just the current frontend endpoint would miss other edits.
-
-This work also needs durable background jobs. Your current `fire_and_log()` helper supervises process-local tasks, but those tasks do not survive worker restarts. Compilation and memory extraction need persisted status, retries, and idempotent processing.
-
-**6. Add user memories as canonical records with embeddings as a derived index.**
-
-The existing vector store contains **activity instruction chunks**, not participant memories. Also, the current multi-agent activity reads exact instructions from the main database. Therefore, improving planning does not depend on replacing MiniLM.
-
-For conversational memory, separate:
-
-- **Profile facts:** preferred name or other established attributes.
-- **Preferences:** enjoys discussing football.
-- **Episodic events:** planned to attend a Bears game on a particular date.
-- **Session summaries:** broader context from a completed chat.
-
-Keep `kind` separate from topic category. For example, a record can have `kind="episodic_event"` and `category="sports"`; another can have `kind="summary"`.
-
-A useful initial category list is sports, hobbies, family/relationships, work/education, food, travel/places, technology, daily life, personal history, and other. Support multiple categories when appropriate.
-
-Each memory should retain participant ownership, source session/message IDs, observation time, optional event date, and status. “I’m going to the Bears game today” should remain a planned event, with “today” resolved using the session’s local date. It does not establish confirmed attendance or a permanent preference.
-
-Your modality idea is useful. Distinguish **source modality** from **stored representation**: a spoken statement may have `source_modality="audio"` while the extracted memory has `content_modality="text"`.
-
-Reuse the transcript and summary from [existing post-chat analysis](/Users/adnansadi/GitHub/v2_benchmarking/backend/chat_app/services/db_services.py:77). Start memory extraction as a separate typed operation so it can be evaluated independently. Process it after the transcript is finalized, with retries that upsert records rather than duplicate them.
-
-Store canonical memories in the main database. Your vector database is separate, so use stable memory IDs and a reliable projection/reconciliation process. Retrieval should filter participant ownership and record status before similarity ranking, then apply relevant time/category filters.
-
-For embeddings, verify the exact IU model ID. The original **EmbeddingGemma** is text-only; **EmbeddingGemma 2** supports text, image, audio, and video in a shared embedding space. Model support does not establish that IU exposes every modality. [Original model card](https://ai.google.dev/gemma/docs/embeddinggemma/model_card), [EmbeddingGemma 2 model card](https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2?hl=en).
-
-Migrate alongside the old index: add a provider interface, identify the embedding space by model/version/dimensions/formatting, backfill from original text, evaluate retrieval, and then switch reads. MiniLM and Gemma vectors must remain in separate spaces even if you choose matching dimensions.
-
-**7. Add activity switching through a session-level coordinator.**
-
-When the user requests a game or accepts an offer, record a proposed activity switch. Apply it at a controlled turn boundary:
-
-1. Suspend or finish the current activity run.
-2. Cancel its outstanding planning work and invalidate late results.
-3. Start the target activity at an eligible entry state.
-4. Preserve session context, known identity, and relevant memories.
-5. Record the handoff for analytics and possible resumption.
-
-Use separate `ActivityRun` records under `ChatSession`; one session-level `chat_type` string cannot describe several activities accurately.
-
-Keep specialized implementations such as the map task. Its geometry and movement rules belong in code. A generic conversational-activity harness can interpret the generated specifications for more open-ended activities.
-
-For behavioral variation, compose policies with explicit precedence: product rules, session/persona preferences, activity policy, state guidance, and agent-role output requirements. The planner might produce concise structured observations while the responder speaks warmly. Each role can use a different model, but roles can initially share one model deployment.
-
-I would make the **first implementation milestone** deliberately narrow: fix state commits and closing, manually structure two or three memory states, and introduce a typed planner result. Then compare response-only, current sequential planning, and asynchronous planning using recorded conversations. Measure goal completion, repeated questions, invalid transitions, model cost, and time to first audible response under concurrent load. Those results will tell you where additional agents improve the system.
-
----
-
-## Subsequent clarifications
-
-- The live database no longer contains `end_conversation`; the supplied JSON is historical sample material. Keep the current controlled closing workflow. The earlier closing-conflict observation concerns that sample, not the live database.
-- The three-turn advancement rule was intentionally added to prevent stalled states. Replace it with explicit saved-turn counters and configurable per-state limits, preserving a bounded escape path and recording skipped goals honestly.
-- Code changes are provided in chat for the user to apply. Existing README/documentation edits require the user's approval before application.
-- Stages 1–2 retain sequential planner/responder calls. Scheduling and speculative interim planning belong to Stage 3.
-
-## Progress
-
-- [x] Preserve the original planning response.
-- [x] Record the user's closing-flow and turn-limit clarifications.
-- [x] User applied the initial Stage 1–2 code for review.
-- [ ] Stage 1: Apply code changes and verify cancellation and closing.
-- [ ] Stage 2: Apply structured goals, evidence, plans, and per-state limits; verify behavior.
-- [ ] Stage 3: Scheduling and asynchronous/speculative planning.
-- [ ] Stage 4: Reusable/versioned database definitions.
-- [ ] Stage 5: Creator and admin workflow.
-- [ ] Stage 6: User memories and embedding migration.
-- [ ] Stage 7: Activity switching.
-
-These boxes record completed work, not proposed work. Stages 1–2 remain unchecked until the code is applied and verified.
-
-## Implementation review: November 5, 2026
-
-Documentation updates were approved and applied. The activity README now records
-temporary testing choices, future improvements, and Docker test commands.
-
-The installed code has two unresolved integration blockers: agents were moved to
-`websocket/agents/` without updating the harness's relative imports, and the
-planner schema omits `updated_memory` while the pipeline still requires it on
-successful turns. Code fixes are supplied in chat for manual application.
-
-All twelve reviewed Python files parsed. Six isolated goal/transition tests passed
-using the actual runtime source; a focused execution reproduced the successful-
-response `KeyError` caused by the schema mismatch. The complete Django suite has
-not run because host dependencies are missing and the Docker daemon is stopped.
-Stages 1–2 therefore remain open. The original planning response above is unchanged.
-
-## Follow-up implementation and test results
-
-The user corrected the shared agent imports, restored `ResponsePlan.updated_memory`,
-renamed its model to `PlannerMemory`, and consistently uses `planner_memory` for
-session state. The retired RAG helpers and legacy consumer were removed. The two
-integration blockers identified in the earlier review are resolved in source.
-
-The Docker test run progressed to test-database creation, then failed before any
-test cases executed. The primary error was `chat_app_profile.language does not
-exist`; the final invalid-cursor error followed that failed SQL query. `Profile`
-defines `language`, while the available migration history does not add it. The
-session fields `chat_type`, `condition`, and `variant` also have no migration in
-that history. Generate and inspect migrations for the current models before
-rerunning the suite. The root `.gitignore` excludes chat-app migrations, so they
-are not automatically included in version control. No migration files or databases
-were modified during this documentation review.
-
-The user requested that numbered implementation stages and planning live only in
-this document. Runtime READMEs now describe current behavior, provisional settings,
-limitations, and test commands. Historical blocker notes were removed from those
-READMEs. This document retains the original plan and historical review entries.
-
-### Role-based naming
-
-Use purpose-based names (`PlannerAgent`, `PlannerMemory`, `ResponseAgent`) rather
-than numerical agent identifiers. `planner_memory` is already updated in the
-pipeline and failure assertion. Remaining numerical log keys in `pipeline.py` and
-one assertion in `test_activity_pipeline.py` require manual replacement:
-
-| Current key/prefix | Replacement |
-|---|---|
-| `agent2_planner_error` | `planner_error` |
-| `agent2_planner_output` | `planner_output` |
-| `agent2_planner_latency_ms` | `planner_latency_ms` |
-| `agent1_response_latency_ms` | `responder_latency_ms` |
-| `agent1_response_error` | `responder_error` |
-| `agent1_response` token-usage prefix | `responder` |
-| `agent2_planner` token-usage prefix | `planner` |
-
-These changes affect keys in new `agents_data` JSON records, not database columns.
-Historical logs retain their earlier key names unless explicitly migrated. The
-Python replacements are supplied in chat; only documentation was edited here.
-
-### Verification and improvement backlog
-
-- [x] Align shared agent imports and restore the planner-memory output contract.
-- [x] Remove implementation-stage wording from runtime READMEs.
-- [ ] Generate and inspect migrations matching the current model definitions.
-- [ ] Complete role-based metric-key renaming and update the affected assertion.
-- [ ] Run the full focused Docker suite after schema setup succeeds.
-- [ ] Add successful planner/responder coverage using the actual `ResponsePlan`
-  schema; failure-only pipeline tests do not verify that contract.
-- [ ] Add actual closing-branch tests, commit/generation cancellation coverage,
-  and a saved-closing-response/TTS-interruption case.
-- [ ] Define target-state entry requirements and deliberate timeout/refusal
-  routes; decide whether service-error clarifications consume turn budgets.
-- [ ] Evaluate optional/conditional goals, recurring obligations, correction
-  handling, complete topic-option presentation, and semantic evidence quality.
-- [ ] Measure goal fulfillment, repetition, invalid/forced transitions, token
-  cost, and final-transcript-to-first-audio latency under concurrent load.
-- [ ] Implement Stage 3 scheduling and coalesced asynchronous planning with
-  transcript/activity revisions and verified IU serving/cancellation behavior.
-- [ ] Implement the later roadmap's reusable/versioned database contracts,
-  run/visit persistence, authoring/admin workflow, durable background work,
-  persistent memories, and activity switching.
-
-Stages 1–2 remain incomplete until the focused suite and conversation verification
-succeed; reaching migration setup does not establish a pass or failure of the
-activity test assertions.
+Working convention: provide implementation changes in chat for the repository
+owner to apply unless direct edits are explicitly authorized. Keep runtime READMEs
+focused on current code; keep numbered stages and feature progress in this plan.

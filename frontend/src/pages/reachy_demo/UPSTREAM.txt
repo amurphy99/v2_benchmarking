@@ -1,0 +1,3 @@
+Viewer and motion source: https://huggingface.co/spaces/pollen-robotics/reachy-mini-3d-voice/resolve/bdcac3f73e9b7def1a71ee03d2ca7a858fd0004b
+Emotion source: https://huggingface.co/datasets/pollen-robotics/reachy-mini-emotions-library/resolve/873ae49f0b89114b7e535eff0c1f7560d21d9357
+Local adaptations are documented in download-assets.mjs.

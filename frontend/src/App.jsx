@@ -13,7 +13,7 @@ This component also keeps `window.isMobile` current as the window resizes,
 because pages read that flag directly instead of taking it as a prop.
 
 */
-import { useEffect, useState             } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 // From this project
@@ -35,6 +35,10 @@ import "./App.css";
 // Widest window, in CSS pixels, that pages lay out for mobile
 const MOBILE_MAX_WIDTH_PX = 768;
 
+// Load the experimental viewer only when its page is opened.
+const ReachyDemo = lazy(() => import("@/pages/reachy_demo/ReachyDemo"));
+// Vite reads this at build time. The route is disabled unless explicitly enabled.
+const ENABLE_REACHY_DEMO = import.meta.env.VITE_ENABLE_REACHY_DEMO === "true";
 
 // ================================================================================
 // App
@@ -70,6 +74,19 @@ export default function App() {
             {/* Pages Inside the Login Check */}
             {/* -------------------------------------------------------------------------------- */}
             <Route element={<AuthProvider><Outlet /></AuthProvider>}>
+                {/* Experimental demo: requires login, with no main-site layout or menu entry. */}
+                {ENABLE_REACHY_DEMO && (
+                    <Route element={<Protected />}>
+                        <Route
+                            path="/reachy-conv-demo"
+                            element={
+                                <Suspense fallback={<div>Loading Reachy demo…</div>}>
+                                    <ReachyDemo />
+                                </Suspense>
+                            }
+                        />
+                    </Route>
+                )}
                 <Route element={<AppLayout />}>
                     {/* The site root sends everyone to their landing page or the login page */}
                     <Route path="/" element={<HomeRedirect />} />

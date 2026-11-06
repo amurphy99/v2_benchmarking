@@ -1,3 +1,8 @@
+"""Unit checks for activity goals, proposed state, and model-failure fallbacks.
+
+Model calls and the closing helper are mocked where used. Passing these tests
+does not establish real-model quality or full closing-workflow behavior.
+"""
 import asyncio
 import unittest
 from types import SimpleNamespace
@@ -44,6 +49,7 @@ class GoalTests(unittest.TestCase):
         )
 
     def test_evidence_requires_matching_actor_and_exact_quote(self):
+        """Accept the matching assistant quote; reject invented quotes and user evidence."""
         evidence = [{
             "goal_id": "ask",
             "message_id": "1:assistant",
@@ -69,14 +75,17 @@ class GoalTests(unittest.TestCase):
         )
 
     def test_missing_goals_block_normal_transition(self):
+        """Keep the current state while required goals are pending before the turn limit."""
         self.assertEqual(self.transition().target, "current")
 
     def test_minimum_turns_still_apply_when_goals_are_met(self):
+        """Require the minimum reply count even when the goal is already satisfied."""
         progress = {"ask": {"status": "satisfied"}}
         self.assertEqual(self.transition(progress, turns=1).target, "current")
         self.assertEqual(self.transition(progress, turns=2).target, "next")
 
     def test_turn_limit_records_unmet_goals(self):
+        """Identify unmet goals for skipping when the maximum reply count forces an exit."""
         result = self.transition(turns=4)
         self.assertEqual(
             (result.target, result.reason, result.skipped_goals),
@@ -84,6 +93,7 @@ class GoalTests(unittest.TestCase):
         )
 
     def test_unknown_target_cannot_skip_states(self):
+        """Reject an invented successor during normal progression, despite satisfied goals."""
         self.plan["next_state"] = "invented"
         self.assertEqual(
             self.transition({"ask": {"status": "satisfied"}}).target,
@@ -91,6 +101,7 @@ class GoalTests(unittest.TestCase):
         )
 
     def test_user_exit_requires_grounding_in_current_user_text(self):
+        """Allow the proposed end-chat exit only when its quote matches current user text."""
         self.plan.update(
             transition_reason="user_requested_end",
             exit_quote="Please end the chat",
@@ -119,6 +130,10 @@ class AttemptTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_state_changes_only_when_reply_is_saved(self):
+        """Keep generated state provisional until the save hook adopts the proposal.
+
+        The hook is invoked directly; database persistence is not exercised here.
+        """
         async def generate(**kwargs):
             kwargs["rag_state"]["current_scenario"] = "next"
             return "Hello", None
@@ -139,6 +154,7 @@ class AttemptTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_cancellation_discards_nested_changes(self):
+        """Discard nested attempt-local mutations when running generation is cancelled."""
         self.harness.rag_state["nested"] = {"evidence": []}
         entered = asyncio.Event()
 
@@ -159,6 +175,10 @@ class AttemptTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_closing_flags_also_wait_for_save(self):
+        """Adopt a mocked closing helper's summary-choice flag only through the save hook.
+
+        This checks state ownership, not the actual closing helper's branches.
+        """
         self.harness.rag_state["_closing_flow_active"] = True
 
         async def closing(**kwargs):
@@ -181,6 +201,10 @@ class AttemptTests(unittest.IsolatedAsyncioTestCase):
 
 class PipelineFailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_response_failure_does_not_advance_or_apply_planner_memory(self):
+        """Return fallback text after both agents fail without advancing or adding memory.
+
+        Even at the turn limit, the failed response must not log a forced exit.
+        """
         state = {
             "current_scenario": "imaginative_discussion",
             "_same_state_turn_count": 3,
@@ -218,6 +242,7 @@ class PipelineFailureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(log["forced_state_transition"])
 
     async def test_planner_failure_still_allows_a_response(self):
+        """Allow responder text after planner failure, recording the error and reply count."""
         state = {"current_scenario": "imaginative_discussion"}
 
         planner = SimpleNamespace(

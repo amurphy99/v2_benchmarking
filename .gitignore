@@ -44,6 +44,7 @@ Include/
 Scripts/
 share/
 node_modules/
+/frontend/public/reachy-demo
 
 frontend/package-lock.json
 
@@ -86,4 +87,3 @@ backend/chat_app/websocket/biomarkers/models/altered_grammar/*
 # Prosody
 backend/chat_app/websocket/biomarkers/models/prosody/*
 !backend/chat_app/websocket/biomarkers/models/prosody/.gitkeep
-
