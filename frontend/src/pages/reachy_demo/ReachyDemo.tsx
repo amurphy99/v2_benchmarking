@@ -1,200 +1,137 @@
 /*
- * Avatar-only preview.
- *
- * The audio is an existing local sample, not a chat reply. Live activity chat
- * will later supply the conversation state and assistant audio inputs.
+ * Activity chat client for the isolated Reachy preview.
+ * Dialogue, STT, TTS, and persistence stay in the existing backend.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ReachyAvatar from "./ReachyAvatar";
-import type {
-    ReachyAvatarHandle,
-    ReachyState,
-} from "./ReachyAvatar";
+import type { ReachyAvatarHandle } from "./ReachyAvatar";
+import ReachyPreviewPanel from "./ReachyPreviewPanel";
+import type { PreviewInput } from "./ReachyPreviewPanel";
+import { createExpressionPolicy } from "./expressionPolicy";
+import useReachyChat from "./useReachyChat";
 
 import "./reachyDemo.css";
 
-const STATES: { value: ReachyState; label: string }[] = [
-    { value: "idle", label: "Idle" },
-    { value: "listening", label: "Listening" },
-    { value: "user-speaking", label: "User speaking" },
-    { value: "processing", label: "Thinking" },
-];
-
 export default function ReachyDemo() {
     const avatarRef = useRef<ReachyAvatarHandle>(null);
-    const audioRef = useRef<HTMLAudioElement>(null);
 
-    const graphRef = useRef<{
-        context: AudioContext;
-        source: MediaElementAudioSourceNode;
-        analyser: AnalyserNode;
-    } | null>(null);
+    const [preview, setPreview] = useState<PreviewInput>({
+        state: "idle",
+        analyser: null,
+    });
 
-    const [state, setState] = useState<ReachyState>("idle");
-    const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    // Keep policy timers and cooldowns stable across page renders.
+    const behavior = useMemo(
+        () => createExpressionPolicy(() => avatarRef.current),
+        [],
+    );
 
-    // Create one audio graph per media element, after a user gesture.
-    // Reusing it prevents createMediaElementSource errors on later plays.
-    const playSample = async () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        setError(null);
-
-        try {
-            if (!graphRef.current) {
-                const context = new AudioContext();
-                const source = context.createMediaElementSource(audio);
-                const output = context.createAnalyser();
-
-                source.connect(output);
-                output.connect(context.destination);
-
-                graphRef.current = {
-                    context,
-                    source,
-                    analyser: output,
-                };
-            }
-
-            const graph = graphRef.current;
-
-            await graph.context.resume();
-            await audio.play();
-
-            setAnalyser(graph.analyser);
-            setState("ai-speaking");
-        } catch (cause) {
-            setError(
-                cause instanceof Error
-                    ? cause.message
-                    : "Sample audio could not play."
-            );
-        }
-    };
-
-    // Manual posture changes also stop the sample and any primary gesture.
-    const chooseState = (next: ReachyState) => {
-        audioRef.current?.pause();
-        setAnalyser(null);
-        avatarRef.current?.stopMotion();
-        setState(next);
-    };
+    const chat = useReachyChat(behavior);
+    const canStart = chat.phase === "idle" || chat.phase === "ended";
 
     useEffect(() => {
-        // Capture now: React clears element refs before passive cleanup.
-        const audio = audioRef.current;
-
         return () => {
-            audio?.pause();
-
-            const graph = graphRef.current;
-            graphRef.current = null;
-
-            graph?.source.disconnect();
-            graph?.analyser.disconnect();
-
-            if (graph) {
-                void graph.context.close().catch(() => {});
-            }
+            // Stop the recurring scheduler as well as any active gesture.
+            behavior.setListening(false);
+            behavior.onMotionCancel();
         };
-    }, []);
+    }, [behavior]);
+
+    // Only live listening enables attention gestures; manual previews do not.
+    useEffect(() => {
+        behavior.setListening(
+            chat.phase === "active" &&
+            chat.avatarState === "listening",
+        );
+    }, [behavior, chat.phase, chat.avatarState]);
 
     return (
         <main className="reachy-demo-page">
-            <h1>Reachy Mini avatar preview</h1>
+            <h1>Reachy Mini Simulator</h1>
 
             <p>
-                Drag to rotate. Try a posture, a gesture, or the sample voice.
+                Start a conversation, then speak normally. This uses your
+                account&apos;s activity chat and the app&apos;s default voice.
             </p>
 
-            <ReachyAvatar
-                ref={avatarRef}
-                state={state}
-                assistantAudio={analyser}
-            />
+            <div className="reachy-demo-workspace">
+                <div className="reachy-demo-conversation">
+                    <ReachyAvatar
+                        ref={avatarRef}
+                        state={canStart ? preview.state : chat.avatarState}
+                        assistantAudio={
+                            canStart ? preview.analyser : chat.analyser
+                        }
+                    />
 
-            <div
-                className="reachy-demo-controls"
-                role="group"
-                aria-label="Conversation posture"
-            >
-                {STATES.map(({ value, label }) => (
-                    <button
-                        key={value}
-                        type="button"
-                        aria-pressed={state === value}
-                        onClick={() => chooseState(value)}
+                    <div
+                        className="reachy-demo-controls"
+                        aria-label="Conversation controls"
                     >
-                        {label}
-                    </button>
-                ))}
+                        <button
+                            type="button"
+                            disabled={!canStart}
+                            onClick={() => {
+                                behavior.onMotionCancel();
+                                setPreview({
+                                    state: "idle",
+                                    analyser: null,
+                                });
+                                chat.start();
+                            }}
+                        >
+                            {chat.phase === "ended"
+                                ? "New conversation"
+                                : "Start conversation"}
+                        </button>
 
-                <button
-                    type="button"
-                    onClick={() => void playSample()}
-                >
-                    Play sample speech
-                </button>
+                        <button
+                            type="button"
+                            disabled={canStart}
+                            onClick={chat.end}
+                        >
+                            End conversation
+                        </button>
+                    </div>
+
+                    <p role="status">
+                        Connection: {chat.phase}. Robot:{" "}
+                        {canStart ? preview.state : chat.avatarState}.
+                    </p>
+
+                    {chat.error && <p role="alert">{chat.error}</p>}
+
+                    <section
+                        className="reachy-demo-transcript"
+                        aria-label="Conversation transcript"
+                    >
+                        {chat.turns.map((turn) => (
+                            <p key={turn.id}>
+                                <strong>
+                                    {turn.role === "user" ? "You" : "Reachy"}:
+                                </strong>{" "}
+                                {turn.text}
+                            </p>
+                        ))}
+                    </section>
+                </div>
+
+                {canStart ? (
+                    <ReachyPreviewPanel
+                        avatarRef={avatarRef}
+                        onPreviewChange={setPreview}
+                    />
+                ) : (
+                    <aside className="reachy-demo-preview">
+                        <h2>Avatar preview</h2>
+                        <p>
+                            End the conversation to test motions, postures,
+                            or sample speech.
+                        </p>
+                    </aside>
+                )}
             </div>
-
-            <div
-                className="reachy-demo-controls"
-                role="group"
-                aria-label="Robot gestures"
-            >
-                <button
-                    type="button"
-                    onClick={() => void avatarRef.current?.playEmotion("welcoming2")}
-                >
-                    Welcome
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => void avatarRef.current?.playEmotion("yes1")}
-                >
-                    Nod
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => void avatarRef.current?.playEmotion("thoughtful1")}
-                >
-                    Thoughtful
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => avatarRef.current?.playDance("simple_nod")}
-                >
-                    Dance
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => chooseState("idle")}
-                >
-                    Reset
-                </button>
-            </div>
-
-            <p role="status">Posture: {state}</p>
-
-            {error && <p role="alert">{error}</p>}
-
-            {/* No native controls: the buttons above manage this sample. */}
-            <audio
-                ref={audioRef}
-                src="/audio/sample_reply.wav"
-                preload="none"
-                onEnded={() => {
-                    setAnalyser(null);
-                    setState("listening");
-                }}
-            />
         </main>
     );
 }

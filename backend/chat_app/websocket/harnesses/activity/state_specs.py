@@ -39,7 +39,7 @@ STATE_SPECS = {
     ), min_turns=3, max_turns=6),
 
     "initiate_memory_activity": StateSpec((
-        GoalSpec("offer_topics", "Offer ALL THREE: cars, early communication, and the Moon landing.", "assistant"),
+        GoalSpec("offer_topics", "Offer ALL THREE: social life, early communication, and the Moon landing.", "assistant"),
         GoalSpec("topic_selected", "The user chooses or clearly favors a memory topic.", "user"),
     ), max_turns=4),
 

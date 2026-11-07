@@ -245,6 +245,32 @@ if (emotions.length === 0) {
     throw new Error("No recorded emotions found.");
 }
 
+// Expose every downloaded recording, and let exact IDs bypass intent fallback.
+const recordedEmotionNames = emotions.map((name) => name.slice(0, -5)).sort();
+const motionPath = join(demoDir, "vendor", "motion.js");
+let motionSource = await readFile(motionPath, "utf8");
+
+motionSource = replaceOnce(
+    motionSource,
+    "const ALLOWED_EMOTION_MOVES = new Set([",
+    "// Local catalog generated from the pinned dataset file list.\n" +
+    "export const RECORDED_EMOTIONS = " +
+    JSON.stringify(recordedEmotionNames) + ";\n\n" +
+    "const ALLOWED_EMOTION_MOVES = new Set([\n" +
+    "  ...RECORDED_EMOTIONS,"
+);
+
+motionSource = replaceOnce(
+    motionSource,
+    "  const key = normalizeEmotionKey(requested);",
+    "  // Preserve exact dataset filenames, including hyphens.\n" +
+    '  const exact = String(requested || "").trim();\n' +
+    "  if (ALLOWED_EMOTION_MOVES.has(exact)) return exact;\n" +
+    "  const key = normalizeEmotionKey(requested);"
+);
+
+await save(motionPath, motionSource);
+
 const downloads = [
     ...assets.map((name) => [
         join(publicDir, name),

@@ -69,6 +69,7 @@ interface AudioPlayerOptions {
     bitsPerSample?   : number;  // Fallback sample bit depth
     bufferAhead?     : number;  // Seconds scheduled ahead of the browser playhead
     onPlaybackState? : (responseId: number, state: PlaybackState) => void;
+    onAudioSource?: (source: AudioBufferSourceNode) => void;     // Optional analysis tap. The player still handles speaker output.
 }
 
 interface ResponsePlayback {
@@ -116,6 +117,7 @@ export function useAudioPlayer({
     bitsPerSample   = 16,
     bufferAhead     = 0.2,
     onPlaybackState = () => {},
+    onAudioSource   = () => {},
 }: AudioPlayerOptions): AudioPlayerControls {
     /*
     Schedule each PCM chunk on a shared Web Audio timeline and expose controls for
@@ -132,6 +134,7 @@ export function useAudioPlayer({
     const playbackGenerationRef = useRef<number>(0);
     const responsePlaybackRef   = useRef<Map<number, ResponsePlayback>>(new Map());
     const playbackHandlerRef    = useRef(onPlaybackState);
+    const audioSourceHandlerRef = useRef(onAudioSource);
 
     // Recent replies' moments, and the next reply's hold (both for plan steps timed to a reply)
     const repliesRef   = useRef<ReplyRecord[]>([]);
@@ -143,6 +146,11 @@ export function useAudioPlayer({
     useEffect(() => {
         playbackHandlerRef.current = onPlaybackState;
     }, [onPlaybackState]);
+
+    // Keep the optional analysis callback current without recreating playback.
+    useEffect(() => {
+        audioSourceHandlerRef.current = onAudioSource;
+    }, [onAudioSource]);
 
     // Create the browser audio timeline once playback is allowed to begin
     const startPlayer = useCallback(() => {
@@ -209,6 +217,7 @@ export function useAudioPlayer({
             const generation = playbackGenerationRef.current;
             source.buffer    = audioBuffer;
             source.connect(ctx.destination);
+            audioSourceHandlerRef.current?.(source);
 
             // Mark the overall TTS player active on the first scheduled chunk
             // (after a held reply's hold, so speaking still starts `bufferAhead` before the voice)

@@ -214,7 +214,11 @@ export const EMOTION_INTENT_TO_MOVES = {
   dying: ["dying1"],
 };
 
+// Local catalog generated from the pinned dataset file list.
+export const RECORDED_EMOTIONS = ["amazed1","anxiety1","attentive1","attentive2","boredom1","boredom2","calming1","cheerful1","come1","confused1","contempt1","curious1","dance1","dance2","dance3","disgusted1","displeased1","displeased2","downcast1","dying1","electric1","enthusiastic1","enthusiastic2","exhausted1","fear1","frustrated1","furious1","go_away1","grateful1","helpful1","helpful2","impatient1","impatient2","incomprehensible2","indifferent1","inquiring1","inquiring2","inquiring3","irritated1","irritated2","laughing1","laughing2","lonely1","lost1","loving1","mini-deep-sleep","no1","no_excited1","no_sad1","oops1","oops2","proud1","proud2","proud3","rage1","relief1","relief2","reprimand1","reprimand2","reprimand3","resigned1","sad1","sad2","scared1","serenity1","shy1","sleep1","success1","success2","surprised1","surprised2","thoughtful1","thoughtful2","tired1","toc-toc-toc","uncertain1","uncomfortable1","understanding1","understanding2","waiting","wake-mini-up","welcoming1","welcoming2","yes1","yes_sad1"];
+
 const ALLOWED_EMOTION_MOVES = new Set([
+  ...RECORDED_EMOTIONS,
   ...CURATED_EMOTION_MOVES,
   ...Object.values(EMOTION_INTENT_TO_MOVES).flat(),
 ]);
@@ -249,6 +253,9 @@ function keywordEmotionIntent(key) {
 /** Resolve an intent or recorded ID exactly like the conversation app.
  * @param {unknown} requested @returns {string} */
 export function resolveEmotionName(requested) {
+  // Preserve exact dataset filenames, including hyphens.
+  const exact = String(requested || "").trim();
+  if (ALLOWED_EMOTION_MOVES.has(exact)) return exact;
   const key = normalizeEmotionKey(requested);
   if (key && key !== "random" && ALLOWED_EMOTION_MOVES.has(key)) return key;
   const intent = EMOTION_INTENT_TO_MOVES[key] ? key : keywordEmotionIntent(key);

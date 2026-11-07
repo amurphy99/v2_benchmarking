@@ -45,6 +45,7 @@ Scripts/
 share/
 node_modules/
 /frontend/public/reachy-demo
+/frontend/.cache
 
 frontend/package-lock.json
 
