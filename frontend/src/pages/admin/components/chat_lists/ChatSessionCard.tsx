@@ -8,6 +8,7 @@ import { memo, useMemo } from "react";
 // From this project
 import { ChatSession                       } from "@/api";
 import { dateFormatLong, formatElapsedTime } from "@/utils/styling/numFormatting";
+import { chatRunText                       } from "./chatRunFilter";
 import { formatTimeAgo                     } from "./timeGrouping";
 
 // Components
@@ -33,6 +34,7 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
     const agoText      = formatTimeAgo(startDate);
     const title        = `${session.profile.account.user.first_name} ${session.profile.account.user.last_name}`;
     const sessionLabel = `Session #${session.id ?? "—"}`;
+    const task         = chatRunText(session);   // What it ran (null when nothing was recorded)
 
     // Active vs completed accent on the left edge.
     const accentBorder = isActive ? "border-l-status-live" : "border-l-admin-border";
@@ -71,6 +73,7 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             <div className="flex gap-2 flex-wrap mt-2">
                 <Pill label="Messages" value={session.messages.length ?? "—"     } />
                 <Pill label="Duration" value={formatElapsedTime(session.duration)} />
+                {(task !== null) ? <Pill label="Task" value={task} /> : null}
             </div>
 
             {/* -------------------------------------------------------------------------------- */}

@@ -149,6 +149,7 @@ export function AdminChat() {
                 lastEventAt   = {lastEventAt}
                 latencyMs     = {latencyMs}
                 startTsUnix   = {sessionInfo?.startTs      ?? null}
+                chatRun       = {sessionInfo}
                 messageCount  = {session.messages.length}
                 streamStatus  = {streamStatus}
                 inactive_chat = {false}

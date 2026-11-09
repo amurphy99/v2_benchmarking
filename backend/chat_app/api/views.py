@@ -31,6 +31,9 @@ from ..helpers.downloadHelpers             import get_download_data
 from ..services.session_audio_storage      import create_recording_playback_url
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
+# `ChatSession` fields recording what ran, each an optional exact-match filter on the session list
+SESSION_RUN_FIELDS = ("chat_type", "condition", "variant")
+
 # ======================================================================= ===================================
 # Single-object endpoints (no list, one-to-one)
 # ======================================================================= ===================================
@@ -204,6 +207,10 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         # Filter for demo vs. real data
         if   int(demo) == 0:  objs = objs.exclude(source="demo")
         elif int(demo) == 1:  objs = objs.filter (source="demo")
+
+        # Optional exact matches on what ran (`?chat_type=map_task&variant=demo`; "" matches sessions without one)
+        for field in SESSION_RUN_FIELDS:
+            if field in self.request.query_params: objs = objs.filter(**{field: self.request.query_params[field]})
 
         # Return ChatSessions ordered by creation date
         return objs.order_by("-date")

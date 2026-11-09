@@ -28,7 +28,7 @@ import        useLiveChat                 from "@/hooks/useLiveChat";
 import      { Avatar                    } from "@/pages/common/avatar/Avatar";
 import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
 import type { ChatMode                  } from "./chatModes";
-import      { CHAT_MODES                } from "./chatModes";
+import      { CHAT_MODES, variantLabel  } from "./chatModes";
 import      { useChatAvatar             } from "./useChatAvatar";
 
 // Components
@@ -41,6 +41,9 @@ import        ReplyCaption         from "./components/ReplyCaption";
 
 // What the caption says before the avatar's first reply
 const CHAT_IDLE_TEXT = "Press Start when you're ready.";
+
+// The chat type and task version pickers
+const CHAT_PICKER_CLASS = "rounded-xl border border-chat-border bg-chat-panel px-4 py-2 text-base text-chat-text disabled:opacity-50";
 
 // Where the participant's card goes until the backend sends it (it comes once the chat starts)
 const CARD_WAITING = (
@@ -59,8 +62,9 @@ export function Chat(): ReactElement {
     const avatarRef = useRef<AvatarHandle>(null);
     const { data: settings, isFetchedAfterMount } = useUserSettings();
 
-    // Which chat type to open (picked before the chat starts)
-    const [mode, setMode] = useState<ChatMode>(CHAT_MODES[0]);
+    // Which chat type to open, and its task content (both picked before the chat starts; null for a type without variants)
+    const [mode,    setMode   ] = useState<ChatMode>(CHAT_MODES[0]);
+    const [variant, setVariant] = useState<string | null>(CHAT_MODES[0].variants[0] ?? null);
 
     // What the participant sees: their last words, the latest reply, and their task card
     const [heard,         setHeard        ] = useState<string   | null>(null);
@@ -105,7 +109,7 @@ export function Chat(): ReactElement {
         onChatResumed     : () => { setRecording(true ); },
         onRecordingStatus : (enabled: boolean) => { setAdminRecording(enabled); },
         wsPath            : mode.wsPath,
-        extraQuery        : new URLSearchParams(mode.query).toString(),
+        extraQuery        : new URLSearchParams((variant === null) ? mode.query : {...mode.query, variant}).toString(),
         avatarRef,
         avatarModel       : model,
     });
@@ -116,9 +120,10 @@ export function Chat(): ReactElement {
     const saveChat  = (): void => { save (); setShowModal(false); navigate("/chat/end"); };
     const askToEnd  = (): void => { setShowModal(true); if (recording) pauseChat(); };
 
-    // Picking another chat type starts its view fresh
+    // Picking another chat type starts its view fresh, on its default variant
     const pickMode = (index: number): void => {
         setMode(CHAT_MODES[index]);
+        setVariant(CHAT_MODES[index].variants[0] ?? null);
         setTaskCard(null);
         setDebugTurns([]);
         setHeard(null);
@@ -157,15 +162,30 @@ export function Chat(): ReactElement {
                             <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Chat</div>
                             <h1 className="text-3xl font-semibold text-chat-text">{mode.label}</h1>
                         </div>
-                        <select
-                            aria-label = "Chat type"
-                            className  = "rounded-xl border border-chat-border bg-chat-panel px-4 py-2 text-base text-chat-text disabled:opacity-50"
-                            disabled   = {started}
-                            onChange   = {(event) => pickMode(Number(event.target.value))}
-                            value      = {CHAT_MODES.indexOf(mode)}
-                        >
-                            {CHAT_MODES.map((option: ChatMode, index: number) => <option key={option.label} value={index}>{option.label}</option>)}
-                        </select>
+                        <div className="flex flex-wrap gap-3">
+                            <select
+                                aria-label = "Chat type"
+                                className  = {CHAT_PICKER_CLASS}
+                                disabled   = {started}
+                                onChange   = {(event) => pickMode(Number(event.target.value))}
+                                value      = {CHAT_MODES.indexOf(mode)}
+                            >
+                                {CHAT_MODES.map((option: ChatMode, index: number) => <option key={option.label} value={index}>{option.label}</option>)}
+                            </select>
+
+                            {/* The task content, for chat types that have it */}
+                            {(variant !== null) ? (
+                                <select
+                                    aria-label = "Task version"
+                                    className  = {CHAT_PICKER_CLASS}
+                                    disabled   = {started}
+                                    onChange   = {(event) => setVariant(event.target.value)}
+                                    value      = {variant}
+                                >
+                                    {mode.variants.map((option: string) => <option key={option} value={option}>{variantLabel(option)}</option>)}
+                                </select>
+                            ) : null}
+                        </div>
                     </header>
 
                     {/* -------------------------------------------------------------------------------- */}

@@ -11,6 +11,7 @@ import { LuArrowLeft } from "react-icons/lu";
 import      { HeaderPills        } from "./HeaderPills";
 import      { AdminButton        } from "../ui/AdminButton";
 import type { SessionHeaderProps } from "./StatusComponents";
+import      { chatRunText        } from "../chat_lists/chatRunFilter";
 
 // Optional props for added navigation buttons (to secondary analysis pages)
 interface ExtendedProps extends SessionHeaderProps {
@@ -32,8 +33,11 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
     };
 
     // ChatSession information
-    const { title, sessionId, username, source, mode, rightActions } = props;
+    const { title, sessionId, username, source, mode, chatRun, rightActions } = props;
     const show_session_id = sessionId ? `#${sessionId}` : "#--";
+
+    // What the chat ran, in one line (null until known, or when nothing was recorded)
+    const task = ((chatRun === undefined) || (chatRun === null)) ? null : chatRunText(chatRun);
 
     // UI Component
     return (
@@ -64,6 +68,7 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
                             {username  && <>Username: <span className="text-admin-text/80">{username}</span></>}
                             {source    && <> · Source: <span className="text-admin-text/80">{source}</span></>}
                             {mode      && <> · Mode: <span className="text-admin-text/80">{mode}</span></>}
+                            {task      && <> · Task: <span className="text-admin-text/80">{task}</span></>}
                         </div>
                     </div>
                 </div>

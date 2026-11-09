@@ -13,6 +13,9 @@ the `components/ui/Pill.tsx` file.
 import { memo, useMemo, useState, useEffect } from "react";
 import { formatAgo, formatElapsedTime, formatDurationFromStart } from "@/utils/styling/numFormatting";
 
+// From this project
+import type { ChatRun } from "../chat_lists/chatRunFilter";
+
 // --------------------------------------------------------------------------------
 // Connection State Indicator
 // --------------------------------------------------------------------------------
@@ -137,6 +140,7 @@ export type SessionHeaderProps = {
     startTsUnix  ? : number | null;     // seconds since epoch
     messageCount ? : number | null;
     streamStatus ? : StreamStatus;
+    chatRun      ? : ChatRun | null;    // Chat type, condition, and variant that ran (null until known)
 
     // Inactive chat page fields
     inactive_chat  : boolean;

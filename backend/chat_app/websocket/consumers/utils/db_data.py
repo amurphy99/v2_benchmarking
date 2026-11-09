@@ -71,6 +71,9 @@ async def send_initial_data(session_data, consumer):
         "isActive"    : getattr(session,   "is_active", None         ),
         "startTs"     : start_dt.timestamp() if start_dt else None,
         "messageCount": 0, # TODO: This just needs to be handled on the frontend
+        "chat_type"   : session.chat_type,   # What ran ("" for none, and on sessions from before chat types were recorded)
+        "condition"   : session.condition,
+        "variant"     : session.variant,
     }
     await consumer.send_json({"type": "session_info", "data": session_info})
 

@@ -16,20 +16,26 @@ the inactive  chat list takes you to the "Inactive Chat" (AdminChatInactive.tsx)
 page.
 
 Between the two lists, cards link to the Participant Settings page (Accounts for
-staff) and, for staff only, the Activity Instructions page.
+staff) and, for staff only, the Activity Instructions page. A filter bar above
+the lists narrows both to one chat type, condition, or variant
+(`components/chat_lists/ChatRunFilterBar`).
 
 */
-import { useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate                               } from "react-router-dom";
 
 // From this project
-import { useAuth                                        } from "@/context/AuthProvider";
-import { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
-import { ChatList      } from "./components/chat_lists/ChatList";
-import { AdminPage     } from "./components/ui/AdminPage";
-import { AdminCard     } from "./components/ui/AdminCard";
-import { SectionHeader } from "./components/ui/SectionHeader";
-import { NON_DEMO_ONLY } from "@/utils/misc/constants";
+import type { ChatSession                                    } from "@/api";
+import      { useAuth                                        } from "@/context/AuthProvider";
+import      { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
+import      { NON_DEMO_ONLY                                  } from "@/utils/misc/constants";
+import      { ChatList                                       } from "./components/chat_lists/ChatList";
+import        ChatRunFilterBar                                 from "./components/chat_lists/ChatRunFilterBar";
+import type { ChatRunFilter                                  } from "./components/chat_lists/chatRunFilter";
+import      { CHAT_RUN_ANY, matchesChatRun                   } from "./components/chat_lists/chatRunFilter";
+import      { AdminCard                                      } from "./components/ui/AdminCard";
+import      { AdminPage                                      } from "./components/ui/AdminPage";
+import      { SectionHeader                                  } from "./components/ui/SectionHeader";
 
 // ================================================================================
 // Admin list view of all ChatSessions (split into active and inactive chats)
@@ -61,6 +67,12 @@ export function Admin() {
         return () => window.removeEventListener("focus", onFocus);
     }, [refreshBoth]);
 
+    // Both lists narrowed to the chat type, condition, and variant picked (the dropdowns offer what either list holds)
+    const [runFilter, setRunFilter] = useState<ChatRunFilter>(CHAT_RUN_ANY);
+    const allSessions      = useMemo((): ChatSession[] => [...active, ...inactive], [active, inactive]);
+    const filteredActive   = useMemo((): ChatSession[] => active  .filter((session: ChatSession) => matchesChatRun(session, runFilter)), [active,   runFilter]);
+    const filteredInactive = useMemo((): ChatSession[] => inactive.filter((session: ChatSession) => matchesChatRun(session, runFilter)), [inactive, runFilter]);
+
     return (
         <AdminPage>
             <div className="flex flex-col gap-6 pt-6">
@@ -68,11 +80,14 @@ export function Admin() {
                     <div className="text-admin-subtext text-sm">Loading sessions...</div>
                 )}
 
+                {/* Chat type, condition, and variant filters for both lists */}
+                <ChatRunFilterBar sessions={allSessions} filter={runFilter} onChange={setRunFilter} />
+
                 {/* Active Sessions */}
                 <ChatList
                     title       = "Currently Active Chat Sessions"
                     subtitle    = "Live sessions you can open in the listener view."
-                    sessions    = {active}
+                    sessions    = {filteredActive}
                     onRefresh   = {refreshBoth}
                     navigate_to = {"/admin/chat/"}
                     variant     = "active"
@@ -120,7 +135,7 @@ export function Admin() {
                 <ChatList
                     title       = "Completed Chat Sessions"
                     subtitle    = "View post-chat analysis results."
-                    sessions    = {inactive}
+                    sessions    = {filteredInactive}
                     onRefresh   = {refreshBoth}
                     navigate_to = {"/admin/chat/inactive/"}
                     variant     = "completed"

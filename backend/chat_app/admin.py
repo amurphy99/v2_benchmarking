@@ -30,8 +30,8 @@ class ChatMessageInline(admin.TabularInline):
 
 @admin.register(ChatSession)
 class ChatSessionAdmin(admin.ModelAdmin):
-    list_display    = ("id", "profile", "source", "taskType", "is_active", "date", "end_ts")
-    list_filter     = ("is_active", "source", "taskType") # filtering based on speific fields
+    list_display    = ("id", "profile", "source", "chat_type", "condition", "variant", "taskType", "is_active", "date", "end_ts")
+    list_filter     = ("is_active", "source", "chat_type", "condition", "variant", "taskType") # filtering based on speific fields
     search_fields   = ("profile__account__user__username",)
     readonly_fields = ("date", "end_ts", "start_ts", "duration")
     inlines         = [ChatMessageInline]

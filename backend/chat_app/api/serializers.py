@@ -274,7 +274,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         model  = ChatSession
         fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio", "duration", "topics",
                   "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
-                  "image", "risk_level", "risk_quotes", "risk_reason")
+                  "image", "risk_level", "risk_quotes", "risk_reason", "chat_type", "condition", "variant")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts

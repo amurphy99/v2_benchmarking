@@ -32,7 +32,16 @@ are independent, so a participant could run one map with cues and another withou
 A chat type that has none takes neither parameter, and its sessions store `""`.
 
 An unknown name refuses the connection with close code `4005`. The chat type,
-condition, and variant are saved on the `ChatSession`.
+condition, and variant are saved on the `ChatSession`. The session API returns
+them, and filters on them with query parameters
+(`/api/chatsessions/0/0/?chat_type=map_task&variant=demo`; `""` matches sessions
+without one). The Django admin lists and filters them, the admin listener gets
+them in `session_info`, and the Monitor page shows them on each chat and filters
+its lists by them.
+
+The participant chat page picks the chat type and condition from its dropdown,
+and the variant from a second one (`frontend/src/pages/chat/chatModes.ts`, which
+copies each chat type's `VARIANTS`).
 
 `ws/chat/activity/` is an older route that always runs the `activity` chat type
 (the chat page still uses it).
@@ -223,6 +232,7 @@ The harness then switches it on for one condition only, in its `__init__`:
 3. List its conditions and variants in `CONDITIONS` and `VARIANTS`, and build each condition's `cues` in `__init__`.
 4. Add it to `CHAT_TYPES` in `registry.py`.
 5. Add its name to `CLIENT_PROTOCOL.md` §1 and to the table above.
+6. Add its modes, with its variants, to `frontend/src/pages/chat/chatModes.ts`, so the chat page can open it.
 
 <br>
 
@@ -246,9 +256,9 @@ moving it:
 - It reaches the LLM through `services/llm/instructor_client.py` (`LLM_BASE_URL`,
   `LLM_GATEWAY_TOKEN`), while the other chat types use `services/llm/endpoint.py`
   (`IU_URL`, `IU_KEY`).
-- The chat page reaches it through `ws/chat/activity/` (`chatMode` in
-  `frontend/src/pages/chat/Chat.tsx`). Once the page sends `chat_type`, that route
-  can go, if no robot uses it.
+- The chat page reaches it through `ws/chat/activity/` (its "Memory activity"
+  mode in `frontend/src/pages/chat/chatModes.ts`). Once that mode sends
+  `chat_type` instead, the route can go, if no robot uses it.
 
 Left as they are for now: the `taskType` and `taskSubtype` fields on `UserSettings`
 and `ChatSession`, which the settings page's chat-type form sets. They are separate
