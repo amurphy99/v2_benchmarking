@@ -8,9 +8,9 @@ Shape math lives in `faceDrawing2D`; the eyes, mouth, and animated extras are
 their own parts, all filled from the gradients defined here. The face's objects
 (`face.objects`: hearts, then hands in front of the features) are drawn by
 `SmileyHeart2D` and `SmileyHand2D`, with their shapes in `objectDrawing2D`.
-The Map Task map (`SmileyMap2D`) is in front of everything. It is held by the
-body, so it sits outside the head's group (the head tilts and turns behind it)
-and is clipped to the frame.
+The held prop, the map or the card (`SmileyMap2D`), is in front of everything.
+It is held by the body, so it sits outside the head's group (the head tilts
+and turns behind it) and is clipped to the frame.
 
 The face is shaded glossy, like an iOS emoji: bright and nearly white at the
 top, the face color through the middle, and a deeper warm shade toward the
@@ -259,7 +259,7 @@ export default function SmileyFace2D({face}: {
             </g>
 
             {/* -------------------------------------------------------------------------------- */}
-            {/* Map Task Map */}
+            {/* Held Prop (the map or the card) */}
             {/* -------------------------------------------------------------------------------- */}
             {/* Held by the body: in front of the face but outside its group, so the head tilts and turns behind it */}
             {(face.map > 0) ? (

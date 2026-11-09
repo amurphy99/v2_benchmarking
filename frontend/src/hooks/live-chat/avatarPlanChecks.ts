@@ -2,7 +2,7 @@
 --------------------------------------------------------------------------------
 `@frontend/src/hooks/live-chat/avatarPlanChecks`
 
-A plan runs completely or not at all (`pages/common/avatar/AVATAR_PLANS.md` §7).
+A plan runs completely or not at all (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §7).
 `parseAvatarPlan` and `parseAvatarSetup` check a frame's shape, types, ranges,
 and limits, and return either the frame as the client runs it
 (`avatarPlanFrames`) or the rejection to send back. `checkPlanNames` and
@@ -14,8 +14,9 @@ import type { AnimationAction, AutoBehaviors, AvatarFeedback, AvatarPlan, Avatar
 import type { FaceAction, GazeAction, GazeFrame, GazeLook, MoveAction, PlanCatalog, PlanMoment                   } from "./avatarPlanFrames";
 import type { PlanPoint, PlanState, PlanStep, PoseAction, PropAction, StepActions                                } from "./avatarPlanFrames";
 import      { AUTO_BEHAVIORS, GAZE_FRAMES, PLAN_FEEDBACK_MODES, PLAN_MOMENT_NAMES, PLAN_STATES, PROP_NAMES       } from "./avatarPlanFrames";
+import      { isPropFrame                                                                                        } from "./avatarPlanFrames";
 
-// Limits a plan stays within (`AVATAR_PLANS.md` §7)
+// Limits a plan stays within (`HARNESS_PROTOCOL.md` §7)
 const PLAN_MAX_STEPS         = 64;
 const PLAN_MAX_PATH_POINTS   = 64;
 const PLAN_MAX_ID_CHARS      = 128;
@@ -248,8 +249,8 @@ function readGaze(value: unknown, path: string): GazeAction {
     const modes = ["at", "offset", "scan", "trace"].filter((key: string) => key in gaze);
     if (modes.length > 1) reject(path, `can hold only one of at, offset, scan, trace (it has ${modes.join(", ")})`);
 
-    // Points run 0 to 1 on the map and -1 to 1 elsewhere
-    const [low, high] = (on === "map") ? [0, 1] : [-1, 1];
+    // Points run 0 to 1 on a held prop and -1 to 1 elsewhere
+    const [low, high] = isPropFrame(on) ? [0, 1] : [-1, 1];
     let look: GazeLook;
     if (gaze.at !== undefined) {
         if (on === "user") reject(`${path}.at`, "use offset to look away from the user");
@@ -276,7 +277,7 @@ function readScan(value: unknown, path: string, on: GazeFrame, low: number, high
     return {
         kind   : "scan",
         around : readPoint(scan.around, `${path}.around`, low, high),
-        radius : readRequiredNumber(scan, "radius", path, 0, (on === "map") ? PLAN_SCAN_MAX_RADIUS.map : PLAN_SCAN_MAX_RADIUS.other),
+        radius : readRequiredNumber(scan, "radius", path, 0, isPropFrame(on) ? PLAN_SCAN_MAX_RADIUS.map : PLAN_SCAN_MAX_RADIUS.other),
         fix_ms : fixMs,
     };
 }

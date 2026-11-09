@@ -9,14 +9,14 @@ against what the client actually does.
 
 | Read with | What it covers |
 |---|---|
-| `AVATAR_PLANS.md` (beside this file) | The plan frames' exact contract (a draft): every field, default, range, and limit, plus the Smiley's names |
+| `backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` | The plan frames' exact contract: every field, default, range, and limit, plus the Smiley's names (and the `task_card` frame) |
 | `smiley/README.md` | How the Smiley builds and draws each frame |
 | `backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md` | Today's chat protocol: `robot_action`, `llm_response`, `audio_chunk`, `cancel_audio`, `tts_playback` |
 
-> **Status:** the plan pathway runs end to end on the avatar demo page
-> (`/avatar-demo`), which plays the backend's part with example plans. The chat
-> page doesn't read plan frames yet, and the backend sends none (§8).
-> `robot_action` and `CLIENT_PROTOCOL.md` are unchanged.
+> **Status:** the plan pathway runs end to end. The backend's
+> `cooperative_planning` chat type sends setups and plans, and the chat page runs
+> them through `useLiveChat` (§7). The avatar demo page (`/avatar-demo`) plays the
+> backend's part with example plans. `robot_action` is unchanged.
 
 <br>
 
@@ -129,7 +129,7 @@ leaves out takes the protocol's default: on, except `speech_gaze`.
 <!-- -------------------------------------------------------------------------------- -->
 ## 3. What a plan can do
 
-A summary; every field, default, and limit is in `AVATAR_PLANS.md` §2-§3.
+A summary; every field, default, and limit is in `HARNESS_PROTOCOL.md` §2-§3.
 
 ### 3.1 Frames
 
@@ -163,8 +163,8 @@ Each step has a moment, a length, and its actions.
 | `move` | Plays a movement (Nod, Shake No, …), scaled by `strength`, faster or slower by `speed` |
 | `animation` | Plays an animation: a held one (Ponder) acts like a face, a timed one (Yawn, the Glances) runs its length |
 | `pose` | Holds the head turned and leaning, on top of the face's own pose, for a hold. `"rest"` eases out |
-| `gaze` | Looks at a point, scans around one, or traces a path, in the `user`, `screen`, or `map` frame, for a hold. `head` turns the head along by a share. `"release"` goes back to the automatic look |
-| `prop` | Picks up or puts away the map (`hold`), and raises it from 0 to 1 (`raise`) |
+| `gaze` | Looks at a point, scans around one, or traces a path, in the `user`, `screen`, `map`, or `card` frame, for a hold. `head` turns the head along by a share. `"release"` goes back to the automatic look |
+| `prop` | Picks up or puts away the map or the card (`hold`), and raises it from 0 to 1 (`raise`) |
 | `breath` | One deliberate breath: in, held (a null hold lasts until "speaking" starts, at most 2.5 s), and out |
 | `blink` | One blink now |
 | `state` | Sets the conversation state: `idle`, `listening`, or `thinking` (the client owns `speaking`) |
@@ -174,13 +174,15 @@ Each step has a moment, a length, and its actions.
 
 * **Gaze and head:** -1 to 1 each way, left and right always the viewer's,
   positive y down. The user is at (0, 0).
-* **The map:** 0 to 1 across and down the map **as the avatar reads it**, from
-  its top-left. We see the map's back, so its top-left looks up and to the
-  viewer's right. A spot's look follows how far the map is raised.
+* **The map and the card:** 0 to 1 across and down the prop **as the avatar
+  reads it**, from its top-left. We see the prop's back, so its top-left looks up
+  and to the viewer's right. A spot's look follows how far the prop is raised.
+  The card is the same size as the map, so the same spot looks the same way on
+  either.
 
 ### 3.5 Names
 
-A plan uses the avatar's own names, exactly as `AVATAR_PLANS.md` §9 lists them
+A plan uses the avatar's own names, exactly as `HARNESS_PROTOCOL.md` §9 lists them
 (matched ignoring case), never mood labels: `"Happy"` is rejected in a plan.
 The names are checked against the catalog before anything runs, and one unknown
 name rejects the whole plan.
@@ -275,7 +277,7 @@ only change the layers' state; the frame loop builds the next frame from them.
 | `move` | The movement playing (one at a time), resized and sped up | `actions/faceMotions.ts` |
 | `animation` | Held: like a face. Timed: its face, motion, and breath over its length | `actions/faceAnimations.ts` |
 | `pose`, `gaze` | Where the eyes and head point | `behavior/gaze.ts` |
-| `prop` | The map: how far into view and how far raised | `behavior/mapTask.ts`, `render_2d/SmileyMap2D.tsx` |
+| `prop` | The map or the card: which one, how far into view, and how far raised | `behavior/mapTask.ts`, `render_2d/SmileyMap2D.tsx` |
 | `breath` | A deliberate breath over the breathing rhythm | `behavior/breathing.ts` |
 | `blink`, `state` | A blink request, and the backend's conversation state | `useFaceController.ts` |
 
@@ -420,45 +422,36 @@ a new reply, its two sentences numbered the way the backend will number them
 <!-- -------------------------------------------------------------------------------- -->
 <!-- What the Backend Needs                                                           -->
 <!-- -------------------------------------------------------------------------------- -->
-## 7. What the backend needs
+## 7. What the backend does
 
-Paths are under `backend/chat_app/`.
+Paths are under `backend/chat_app/`; `websocket/consumers/HARNESS_PROTOCOL.md` §10
+has the details.
 
-1. **A chat type that uses plans.** Each chat type is a harness
-   (`websocket/harnesses/`, see its README), picked per connection with the
-   `chat_type` query parameter, and its `generate` returns a `ResponseOutcome`
-   for every reply. The chat page still picks only the socket path from its chat
-   mode (`chatMode` in `frontend/src/pages/chat/Chat.tsx`; `ws/chat/activity/` is
-   the older route for `chat_type=activity`), so a new chat type needs a mode
-   there that sends `chat_type`.
-2. **Setup, then only plans.** Send `avatar_setup` when the client connects,
-   then drive the avatar only with plans. No `robot_action` in that chat: an LLM
-   mood or an admin button would cut the running plan short.
-3. **One send function for avatar frames** that drops anything made for a
-   superseded turn, a general version of `ChatHandler._publish_response_mood`
-   (`websocket/services/chatHelpers.py`), which drops an automatic reply's mood
-   once `consumer._stt_progress_revision` has moved on (newer speech never cancels
-   a `reply_now` reply, so its mood always goes out).
-4. **Reply timing as it is today.** `llm_response` goes out when the exchange
+1. **A chat type that uses plans** is a harness (`websocket/harnesses/`, see its
+   README) that sends `avatar_setup` from its `start()` and then drives the avatar
+   only with plans, never `robot_action` (an LLM mood or an admin button would cut
+   the running plan short). `cooperative_planning` is the first; the chat page
+   picks it with `chat_type` (`frontend/src/pages/chat/chatModes.ts`).
+2. **A reply's own plan** rides on its `ResponseOutcome` and goes out just before
+   its `llm_response`. A plan made while the reply is prepared goes through
+   `TurnAttempt.publish_plan`, dropped once newer speech has cancelled the reply
+   (the check moods already had). A cue's plan goes out at once.
+3. **Reply timing as it is today.** `llm_response` goes out when the exchange
    commits (`ChatHandler._commit_response`), with `responseId` set to the
    assistant message's id. TTS starts after that
    (`synthesize_and_stream_tts` in `websocket/services/speech/tts/tts_streaming.py`),
    and every `audio_chunk` carries the same `responseId`. So `reply_text` always
    comes before `reply_audio`, by at least the first sentence's synthesis time.
-5. **Sentence numbers.** Add an optional 1-based `sentence` to every
-   `audio_chunk`. TTS already works one piece at a time: `_speech_pieces` splits
-   the reply at sentence ends, a sentence shorter than 24 characters joins the
-   next, and a short tail joins the last piece; `_AudioChunkSender.add()` runs
-   once per piece. The number is the piece's index, and the chunk the sender holds
-   back keeps its own piece's number. A plan's `{"sentence": n}` has to count the
-   same pieces.
-6. **Handle `avatar_feedback`**: a new branch in
-   `websocket/consumers/handlers/ws_events.py` (an unknown type is only logged
-   today). Log it, or store it with the session; never wait on it.
-7. **Long waits:** a plan waiting on the end of a long reply needs `expire_ms`
-   above the 15 s default.
-8. **Protocol doc:** once the design settles, the three frames and
-   `audio_chunk.sentence` move from `AVATAR_PLANS.md` into `CLIENT_PROTOCOL.md`.
+4. **Sentence numbers.** Every `audio_chunk` carries a 1-based `sentence`: the
+   piece TTS synthesized it from (`_speech_pieces` splits the reply at sentence
+   ends, a sentence shorter than 24 characters joins the next, and a short tail
+   joins the last piece). The chunk the sender holds back keeps its own piece's
+   number.
+5. **`avatar_feedback`** is checked and logged once per event
+   (`websocket/consumers/processing/avatar_feedback.py`), a rejection as a
+   warning. Nothing waits on it, and it isn't stored yet.
+6. **Long waits:** a plan waiting on the end of a long reply sets `expire_ms`
+   above the 15 s default (the planning harness's reply plans use 45 s).
 
 <br>
 
@@ -469,19 +462,8 @@ Paths are under `backend/chat_app/`.
 
 **Not built yet:**
 
-* **The chat page's wiring** (the next frontend step):
-  * `useChatSocket` routing `avatar_setup` and `avatar_plan` through the checks
-    (a malformed frame gets one warning and a rejection sent back).
-  * The chat page running `useAvatarPlans` with its audio player. `useLiveChat`
-    doesn't pass the player's reply timeline, lead, and hold through yet.
-  * Sending `avatar_feedback`.
-  * Calling `noteReplyText` on `llm_response` and `noteRobotAction` on
-    `robot_action`.
-  * Clearing the setup when the session ends.
-
-  Until then a live chat ignores the plan frames.
-* **The backend:** nothing sends setups or plans, and no chunk carries
-  `sentence`.
+* **The Map Task's plans:** the chat page can pick it, but its harness sends no
+  setup or plans yet, so its avatar never holds the map.
 * **Other avatars:** only the Smiley has a plan catalog. The 3D QT and Buddy
   avatars reject plans, and the physical robots don't know about them.
 * **Strength on `robot_action`:** not on the wire (plans have it).
@@ -549,9 +531,10 @@ Paths are under `backend/chat_app/`.
 ```diff
  frontend/src/
  ├── hooks/
- │   ├── useLiveChat.ts                    # The chat page's socket, microphone, and TTS player (reports `tts_playback`)
+ │   ├── useLiveChat.ts                    # The chat page's socket, microphone, TTS player, and avatar plans (reports `tts_playback`)
  │   └── live-chat/
- │       ├── useChatSocket.ts              # Routes the chat socket's frames (plan frames not routed yet)
+ │       ├── useChatSocket.ts              # Routes the chat socket's frames, checking the plan frames and task cards
+ │       ├── taskCardFrame.ts              # The `task_card` frame's types, checked on arrival
  │       ├── avatarPlanFrames.ts           # The plan frames' types and vocabularies, as the client runs them
  │       ├── avatarPlanChecks.ts           # Checks a setup or plan on arrival: the frame, or its rejection
  │       ├── useAudioPlayer.ts             # Schedules TTS chunks: loudness for the mouth, reply timeline and hold for plans
@@ -560,7 +543,6 @@ Paths are under `backend/chat_app/`.
  └── pages/
      ├── common/avatar/
      │   ├── README.md                     # This overview
-     │   ├── AVATAR_PLANS.md               # The plan frames' contract (draft)
      │   ├── avatarRegistry.tsx            # The avatar contract (`AvatarHandle`, `RobotAction`) and the avatar list
      │   ├── Avatar.tsx                    # Shows the avatar for a model id
      │   ├── useSpeakingAvatar.ts          # The mouth (and speech phases) from the reply's audio
@@ -575,8 +557,10 @@ Paths are under `backend/chat_app/`.
      │   └── GltfRobotAvatar.tsx           # The 3D QT and Buddy avatars (with GltfRobotScene, QTModel, BuddyModel)
      │
      ├── chat/
-     │   ├── Chat.tsx                      # The participant chat page (passes `robot_action` to the avatar)
-     │   └── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
+     │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
+     │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`)
+     │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
+     │   └── components/                   # The reply caption, the controls, the planning card, and the task notes
      │
      ├── avatar_demo/
      │   ├── AvatarDemo.tsx                # The demo page
@@ -600,7 +584,7 @@ Paths are under `backend/chat_app/`.
 <!-- -------------------------------------------------------------------------------- -->
 ## 11. Gotchas
 
-The protocol's own list is `AVATAR_PLANS.md` §12. From the client's side:
+The protocol's own list is `HARNESS_PROTOCOL.md` §12. From the client's side:
 
 * **Every plan cuts the one before short**, and so does every `robot_action`,
   including an admin's button press. Put everything still wanted into the new

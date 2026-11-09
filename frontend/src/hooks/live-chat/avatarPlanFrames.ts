@@ -3,10 +3,10 @@
 `@frontend/src/hooks/live-chat/avatarPlanFrames`
 
 The backend drives a capable avatar with three frames, specified in
-`pages/common/avatar/AVATAR_PLANS.md` (a draft that will move into
-`CLIENT_PROTOCOL.md`): `avatar_setup` (session settings), `avatar_plan` (steps
-that run in order on the client's clock), and `avatar_feedback` (what happened,
-sent back). These types mirror that wire format as the client runs it: field
+`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` (the frames only some
+chat types use): `avatar_setup` (session settings), `avatar_plan` (steps that run
+in order on the client's clock), and `avatar_feedback` (what happened, sent
+back). These types mirror that wire format as the client runs it: field
 names keep the wire's spelling, the protocol's own defaults are filled in, and a
 timing an avatar tunes for itself (how fast a face moves in, a breath's depth)
 stays null when the plan leaves it out.
@@ -18,8 +18,8 @@ Frames are checked where they arrive (`avatarPlanChecks`).
 export const PLAN_FEEDBACK_MODES = ["none", "end", "steps"] as const;
 export const PLAN_MOMENT_NAMES   = ["previous", "reply_text", "reply_audio", "reply_end"] as const;
 export const PLAN_STATES         = ["idle", "listening", "thinking"] as const;
-export const GAZE_FRAMES         = ["user", "screen", "map"] as const;
-export const PROP_NAMES          = ["map"] as const;
+export const GAZE_FRAMES         = ["user", "screen", "map", "card"] as const;
+export const PROP_NAMES          = ["map", "card"] as const;
 export const AUTO_BEHAVIORS      = ["idle_glances", "thinking_look", "speech_gaze", "listening_motions"] as const;
 
 
@@ -32,8 +32,13 @@ export type PlanState        = typeof PLAN_STATES[number];
 export type GazeFrame        = typeof GAZE_FRAMES[number];
 export type PropName         = typeof PROP_NAMES[number];
 
-// An [x, y] pair (`AVATAR_PLANS.md` §8)
+// An [x, y] pair (`HARNESS_PROTOCOL.md` §8)
 export type PlanPoint = [number, number];
+
+// A gaze frame on a held prop: its points run 0 to 1 across and down it (§8.2), where the others run -1 to 1
+export function isPropFrame(on: GazeFrame): boolean {
+    return (on === "map") || (on === "card");
+}
 
 // The moment a step is measured from
 export type PlanMoment = typeof PLAN_MOMENT_NAMES[number] | {sentence: number};

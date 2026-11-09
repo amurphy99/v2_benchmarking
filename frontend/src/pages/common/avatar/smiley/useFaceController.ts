@@ -16,8 +16,8 @@ Each animation frame combines several layers into one `FaceState`:
      from `passiveMotions.ts`: a slight sway or a head cock while listening
      (never during a movement or animation), and the breathing
      (`breathing.ts`), which always plays
-  3) the Map Task map (`mapTask.ts`): held in front of the body, raised and
-     lowered (the face's own hands fade out while it holds the map)
+  3) the held prop, the map or the card (`mapTask.ts`): in front of the body,
+     raised and lowered (the face's own hands fade out while it holds one)
   4) where the eyes and head point (`gaze.ts`): a point the page sets, a plan's
      look or held pose, the speech phase's or conversation state's look, or
      small idle glances, plus the slow `wander` drift of an expression like
@@ -432,6 +432,7 @@ export function useFaceController(
                 brows         : browsAlways ? 1 : expression.brows,
                 mouthOpen     : Math.max(expression.mouthOpen, speech * SMILEY_SPEECH_MOUTH_GAIN),
                 scale         : expression.scale * (1 + (offsets.grow ?? 0)),
+                mapKind       : map.kind,
                 map           : map.held,
                 mapRaise      : map.raise,
                 timeSec       : nowMs / 1_000,

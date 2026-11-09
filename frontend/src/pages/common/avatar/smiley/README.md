@@ -45,7 +45,7 @@ rest.
  │   ├── passiveMotions.ts     # Passive motions on channels (listening sway, head cock; breathing's channel)
  │   ├── breathing.ts          # Breathing rhythm, deliberate breaths (yawn), and the breath before speaking
  │   ├── gaze.ts               # Where the eyes and head point: automatic looks, and plans' looks and poses
- │   └── mapTask.ts            # The Map Task map: picked up or put away, raised or lowered
+ │   └── mapTask.ts            # The held prop (the Map Task map or the planning card): picked up or put away, raised or lowered
  │
  ├── plans/
  │   └── smileyStepRunner.ts   # One backend plan step, each action through the face controller's levers
@@ -60,7 +60,7 @@ rest.
      ├── SmileyExtras2D.tsx    # The tear and the sleep Zs
      ├── SmileyHand2D.tsx      # One hand object
      ├── SmileyHeart2D.tsx     # One floating heart object
-     ├── SmileyMap2D.tsx       # The Map Task map and the fists holding it
+     ├── SmileyMap2D.tsx       # The held map or card, and the fists holding it
      ├── faceDrawing2D.ts      # Face layout and shape math (eyes, brows, mouth, extras)
      └── objectDrawing2D.ts    # Object shapes (hands, heart, tear), placement, and lighting
 ```
@@ -96,10 +96,10 @@ Outside this folder:
    2. **Offsets:** the movement or timed animation playing (one at a time),
       plus the passive motions: a sway or head cock while listening (never
       during a movement or animation) and breathing (always).
-   3. **The map** (`behavior/mapTask.ts`), when it is held: how far into view,
-      and how far raised.
+   3. **The held prop** (`behavior/mapTask.ts`), when one is held: the map or the
+      card, how far into view, and how far raised.
    4. **Gaze** (`behavior/gaze.ts`), by priority: a point the page set → a
-      backend plan's look (a point on the user, the screen, or the map, a scan,
+      backend plan's look (a point on the user, the screen, or the held map or card, a scan,
       or a trace) → the speech phase's look → the conversation state's look →
       small idle glances around the user. Faces that set `wander` (Ponder) add
       a slow drift, and a plan can hold the head in a pose.
@@ -109,8 +109,8 @@ Outside this folder:
    7. **Combine** into one `FaceState`, including the objects (with any
       animation offsets applied).
 
-   Backend plans (`../AVATAR_PLANS.md`, a draft) reach these layers through
-   `runPlanStep`, one step at a time (`plans/smileyStepRunner.ts`), and a setup
+   Backend plans (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`)
+   reach these layers through `runPlanStep`, one step at a time (`plans/smileyStepRunner.ts`), and a setup
    through `applySetup` picks the resting face and which automatic behaviors
    run.
 3. **The renderer draws it** (`render_2d/SmileyFace2D.tsx`). Anything animated

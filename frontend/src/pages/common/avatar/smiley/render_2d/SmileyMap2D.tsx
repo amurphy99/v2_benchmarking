@@ -1,12 +1,13 @@
-/* Draw the Map Task map the smiley holds.
+/* Draw the prop the smiley holds: the Map Task map, or the planning card.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/render_2d/SmileyMap2D`
 
-The map is drawn to look the like back of a folded paper map, gripped by two
-fists.
-
-The avatar reads the map's front, so we see its back: cream paper with faint
-folds and a small faded compass rose, so it reads as a map. Two fists grip its
+Either prop is drawn as the back of a piece of paper gripped by two fists. The
+avatar reads its front, so we see its back. The map is cream paper with faint
+folds and a small faded compass rose, so it reads as a map. The card (the
+cooperative planning task's notes) is a white index card with its ruled lines
+and red header line faintly showing through, and no folds. Both are the same
+size, so a look at a spot on either lands in the same place. Two fists grip its
 sides. They are the `fist` hand shape drawn by `SmileyHand2D`, so they are
 outlined and lit like the other hands and cast a shadow on the paper.
 
@@ -75,13 +76,25 @@ const SMILEY_MAP_RING_W  = 1;
 // Four-pointed compass star around its center, pointing up, right, down, and left
 const SMILEY_MAP_COMPASS_PATH = compassStarPath(SMILEY_MAP_COMPASS_R, SMILEY_MAP_COMPASS_WAIST);
 
+// The card: paper colors (top to bottom), its edge, and its ruled lines and header line showing through
+const SMILEY_CARD_PAPER_HEXES  = ["#ffffff", "#e9edf2"] as const;
+const SMILEY_CARD_EDGE_HEX     = "#aab4bf";
+const SMILEY_CARD_RULE_HEX     = "#7fa3cf";
+const SMILEY_CARD_HEADER_HEX   = "#d9534f";
+const SMILEY_CARD_LINE_OPACITY = 0.35;
+const SMILEY_CARD_LINE_W       = 1;
+const SMILEY_CARD_HEADER_Y     = 30;    // The red line, down from the top edge
+const SMILEY_CARD_FIRST_RULE_Y = 50;    // The first ruled line
+const SMILEY_CARD_RULE_GAP     = 18;    // Between ruled lines
+const SMILEY_CARD_RULE_INSET   = 8;     // Ruled lines stop short of the sides
+
 
 // ================================================================================
 // Smiley Map (2D)
 // ================================================================================
-// The held map and its fists, in the face's outer coordinates (outside the head's tilt and turn)
+// The held map or card and its fists, in the face's outer coordinates (outside the head's tilt and turn)
 export default function SmileyMap2D({face, paint}: {
-    face  : FaceState;     // Combined face for this frame (`map`, `mapRaise`, and the whole-avatar offsets)
+    face  : FaceState;     // Combined face for this frame (`mapKind`, `map`, `mapRaise`, and the whole-avatar offsets)
     paint : SmileyPaint;   // Fills and hand shading colors from `SmileyFace2D`
 }): ReactElement {
     // Paint ids, unique per map on the page (React's ids may hold characters `url(#...)` rejects)
@@ -92,6 +105,14 @@ export default function SmileyMap2D({face, paint}: {
     // Its top edge between lowered and raised, dropped below the frame until it is fully held
     const top   = SMILEY_MAP_LOWERED_TOP + ((SMILEY_MAP_RAISED_TOP - SMILEY_MAP_LOWERED_TOP) * face.mapRaise) + ((1 - face.map) * SMILEY_MAP_AWAY_DROP);
     const halfW = SMILEY_MAP_W / 2;
+
+    // Which paper it is
+    const card  = (face.mapKind === "card");
+    const paper = card ? SMILEY_CARD_PAPER_HEXES : SMILEY_MAP_PAPER_HEXES;
+    const edge  = card ? SMILEY_CARD_EDGE_HEX    : SMILEY_MAP_EDGE_HEX;
+
+    // The card's ruled lines, down to its bottom edge
+    const rules = Array.from({length: Math.floor((SMILEY_MAP_H - SMILEY_CARD_FIRST_RULE_Y) / SMILEY_CARD_RULE_GAP) + 1}, (_: unknown, i: number) => SMILEY_CARD_FIRST_RULE_Y + (i * SMILEY_CARD_RULE_GAP));
 
     // Panels and folds: each column's left side, then one path through every fold line
     const panelW  = SMILEY_MAP_W / SMILEY_MAP_FOLD_COLUMNS;
@@ -116,28 +137,46 @@ export default function SmileyMap2D({face, paint}: {
         <g transform={`translate(${face.offsetX * SMILEY_FACE_R} ${(face.offsetY * SMILEY_FACE_R) + top})`}>
             <defs>
                 <linearGradient id={paperId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor={SMILEY_MAP_PAPER_HEXES[0]} />
-                    <stop offset="100%" stopColor={SMILEY_MAP_PAPER_HEXES[1]} />
+                    <stop offset="0%"   stopColor={paper[0]} />
+                    <stop offset="100%" stopColor={paper[1]} />
                 </linearGradient>
                 <clipPath id={clipId}>
                     <rect x={-halfW} y={0} width={SMILEY_MAP_W} height={SMILEY_MAP_H} rx={SMILEY_MAP_CORNER_R} />
                 </clipPath>
             </defs>
 
-            {/* Paper, every other panel a little darker, its folds, and a shine along the top edge */}
+            {/* Paper */}
             <rect x={-halfW} y={0} width={SMILEY_MAP_W} height={SMILEY_MAP_H} rx={SMILEY_MAP_CORNER_R} fill={`url(#${paperId})`} />
-            <g clipPath={`url(#${clipId})`} fill={SMILEY_MAP_SHADE_HEX} opacity={SMILEY_MAP_FOLD_SHADE}>
-                {columns.filter((_: number, i: number) => i % 2 === 1).map((x: number) => <rect key={x} x={x} y={0} width={panelW} height={SMILEY_MAP_H} />)}
-            </g>
-            <path d={[...across, ...down].join(" ")} fill="none" stroke={SMILEY_MAP_FOLD_HEX} strokeWidth={SMILEY_MAP_FOLD_W} />
-            <line x1={-halfW + SMILEY_MAP_CORNER_R} y1={SMILEY_MAP_SHINE_W} x2={halfW - SMILEY_MAP_CORNER_R} y2={SMILEY_MAP_SHINE_W} stroke={SMILEY_MAP_SHINE_HEX} strokeWidth={SMILEY_MAP_SHINE_W} opacity={SMILEY_MAP_SHINE_OPACITY} />
-            <rect x={-halfW} y={0} width={SMILEY_MAP_W} height={SMILEY_MAP_H} rx={SMILEY_MAP_CORNER_R} fill="none" stroke={SMILEY_MAP_EDGE_HEX} strokeWidth={SMILEY_MAP_EDGE_W} />
 
-            {/* Compass rose printed on the back, faded */}
-            <g transform={`translate(${halfW - SMILEY_MAP_COMPASS_IN} ${SMILEY_MAP_COMPASS_DOWN})`} opacity={SMILEY_MAP_INK_OPACITY}>
-                <circle r={SMILEY_MAP_COMPASS_R * SMILEY_MAP_COMPASS_RING} fill="none" stroke={SMILEY_MAP_INK_HEX} strokeWidth={SMILEY_MAP_RING_W} />
-                <path d={SMILEY_MAP_COMPASS_PATH} fill={SMILEY_MAP_INK_HEX} />
-            </g>
+            {/* The map: every other panel a little darker, and its folds */}
+            {!card ? (
+                <>
+                    <g clipPath={`url(#${clipId})`} fill={SMILEY_MAP_SHADE_HEX} opacity={SMILEY_MAP_FOLD_SHADE}>
+                        {columns.filter((_: number, i: number) => i % 2 === 1).map((x: number) => <rect key={x} x={x} y={0} width={panelW} height={SMILEY_MAP_H} />)}
+                    </g>
+                    <path d={[...across, ...down].join(" ")} fill="none" stroke={SMILEY_MAP_FOLD_HEX} strokeWidth={SMILEY_MAP_FOLD_W} />
+                </>
+            ) : null}
+
+            {/* The card: its ruled lines and red header line, showing through */}
+            {card ? (
+                <g opacity={SMILEY_CARD_LINE_OPACITY} strokeWidth={SMILEY_CARD_LINE_W}>
+                    <line x1={-halfW} y1={SMILEY_CARD_HEADER_Y} x2={halfW} y2={SMILEY_CARD_HEADER_Y} stroke={SMILEY_CARD_HEADER_HEX} />
+                    {rules.map((y: number) => <line key={y} x1={-halfW + SMILEY_CARD_RULE_INSET} y1={y} x2={halfW - SMILEY_CARD_RULE_INSET} y2={y} stroke={SMILEY_CARD_RULE_HEX} />)}
+                </g>
+            ) : null}
+
+            {/* A shine along the top edge, and the edge */}
+            <line x1={-halfW + SMILEY_MAP_CORNER_R} y1={SMILEY_MAP_SHINE_W} x2={halfW - SMILEY_MAP_CORNER_R} y2={SMILEY_MAP_SHINE_W} stroke={SMILEY_MAP_SHINE_HEX} strokeWidth={SMILEY_MAP_SHINE_W} opacity={SMILEY_MAP_SHINE_OPACITY} />
+            <rect x={-halfW} y={0} width={SMILEY_MAP_W} height={SMILEY_MAP_H} rx={SMILEY_MAP_CORNER_R} fill="none" stroke={edge} strokeWidth={SMILEY_MAP_EDGE_W} />
+
+            {/* Compass rose printed on the map's back, faded */}
+            {!card ? (
+                <g transform={`translate(${halfW - SMILEY_MAP_COMPASS_IN} ${SMILEY_MAP_COMPASS_DOWN})`} opacity={SMILEY_MAP_INK_OPACITY}>
+                    <circle r={SMILEY_MAP_COMPASS_R * SMILEY_MAP_COMPASS_RING} fill="none" stroke={SMILEY_MAP_INK_HEX} strokeWidth={SMILEY_MAP_RING_W} />
+                    <path d={SMILEY_MAP_COMPASS_PATH} fill={SMILEY_MAP_INK_HEX} />
+                </g>
+            ) : null}
 
             {/* Fists gripping the sides */}
             <SmileyHand2D hand={fist(-1)} paint={paint} />

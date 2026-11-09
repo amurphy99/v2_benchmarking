@@ -7,7 +7,7 @@ to the expression's own) and how the head turns and leans (added to the
 expression's pose). The eyes go, in order of priority, to:
 
   1) a point the page sets (the demo's gaze pad)
-  2) a look a plan asks for (`AVATAR_PLANS.md` §3.3.1): a point in the user,
+  2) a look a plan asks for (`HARNESS_PROTOCOL.md` §3.3.1): a point in the user,
      screen, or map frame, a scan of short fixations around one, or a trace
      along a path, holding for its `hold_ms` and then releasing. It lands where
      it says, whatever the expression's own gaze is, and can turn the head part
@@ -31,6 +31,7 @@ there, and its raised top edge sits just under the eyes' lowest map look).
 
 */
 import type { AutoBehaviors, GazeAction, GazeFrame, GazeLook, PlanPoint, PoseAction } from "@/hooks/live-chat/avatarPlanFrames";
+import      { isPropFrame                                                           } from "@/hooks/live-chat/avatarPlanFrames";
 import type { ConversationState, SpeechPhase                                        } from "../../avatarRegistry";
 import type { Ease                                                                  } from "../actions/faceMotions";
 import      { clampRange, easeAt, easeStep, easeToward, randomBetween               } from "../actions/faceMotions";
@@ -63,7 +64,7 @@ const SMILEY_WANDER_HEAD_EASE_PER_SEC = 2.5;     // How quickly the head turns a
 const SMILEY_WANDER_SWAY_DEG          = 1.5;     // Lean sway either way
 const SMILEY_WANDER_SWAY_PERIOD_MS    = 5_500;   // One sway there and back
 
-// A plan's look: the eyes' time to get there (part of a look's length), and what a plan leaves out (`AVATAR_PLANS.md` §3.3.1)
+// A plan's look: the eyes' time to get there (part of a look's length), and what a plan leaves out (`HARNESS_PROTOCOL.md` §3.3.1)
 const SMILEY_GAZE_SETTLE_MS = 200;
 const SMILEY_SCAN_FIX_MS    = [250, 450] as const;      // Shortest and longest fixation in a scan
 const SMILEY_TRACE_SPEED    = {map: 0.5, other: 1};     // Frame units per second along a trace
@@ -224,7 +225,7 @@ export function createGaze(startMs: number): Gaze {
             commanded = {
                 on        : action.on,
                 look      : action.look,
-                head      : action.head ?? ((action.on === "map") ? SMILEY_HEAD_SHARE.map : SMILEY_HEAD_SHARE.other),
+                head      : action.head ?? (isPropFrame(action.on) ? SMILEY_HEAD_SHARE.map : SMILEY_HEAD_SHARE.other),
                 startMs   : nowMs,
                 endMs     : (action.hold_ms === null) ? null : (nowMs + lengthMs),
                 fixation  : (action.look.kind === "scan") ? action.look.around : [0, 0],
@@ -303,10 +304,10 @@ function lookLengthMs(on: GazeFrame, look: GazeLook, holdMs: number | null): num
 
 // A trace's speed in its frame's units per second
 function traceSpeed(on: GazeFrame, speed: number | null): number {
-    return speed ?? ((on === "map") ? SMILEY_TRACE_SPEED.map : SMILEY_TRACE_SPEED.other);
+    return speed ?? (isPropFrame(on) ? SMILEY_TRACE_SPEED.map : SMILEY_TRACE_SPEED.other);
 }
 
-// A point in a gaze frame, as a gaze point (user points are offsets from the user; map points flip and follow the map's raise)
+// A point in a gaze frame, as a gaze point (user points are offsets from the user; map and card points flip and follow the raise)
 function frameToGaze(on: GazeFrame, [x, y]: PlanPoint, mapRaise: number): GazePoint {
     if (on === "user"  ) return fromUser({x, y});
     if (on === "screen") return {x, y};
@@ -316,11 +317,11 @@ function frameToGaze(on: GazeFrame, [x, y]: PlanPoint, mapRaise: number): GazePo
     return {x: 2 * across * SMILEY_MAP_GAZE_ACROSS, y: top + ((bottom - top) * y)};
 }
 
-// A random point in a scan's circle, kept inside its frame (map points run 0 to 1, the others -1 to 1)
+// A random point in a scan's circle, kept inside its frame (map and card points run 0 to 1, the others -1 to 1)
 function scanPoint(on: GazeFrame, [aroundX, aroundY]: PlanPoint, radius: number): PlanPoint {
     const reach = radius * Math.sqrt(Math.random());   // Square root spreads the points evenly over the circle
     const angle = 2 * Math.PI * Math.random();
-    const [low, high] = (on === "map") ? [0, 1] : [-1, 1];
+    const [low, high] = isPropFrame(on) ? [0, 1] : [-1, 1];
     return [clampRange(aroundX + (reach * Math.cos(angle)), low, high), clampRange(aroundY + (reach * Math.sin(angle)), low, high)];
 }
 
