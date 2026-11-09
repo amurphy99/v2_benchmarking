@@ -304,6 +304,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         barrier = self.stt_provider.create_audio_barrier()
         return ChatHandler.request_reply_now(self, barrier)
 
+    # Start a reply the chat type's harness asked for (None while another reply owns the turn)
+    def request_harness_turn(self) -> asyncio.Task[str | None] | None:
+        return ChatHandler.request_harness_turn(self)
+
     # --------------------------------------------------------------------------------
     # Persist the literal command before scheduling the response it requested
     # --------------------------------------------------------------------------------

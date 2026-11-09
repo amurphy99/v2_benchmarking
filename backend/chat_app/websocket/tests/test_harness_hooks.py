@@ -15,13 +15,17 @@ from unittest.mock import AsyncMock, Mock, patch
 import asyncio, json, re, unittest
 
 # From this project
-from chat_app.websocket.consumers.handlers.ws_events  import handle_transcription_message
-from chat_app.websocket.consumers.processing.playback import handle_playback_event
-from chat_app.websocket.consumers.processing.speech   import handle_final, handle_interim
-from chat_app.websocket.harnesses.base                import ChatHarness, Cue, FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
-from chat_app.websocket.harnesses.cues                import KeywordCue, SilenceWatcher
-from chat_app.websocket.services.chatHelpers          import ChatHandler
-from chat_app.websocket.services.chat_state           import StagedUtteranceBuffer
+from chat_app.websocket.consumers.handlers.ws_events         import handle_transcription_message
+from chat_app.websocket.consumers.processing.avatar_feedback import handle_avatar_feedback
+from chat_app.websocket.consumers.processing.playback        import handle_playback_event
+from chat_app.websocket.consumers.processing.speech          import handle_final, handle_interim
+from chat_app.websocket.harnesses.base                       import ChatHarness, Cue, FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
+from chat_app.websocket.harnesses.cues                       import KeywordCue, SilenceWatcher
+from chat_app.websocket.services.chatHelpers                 import ChatHandler
+from chat_app.websocket.services.chat_state                  import StagedUtteranceBuffer
+
+# Logger the avatar feedback handler writes each event to
+FEEDBACK_LOGGER = "chat_app.websocket.consumers.processing.avatar_feedback"
 
 # Silence thresholds short enough for a test, with room for a busy machine
 SILENCE_TEST_SEC = (0.1, 0.2)
@@ -293,6 +297,58 @@ class HarnessTurnTests(PipelineTestCase):
         with patch("chat_app.websocket.services.chatHelpers.send_mood", new=AsyncMock()) as send_mood:
             await ChatHandler._publish_response_mood(consumer, "Happy", "harness", 4)
         send_mood.assert_not_awaited()
+
+
+# ================================================================================
+# Avatar Frames
+# ================================================================================
+class AvatarFrameTests(PipelineTestCase):
+    """
+    A plan-driven chat type sends plans for its replies, and its client reports what
+    happened to them.
+    """
+    # A reply's plan goes out just before its text, so the plan's reply moments mean that reply
+    async def test_a_replys_plan_goes_out_just_before_its_text(self) -> None:
+        consumer = make_consumer()
+        sent     : list[str] = []
+        plan     = {"id": "t1-reply", "steps": [{"start_on": "reply_audio", "state": "listening"}]}
+        consumer.send_json        = AsyncMock(side_effect=lambda frame: sent.append(frame["type"]))
+        consumer.send             = AsyncMock(side_effect=lambda text:  sent.append(json.loads(text)["type"]))
+        consumer.harness.generate = AsyncMock(return_value=ResponseOutcome(message="Hello there.", avatar_plan=plan))
+
+        await ChatHandler.request_harness_turn(consumer)
+
+        self.assertEqual(sent, ["avatar_plan", "llm_response"])
+        self.assertEqual(consumer.send_json.await_args.args[0], {"type": "avatar_plan", "data": plan})
+
+    # A plan made while preparing a reply is dropped once newer speech has cancelled it (a `reply_now` reply plays anyway)
+    async def test_a_plan_made_for_a_cancelled_reply_is_dropped(self) -> None:
+        consumer = SimpleNamespace(_stt_progress_revision=5)
+        with patch("chat_app.websocket.services.chatHelpers.send_avatar_plan", new=AsyncMock()) as send_plan:
+            await ChatHandler._publish_response_plan(consumer, {"id": "stale"}, "automatic", 4)
+            await ChatHandler._publish_response_plan(consumer, {"id": "kept"},  "reply_now", 4)
+        self.assertEqual([call.args[1]["id"] for call in send_plan.await_args_list], ["kept"])
+
+
+class AvatarFeedbackTests(unittest.IsolatedAsyncioTestCase):
+    # Feedback is logged once per event, a rejection as a warning, and only its known details
+    async def test_feedback_is_logged_with_its_details(self) -> None:
+        consumer = SimpleNamespace(session_id=7)
+        with self.assertLogs(FEEDBACK_LOGGER, level="INFO") as logs:
+            await handle_avatar_feedback(consumer, {"type": "avatar_feedback", "data": {"id": "t1-reply", "turn": 1, "event": "ended", "how": "finished"}})
+            await handle_avatar_feedback(consumer, {"type": "avatar_feedback", "data": {"id": "bad", "event": "rejected", "reason": "steps[0].face.name:\nunknown", "extra": "x"}})
+        self.assertEqual([record.levelname for record in logs.records], ["INFO", "WARNING"])
+        self.assertIn("turn=1 how='finished'", logs.output[0])
+        self.assertIn("reason='steps[0].face.name: unknown'", logs.output[1])
+        self.assertNotIn("extra", logs.output[1])
+
+    # Malformed feedback is dropped with one warning (an unknown event, or an id that isn't a short string)
+    async def test_malformed_feedback_is_dropped(self) -> None:
+        consumer = SimpleNamespace(session_id=7)
+        for payload in ({"data": "nope"}, {"data": {"id": "p", "event": "exploded"}}, {"data": {"id": 3, "event": "started"}}, {"data": {"id": "x" * 129, "event": "started"}}):
+            with self.subTest(payload=str(payload)[:40]), self.assertLogs(FEEDBACK_LOGGER, level="WARNING") as logs:
+                await handle_avatar_feedback(consumer, payload)
+            self.assertIn("Ignoring", logs.output[0])
 
 
 # ================================================================================

@@ -32,6 +32,11 @@ session through Channels groups and can relay canonical commands to the primary.
 
 ```diff
 +consumers/
+ ├── CLIENT_PROTOCOL.md
+ │   What every primary client sends and receives.
+ ├── HARNESS_PROTOCOL.md
+ │   The extra frames only some chat types use: avatar setups, plans, feedback, and task cards.
+ │
 +├── consumers.py
  │   Primary connection lifecycle, per-session state, Channels event methods,
  │   group broadcasts, and response-task entry points.
@@ -53,6 +58,8 @@ session through Channels groups and can relay canonical commands to the primary.
  │   │   Commits messages to the database, updates LLM context, and broadcasts them.
 +│   ├── playback.py
  │   │   Validates optional assistant playback timestamps from primary frontends.
++│   ├── avatar_feedback.py
+ │   │   Validates and logs what a capable avatar's client reports about each plan.
 +│   ├── commands.py
  │   │   Defines canonical commands, applies their behavior, and builds ack bodies.
 +│   ├── speech.py

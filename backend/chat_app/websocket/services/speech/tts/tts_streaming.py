@@ -77,7 +77,7 @@ async def synthesize_and_stream_tts(system_resp: str, send_callback: SendCallbac
     tts_provider = TextToSpeechProvider()
     for index, piece in enumerate(pieces):
         audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(piece)
-        await sender.add(audio_bytes, sr, ch, bps)
+        await sender.add(audio_bytes, sr, ch, bps, sentence=index + 1)
         if index == 0: first_at = now_ts() - t0
 
     # The response's final chunk goes out last, marked as such
@@ -114,7 +114,8 @@ class _AudioChunkSender:
     The held chunk goes out as soon as more audio arrives, or marked `last` when the
     response ends, so the final chunk the frontend receives always carries `last`,
     even when a later sentence fails to synthesize (it comes back with no audio).
-    `sequence` runs across the whole response.
+    `sequence` runs across the whole response, and `sentence` is the 1-based piece the
+    chunk's audio came from (avatar plans time steps to it, `HARNESS_PROTOCOL.md` §3.2).
 
     NOTE: The synthesizer returns (pcm_bytes, sample_rate, num_channels,
           bits_per_sample) so the audio recorder can resample both channels with
@@ -126,14 +127,23 @@ class _AudioChunkSender:
     def __init__(self, send_callback: SendCallback, response_id: int) -> None:
         self.send_callback = send_callback
         self.response_id   = response_id
-        self.sequence      = 0                                          # Number the next chunk sent gets
-        self.held          : tuple[bytes, int, int, int] | None = None  # Newest unsent chunk and its PCM format
+        self.sequence      = 0                                               # Number the next chunk sent gets
+        self.held          : tuple[bytes, int, int, int, int] | None = None  # Newest unsent chunk, its PCM format, and its sentence
 
     # Send everything but the newest chunk of one sentence's audio
-    async def add(self, audio_bytes: bytes, sample_rate: int, channels: int, bits_per_sample: int) -> None:
+    async def add(
+        self,
+        audio_bytes     : bytes,  # One sentence's PCM audio
+        sample_rate     : int,    # Its sample rate, as the synthesizer returned it
+        channels        : int,    # Its channel count
+        bits_per_sample : int,    # Its bit depth
+        *,
+
+        sentence : int,  # 1-based piece of the response it came from
+    ) -> None:
         for start in range(0, len(audio_bytes), CHUNK_SIZE):
             if self.held is not None: await self._send(self.held, last=False)
-            self.held = (audio_bytes[start:start + CHUNK_SIZE], sample_rate, channels, bits_per_sample)
+            self.held = (audio_bytes[start:start + CHUNK_SIZE], sample_rate, channels, bits_per_sample, sentence)
 
     # Send the held chunk as the response's last one
     async def finish(self) -> None:
@@ -141,8 +151,8 @@ class _AudioChunkSender:
         self.held = None
 
     # Send one chunk with everything the browser needs to schedule and identify this response
-    async def _send(self, held: tuple[bytes, int, int, int], *, last: bool) -> None:
-        chunk, sample_rate, channels, bits_per_sample = held
+    async def _send(self, held: tuple[bytes, int, int, int, int], *, last: bool) -> None:
+        chunk, sample_rate, channels, bits_per_sample, sentence = held
         payload = {
             "type": "audio_chunk",
             "data": {
@@ -152,6 +162,7 @@ class _AudioChunkSender:
                 "channels"      : channels,
                 "bitsPerSample" : bits_per_sample,
                 "sequence"      : self.sequence,
+                "sentence"      : sentence,
                 "last"          : last,
             }
         }

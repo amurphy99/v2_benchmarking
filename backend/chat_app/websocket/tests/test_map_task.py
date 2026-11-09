@@ -202,7 +202,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
 
     # One automatic reply attempt for a single user turn
     def attempt(self, text: str) -> TurnAttempt:
-        return TurnAttempt(context=[("user", text, 0.0)], user_text=text, trigger="automatic", publish_mood=AsyncMock())
+        return TurnAttempt(context=[("user", text, 0.0)], user_text=text, trigger="automatic", publish_mood=AsyncMock(), publish_plan=AsyncMock())
 
     # A client that names no map gets the demo map, with the avatar at its start
     def test_defaults_to_the_demo_map(self) -> None:

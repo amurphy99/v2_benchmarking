@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # From this project
 from ...services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
-from  .avatar                  import ResponseMood
+from  .avatar                  import AvatarPlan, ResponseMood
 
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
@@ -44,6 +44,9 @@ ResponseTrigger = Literal["automatic", "reply_now", "harness"]
 
 # Sends a robot mood before the reply (dropped if newer speech cancelled it)
 MoodPublisher = Callable[[ResponseMood], Awaitable[None]]
+
+# Sends an avatar plan before the reply (dropped if newer speech cancelled it)
+PlanPublisher = Callable[[AvatarPlan], Awaitable[None]]
 
 
 # --------------------------------------------------------------------------------
@@ -74,14 +77,16 @@ class TurnAttempt:
     user_text    : str              # The staged user turn ("" for a harness turn with nothing staged)
     trigger      : ResponseTrigger  # What asked for this reply
     publish_mood : MoodPublisher    # Sends a robot mood now, before the reply text
+    publish_plan : PlanPublisher    # Sends an avatar plan now, before the reply text (plan-driven chat types)
 
 # One reply, and the effects to apply once its exchange is saved
 @dataclass(frozen=True, slots=True)
 class ResponseOutcome:
-    message         : str             # Spoken assistant reply
-    state           : object = None   # Harness state to enter once the exchange is saved (None keeps the current one)
-    pause_listening : bool   = False  # Stop the STT stream once the reply is saved
-    close_after     : bool   = False  # Send `chat_ended` and close once the reply has gone out
+    message         : str                        # Spoken assistant reply
+    state           : object            = None   # Harness state to enter once the exchange is saved (None keeps the current one)
+    pause_listening : bool              = False  # Stop the STT stream once the reply is saved
+    close_after     : bool              = False  # Send `chat_ended` and close once the reply has gone out
+    avatar_plan     : AvatarPlan | None = None   # Plan sent just before the reply's text, so its reply moments mean this reply
 
 
 # ================================================================================
@@ -127,6 +132,10 @@ class ChatHarness(ABC):
         if outcome.state is not None: self.state = outcome.state
         self._tell_cues("on_reply_saved", outcome)
 
+    # Ask for a reply of the harness's own (an opening line, a re-prompt); False while another reply owns the turn
+    def request_turn(self) -> bool:
+        return self.consumer.request_harness_turn() is not None
+
     # --------------------------------------------------------------------------------
     # Connection
     # --------------------------------------------------------------------------------
@@ -162,8 +171,8 @@ class ChatHarness(ABC):
 class Cue(ABC):
     """
     Override only the events a cue needs. A cue reacts with side effects (avatar frames,
-    or a turn of its own through `ChatHandler.request_harness_turn`), and never changes
-    the dialogue state.
+    or a turn of its own through `self.harness.request_turn()`), and never changes the
+    dialogue state.
     """
     # Keep the harness whose events this cue hears
     def __init__(self, harness: ChatHarness) -> None:

@@ -72,6 +72,9 @@ class SentenceStreamingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c["last"] for c in chunks], [False] * 5 + [True])
         self.assertTrue(all(c["responseId"] == 7 for c in chunks))
 
+        # Each chunk names the sentence its audio came from (the held chunk keeps its own)
+        self.assertEqual([c["sentence"] for c in chunks], [1, 1, 1, 2, 2, 2])
+
     # Still end the response with a `last` chunk when its final sentence fails to synthesize
     async def test_a_failed_final_sentence_still_ends_the_response(self) -> None:
         _, chunks = await self.speak("That sounds really lovely to me! FAIL on this whole sentence, please.")

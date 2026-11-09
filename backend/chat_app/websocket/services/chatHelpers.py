@@ -37,7 +37,7 @@ from ...services.logging_utils        import RESET, BOLD, UNBOLD, ORANGE
 from  ..biomarkers.callbacks          import process_audio_biomarkers, process_text_biomarkers
 from  ..consumers.processing.messages import commit_chat_exchange, commit_chat_message
 from  ..consumers.processing.stream   import set_streaming_active
-from  ..harnesses.avatar              import send_mood
+from  ..harnesses.avatar              import send_avatar_plan, send_mood
 from  ..harnesses.base                import TurnAttempt
 from   .bg_helpers                    import fire_and_log, trace_await
 from   .speech.stt.audio_queue        import AudioBarrier
@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...models              import ChatMessage
     from  ..consumers.consumers import ChatConsumer
-    from  ..harnesses.avatar    import ResponseMood
+    from  ..harnesses.avatar    import AvatarPlan, ResponseMood
     from  ..harnesses.base      import ResponseOutcome, ResponseTrigger
 
 # Configuration constants
@@ -316,13 +316,14 @@ class ChatHandler:
         temp_context = list(consumer.context_buffer)
         if staged_snapshot: temp_context.append(("user", combined_text, combined_ts))
 
-        # A mood is checked against the STT revision this attempt started from
+        # A mood or plan is checked against the STT revision this attempt started from
         response_revision = consumer._stt_progress_revision
         attempt = TurnAttempt(
             context      = temp_context,
             user_text    = combined_text,
             trigger      = trigger,
             publish_mood = lambda mood: ChatHandler._publish_response_mood(consumer, mood, trigger, response_revision),
+            publish_plan = lambda plan: ChatHandler._publish_response_plan(consumer, plan, trigger, response_revision),
         )
         consumer.harness.on_reply_started(attempt)
 
@@ -391,8 +392,9 @@ class ChatHandler:
             raise
 
     # --------------------------------------------------------------------------------
-    # Send a mood to the frontend (if we have it before the spoken text result)
+    # Send a mood or an avatar plan to the frontend (if we have it before the spoken text result)
     # --------------------------------------------------------------------------------
+    # Send the reply's mood, unless newer speech has cancelled the reply
     @staticmethod
     async def _publish_response_mood(
         consumer          : ChatConsumer,     # Active chat whose primary client shows the mood
@@ -400,13 +402,27 @@ class ChatHandler:
         trigger           : ResponseTrigger,  # What asked for the reply
         response_revision : int,              # STT revision when the reply attempt started
     ) -> None:
+        if ChatHandler._attempt_is_current(consumer, trigger, response_revision): await send_mood(consumer, mood)
+
+    # Send a plan made while the reply was prepared, unless newer speech has cancelled the reply
+    @staticmethod
+    async def _publish_response_plan(
+        consumer          : ChatConsumer,     # Active chat whose primary client runs the plan
+        plan              : AvatarPlan,       # Plan the harness made for this attempt
+        trigger           : ResponseTrigger,  # What asked for the reply
+        response_revision : int,              # STT revision when the reply attempt started
+    ) -> None:
+        if ChatHandler._attempt_is_current(consumer, trigger, response_revision): await send_avatar_plan(consumer, plan)
+
+    # Whether a reply attempt can still be heard
+    @staticmethod
+    def _attempt_is_current(consumer: ChatConsumer, trigger: ResponseTrigger, response_revision: int) -> bool:
         """
-        Newer speech cancels every reply except a `reply_now` one, so any other reply's
-        mood is dropped once the STT revision has moved. A `reply_now` reply plays
-        anyway, so its mood always goes out with it.
+        Newer speech cancels every reply except a `reply_now` one, so anything made for
+        another reply is dropped once the STT revision has moved. A `reply_now` reply
+        plays anyway, so what it makes always goes out with it.
         """
-        if (trigger != "reply_now") and (response_revision != consumer._stt_progress_revision): return
-        await send_mood(consumer, mood)
+        return (trigger == "reply_now") or (response_revision == consumer._stt_progress_revision)
 
     # --------------------------------------------------------------------------------
     # Commit one completed response without leaving a partially persisted exchange
@@ -433,6 +449,8 @@ class ChatHandler:
         consumer.harness.on_reply_saved(response_outcome)
 
         # Send the already-persisted assistant response to the primary frontend
+        # (a plan made for this reply goes first, so its reply moments mean this reply)
+        if response_outcome.avatar_plan is not None: await send_avatar_plan(consumer, response_outcome.avatar_plan)
         await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_msg.id}))
 
         # Apply the reversible stream effect after publishing its acknowledgement message

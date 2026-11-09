@@ -4,7 +4,7 @@ Route messages received from the primary chat WebSocket client.
 `backend.chat_app.websocket.consumers.handlers.ws_events`
 
 This is the transport boundary for audio payloads, direct transcriptions,
-canonical commands, overlap notifications, and end-chat requests.
+canonical commands, overlap notifications, avatar feedback, and end-chat requests.
 
 NOTE: Serves as a passthrough routing all incoming message types that the main
       consumer receives to the proper handling endpoints. 
@@ -21,12 +21,13 @@ from ....services import logging_utils as lu
 from ....services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
 
 # Handling incoming payloads
-from ...harnesses.base       import FinalUtterance
-from ...services.chatHelpers import ChatHandler
-from  ..processing.audio     import ingest_audio_payload
-from  ..processing.commands  import dispatch_command
-from  ..processing.playback  import handle_playback_event
-from  ..processing.speech    import handle_final
+from ...harnesses.base             import FinalUtterance
+from ...services.chatHelpers       import ChatHandler
+from  ..processing.audio           import ingest_audio_payload
+from  ..processing.avatar_feedback import handle_avatar_feedback
+from  ..processing.commands        import dispatch_command
+from  ..processing.playback        import handle_playback_event
+from  ..processing.speech          import handle_final
 
 # Experimental Buddy media (see websocket/experimental/buddy/README.md)
 from ...experimental.buddy import primary_hooks as buddy_hooks
@@ -54,6 +55,7 @@ async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
     elif msg_type == "transcription"     : await handle_transcription_message(consumer, data)
     elif msg_type == "command"           : await handle_client_command       (consumer, data)
     elif msg_type == "tts_playback"      : await handle_playback_event       (consumer, data)
+    elif msg_type == "avatar_feedback"   : await handle_avatar_feedback      (consumer, data)
     elif msg_type == "end_chat"          : await consumer.close(code=1000)
 
     # Unknown JSON

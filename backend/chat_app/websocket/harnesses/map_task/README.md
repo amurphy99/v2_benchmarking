@@ -134,7 +134,7 @@ backend starts, so a broken file stops startup with the file and the field at fa
 
 **Points** are `[x, y]`, each from 0 to 1, measured across and down from the top-left corner
 of the avatar's map. Up is a smaller `y`. This is the frame avatar gaze plans use
-(`frontend/src/pages/common/avatar/AVATAR_PLANS.md` §8.2), so a plan can look at a landmark
+(`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §8.2), so a plan can look at a landmark
 with no conversion.
 
 Names are matched as whole words, ignoring case, longest first ("rope bridge" before
@@ -184,6 +184,9 @@ are constants at the top of `geometry.py`.
 - **Conditions and cues.** No cues yet, so the chat type takes no `condition`. The first two
   planned are a direction gaze (look toward "up", "left", ... as the word is heard) and a
   landmark gaze (look at a landmark the moment it is named, or search when it isn't there).
-- **The chat page.** The web app's chat page can't pick `map_task` or show the giver's map yet.
-- **Avatar plans.** The gaze cues need `avatar_setup` and `avatar_plan` frames in the chat page.
+- **The giver's map on screen.** The chat page can pick `map_task`, but shows only what to do
+  with the paper map: the map files have no picture yet, and nothing sends one.
+- **Avatar plans.** The backend can send plans and the chat page runs them
+  (`consumers/HARNESS_PROTOCOL.md`; the cooperative planning harness is the working example),
+  but the Map Task sends no setup or plans yet, so its avatar never holds the map.
 - **Scoring** the avatar's path against `giver.route`.
