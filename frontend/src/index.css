@@ -32,6 +32,28 @@
   --color-status-paused     : #ca8a04;
   --color-status-offline    : #71717a;
   --color-status-error      : #dc2626;
+
+  /* Participant chat page (calm and high-contrast, with large type) */
+  --color-chat-surface      : #f3efe7;
+  --color-chat-stage        : #fbf9f4;
+  --color-chat-panel        : #ffffff;
+  --color-chat-border       : #e2dacb;
+  --color-chat-text         : #1f1d1a;
+  --color-chat-subtext      : #6b6457;
+  --color-chat-accent       : #2f6f73;
+  --color-chat-accentSoft   : #e2efee;
+  --color-chat-ink          : #1e3a8a;
+  --color-chat-pending      : #a16207;
+
+  /* Handwriting on the participant's task card (system fonts only) */
+  --font-hand               : "Bradley Hand", "Segoe Print", "Chalkboard SE", "Comic Sans MS", cursive;
+
+  /* A choice being written onto the task card */
+  --animate-chat-write      : chat-write 0.7s ease-out;
+  @keyframes chat-write {
+    from { opacity: 0; clip-path: inset(0 100% 0 0); }
+    to   { opacity: 1; clip-path: inset(0 0 0 0);    }
+  }
 }
 
 * {

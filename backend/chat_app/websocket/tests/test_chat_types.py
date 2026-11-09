@@ -36,7 +36,7 @@ CONNECT_TIMEOUT_SEC = 5
 
 # One reply attempt for a single staged user turn
 def make_attempt(text: str, publish_mood: MoodPublisher, trigger: ResponseTrigger = "automatic") -> TurnAttempt:
-    return TurnAttempt(context=[("user", text, 0.0)], user_text=text, trigger=trigger, publish_mood=publish_mood)
+    return TurnAttempt(context=[("user", text, 0.0)], user_text=text, trigger=trigger, publish_mood=publish_mood, publish_plan=AsyncMock())
 
 
 # ================================================================================

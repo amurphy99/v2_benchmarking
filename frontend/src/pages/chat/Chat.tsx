@@ -1,255 +1,203 @@
-/* Participant chat page: the avatar, the assistant's latest line, and controls.
+/* Participant chat page: the avatar, its reply, the task beside it, and controls.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/chat/Chat`
 
+The avatar is the center of the page, with its latest reply in large type under
+it. For the tasks, the panel beside it holds what the participant works from:
+their planning card, filled in live from the backend's `task_card` frames, or
+the Map Task's instructions. Before the chat starts, the picker chooses the chat
+type (`chatModes.ts`).
+
 The avatar dozes until the chat starts and follows the conversation while it
-runs (`useChatAvatar`). The settings are re-read every time the page opens, so
-an avatar picked on the admin or caregiver page shows on the next visit.
+runs (`useChatAvatar`). A chat type that drives it from the backend sends plans,
+which `useLiveChat` runs on it. The settings are re-read every time the page
+opens, so an avatar picked on the admin or caregiver page shows on the next
+visit.
 
 */
-import { useEffect, useRef, useState } from "react";
-import { useNavigate                 } from "react-router-dom";
-import { Spinner                     } from "react-bootstrap";
-import { BsPlayCircle, BsPauseCircle, BsStopCircle } from "react-icons/bs";
+import type { ReactElement                } from "react";
+import      { useEffect, useRef, useState } from "react";
+import      { useNavigate                 } from "react-router-dom";
 
 // From this project
+import        SaveChatModal               from "@/components/modals/SaveChatModal";
+import      { useLocalChatSession       } from "@/hooks/live-chat";
+import type { TaskCard                  } from "@/hooks/live-chat/taskCardFrame";
+import      { useUserSettings           } from "@/hooks/queries/useUserSettings";
+import        useLiveChat                 from "@/hooks/useLiveChat";
+import      { Avatar                    } from "@/pages/common/avatar/Avatar";
 import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
-import { LocalChatMessage, useLocalChatSession } from "@/hooks/live-chat";
-import { Avatar          } from "../common/avatar/Avatar";
-import { useChatAvatar   } from "./useChatAvatar";
-import { useUserSettings } from "@/hooks/queries/useUserSettings";
-import   SaveChatModal     from "@/components/modals/SaveChatModal";
-import   useLiveChat       from "@/hooks/useLiveChat";
+import type { ChatMode                  } from "./chatModes";
+import      { CHAT_MODES                } from "./chatModes";
+import      { useChatAvatar             } from "./useChatAvatar";
+
+// Components
+import type { DebugTurn          } from "./components/ActivityDebugPanel";
+import        ActivityDebugPanel   from "./components/ActivityDebugPanel";
+import        ChatControls         from "./components/ChatControls";
+import        MapTaskNote          from "./components/MapTaskNote";
+import        PlanningCardPanel    from "./components/PlanningCardPanel";
+import        ReplyCaption         from "./components/ReplyCaption";
+
+// What the caption says before the avatar's first reply
+const CHAT_IDLE_TEXT = "Press Start when you're ready.";
+
+// Where the participant's card goes until the backend sends it (it comes once the chat starts)
+const CARD_WAITING = (
+    <div className="rounded-2xl border border-dashed border-chat-border bg-chat-panel/60 p-6 text-lg text-chat-subtext">
+        Your card appears here when the chat starts.
+    </div>
+);
 
 
 // ================================================================================
-// Chat Page (UI that users see during a webapp chat)
+// Chat Page
 // ================================================================================
-// TODO: Move speech providers folder to utils, fix the index
-// TODO: Might need to add the user/token stuff to the websocket
-export function Chat() {
-    const navigate = useNavigate();
-    const { data: settings, isFetchedAfterMount } = useUserSettings();
-    const [botMessage, setBotMessage] = useState(<>Chat with me!</>);
+// The participant's live chat with the avatar
+export function Chat(): ReactElement {
+    const navigate  = useNavigate();
     const avatarRef = useRef<AvatarHandle>(null);
+    const { data: settings, isFetchedAfterMount } = useUserSettings();
 
-    // True from the participant's finished utterance until the reply starts playing (the avatar's "thinking" look)
-    const [awaitingReply, setAwaitingReply] = useState(false);
+    // Which chat type to open (picked before the chat starts)
+    const [mode, setMode] = useState<ChatMode>(CHAT_MODES[0]);
 
-    // Local (frontend, view-related only) chat tracking
-    const { pushMessage, session } = useLocalChatSession();
-    
+    // What the participant sees: their last words, the latest reply, and their task card
+    const [heard,         setHeard        ] = useState<string   | null>(null);
+    const [reply,         setReply        ] = useState<string   | null>(null);
+    const [taskCard,      setTaskCard     ] = useState<TaskCard | null>(null);
+    const [awaitingReply, setAwaitingReply] = useState(false);   // From the participant's finished utterance until the reply starts (the avatar's "thinking" look)
+    const [debugTurns,    setDebugTurns   ] = useState<DebugTurn[]>([]);
+
+    // Where the chat is: started once, the microphone on, and an admin keeping the audio
+    const [started,        setStarted       ] = useState(false);
+    const [recording,      setRecording     ] = useState(false);
+    const [adminRecording, setAdminRecording] = useState(false);
+    const [showModal,      setShowModal     ] = useState(false);
+
+    // Local (view-only) record of the conversation
+    const { pushMessage } = useLocalChatSession();
+
     // --------------------------------------------------------------------------------
-    // WebSocket Response Callbacks
+    // Live Chat
     // --------------------------------------------------------------------------------
-    // User utterance received (STT result from the backend) -> set "thinking" spinner indicator
-    const onUserUtterance   = (text: string) => {
-        pushMessage("user",      text);
-        setAwaitingReply(true);
-        setBotMessage(
-            <div className="flex flex-row gap-2 justify-center">
-                <Spinner animation="grow" />
-                <Spinner animation="grow" />
-                <Spinner animation="grow" />
-            </div>
-        );
-    };
+    // The participant finished an utterance (the backend's transcript): the avatar starts thinking
+    const onUserUtterance = (text: string): void => { pushMessage("user", text); setHeard(text); setAwaitingReply(true); };
 
-    // System utterance received
-    const onSystemUtterance = (text: string) => { pushMessage("assistant", text); setBotMessage(<>{text}</>); };
+    // The avatar's reply arrived
+    const onSystemUtterance = (text: string): void => { pushMessage("assistant", text); setReply(text); };
 
-    // Backend "robot_action" frames: {kind: "emotion" | "animation", value, duration_ms}
-    // The avatar decides how to act each one out (contract in `common/avatar/avatarRegistry`)
+    // Backend `robot_action` frames: {kind: "emotion" | "animation", value, duration_ms} (each avatar acts them out its own way)
     const onRobotAction = (data: RobotAction): void => { avatarRef.current?.performAction(data); };
 
-    // --------------------------------------------------------------------------------
-    // IDK, unlabeled stuff people add in
-    // --------------------------------------------------------------------------------
-    // Selecting the type of chat
-    type ChatMode = "default" | "memory_activity";
-    const [chatMode, setChatMode] = useState<ChatMode>("default");
+    // Avatar from the participant's settings (`UserSettings.modelChoice`), null until this visit's settings arrive
+    const model = isFetchedAfterMount ? settings.modelChoice : null;
 
-
-    // This should be deleted
-    type DebugTurn = {
-        ts: number;
-        role: "user" | "assistant";
-        text: string;
-        state?: string;
-    };
-
-    const [debugTurns, setDebugTurns] = useState<DebugTurn[]>([]);
-
-
-
-    // Live-chat hook
     const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
-        onScores: () => {},
+        onScores          : () => {},
         onRobotAction,
-        wsPath: chatMode === "memory_activity" ? "/ws/chat/activity/" : "/ws/chat/",
-
-        onDebugTurn     : (t) => { setDebugTurns((prev) => [...prev, { ts: Date.now(), ...t }]);                                 },
-
-        // Chat ended
-        onChatClosed: () => {
-            setRecording(false);
-            setShowModal(false);
-            navigate("/chat/end"); // navigate("/goal")
-        },
-        onChatPaused      : (       ) => { setRecording     (false  ); },
-        onChatResumed     : (       ) => { setRecording     (true   ); },
-        onRecordingStatus : (enabled) => { setAdminRecording(enabled); },
+        onTaskCard        : setTaskCard,
+        onDebugTurn       : (turn) => { setDebugTurns((previous: DebugTurn[]) => [...previous, {ts: Date.now(), ...turn}]); },
+        onChatClosed      : () => { setRecording(false); setShowModal(false); navigate("/chat/end"); },
+        onChatPaused      : () => { setRecording(false); },
+        onChatResumed     : () => { setRecording(true ); },
+        onRecordingStatus : (enabled: boolean) => { setAdminRecording(enabled); },
+        wsPath            : mode.wsPath,
+        extraQuery        : new URLSearchParams(mode.query).toString(),
+        avatarRef,
+        avatarModel       : model,
     });
-    
-    // Separate recording flag that we control ourselves
-    const [recording,       setRecording      ] = useState(false);
-    const [adminRecording,  setAdminRecording ] = useState(false); // true when admin has enabled audio saving
-    const startChat = () => { start(); setRecording(true ); };
-	const pauseChat = () => { stop (); setRecording(false); };
-	const saveChat  = () => { save (); setShowModal(false); navigate("/chat/end"); }; // use the stop speaking callback
 
-    // Modal control
-    const [showModal, setShowModal] = useState(false);
-    const endChatModal = () => {setShowModal(true); if (!recording) { pauseChat(); } };
+    // Start or resume, pause, and end (ending asks first)
+    const startChat = (): void => { start(); setRecording(true); setStarted(true); };
+    const pauseChat = (): void => { stop (); setRecording(false); };
+    const saveChat  = (): void => { save (); setShowModal(false); navigate("/chat/end"); };
+    const askToEnd  = (): void => { setShowModal(true); if (recording) pauseChat(); };
+
+    // Picking another chat type starts its view fresh
+    const pickMode = (index: number): void => {
+        setMode(CHAT_MODES[index]);
+        setTaskCard(null);
+        setDebugTurns([]);
+        setHeard(null);
+        setReply(null);
+    };
 
     // A reply that starts playing, or a chat that stops, ends the wait for a reply
     useEffect(() => { if (systemSpeaking || !recording) setAwaitingReply(false); }, [systemSpeaking, recording]);
 
-    // Avatar from the participant's settings (`UserSettings.modelChoice`), asleep until the chat starts
-    const model = settings.modelChoice;
-    useChatAvatar(avatarRef, isFetchedAfterMount ? model : null, {running: recording, systemSpeaking, awaitingReply}, {readSpeechLoudness, readSpeechRemaining});
+    // Doze while stopped, and follow the conversation while running
+    useChatAvatar(avatarRef, model, {running: recording, systemSpeaking, awaitingReply}, {readSpeechLoudness, readSpeechRemaining});
 
-    // ================================================================================
-    // Return UI elements
-    // ================================================================================
+    // --------------------------------------------------------------------------------
+    // Render
+    // --------------------------------------------------------------------------------
     // Wait for this visit's settings (a cached copy could still name an avatar changed since)
-    if (!isFetchedAfterMount) { return <div>Loading...</div>; }
+    if (model === null) { return <div className="p-8 text-lg text-chat-subtext">Loading...</div>; }
 
-    const stopStyle = "flex flex-col gap-2 items-center";
+    // The panel beside the avatar (the task's materials), and the avatar's framing (a held card or map needs its body)
+    const panel =
+        (mode.panel === "card")           ? ((taskCard !== null) ? <PlanningCardPanel card={taskCard} /> : CARD_WAITING) :
+        (mode.panel === "map")            ? <MapTaskNote /> :
+        (mode.panel === "activity_debug") ? <ActivityDebugPanel turns={debugTurns} /> :
+                                            null;
+    const zoom = (window.isMobile && (panel === null)) ? "head" : "body";
+
     return (
-    <>
-        <div className="flex flex-col h-[85vh]">
-            {!window.isMobile ? 
-                <div className="flex flex-row justify-center h-7/10 m-[1rem] mt-[4rem]">
-                    <div className="sm:w-1/5" />
-                    <div className="mt-[1rem] w-full sm:w-1/2"> 
-                        <Avatar model={model} zoom="body" ref={avatarRef} /> 
-                    </div> 
-                    <div className="hidden sm:inline-block bubble"> 
-                        {botMessage} 
-                    </div>
-                </div>
-                :  
-                <div className="flex flex-col mx-[1rem] mt-[2rem] h-[65vh]">
-                    <Avatar model={model} zoom="head" ref={avatarRef}/>
-                    <div className="text-3xl font-extrabold mt-[4rem] mx-[2rem] overflow-y-auto hidden-scrollbar h-full">
-                        {botMessage}
-                    </div>
-                </div>
-            }
-
-            {/* Buttons for starting/pausing the chat & saving the chat history/ending the chat */}
-           <div className={`flex flex-col ${chatMode === "memory_activity" ? "mb-6" : "mb-[5rem]"} items-center gap-3`}>
-
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Recording Indicator (shown when admin has set audio to be saved on chat end) */}
-                {/* -------------------------------------------------------------------------------- */}
-                {adminRecording && (
-                    <div className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
-                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
-                        Recording
-                    </div>
-                )}
-
-
-                <div className="flex flex-row mx-[20vw] gap-[4em] justify-around w-full">
-
-                    {/* Again, I don't know what this is... */}
-                    {chatEnding
-                        ? <div className="flex flex-col gap-2 items-center text-gray-500">
-                            <BsStopCircle size={"8vh"} color={"gray"} />
-                            Ending chat...
+        <>
+            <div className="min-h-[85vh] bg-chat-surface px-4 py-6 md:px-8">
+                <div className={`mx-auto flex flex-col gap-6 ${(panel !== null) ? "max-w-6xl" : "max-w-3xl"}`}>
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Chat Type */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <header className="flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Chat</div>
+                            <h1 className="text-3xl font-semibold text-chat-text">{mode.label}</h1>
                         </div>
-                        : <>
-                            <RecordButton recording={recording} stopRecording={pauseChat} startRecording={startChat}/>
-                            <button className={stopStyle} onClick={endChatModal}> <BsStopCircle size={"8vh"} color={"black"} /> End Chat </button>
-                        </>
-                    }
+                        <select
+                            aria-label = "Chat type"
+                            className  = "rounded-xl border border-chat-border bg-chat-panel px-4 py-2 text-base text-chat-text disabled:opacity-50"
+                            disabled   = {started}
+                            onChange   = {(event) => pickMode(Number(event.target.value))}
+                            value      = {CHAT_MODES.indexOf(mode)}
+                        >
+                            {CHAT_MODES.map((option: ChatMode, index: number) => <option key={option.label} value={index}>{option.label}</option>)}
+                        </select>
+                    </header>
 
-                    
                     {/* -------------------------------------------------------------------------------- */}
-                    {/* Select Chat Mode */}
+                    {/* Avatar and Task */}
                     {/* -------------------------------------------------------------------------------- */}
-                    <select
-                        value     = {chatMode}
-                        onChange  = {(e) => {setChatMode(e.target.value as ChatMode); setDebugTurns([]); }}
-                        disabled  = {recording}
-                        className = "border max-h-1/2 rounded px-2 py-2"
-                    >
-                        <option value="default"         >default</option>
-                        <option value="memory_activity" >memory_activity</option>
-                    </select>
+                    <main className={`grid gap-6 ${(panel !== null) ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}>
+                        <section className="flex flex-col overflow-hidden rounded-3xl border border-chat-border bg-chat-stage shadow-sm">
+                            <div className="h-[46vh] md:h-[56vh]">
+                                <Avatar model={model} zoom={zoom} ref={avatarRef} />
+                            </div>
+                            <ReplyCaption heard={heard} reply={reply} awaitingReply={awaitingReply} idleText={CHAT_IDLE_TEXT} />
+                        </section>
+                        {(panel !== null) ? <aside>{panel}</aside> : null}
+                    </main>
 
-
-
-                </div>  {/* end flex-row buttons */}
-            </div>  {/* end flex-col wrapper */}
-
-            {/* Added only for debugging, will probably remove later */}
-            {chatMode === "memory_activity" && (
-            <div className="border rounded p-4 mx-[10vw] mb-[2rem] h-[35vh] overflow-y-auto">
-                <div className="font-semibold mb-2">
-                Memory Activity Debug (testing)
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Controls */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <ChatControls
+                        adminRecording = {adminRecording}
+                        chatEnding     = {chatEnding}
+                        onEnd          = {askToEnd}
+                        onPause        = {pauseChat}
+                        onStart        = {startChat}
+                        recording      = {recording}
+                        started        = {started}
+                    />
                 </div>
-
-                {debugTurns.map((t, i) => (
-                <div key={i} className="mb-2">
-                    <div className="text-xs text-gray-500">
-                    {t.role}
-                    {t.state ? ` · state: ${t.state}` : ""}
-                    </div>
-                    <div className="text-sm whitespace-pre-wrap">
-                    {t.text}
-                    </div>
-                </div>
-                ))}
             </div>
-            )}
-        </div>
-        
 
-        {/* SaveChatModal, controlled with props */}
-        <SaveChatModal show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat}/>
-    </>
+            {/* Asks before ending the chat */}
+            <SaveChatModal show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat} />
+        </>
     );
 }
-
-
-// --------------------------------------------------------------------------------
-// Returns the Play or Pause buttons
-// --------------------------------------------------------------------------------
-function RecordButton({ recording, stopRecording, startRecording } : { recording: boolean, stopRecording: () => void, startRecording: () => void }) {
-    const style = "flex flex-col gap-2 items-center";
-
-    const icon    = recording ? <BsPauseCircle size={"8vh"} style={{color: "black"}}/> : <BsPlayCircle size={"8vh"} style={{color: "black"}}/>;
-    const text    = recording ? "Pause Chat" : "Start Chat";
-    const onClick = recording ? stopRecording : startRecording;
-
-    return <button className={style} onClick={onClick}> {icon} {text} </button>;
-}
-
-
-// --------------------------------------------------------------------------------
-// idk the purpose of this, was unlabeled
-// --------------------------------------------------------------------------------
-const default_message = `Chat with me!`;
-export function getRecentMessage(messages: LocalChatMessage[], fallback = default_message): string {
-    const latest = messages.reduce<LocalChatMessage | null>((acc, m) => {
-        if (m.role !== "assistant") return acc; // skip
-        return !acc || m.ts > acc.ts ? m : acc; // keep newer
-    }, null);
-    return latest ? latest.content : fallback;
-}
-
