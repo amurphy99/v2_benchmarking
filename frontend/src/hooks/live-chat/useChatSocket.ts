@@ -1,5 +1,26 @@
-import { getAccess } from "@/context/AuthProvider";
+/* Open the participant chat's socket, route each frame, and queue early sends.
+--------------------------------------------------------------------------------
+`@frontend/src/hooks/live-chat/useChatSocket`
+
+The socket opens when the chat starts recording and closes when it stops. Every
+frame type goes to its own callback. The frames only some chat types send
+(`avatar_setup`, `avatar_plan`, `task_card`;
+`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`) are checked here,
+where they arrive: a malformed avatar frame gets one warning and a rejection
+sent back (`onAvatarRejected`), and a task card this page can't show is dropped
+with a warning. `extraQuery` adds the chat type's parameters (`chat_type`,
+`condition`, `variant`) to the socket URL. The URL carries the access token, so
+it is never logged.
+
+*/
 import { useRef, useEffect, useState, useCallback } from "react";
+
+// From this project
+import      { getAccess                               } from "@/context/AuthProvider";
+import      { parseAvatarPlan, parseAvatarSetup       } from "@/hooks/live-chat/avatarPlanChecks";
+import type { AvatarFeedback, AvatarPlan, AvatarSetup } from "@/hooks/live-chat/avatarPlanFrames";
+import type { TaskCard                                } from "@/hooks/live-chat/taskCardFrame";
+import      { parseTaskCard                           } from "@/hooks/live-chat/taskCardFrame";
 
 const MAX_PENDING_MESSAGES =   500; // Maximum messages retained while the socket is connecting
 
@@ -10,16 +31,22 @@ const MAX_PENDING_MESSAGES =   500; // Maximum messages retained while the socke
 // ToDo: change typing to be done like in useAudioStreamer (do I actually NEED to ?)
 export default function useChatSocket({
     recording,
-    wsPath            = "/ws/chat/", 
-    onLLMResponse     = (unknown            ) => {},
-    onScores          = (WSMessage : any    ) => {},
-    onUserUtt         = (text      : string ) => {},
-    onAudio           = (data               ) => {},
-    onRobotAction     = (data               ) => {},
-    onStreamStatus    = (data      : any    ) => {},
-    onChatClosed      = (                   ) => {},
-    onRecordingStatus = (enabled   : boolean) => {},
-    onCancelAudio     = (                   ) => {},
+    wsPath             = "/ws/chat/",
+    onLLMResponse      = (unknown                   ) => {},
+    onScores           = (WSMessage : any           ) => {},
+    onUserUtt          = (text      : string        ) => {},
+    onAudio            = (data                      ) => {},
+    onRobotAction      = (data                      ) => {},
+    onStreamStatus     = (data      : any           ) => {},
+    onChatClosed       = (                          ) => {},
+    onRecordingStatus  = (enabled   : boolean       ) => {},
+    onCancelAudio      = (                          ) => {},
+    extraQuery         = "",                                  // More socket URL parameters, already encoded ("chat_type=map_task")
+    onAvatarSetup      = (setup     : AvatarSetup   ) => {},  // A checked `avatar_setup` arrived
+    onAvatarPlan       = (plan      : AvatarPlan    ) => {},  // A checked `avatar_plan` arrived
+    onAvatarRejected   = (rejection : AvatarFeedback) => {},  // An avatar frame failed its checks (send the rejection back)
+    onTaskCard         = (card      : TaskCard      ) => {},  // A `task_card` this page can show arrived
+    onConnectionClosed = (                          ) => {},  // The socket closed (the chat type's avatar setup no longer applies)
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -29,17 +56,17 @@ export default function useChatSocket({
         location.hostname === "localhost"
             ? `ws://localhost:8000${wsPath}`
             : `wss://${location.host}${wsPath}`;
-    const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp`;
+    const wsUrl = `${wsUrlBase}?token=${getAccess()}&source=webapp${extraQuery ? `&${extraQuery}` : ""}`;
 
     // --------------------------------------------------------------------------------
     // Receive things from the backend: LLM messages, Biomarker scores (sometimes)
     // --------------------------------------------------------------------------------
     // Callback props often receive a new identity on every parent render. Keep the WebSocket
     // message handler stable while still invoking the newest callback implementations.
-    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio});
+    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed});
     useEffect(() => {
-        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio};
-    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio]);
+        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed};
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed]);
 
     const onMessage = useCallback((event: MessageEvent) => {
         // One malformed backend frame should not break handling of later socket messages
@@ -66,6 +93,25 @@ export default function useChatSocket({
 
         // Cancel audio already buffered by the browser when continued speech invalidates a response
         else if (type === "cancel_audio"    ) { console.log("Backend cancelled audio"      ); handlers.onCancelAudio(); }
+
+        // A chat type driving the avatar with plans: each frame is checked here, and a malformed one is sent back rejected
+        else if (type === "avatar_setup"    ) {
+            const parsed = parseAvatarSetup(data);
+            if (parsed.ok) { handlers.onAvatarSetup(parsed.frame); }
+            else           { console.warn("Rejected an avatar setup:", parsed.rejection); handlers.onAvatarRejected(parsed.rejection); }
+        }
+        else if (type === "avatar_plan"     ) {
+            const parsed = parseAvatarPlan(data);
+            if (parsed.ok) { handlers.onAvatarPlan(parsed.frame); }
+            else           { console.warn("Rejected an avatar plan:", parsed.rejection); handlers.onAvatarRejected(parsed.rejection); }
+        }
+
+        // The participant's task card (a kind this page can't show is dropped)
+        else if (type === "task_card"       ) {
+            const card = parseTaskCard(data);
+            if (card !== null) { handlers.onTaskCard(card); }
+            else               { console.warn("Dropped a task card this page can't show"); }
+        }
 
         // Committed transcript echo (this UI renders from user_utt/llm_response instead) & command results
         else if (type === "message"         ) { /* transcript echo; nothing to do here */ }
@@ -96,7 +142,7 @@ export default function useChatSocket({
         wsRef.current = ws;
         ws.onopen = () => {
             setConnected(true);
-            console.log("WebSocket connected to:", wsUrl);
+            console.log("WebSocket connected to:", wsPath);
 
             // Flush in original production order; this ordering also matters for reply_now barriers
             while ((ws.readyState === WebSocket.OPEN) && pendingMessagesRef.current.length) {
@@ -109,7 +155,8 @@ export default function useChatSocket({
             canQueueRef.current         = false;
             pendingMessagesRef.current = [];
             setConnected(false);
-            console.log("WebSocket closed:", event);
+            console.log("WebSocket closed:", event.code);
+            handlersRef.current.onConnectionClosed();
 
             // Stop frontend microphone streaming when the backend connection disappears
             handlersRef.current.onStreamStatus({ status: "paused" });

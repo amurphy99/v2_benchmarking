@@ -8,11 +8,26 @@ the page hears about both through `onChatPaused` and `onChatResumed`. The TTS
 player's `systemSpeaking`, `readSpeechLoudness`, and `readSpeechRemaining`
 pass through for the avatar.
 
+A chat type that drives the avatar from the backend sends setups and plans
+(`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`). They run here, on
+the page's avatar (`useAvatarPlans`), timed against this player's replies, and
+their feedback goes back on the same socket. Each reply's text and every
+`robot_action` are noted for the plans, and the setup is forgotten when the
+socket closes. Task cards pass through to the page (`onTaskCard`).
+
 */
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useQueryClient                  } from "@tanstack/react-query";
-import { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
-import { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
+import      { useQueryClient                           } from "@tanstack/react-query";
+import type { RefObject                                } from "react";
+import      { useState, useEffect, useRef, useCallback } from "react";
+
+// From this project
+import      { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
+import type { AvatarFeedback                  } from "@/hooks/live-chat/avatarPlanFrames";
+import      { avatarFeedbackFrame             } from "@/hooks/live-chat/avatarPlanFrames";
+import type { TaskCard                        } from "@/hooks/live-chat/taskCardFrame";
+import type { AvatarHandle                    } from "@/pages/common/avatar/avatarRegistry";
+import      { useAvatarPlans                  } from "@/pages/common/avatar/plans/useAvatarPlans";
+import      { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
 // What the hook gives the chat page
 interface LiveChatControls {
@@ -41,6 +56,10 @@ export default function useLiveChat({
     onChatPaused,      // Backend sent message telling us that the chat is paused
     onChatResumed,     // Backend sent message telling us that the chat is listening again
     onRecordingStatus, // Backend updates the recording status (if we are saving the audio on chat end)
+    onTaskCard,        // The participant's task card arrived (chat types that show one)
+    avatarRef,         // The page's avatar, which runs the backend's plans
+    avatarModel,       // The avatar showing (null while the settings load)
+    extraQuery = "",   // The chat type's socket parameters, already encoded ("chat_type=map_task")
 } : {
     onUserUtterance   : (text    : string) => void;
     onSystemUtterance : (text    : string) => void;
@@ -52,6 +71,10 @@ export default function useLiveChat({
     onChatPaused      ?: () => void;
     onChatResumed     ?: () => void;
     onRecordingStatus ?: (enabled: boolean) => void;
+    onTaskCard        ?: (card: TaskCard) => void;
+    avatarRef          : RefObject<AvatarHandle | null>;
+    avatarModel        : string | null;
+    extraQuery        ?: string;
 }): LiveChatControls {
     // Misc. setup
     const qc = useQueryClient();
@@ -62,7 +85,8 @@ export default function useLiveChat({
 		const payload = response.data;
         const text    = typeof payload === "string" ? payload : payload?.text ?? "";
 
-        // System utterance behavior
+        // System utterance behavior (avatar plans timed to this reply learn its text has arrived)
+        if (typeof response.responseId === "number") plans.noteReplyText(response.responseId);
         onSystemUtterance(text);
 
         // Maybe there is extra data
@@ -82,13 +106,20 @@ export default function useLiveChat({
 
     // TODO: Maybe these values should be pulled from a config file somewhere...
     // Instantiate the audio player for backend-sent TTS
-    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness, readSpeechRemaining } = useAudioPlayer({
+    const { startPlayer, sendAudio, stopPlayer, cancelAudio, systemSpeaking, readSpeechLoudness, readSpeechRemaining, readReplyTimeline, readAudioLeadMs, holdNextReply } = useAudioPlayer({
         sampleRate      : 24_000,
         numChannels     : 1,
         bitsPerSample   : 16,
         bufferAhead     : 0.2,
         onPlaybackState : reportPlaybackState,
     });
+
+    // Backend avatar plans run on the page's avatar, timed to this player's replies (their feedback goes back on the socket)
+    const sendAvatarFeedback = useCallback((feedback: AvatarFeedback) => { socketSendRef.current(avatarFeedbackFrame(feedback)); }, []);
+    const plans = useAvatarPlans(avatarRef, avatarModel, {read: readReplyTimeline, leadMs: readAudioLeadMs, holdNext: holdNextReply}, sendAvatarFeedback);
+
+    // A `robot_action` counts as a newer plan (it drops the running plan's waiting steps)
+    const onRobotActionWrapped = (data: any) => { plans.noteRobotAction(); onRobotAction(data); };
 
     // Wrap user utterances
     const onUserUttWrapped = (text: string) => { onUserUtterance(text); onDebugTurn?.({ role: "user", text }); };
@@ -123,15 +154,21 @@ export default function useLiveChat({
 	const { send, prepareConnection } = useChatSocket({
 		recording,
         wsPath,
-		onLLMResponse     : onLLMres,
+        extraQuery,
+		onLLMResponse      : onLLMres,
 		onScores,
-		onUserUtt         : onUserUttWrapped,
-		onAudio           : sendAudio,
+		onUserUtt          : onUserUttWrapped,
+		onAudio            : sendAudio,
         onStreamStatus,
-        onChatClosed      : handleChatEnded,
-        onRobotAction,
-        onRecordingStatus : (enabled) => onRecordingStatus?.(enabled),
-        onCancelAudio     : cancelAudio,
+        onChatClosed       : handleChatEnded,
+        onRobotAction      : onRobotActionWrapped,
+        onRecordingStatus  : (enabled) => onRecordingStatus?.(enabled),
+        onCancelAudio      : cancelAudio,
+        onAvatarSetup      : plans.applySetup,
+        onAvatarPlan       : plans.runPlan,
+        onAvatarRejected   : sendAvatarFeedback,
+        onTaskCard         : (card: TaskCard) => onTaskCard?.(card),
+        onConnectionClosed : plans.clearSetup,
 	});
     socketSendRef.current = send;
 	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
