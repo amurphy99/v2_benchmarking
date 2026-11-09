@@ -10,8 +10,12 @@ behavior that works here works in a chat. Avatars with optional features (gaze,
 conversation state, speech level, sleep) also get the face controls. Avatars
 that run backend plans get example plans to try, sent through the same checks
 and scheduler a chat uses (`utils/usePlanExamples`), and the Smiley gets the
-Map Task's map and examples. The log shows everything sent, and how each
-example plan ended.
+Map Task's map and the planning card, each with its examples. The log shows
+everything sent, and how each example plan ended.
+
+The avatar always stays in view. Side by side, the page fills the screen and
+each column of controls scrolls on its own under or beside the avatar; stacked
+on a narrow screen, the avatar stays pinned to the top as the page scrolls.
 
 For tuning one face, the URL can pick the avatar and hold a face from the start
 (`/avatar-demo?avatar=smiley&face=Ponder`), so a reload after an edit
@@ -44,6 +48,7 @@ import        FaceControlsGroup                                           from "
 import type { GazePoint                                                 } from "./components/GazePad";
 import        MapTaskGroup                                                from "./components/MapTaskGroup";
 import        PlanExamplesGroup                                           from "./components/PlanExamplesGroup";
+import        PlanningCardGroup                                           from "./components/PlanningCardGroup";
 import      { DEMO_DEFAULT_DURATION_MS                                  } from "./utils/durationOptions";
 import type { PlanExample                                               } from "./utils/planExamples";
 import      { useActionLog                                              } from "./utils/useActionLog";
@@ -54,6 +59,9 @@ import      { useSimulatedTurn                                          } from "
 
 // Avatar shown when the page opens
 const DEMO_DEFAULT_AVATAR_ID = "smiley";
+
+// A column of controls that scrolls on its own when the columns sit side by side (room on the right for its scroll bar)
+const DEMO_SCROLL_COLUMN = "flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2 lg:pb-1";
 
 // Commands "Think, then reply" sends when the reply's text arrives (each sent and logged on its own): a nod at its own
 // length, and a smile held until this far into the speech, then back to Neutral
@@ -224,7 +232,7 @@ export function AvatarDemo(): ReactElement {
         examples.run(example, logExample(example.name));
     };
 
-    // Forget the Map Task setup: the page's own conversation state and resting face count again
+    // Forget the Map Task or planning setup: the page's own conversation state and resting face count again
     const clearSetup = (): void => {
         examples.clearSetup();
         avatarRef.current?.setRestingExpression?.(restingExpression);
@@ -234,72 +242,83 @@ export function AvatarDemo(): ReactElement {
     // Render
     // --------------------------------------------------------------------------------
     return (
-        <AdminPage>
-            {/* -------------------------------------------------------------------------------- */}
-            {/* Page Header */}
-            {/* -------------------------------------------------------------------------------- */}
-            {/* Title, subtitle, and setup button in one row (a wrapper div pushes the button right) */}
-            <div className="pt-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-                <h1 className="text-2xl font-semibold">Avatar Demo</h1>
-                <p className="text-sm text-admin-subtext">Try each avatar's behaviors outside of a live chat.</p>
-                <div className="ml-auto">
-                    <button className={btnClass(false, "secondary")} onClick={() => setSetupOpen(true)}>Demo Setup</button>
+        <AdminPage bottomSpace={false}>
+            {/* Side by side, the page fills the screen exactly (each column scrolls inside it) */}
+            <div className="flex flex-col pb-6 lg:h-dvh lg:pb-4">
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Page Header */}
+                {/* -------------------------------------------------------------------------------- */}
+                {/* Title, subtitle, and setup button in one row (a wrapper div pushes the button right) */}
+                <div className="shrink-0 pt-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+                    <h1 className="text-2xl font-semibold">Avatar Demo</h1>
+                    <p className="text-sm text-admin-subtext">Try each avatar's behaviors outside of a live chat.</p>
+                    <div className="ml-auto">
+                        <button className={btnClass(false, "secondary")} onClick={() => setSetupOpen(true)}>Demo Setup</button>
+                    </div>
                 </div>
-            </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Avatar and Face Controls */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="flex flex-col gap-4">
-                    <div className={`${groupDivStyle} h-[42vh] lg:h-[50vh]`}>
-                        <Avatar model={avatarId} zoom="body" ref={avatarRef} />
+                {/* Side by side: the avatar over its controls on the left, the action buttons and log on the right */}
+                <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-[auto_minmax(0,1fr)]">
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Avatar */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Pinned to the top of the screen while stacked (its backdrop hides the controls scrolling under it) */}
+                    <div className="sticky top-0 z-20 bg-admin-surface py-2 lg:static lg:col-start-1 lg:row-start-1 lg:p-0">
+                        <div className={`${groupDivStyle} h-[35dvh] lg:h-[45dvh]`}>
+                            <Avatar model={avatarId} zoom="body" ref={avatarRef} />
+                        </div>
                     </div>
 
-                    {(entry.features.length > 0) ? (
-                        <FaceControlsGroup
-                            features            = {entry.features}
-                            conversationState   = {conversationState}
-                            onConversationState = {changeConversationState}
-                            gazePoint           = {gazePoint}
-                            onGaze              = {changeGaze}
-                            onClearGaze         = {clearGaze}
-                            talking             = {talking}
-                            onTalkingChange     = {changeTalking}
-                            mouthLevel          = {mouthLevel}
-                            onMouthLevel        = {changeMouthLevel}
-                            replyPlaying        = {player.systemSpeaking}
-                            onPlayReply         = {playReply}
-                            onPlayTurn          = {playTurn}
-                            extraPauseSec       = {extraPauseSec}
-                            onExtraPause        = {setExtraPauseSec}
-                            speechPhase         = {speechPhase}
-                            asleep              = {asleep}
-                            onAsleepChange      = {changeAsleep}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Face Controls and Task Props */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <div className={`${DEMO_SCROLL_COLUMN} lg:col-start-1 lg:row-start-2`}>
+                        {(entry.features.length > 0) ? (
+                            <FaceControlsGroup
+                                features            = {entry.features}
+                                conversationState   = {conversationState}
+                                onConversationState = {changeConversationState}
+                                gazePoint           = {gazePoint}
+                                onGaze              = {changeGaze}
+                                onClearGaze         = {clearGaze}
+                                talking             = {talking}
+                                onTalkingChange     = {changeTalking}
+                                mouthLevel          = {mouthLevel}
+                                onMouthLevel        = {changeMouthLevel}
+                                replyPlaying        = {player.systemSpeaking}
+                                onPlayReply         = {playReply}
+                                onPlayTurn          = {playTurn}
+                                extraPauseSec       = {extraPauseSec}
+                                onExtraPause        = {setExtraPauseSec}
+                                speechPhase         = {speechPhase}
+                                asleep              = {asleep}
+                                onAsleepChange      = {changeAsleep}
+                            />
+                        ) : null}
+
+                        {/* Map Task map and planning card, with their examples (avatars whose plans can hold each) */}
+                        {(entry.plans?.props.includes("map" ) === true) ? <MapTaskGroup      onRun={runExample} onClearSetup={clearSetup} setupOn={examples.setupOn} /> : null}
+                        {(entry.plans?.props.includes("card") === true) ? <PlanningCardGroup onRun={runExample} onClearSetup={clearSetup} setupOn={examples.setupOn} /> : null}
+                    </div>
+
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Controls */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    <div className={`${DEMO_SCROLL_COLUMN} lg:col-start-2 lg:row-span-2 lg:row-start-1`}>
+                        {/* Same buttons as the AdminChat panel (always "connected": nothing goes over a socket) */}
+                        <AvatarActionsGroup
+                            connected    = {true}
+                            capabilities = {capabilities}
+                            pending      = {{robot_emotion: false, robot_animation: false}}
+                            onEmotion    = {(value: string) => sendAction("emotion",   value)}
+                            onAnimation  = {(value: string) => sendAction("animation", value)}
                         />
-                    ) : null}
 
-                    {/* Map Task map and examples (avatars whose plans can hold the map) */}
-                    {(entry.plans?.props.includes("map") === true) ? <MapTaskGroup onRun={runExample} onClearSetup={clearSetup} setupOn={examples.setupOn} /> : null}
-                </div>
+                        {/* Example plans (avatars that run plans) */}
+                        {(entry.plans !== null) ? <PlanExamplesGroup onRun={runExample} /> : null}
 
-                {/* -------------------------------------------------------------------------------- */}
-                {/* Controls */}
-                {/* -------------------------------------------------------------------------------- */}
-                <div className="flex flex-col gap-4">
-                    {/* Same buttons as the AdminChat panel (always "connected": nothing goes over a socket) */}
-                    <AvatarActionsGroup
-                        connected    = {true}
-                        capabilities = {capabilities}
-                        pending      = {{robot_emotion: false, robot_animation: false}}
-                        onEmotion    = {(value: string) => sendAction("emotion",   value)}
-                        onAnimation  = {(value: string) => sendAction("animation", value)}
-                    />
-
-                    {/* Example plans (avatars that run plans) */}
-                    {(entry.plans !== null) ? <PlanExamplesGroup onRun={runExample} /> : null}
-
-                    <ActionLog log={log} />
+                        <ActionLog log={log} />
+                    </div>
                 </div>
             </div>
 

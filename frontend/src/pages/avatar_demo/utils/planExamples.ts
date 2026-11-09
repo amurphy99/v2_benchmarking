@@ -5,7 +5,7 @@
 Each example is a short list of `avatar_setup` and `avatar_plan` frames
 (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`), sent at set times after its button is
 clicked (`usePlanExamples`). Every one uses something only plans can do: chains
-of steps, looks at the screen or the map, scans and traces, held head poses,
+of steps, looks at the screen, the map, or the card, scans and traces, held head poses,
 faces at a strength, steps timed to a reply (its first audio, a sentence, its
 end, or just before it starts), and a newer plan cutting an older one short.
 An example with a reply simulates one: its text arrives at `textAtMs` (after
@@ -16,9 +16,15 @@ backend owns the conversation state; the listening sway, head cock, and
 thinking look are off), then the avatar picks up its map. Their spots are on
 the demo's made-up map (`sampleMap`).
 
+The card examples copy what the cooperative planning chat sends with cues
+(`backend/.../cooperative_planning/behaviors.py`): its setup, the card read over
+while a reply is worked out, then the reply's own plan for the behavior the reply
+picked. Their spots are on the dinner party card (`sampleCard`).
+
 */
-import type { PlanPoint                          } from "@/hooks/live-chat/avatarPlanFrames";
-import      { DEMO_MAP_LANDMARKS, DEMO_MAP_START } from "./sampleMap";
+import type { PlanPoint                                                    } from "@/hooks/live-chat/avatarPlanFrames";
+import      { DEMO_CARD_CONSTRAINTS_AT, DEMO_CARD_LINES, DEMO_CARD_READ_AT } from "./sampleCard";
+import      { DEMO_MAP_LANDMARKS, DEMO_MAP_START                           } from "./sampleMap";
 
 
 // --------------------------------------------------------------------------------
@@ -203,4 +209,108 @@ export const DEMO_MAP_CONTROLS = {
     putAway : {name: "Put the Map Away", blurb: "Puts the map away (the page clears the setup too).",        reply: null, frames: [plan(0, "map-away",  [{prop: {hold: null}}])]},
     raise   : {name: "Raise the Map",    blurb: "Raises the map until its eyes peek over it.",              reply: null, frames: [plan(0, "map-raise", [{prop: {raise: 1}}])]},
     lower   : {name: "Lower the Map",    blurb: "Lowers the map to its chin.",                              reply: null, frames: [plan(0, "map-lower", [{prop: {raise: 0}}])]},
+} satisfies Record<string, PlanExample>;
+
+
+// --------------------------------------------------------------------------------
+// Card Examples
+// --------------------------------------------------------------------------------
+// The planning chat's setup with cues, sent first by every card example
+const DEMO_CARD_SETUP: ExampleFrame = {atMs: 0, type: "avatar_setup", data: {rest: "Slightly Smiling Face", auto: {idle_glances: true, thinking_look: false, speech_gaze: false, listening_motions: true}}};
+
+// How long each look lasts (the harness's `PLANNING_*_MS`)
+const DEMO_CARD_GLANCE_MS    = 700;
+const DEMO_CARD_READ_MS      = 900;
+const DEMO_CARD_WRITE_MS     = 900;
+const DEMO_CARD_LOOK_BACK_MS = 1_500;
+
+// When each simulated reply's text arrives (the card is read over until then)
+const DEMO_CARD_REPLY_AT_MS = 1_600;
+
+// Pick up the card, raise it a little, and read it over while the reply is worked out (`thinking_plan`)
+function cardThinking(id: string): ExampleFrame {
+    return plan(0, id, [{prop: {hold: "card", raise: 0.6}, state: "thinking", gaze: {on: "card", scan: {around: DEMO_CARD_READ_AT, radius: 0.35}}}]);
+}
+
+// A reply's plan: the card comes down and the avatar listens again as the reply starts, with the behavior on top
+function cardReply(id: string, start: Record<string, unknown>, laterSteps: Record<string, unknown>[] = []): ExampleFrame {
+    return plan(DEMO_CARD_REPLY_AT_MS, id, [{start_on: "reply_audio", state: "listening", prop: {raise: 0}, ...start}, ...laterSteps]);
+}
+
+// Look back at the user for a moment
+const DEMO_CARD_AT_USER = {gaze: {on: "user", hold_ms: DEMO_CARD_LOOK_BACK_MS}};
+
+// Every card example (each picks up the card itself)
+export const DEMO_CARD_EXAMPLES: PlanExample[] = [
+    {
+        name   : "Check Its Card",
+        blurb  : "Reads its card over while thinking, then as the reply starts raises it all the way to read its own constraints, and lowers it to look back at the user.",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("check-think"), cardReply("check-reply", {prop: {raise: 1}, gaze: {on: "card", at: DEMO_CARD_CONSTRAINTS_AT, hold_ms: DEMO_CARD_READ_MS}}, [
+            {prop: {raise: 0}, ...DEMO_CARD_AT_USER},
+        ])],
+    },
+    {
+        name   : "Glance at the Starter",
+        blurb  : "Lowers the card as the reply starts, then glances down at the starter's line on it and back up at the user.",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("starter-think"), cardReply("starter-reply", {gaze: {on: "user"}, ms: 400}, [
+            {gaze: {on: "card", at: DEMO_CARD_LINES.starter.at, hold_ms: DEMO_CARD_GLANCE_MS}},
+            DEMO_CARD_AT_USER,
+        ])],
+    },
+    {
+        name   : "Agree and Write It In",
+        blurb  : "Smiles through a reply that settles the main course, then once the reply ends looks down at the main course's line and nods as if writing it in.",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("write-think"), cardReply("write-reply", {...DEMO_CARD_AT_USER, face: {name: "Smiling Face with Smiling Eyes", strength: 0.7, hold_ms: 2_500}}, [
+            {start_on: "reply_end", gaze: {on: "card", at: DEMO_CARD_LINES.main.at, hold_ms: DEMO_CARD_WRITE_MS}, move: {name: "Nod", strength: 0.3}},
+            DEMO_CARD_AT_USER,
+        ])],
+    },
+    {
+        name   : "Ponder",
+        blurb  : "As the reply starts, raises an eyebrow and looks up and away while it thinks the idea over, then looks back at the user.",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("ponder-think"), cardReply("ponder-reply", {gaze: {on: "user", offset: [-0.45, -0.35], hold_ms: DEMO_CARD_GLANCE_MS}, face: {name: "Face with Raised Eyebrow", strength: 0.5, hold_ms: 1_200}}, [
+            DEMO_CARD_AT_USER,
+        ])],
+    },
+    {
+        name   : "Apologize",
+        blurb  : "Lowers the card as the reply starts, with a pensive face and a small head tilt (turning down an idea that breaks one of its constraints).",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("sorry-think"), cardReply("sorry-reply", {...DEMO_CARD_AT_USER, face: {name: "Pensive Face", strength: 0.5, hold_ms: 2_000}, move: {name: "Head Tilt", strength: 0.4}})],
+    },
+    {
+        name   : "Plan Approved",
+        blurb  : "The closing line: a big grin and a bounce as the reply starts.",
+        reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
+        frames : [DEMO_CARD_SETUP, cardThinking("done-think"), cardReply("done-reply", {...DEMO_CARD_AT_USER, face: {name: "Grinning Face with Big Eyes", strength: 0.8, hold_ms: 2_000}, move: {name: "Bounce", strength: 0.5}})],
+    },
+    {
+        name   : "Hear \"Dessert\"",
+        blurb  : "While listening, the user names an item: a quick glance at the dessert's line on the card (the item-glance cue).",
+        reply  : null,
+        frames : [DEMO_CARD_SETUP, plan(0, "dessert-glance", [
+            {prop: {hold: "card"}, state: "listening", ms: 800},
+            {gaze: {on: "card", at: DEMO_CARD_LINES.dessert.at, hold_ms: DEMO_CARD_GLANCE_MS}},
+        ])],
+    },
+    {
+        name   : "Barge-In",
+        blurb  : "It starts reading its card, but 1.3 s in the user talks again: the reply is cancelled, so the card comes down and it listens (the back-to-listening cue).",
+        reply  : null,
+        frames : [DEMO_CARD_SETUP, cardThinking("card-barge-think"), plan(1_300, "card-barge-in", [
+            {state: "listening", prop: {raise: 0}, gaze: "release"},
+        ])],
+    },
+];
+
+// The card by hand: picked up (with the planning setup), put away, raised to read, and lowered
+export const DEMO_CARD_CONTROLS = {
+    hold    : {name: "Hold the Card",     blurb: "Takes the planning setup, picks up the card, and listens.",      reply: null, frames: [DEMO_CARD_SETUP, plan(0, "card-hold", [{prop: {hold: "card"}, state: "listening"}])]},
+    putAway : {name: "Put the Card Away", blurb: "Puts the card away (the page clears the setup too).",            reply: null, frames: [plan(0, "card-away",  [{prop: {hold: null}}])]},
+    raise   : {name: "Raise the Card",    blurb: "Raises the card all the way, as when it reads its constraints.", reply: null, frames: [plan(0, "card-raise", [{prop: {raise: 1}}])]},
+    lower   : {name: "Lower the Card",    blurb: "Lowers the card to its chin.",                                   reply: null, frames: [plan(0, "card-lower", [{prop: {raise: 0}}])]},
 } satisfies Record<string, PlanExample>;

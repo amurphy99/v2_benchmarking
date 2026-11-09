@@ -386,7 +386,7 @@ now.
 ## 6. Trying it without a backend: the demo page
 
 `/avatar-demo` (`pages/avatar_demo/`) needs no backend. Next to the action
-buttons (the `robot_action` path) it has two groups of example plans for
+buttons (the `robot_action` path) it has three groups of example plans for
 avatars that can run plans:
 
 * **Example Plans:** chains on the face alone. Look Away and Back, Puzzle It
@@ -398,6 +398,15 @@ avatars that can run plans:
   the map by hand (hold, put away, raise, lower), and six examples: finding the
   bridge, tracing the way to the bus, the missing castle, a barge-in, a Z across
   the map, and a glance at it while listening.
+* **Planning Card:** a picture of the avatar's dinner party card
+  (`utils/sampleCard.ts`), the card by hand, and eight examples copying what the
+  cooperative planning chat sends with cues: the card read over while a reply is
+  worked out, then one reply behavior each (checking its constraints, glancing at
+  an item, writing a choice in, pondering, apologizing, the approved plan), plus
+  the item-glance and back-to-listening cues.
+
+The avatar stays in view while the controls scroll: side by side, each column
+scrolls on its own; stacked on a narrow screen, the avatar is pinned to the top.
 
 `utils/usePlanExamples.ts` plays the backend's part. Each example
 (`utils/planExamples.ts`) is a list of frames in wire format, sent at set times
@@ -567,10 +576,11 @@ has the details.
      │   ├── utils/planExamples.ts         # The example plans (frames in wire format)
      │   ├── utils/usePlanExamples.ts      # Sends them like a backend, plays their replies, reports how each ended
      │   ├── utils/sampleMap.ts            # The made-up map's landmarks and start
+     │   ├── utils/sampleCard.ts           # The planning card's constraints and item lines
      │   ├── utils/useSampleReply.ts       # Plays the sample reply through the chat's audio player, sentences numbered
      │   ├── utils/useSimulatedTurn.ts     # "Think, then reply" on the `robot_action` path
      │   ├── utils/useActionLog.ts         # The log of everything sent
-     │   └── components/                   # The groups (Map Task, Example Plans, the map picture, the log, …)
+     │   └── components/                   # The groups (Map Task, Planning Card, Example Plans, the pictures, the log, …)
      │
      └── admin/
          ├── capabilities/profiles.ts      # Each avatar's admin and demo buttons
