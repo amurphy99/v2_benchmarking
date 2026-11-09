@@ -183,6 +183,7 @@ class ReplyEffectTests(unittest.IsolatedAsyncioTestCase):
         consumer = SimpleNamespace(
             context_buffer         = [],
             use_backend_TTS        = False,
+            run_biomarkers         = True,
             last_response          = None,
             send                   = AsyncMock(),
             _staged_utterances     = StagedUtteranceBuffer(),

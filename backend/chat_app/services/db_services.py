@@ -70,6 +70,11 @@ class ChatService:
     def get_audio_recording_default(session_id: int) -> bool:
         return bool(ChatSession.objects.values_list("profile__save_audio_by_default", flat=True).get(id=session_id))
 
+    # Load whether the patient's profile has biomarker analysis turned on, for a newly connected session
+    @staticmethod
+    def get_run_biomarkers(session_id: int) -> bool:
+        return ChatSession.objects.values_list("profile__run_biomarkers", flat=True).get(id=session_id)
+
     # ===============================================================================
     # Close Session
     # ================================================================================

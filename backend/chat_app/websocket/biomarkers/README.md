@@ -4,6 +4,13 @@ All preprocessing, feature extraction, and calculation code for our speech bioma
 
 <hr>
 
+# When Biomarkers Run
+Live chats score biomarkers only for participants whose `Profile.run_biomarkers` is on. It
+is off by default, and staff (or a participant's caregiver) turn it on per participant on
+the admin Participants page (`/admin/participants`). Each chat reads the setting once as
+it connects, so a change applies from the participant's next chat. With it off, the chat
+still saves messages and word timestamps; it just never calls `callbacks.py`.
+
 # Biomarker Score Scale
 Biomarker scores are returned on a scale of 0-1 with 0 being the worst (indicitive of cognitive impairment) and 1 being the best. Model outputs are scaled differently to reach this point.
 

@@ -93,7 +93,7 @@ class AdminProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model            = Profile
-        fields           = ("id", "user", "save_audio_by_default", "language", "modelChoice", "chat_count", "last_chat_at", "password", "password_from_env")
+        fields           = ("id", "user", "save_audio_by_default", "run_biomarkers", "placeholder_flag", "language", "modelChoice", "chat_count", "last_chat_at", "password", "password_from_env")
         read_only_fields = ("id",)
 
     # Whether the server's .env controls this participant's password

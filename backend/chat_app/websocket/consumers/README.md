@@ -103,7 +103,8 @@ Related code outside this directory:
    type, condition, and variant.
 6. Build the bounded in-memory `context_buffer` used for LLM calls.
 7. Join the session room and control Channels groups.
-8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer.
+8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer,
+   and read the profile's `save_audio_by_default` and `run_biomarkers` settings.
 9. Claim the user's primary connection, then start the harness (`harness.start()`).
 
 The consumer instance is the owner of per-connection mutable state. Processing modules
@@ -384,6 +385,7 @@ passthroughs.
   only after its database write succeeds.
 
 Word timestamps and biomarker work run after the associated user message commits.
+Biomarker work runs only when the profile's `run_biomarkers` was on as the chat connected.
 Biomarker callbacks await their own database write before broadcasting scores, while the
 whole callback task remains background work relative to response delivery.
 

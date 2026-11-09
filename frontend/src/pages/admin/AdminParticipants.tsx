@@ -52,7 +52,7 @@ export function AdminParticipants(): ReactElement {
                 title    = {isStaff ? "Accounts" : "Participant Settings"}
                 subtitle = {isStaff
                     ? "Create accounts, choose which participants each caregiver monitors, and change each participant's settings."
-                    : "Choose each of your participants' avatar, language, and whether their chat audio is saved automatically."}
+                    : "Choose each of your participants' avatar, language, audio saving, and biomarker analysis."}
                 backTo   = "/admin"
                 actions  = {isStaff ? <AdminButton variant="primary" size="sm" onClick={() => navigate("/admin/accounts/new")}>Create account</AdminButton> : undefined}
             />
@@ -80,7 +80,7 @@ export function AdminParticipants(): ReactElement {
                 {/* Participants */}
                 {/* -------------------------------------------------------------------------------- */}
                 <section className="flex flex-col gap-3">
-                    {isStaff ? <SectionHeader title="Participants" subtitle="Avatar, language, and recording default for each participant. Changes apply from their next chat." /> : null}
+                    {isStaff ? <SectionHeader title="Participants" subtitle="Avatar, language, recording, and biomarker settings for each participant. Changes apply from their next chat." /> : null}
                     {isLoading ? (
                         <p className="text-sm text-admin-subtext">Loading participants...</p>
                     ) : (participants.length === 0) ? (

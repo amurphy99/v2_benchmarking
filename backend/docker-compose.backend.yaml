@@ -56,9 +56,10 @@ services:
       context: .
       dockerfile: Dockerfile-backend
     container_name: backend
+    # Apply the committed migrations (startup refuses a model change that has no migration file)
     command: |
       sh -c "
-        python manage.py makemigrations --noinput &&
+        python manage.py makemigrations --check --dry-run --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py close_stale_sessions &&

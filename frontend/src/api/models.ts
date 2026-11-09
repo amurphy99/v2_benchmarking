@@ -113,6 +113,8 @@ export interface AdminProfile {
     id                    : number;
     user                  : User;
     save_audio_by_default : boolean;             // Whether each new chat starts with its audio set to be saved
+    run_biomarkers        : boolean;             // Whether their chats are scored for biomarkers (read as each chat starts)
+    placeholder_flag      : boolean;             // Spare switch that nothing reads yet
     language              : LanguageChoice;      // Language their chats will use (not read by the backend yet)
     modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
     chat_count            : number;              // Chats so far (demo sessions left out)
@@ -121,7 +123,7 @@ export interface AdminProfile {
 }
 
 // Settings staff and caregivers can change for one participant (any of them may be sent alone; a password only by staff)
-export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "language" | "modelChoice">> & {password?: string};
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "run_biomarkers" | "placeholder_flag" | "language" | "modelChoice">> & {password?: string};
 
 // --------------------------------------------------------------------------------
 // Admin Accounts

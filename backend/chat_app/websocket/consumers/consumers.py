@@ -144,6 +144,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.save_audio     = await db_s2a(ChatService.get_audio_recording_default)(self.session_id)
         self.audio_recorder = SessionAudioRecorder(self.session_id)
 
+        # Biomarkers run only when the profile has them turned on (fixed for the whole chat)
+        self.run_biomarkers = await db_s2a(ChatService.get_run_biomarkers)(self.session_id)
+
         # A fully initialized connection takes ownership only after it is ready to receive
         # traffic. Any older primary socket for this user is closed with a dedicated code.
         await claim_primary_connection(self)
@@ -154,7 +157,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # Log the successful connection
         log.log_connect_done(self.user, self.session.id,
                              config={"chat_type": self.harness.NAME, "condition": self.harness.condition, "variant": self.harness.variant,
-                                     "backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode})
+                                     "backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode,
+                                     "biomarkers": self.run_biomarkers})
     
     # ================================================================================
     # Disconnect

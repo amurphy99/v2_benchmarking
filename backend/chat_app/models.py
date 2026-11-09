@@ -32,6 +32,12 @@ class Account(models.Model):
     def __str__(self): return f"Account for {self.user.username}"
 
 class Profile(models.Model):
+    """
+    Built-in "toggles" allow managing users to modify how the system works for
+    individual users.
+
+    The boolean flag values are all read when each new chat connects.
+    """
     # Chat languages as BCP-47 tags (`LANGUAGE_CHOICES` in `frontend/src/api/models.ts` copies these)
     LANGUAGE_CHOICES = [
         ("en-US", "English (US)"         ), ("en-GB", "English (UK)"         ),
@@ -46,16 +52,22 @@ class Profile(models.Model):
         ("zh-CN", "Chinese (Simplified)" ), ("zh-TW", "Chinese (Traditional)"),
     ]
 
+    # Misc. profile details
     account               = models.OneToOneField(Account, on_delete=models.CASCADE, related_name="profile_account")
     zipcode               = models.CharField(max_length=10, **init_args)
     birthDate             = models.DateField(**init_args)
     locationStatus        = models.CharField(max_length=100, **init_args)
-    save_audio_by_default = models.BooleanField(default=False)
 
-    # TODO: Will select the chat's STT, LLM, and TTS language; nothing reads it yet
-    language = models.CharField(max_length=16, choices=LANGUAGE_CHOICES, default="en-US")
+    # Configurable fields that change how the system works for users
+    save_audio_by_default = models.BooleanField(default=False)  # Toggle automatic audio saving
+    run_biomarkers        = models.BooleanField(default=False)  # Toggle speech biomarker analysis for chats
+    placeholder_flag      = models.BooleanField(default=False)  # Placeholder switch/flag that can be used for testing
+    language = models.CharField(max_length=16, choices=LANGUAGE_CHOICES, default="en-US")  # TODO: Select the chat's STT, LLM, and TTS language
+
 
     def __str__(self): return f"Profile for {self.account.user.username}"
+
+
 
 # One caregiver's link to one participant (a caregiver may hold several)
 class Access(models.Model):

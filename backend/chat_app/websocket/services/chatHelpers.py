@@ -464,9 +464,10 @@ class ChatHandler:
         if (combined_words) and (user_msg):
             fire_and_log(db_s2a(ChatService.add_words_bulk)(user_msg.id, combined_words), name="_execute_response::add_words_bulk")
 
-        # Text & audio biomarkers
-        fire_and_log(process_text_biomarkers (consumer, user_msg, combined_text, combined_words), name="_execute_response::bio_callback")
-        fire_and_log(process_audio_biomarkers(consumer, user_msg,                combined_words), name="_execute_response::audio_bio_callback")
+        # Text & audio biomarkers (only for a profile with biomarker analysis turned on)
+        if consumer.run_biomarkers:
+            fire_and_log(process_text_biomarkers (consumer, user_msg, combined_text, combined_words), name="_execute_response::bio_callback")
+            fire_and_log(process_audio_biomarkers(consumer, user_msg,                combined_words), name="_execute_response::audio_bio_callback")
         return assistant_msg
 
 

@@ -82,6 +82,7 @@ def make_consumer(gate: asyncio.Event | None = None) -> SimpleNamespace:
         response_mode             = "automatic",
         last_response             = None,
         streaming_active          = True,
+        run_biomarkers            = True,
         send                      = AsyncMock(),
         _close_scheduled          = False,
         _staged_utterances        = StagedUtteranceBuffer(),
@@ -271,6 +272,18 @@ class HarnessTurnTests(PipelineTestCase):
         self.assertEqual(consumer.harness.attempts[0].user_text, "I am thinking")
         self.mocks["exchange"].assert_awaited_once()
         self.mocks["text_bio"].assert_called_once()
+
+    # A profile with biomarkers turned off still saves the exchange, with no biomarker work
+    async def test_exchange_skips_biomarkers_when_the_profile_has_them_off(self) -> None:
+        consumer = make_consumer()
+        consumer.run_biomarkers = False
+        consumer._staged_utterances.append(text="I am thinking", words=None, timestamp=0.0)
+
+        await ChatHandler.request_harness_turn(consumer)
+
+        self.mocks["exchange" ].assert_awaited_once()
+        self.mocks["text_bio" ].assert_not_called()
+        self.mocks["audio_bio"].assert_not_called()
 
     # Nothing starts while another reply owns the turn
     async def test_no_turn_while_another_reply_owns_it(self) -> None:

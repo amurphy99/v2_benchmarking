@@ -49,6 +49,7 @@ class AdminCreateAccountTests(TestCase):
 
         profile = Profile.objects.get(account__user__username="new_participant")
         self.assertFalse(profile.save_audio_by_default)
+        self.assertFalse(profile.run_biomarkers)
         self.assertEqual(profile.language, "en-US")
         self.assertEqual(UserSettings.objects.get(profile=profile).modelChoice, "smiley")
         self.assertTrue (Goal.objects.filter(profile=profile).exists())

@@ -71,7 +71,7 @@ services:
     container_name: backend
     command: |
       sh -c "
-        python manage.py makemigrations --noinput &&
+        python manage.py makemigrations --check --dry-run --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py close_stale_sessions &&
@@ -149,7 +149,7 @@ services:
     container_name: backend
     command: |
       sh -c "
-        python manage.py makemigrations --noinput &&
+        python manage.py makemigrations --check --dry-run --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py close_stale_sessions &&
@@ -207,7 +207,7 @@ services:
     container_name: backend
     command: |
       sh -c "
-        python manage.py makemigrations --noinput &&
+        python manage.py makemigrations --check --dry-run --noinput &&
         python manage.py migrate --database=default --noinput &&
         python manage.py migrate --database=vector  --noinput &&
         python manage.py close_stale_sessions &&
@@ -257,6 +257,68 @@ networks:
 | **Goal**               | Track number of user conversations       | `Unique(user)`                                        |
 | **UserSettings**       | View / scheduling toggles                | `Unique(user)`                                        |
 | **Reminder**           | Calendar entry                           | FK(`Profile`), `daysOfWeek` Array                     |
+<hr>
+</details>
+
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Database migrations                                                              -->
+<!-- -------------------------------------------------------------------------------- -->
+<details closed> <summary> <b>Database Migrations</b> </summary>
+
+## Database Migrations
+
+Migrations for both apps (`chat_app/migrations/` and `rag_vectorstore/migrations/`)
+are committed, so every database follows the same history and keeps its data when the
+schema changes. Startup never writes a migration file. It first checks that every model
+change has one (`makemigrations --check --dry-run`) and refuses to start when one is
+missing, printing the migration it expected. Then `migrate` applies whatever that
+database has not applied yet.
+
+**Changing a model**
+
+1. Edit the model.
+2. Generate its migration:
+   ```bash
+   # With the backend running
+   docker exec -it backend python manage.py makemigrations chat_app
+
+   # With the backend stopped (from backend/)
+   docker compose -f docker-compose.backend.yaml run --rm backend python manage.py makemigrations chat_app
+   ```
+   Answer its questions. A renamed field stays a rename only if you answer yes to
+   "Did you rename ...?"; otherwise Django drops the old column and its data.
+3. Read the generated file and commit it with the model change.
+4. Restart the backend, or deploy. Startup applies the migration.
+
+**Rules**
+
+* Never edit or delete a committed migration; deployed databases have already applied
+  it. Fix a mistake with a new migration.
+* A new field on a table that already has rows needs a `default` (or `null=True`).
+* When two branches each add a migration, the merged code has two migrations with the
+  same parent, and startup stops with "Conflicting migrations detected". Run
+  `makemigrations --merge chat_app` and commit the merge migration it writes.
+* Before deploying a migration that removes or changes a column holding study data,
+  back up the deployed database:
+  ```bash
+  sudo docker exec db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > chat_app_backup.sql
+  ```
+
+**Switching an existing database over (once per database)**
+
+Until November 2026, every machine generated its own untracked migration files at
+startup, so each database created before then has a private migration history that
+does not match the committed one. Switch each one over once, then never again:
+
+* **Cloud VM:** run `bash utils/reset_databases.sh --confirm-reset` from
+  `chat_app_deployment` (it deletes both database volumes and the old generated
+  files), then redeploy.
+* **Local machine:** delete your old numbered files in `chat_app/migrations/` before
+  pulling the committed ones (otherwise `git pull` refuses to overwrite your
+  `0001_initial.py`), remove the main database volume (`backend_db_data` when you run
+  compose from `backend/`), then start the backend.
+
 <hr>
 </details>
 
