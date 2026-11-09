@@ -1,33 +1,37 @@
-# Frontend // Avatar Plan Protocol (Draft) <br> `frontend/src/pages/common/avatar/..`
+# Speech System // Harness Protocol <br> `backend/chat_app/websocket/consumers/..`
 
-This is the **draft** contract for driving a capable avatar from the backend with timed,
-multi-step commands: where it looks, what its face does, when it raises its map, and how
-each of those lines up with the reply it speaks. It was designed from what the web app's
-Smiley avatar can do and what the client can observe, so the backend can be built against
-it. Once the backend side is settled it moves into
-`backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md`.
+The frames only some chat types use, on top of the primary chat protocol
+(`CLIENT_PROTOCOL.md`, beside this file): driving a capable avatar from the backend with
+timed, multi-step commands (where it looks, what its face does, when it raises the prop it
+holds, and how each of those lines up with the reply it speaks), and showing the participant
+their task card. A client that never picks one of these chat types never receives them. The
+plan frames were designed from what the web app's Smiley avatar can do and what the client
+can observe.
 
-> **Status:** the avatar demo page (`/avatar-demo`) runs these frames, playing the backend's
-> part with example plans; the chat page doesn't read them yet, and the backend sends none.
-> The existing pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and every
-> client and chat type that doesn't use plans keeps working exactly as it does today. For how
-> the frontend runs a plan, and what the backend needs, see `README.md` beside this file.
+> **Status:** the `cooperative_planning` chat type sends setups, plans, and task cards (its
+> harness is in `websocket/harnesses/cooperative_planning/`), every `audio_chunk` carries
+> `sentence`, and `avatar_feedback` is logged. The web app's chat page runs them, and the
+> avatar demo page (`/avatar-demo`) plays the backend's part with example plans. The Map Task
+> doesn't send plans yet. The existing pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is
+> unchanged, and every client and chat type that doesn't use plans works exactly as before.
+> How the frontend runs a plan is in `frontend/src/pages/common/avatar/README.md`.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Overview                                                                         -->
 <!-- -------------------------------------------------------------------------------- -->
 ## 1. Overview
 
-**Who uses it:** chat types that drive the avatar from the backend (the Map Task first). The
-backend picks the pathway by chat type; there is no handshake. A plan uses the avatar's own
-names (§9), kept in sync with this document by hand, and the client rejects any plan it can't
-run completely (§7).
+**Who uses it:** chat types that drive the avatar from the backend (`cooperative_planning`,
+and the Map Task next). The backend picks the pathway by chat type; there is no handshake. A
+plan uses the avatar's own names (§9), kept in sync with this document by hand, and the
+client rejects any plan it can't run completely (§7).
 
 | `type` | Direction | Purpose |
 |---|---|---|
 | `avatar_setup`    | backend → client | Session settings: the resting face and which automatic behaviors run (§2) |
 | `avatar_plan`     | backend → client | Steps that run in order on the client's clock (§3) |
 | `avatar_feedback` | client → backend | What happened to a plan, when the plan asks; rejections always (§6) |
+| `task_card`       | backend → client | The participant's task card: what they see beside the avatar (§13) |
 
 **Who decides what:** the backend decides everything that *means* something; the client keeps
 what keeps the face alive, plus anything timed to its own audio.
@@ -156,7 +160,7 @@ same parts of the face).
 | `pose.tilt` | number, -30-30 | `0` | Head lean in degrees (positive leans to the viewer's right) |
 | `pose.move_ms` | integer, 0-5000 | `400` | Time to move into the pose (and out of it on `"rest"`) |
 | `pose.hold_ms`, `gaze.hold_ms` | integer or `null` | `null` | How long it holds, then releases (`null`: until replaced or released) |
-| `prop.hold` | `"map"` or `null` | unchanged | Picks the map up (it slides into view) or puts it away |
+| `prop.hold` | `"map"`, `"card"`, or `null` | unchanged | Picks the map or the card up (it slides into view, replacing the other) or puts it away |
 | `prop.raise` | number, 0-1 | unchanged | 0 is lowered (top edge at the chin), 1 is raised (the eyes peek over it). Without a held prop it does nothing |
 | `prop.move_ms` | integer, 0-5000 | `450` raising, `550` lowering, `600` picking up | Time to get there |
 | `breath.in_ms` | integer, 100-5000 | required | Time to the top of the breath |
@@ -172,6 +176,7 @@ same parts of the face).
 | `{"on": "user", "offset"?: [dx, dy]}` | At the user, or offset from them (looking away) |
 | `{"on": "screen", "at": [x, y]}` | A fixed direction |
 | `{"on": "map", "at": [x, y]}` | A spot on the held map, in map coordinates (§8.2) |
+| `{"on": "card", "at": [x, y]}` | A spot on the held card, in the same coordinates (§8.2) |
 | `{"on": ..., "scan": {"around": [x, y], "radius": r, "fix_ms"?: [min, max]}}` | Short fixations at random points in that circle, in the frame's units, until `hold_ms` runs out or something replaces it. `fix_ms` defaults to `[250, 450]` |
 | `{"on": ..., "trace": [[x, y], ...], "speed"?: s}` | Follows the path (2-64 points) at `s` frame units per second (default 0.5 on the map, 1 elsewhere), ending on its last point, then holds there for `hold_ms` |
 | `"release"` | Back to the automatic look (the user while listening, etc.) |
@@ -323,7 +328,7 @@ straight out, and its `offset` is measured from there. `pose.tilt` is in degrees
 leaning to the viewer's right. The eyes' reach is the full -1-1 range; offsets and points
 past it stop at the edge.
 
-### 8.2 The map
+### 8.2 The map and the card
 
 The avatar holds its map facing itself, so we see its back. Map coordinates run from 0 to 1
 across and down **the map as the avatar reads it, from its top-left corner**. Its left is the
@@ -331,6 +336,11 @@ viewer's right, so `[0, 0]` (its top-left) sends the eyes up and to the viewer's
 eyes follow the map's current raise: a spot on the lowered map is a lower look than the same
 spot on the raised map. Raised, the eyes stay just above the map's top edge even at their
 lowest look.
+
+The card (the cooperative planning task's notes) is held the same way and is the same size,
+so `"card"` points work exactly like `"map"` points: 0-1 across and down the card as the
+avatar reads it. The planning harness puts the avatar's constraints near the top and one line
+per item below them (`harnesses/cooperative_planning/behaviors.py`).
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Catalog                                                                          -->
@@ -386,25 +396,34 @@ and Hand Over Mouth) fade out.
 
 | What | Values |
 |---|---|
-| `prop.hold` | `"map"` |
-| `gaze.on` | `"user"`, `"screen"`, `"map"` |
+| `prop.hold` | `"map"`, `"card"` |
+| `gaze.on` | `"user"`, `"screen"`, `"map"`, `"card"` |
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Backend                                                                          -->
 <!-- -------------------------------------------------------------------------------- -->
-## 10. What the backend needs
+## 10. How the backend sends them
 
-* **Pick the pathway by chat type.** A plan-driven chat sends `avatar_setup` when the client
-  connects, then drives the avatar only with plans (no `robot_action` moods).
-* **One send function** for every avatar frame, on the client's own socket, that checks the
-  turn revision at send time, so nothing made for a cancelled turn goes out.
-* **`audio_chunk` gets an optional `sentence`** (1-based) on every chunk, to turn on sentence
-  moments.
-* **Handle `avatar_feedback`:** log it (or store it with the session as research data).
-  `rejected` always means a bug or a name out of sync.
+A chat type's harness (`websocket/harnesses/`, see its README) decides every frame; the shared
+pipeline only carries them.
 
-Planned changes to `CLIENT_PROTOCOL.md`: the three frames above, and the optional
-`audio_chunk.sentence` field.
+* **The pathway is picked by chat type.** A plan-driven harness sends `avatar_setup` from its
+  `start()`, when the client has connected, then drives the avatar only with plans: it sends
+  no `robot_action` moods (a mood would cut the running plan short).
+* **A reply's own plan** goes in `ResponseOutcome.avatar_plan`. `ChatHandler._commit_response`
+  sends it just before that reply's `llm_response`, so the plan's reply moments mean that reply
+  (§4.1).
+* **A plan made while a reply is prepared** goes through `TurnAttempt.publish_plan`, which
+  drops it once newer speech has cancelled the reply (the check moods already had). A cue's
+  plan (a glance while the user speaks, back to listening after a cancel) is sent at once with
+  `harnesses/avatar.py`'s `send_avatar_plan`.
+* **`audio_chunk.sentence`** numbers the pieces TTS synthesizes one at a time
+  (`websocket/services/speech/tts/tts_streaming.py`): a sentence shorter than 24 characters
+  joins the next, and a short tail joins the last piece. A plan's `{"sentence": n}` counts the
+  same pieces.
+* **`avatar_feedback`** is checked and logged once per event
+  (`consumers/processing/avatar_feedback.py`); a rejection is a warning, since it always means
+  a bug or a name out of sync. Nothing waits on feedback, and it isn't stored yet.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Examples                                                                         -->
@@ -513,3 +532,39 @@ back at the user 0.4 s before the end (a turn-yielding cue).
    off. Watch for it while developing.
 8. **Waiting steps expire after `expire_ms` (15 s by default).** Raise it for a plan that waits
    on the end of a long reply.
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Task Card                                                                        -->
+<!-- -------------------------------------------------------------------------------- -->
+## 13. `task_card` -- the participant's task card
+
+What the participant sees beside the avatar: their own task materials, filled in as the chat
+goes. A chat type sends one when the chat starts and again whenever it changes; each card
+replaces the last one completely. `kind` says which chat type's card it is, and the rest of
+`data` depends on it. A client that can't show a kind ignores it.
+
+**`cooperative_planning`:** the participant's private constraints, then one line per item to
+agree on.
+
+```json
+{"type": "task_card", "data": {
+  "kind": "cooperative_planning",
+  "title": "Plan a dinner party",
+  "constraints": ["You can't cook fish.", "One of the guests is vegetarian.", "Your budget is limited."],
+  "items": [
+    {"id": "starter", "label": "Starter",     "value": "breadsticks", "pending": null},
+    {"id": "main",    "label": "Main course", "value": null,          "pending": "pasta"},
+    {"id": "dessert", "label": "Dessert",     "value": null,          "pending": null}
+  ],
+  "complete": false
+}}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `title` | string | The card's heading |
+| `constraints` | array of strings | The participant's own constraints, in order (the avatar never sees these) |
+| `items[].id`, `items[].label` | string | The item, and how to show it |
+| `items[].value` | string or `null` | The agreed choice, written on the line (`null` while open) |
+| `items[].pending` | string or `null` | A choice one side asked to settle on, waiting for the other side's yes |
+| `complete` | boolean | The participant approved the whole plan (the chat ends next) |

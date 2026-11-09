@@ -3,7 +3,7 @@
 `@frontend/src/pages/avatar_demo/utils/planExamples`
 
 Each example is a short list of `avatar_setup` and `avatar_plan` frames
-(`pages/common/avatar/AVATAR_PLANS.md`), sent at set times after its button is
+(`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`), sent at set times after its button is
 clicked (`usePlanExamples`). Every one uses something only plans can do: chains
 of steps, looks at the screen or the map, scans and traces, held head poses,
 faces at a strength, steps timed to a reply (its first audio, a sentence, its

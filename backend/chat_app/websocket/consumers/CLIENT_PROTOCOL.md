@@ -19,6 +19,12 @@ the implementation is authoritative.
 > **Scope note for the QT robot:** QT is an *audio* client that starts in `manual` response
 > mode. It streams `audio_data` and asks for each reply with `reply_now`. Read section 4.1
 > first; it describes that loop and the rules the audio stream has to follow.
+>
+> **Harness frames:** chat types that drive a capable avatar from the backend
+> (`cooperative_planning` today) also send `avatar_setup`, `avatar_plan`, and `task_card`, and
+> accept `avatar_feedback`. They are documented separately in `HARNESS_PROTOCOL.md` beside
+> this file. A client that never picks those chat types never receives them, and can skip
+> that file.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Connecting                                                                       -->
@@ -114,7 +120,7 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
 
 | Parameter | Values | Default |
 |---|---|---|
-| `chat_type` | `unguided` \| `active_listening` \| `activity` \| `map_task` | `unguided` |
+| `chat_type` | `unguided` \| `active_listening` \| `activity` \| `map_task` \| `cooperative_planning` | `unguided` |
 | `condition` | One of the chat type's cue sets | The chat type's first one |
 | `variant`   | One of the chat type's task contents (a map, a scenario) | The chat type's first one |
 
@@ -126,9 +132,16 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
 - `map_task` -- the Map Task. The user gives directions from their map, and the avatar follows
   them on its own map, which differs in places. `variant` picks the map: `demo` (the default) is
   a made-up test map. It has no spoken end-chat or pause; the client ends the chat.
+- `cooperative_planning` -- the user and the avatar plan an event together, agreeing on one
+  choice for each item while each side has private constraints. The avatar speaks first, and
+  once the user approves the finished plan it says goodbye and the backend sends `chat_ended`.
+  `variant` picks the scenario: `dinner_party` (the default). `condition` is `cues` (the
+  default: the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
+  It drives the avatar with the frames in `HARNESS_PROTOCOL.md` and sends no `robot_action`.
 
-Only `map_task` takes a `variant` so far, and no chat type has conditions yet. Sending
-`condition`, or a `variant` the chat type doesn't have, is refused. Values are exact (they are not lowercased the way `source` is). The chat
+Only `map_task` and `cooperative_planning` take a `variant` so far, and only
+`cooperative_planning` has conditions. Sending a `condition` or `variant` the chat type doesn't
+have is refused. Values are exact (they are not lowercased the way `source` is). The chat
 type, condition, and variant are saved with the session. The list lives in
 `websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.
 
@@ -163,6 +176,7 @@ Every message is a JSON object with a top-level `"type"`. Routing lives in
 | `tts_playback`      | Optional | Report when your TTS actually started/finished |
 | `audio_data`        | No      | Stream raw PCM for backend STT |
 | `overlapped_speech` | No      | Notify that the user talked over the assistant |
+| `avatar_feedback`   | No      | What happened to an avatar plan (harness chat types only, `HARNESS_PROTOCOL.md` §6) |
 
 ### 2.1 `transcription` -- the main one
 
@@ -330,6 +344,7 @@ currently used for anything.
 | `user_utt`         | No (webapp only) | Backend STT transcript of the user |
 | `audio_chunk`      | No (webapp only) | Streamed TTS audio |
 | `cancel_audio`     | No (webapp only) | Discard buffered TTS audio |
+| `avatar_setup`, `avatar_plan`, `task_card` | No (harness chat types only) | Drive a capable avatar, and show the participant's task card (`HARNESS_PROTOCOL.md`) |
 
 ### 3.1 `robot_action` -- emotions and animations
 
@@ -565,6 +580,7 @@ Buddy will never receive these, but for future interfaces:
     "channels"     : 1,
     "bitsPerSample": 16,
     "sequence"     : 0,
+    "sentence"     : 1,
     "last"         : false
   }
 }
@@ -582,7 +598,9 @@ TTS is synthesized at a different rate.
 The backend synthesizes a response one sentence at a time and sends each sentence's chunks as
 soon as they are ready, so chunks arrive in bursts, possibly with a pause between sentences.
 Play each chunk as it arrives, right after the audio already queued. `sequence` counts across
-the whole response, and only the response's final chunk has `"last": true`.
+the whole response, and only the response's final chunk has `"last": true`. `sentence` is the
+1-based piece of the response the chunk's audio came from (a sentence shorter than 24
+characters joins the next one); avatar plans time steps to it, and other clients can ignore it.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Minimal client                                                                   -->

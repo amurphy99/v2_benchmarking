@@ -2,7 +2,7 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/plans/planScheduler`
 
-A plan's steps run one after another (`AVATAR_PLANS.md` §3-§5). Each step
+A plan's steps run one after another (`HARNESS_PROTOCOL.md` §3-§5). Each step
 starts at a moment (the end of the step before, or a moment in a reply: its
 text arriving, its first audio, its last audio, or a sentence's first audio)
 plus its wait, does its actions through the avatar, and lasts its `ms` (or its

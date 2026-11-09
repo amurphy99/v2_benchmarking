@@ -2,7 +2,7 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/smiley/plans/smileyStepRunner`
 
-A step's actions (`AVATAR_PLANS.md` §3.3) all start at once, `reset` first.
+A step's actions (`HARNESS_PROTOCOL.md` §3.3) all start at once, `reset` first.
 Faces, movements, and animations are found here by name, and a movement is
 scaled to its strength and speed; the other actions go straight to their layer.
 A plan's names are checked against `SMILEY_PLAN_CATALOG` before it runs, so a

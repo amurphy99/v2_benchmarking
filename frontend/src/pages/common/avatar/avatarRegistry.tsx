@@ -23,7 +23,7 @@ only that far from the resting face. It is not on the wire yet, so only the
 avatar demo passes it for now.
 
 `runPlanStep` and `applySetup` carry the backend's avatar plans and setups
-(`AVATAR_PLANS.md`, a draft), which `plans/useAvatarPlans` runs for an avatar
+(`backend/.../consumers/HARNESS_PROTOCOL.md`), which `plans/useAvatarPlans` runs for an avatar
 whose entry lists the names it can run (`plans`).
 
 The optional handle methods are driven by the page, not the WebSocket. Each
@@ -87,7 +87,7 @@ export interface AvatarHandle {
     sleep                ? : (                                       ) => void;       // Doze until woken (Neutral means the sleeping face meanwhile)
     wake                 ? : (                                       ) => void;       // Wake up and rest on the usual face again (does nothing when awake)
     prepareToSpeak       ? : (inMs?:  number                         ) => void;       // A reply's voice is coming in `inMs` (unknown: the avatar's own estimate)
-    runPlanStep          ? : (actions: StepActions                   ) => number;     // Do one backend plan step's actions now, returning how long they take (`AVATAR_PLANS.md`)
+    runPlanStep          ? : (actions: StepActions                   ) => number;     // Do one backend plan step's actions now, returning how long they take (`HARNESS_PROTOCOL.md`)
     applySetup           ? : (setup:   AvatarSetup | null            ) => void;       // Take the session's settings from the backend (null clears them)
 }
 

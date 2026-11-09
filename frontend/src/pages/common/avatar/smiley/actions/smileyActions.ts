@@ -16,7 +16,7 @@ On the wire, `robot_action` frames still carry the protocol's two kinds
 (`CLIENT_PROTOCOL.md` §3.1): the buttons send Expressions and moods as
 "emotion", and Movements and Animations as "animation". The smiley plays
 whatever the name is and ignores the kind, so a name works under either one.
-Backend plans (`AVATAR_PLANS.md`) name them by category instead, and
+Backend plans (`HARNESS_PROTOCOL.md`) name them by category instead, and
 `SMILEY_PLAN_CATALOG` is the list a plan's names are checked against.
 
 */
@@ -75,7 +75,7 @@ export const SMILEY_ACTION_SECTIONS: ActionSection[] = [
     {category: "Animations",  kind: "animation", actions: SMILEY_ANIMATION_LIST .map(({name, emoji}) => ({label: (emoji === null) ? name : `${emoji} ${name}`, name}))},
 ];
 
-// What a backend plan can ask of the smiley: every public name by category, the map, and every gaze frame (`AVATAR_PLANS.md` §9)
+// What a backend plan can ask of the smiley: every public name by category, the map, and every gaze frame (`HARNESS_PROTOCOL.md` §9)
 export const SMILEY_PLAN_CATALOG: PlanCatalog = {
     expressions : SMILEY_EXPRESSION_LIST.map(({name}: {name: string}) => name),
     movements   : SMILEY_MOVEMENT_NAMES,

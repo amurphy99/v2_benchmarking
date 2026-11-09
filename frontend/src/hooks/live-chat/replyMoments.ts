@@ -3,7 +3,7 @@
 `@frontend/src/hooks/live-chat/replyMoments`
 
 A backend plan can time a step to a moment of a reply
-(`pages/common/avatar/AVATAR_PLANS.md` §4): its first audio heard, a numbered
+(`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §4): its first audio heard, a numbered
 sentence's first audio, or its last audio's end. The audio player
 (`useAudioPlayer`) notes each chunk it schedules here, in its timeline's own
 seconds, and the moments are turned into page time (`performance.now()`) as

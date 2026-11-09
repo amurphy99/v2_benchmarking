@@ -10,7 +10,7 @@ hands each chunk to `sendAudio` with `sequence` and `last`, exactly as a live
 reply arrives, so the mouth and the speech gaze run on the real code path. Each
 play is its own reply (the caller picks its `responseId`, as each live reply has
 its own), and its chunks number the clip's two sentences the way the backend
-will (`AVATAR_PLANS.md` §10), so plan steps timed to a sentence can be tried.
+does (`HARNESS_PROTOCOL.md` §10), so plan steps timed to a sentence can be tried.
 An optional extra pause adds silence in the middle of the clip's sentence
 break, so the pause behavior can be tried at different lengths.
 
@@ -22,7 +22,7 @@ const DEMO_SAMPLE_REPLY_URL   = "/audio/sample_reply.wav";
 const DEMO_SAMPLE_CHUNK_BYTES = 8_192;
 
 // Where the clip's second sentence's voice starts (`sentence` 2 from the chunk holding it on)
-// (the way the backend will number them, `AVATAR_PLANS.md` §10)
+// (the way the backend numbers them, `HARNESS_PROTOCOL.md` §10)
 const DEMO_SAMPLE_SENTENCE_2_AT_SEC = 1.52;
 
 // Middle of the clip's silence between its two sentences (0.96 to 1.52 s), where an extra pause goes

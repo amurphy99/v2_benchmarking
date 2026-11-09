@@ -10,7 +10,7 @@ its landmark names are used here, so a landmark the avatar doesn't have is still
 recognized when the participant names it.
 
 Points are 0-1 across and down from the map's top-left as the avatar reads it,
-the frame avatar plans use for gaze (`AVATAR_PLANS.md` §8.2), so up is a smaller y.
+the frame avatar plans use for gaze (`HARNESS_PROTOCOL.md` §8.2), so up is a smaller y.
 
 """
 from __future__  import annotations

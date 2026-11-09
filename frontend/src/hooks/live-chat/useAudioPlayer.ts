@@ -16,7 +16,7 @@ whether a reply arrives all at once or a sentence at a time.
 `readSpeechRemaining()` says how long until the reply's final chunk (the one
 marked `last`) finishes playing, once that chunk is scheduled.
 
-For backend plans timed to a reply (`pages/common/avatar/AVATAR_PLANS.md` §4),
+For backend plans timed to a reply (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §4),
 `readReplyTimeline()` gives each recent reply's moments in page time (its first
 audio heard, each numbered sentence's, and its end; see `replyMoments`), and
 `holdNextReply()` delays the next reply's first audio, so a step that asked for
@@ -60,7 +60,7 @@ interface AudioChunkPayload {
     bitsPerSample? : number;   // PCM sample bit depth
     sequence?      : number;   // Zero-based chunk position in the response
     last?          : boolean;  // Whether this is the response's final chunk
-    sentence?      : number;   // 1-based sentence of the response (a draft field, `AVATAR_PLANS.md` §10; not sent yet)
+    sentence?      : number;   // 1-based sentence of the response (`HARNESS_PROTOCOL.md` §10; for plan steps timed to a sentence)
 }
 
 interface AudioPlayerOptions {

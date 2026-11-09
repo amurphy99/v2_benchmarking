@@ -5,7 +5,7 @@
 The Map Task examples (`planExamples`) look at these spots, and the Map Task
 section draws them (`SampleMapPicture`). Spots are map coordinates as the avatar
 reads its map: 0 to 1 across and down from its top-left corner
-(`pages/common/avatar/AVATAR_PLANS.md` §8.2). The map is made up for the demo;
+(`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §8.2). The map is made up for the demo;
 nothing on it comes from the HCRC Map Task corpus.
 
 */
