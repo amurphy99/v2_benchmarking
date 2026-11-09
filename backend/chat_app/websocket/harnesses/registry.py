@@ -12,20 +12,22 @@ from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from .active_listening.harness import ActiveListeningHarness
-from .activity.harness         import ActivityHarness
-from .base                     import ChatHarness
-from .map_task.harness         import MapTaskHarness
-from .unguided.harness         import UnguidedHarness
+from .active_listening.harness     import ActiveListeningHarness
+from .activity.harness             import ActivityHarness
+from .base                         import ChatHarness
+from .cooperative_planning.harness import CooperativePlanningHarness
+from .map_task.harness             import MapTaskHarness
+from .unguided.harness             import UnguidedHarness
 
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
 # Chat types a client can pick with `chat_type`, keyed by the name saved on each session
 CHAT_TYPES: dict[str, type[ChatHarness]] = {
-    UnguidedHarness       .NAME : UnguidedHarness,
-    ActiveListeningHarness.NAME : ActiveListeningHarness,
-    ActivityHarness       .NAME : ActivityHarness,
-    MapTaskHarness        .NAME : MapTaskHarness,
+    UnguidedHarness           .NAME : UnguidedHarness,
+    ActiveListeningHarness    .NAME : ActiveListeningHarness,
+    ActivityHarness           .NAME : ActivityHarness,
+    MapTaskHarness            .NAME : MapTaskHarness,
+    CooperativePlanningHarness.NAME : CooperativePlanningHarness,
 }
 
 # Chat type a client gets when it sends no `chat_type`

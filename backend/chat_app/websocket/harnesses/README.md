@@ -50,15 +50,18 @@ condition, and variant are saved on the `ChatSession`.
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
 | `map_task` | The Map Task: the user gives directions, and the avatar follows them on its own map (see its README) | none yet | `demo` |
+| `cooperative_planning` | The user and the avatar plan an event together, each with private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party` |
 
-None of these uses cues yet.
+Only `cooperative_planning` uses cues so far. It is also the only chat type that drives
+the avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the others send `robot_action`
+moods.
 
 ```diff
 +harnesses/
  ├── base.py                      # ChatHarness, Cue, the turn events, TurnAttempt, ResponseOutcome
  ├── cues.py                      # Shared cues to build on: KeywordCue, SilenceWatcher
  ├── registry.py                  # chat_type names -> harnesses, the default, and the condition/variant checks
- ├── avatar.py                    # The robot mood vocabulary (ResponseMood) and the mood frame
+ ├── avatar.py                    # The robot mood vocabulary (ResponseMood), and the mood, setup, and plan frames
  │
 +├── unguided/
  │   ├── harness.py               # Scripted end-chat and pause replies, otherwise the LLM
@@ -72,10 +75,24 @@ None of these uses cues yet.
 +├── activity/
  │   └── harness.py               # Wraps the RAG pipeline that still lives in `websocket/services/`
  │
-+└── map_task/                    # The avatar as instruction follower (see its README)
-     ├── harness.py               # Reads each turn, replies through its route's pipeline, and moves the avatar
-     ├── maps/                    # One map file per variant
-     └── ...
++├── map_task/                    # The avatar as instruction follower (see its README)
+ │   ├── harness.py               # Reads each turn, replies through its route's pipeline, and moves the avatar
+ │   ├── maps/                    # One map file per variant
+ │   └── ...
+ │
++└── cooperative_planning/        # Planning an event together, each side with private constraints
+     ├── harness.py               # Opens the chat, answers each turn through the chosen pipeline, and keeps the card current
+     ├── scenarios.py             # Loads and checks the scenario files (the format is in its docstring)
++    ├── scenarios/
+     │   └── dinner_party.json    # A made-up test scenario: a starter, a main course, and a dessert
+     ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
+     ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
+     ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives
+     ├── pipelines.py             # track_then_reply, single_call, reply_then_track
+     ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
+     ├── behaviors.py             # The avatar's setup, its card, and the plan for each named behavior
+     ├── cues.py                  # BackToListening, ItemGlance, QuietNudge
+     └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
 ```
 
 <br>
@@ -95,7 +112,8 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `cues` | This connection's cues, built in the subclass's `__init__` from its condition |
 | `generate(attempt)` | Required. Returns one `ResponseOutcome` for the staged user turn |
 | `on_reply_saved(outcome)` | Called once that reply's exchange is saved. Enters `outcome.state`, unless it is `None`, then tells the cues |
-| `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue) |
+| `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue). A plan-driven harness sends its `avatar_setup` from `start()` |
+| `request_turn()` | Asks for a reply of the harness's own (next section); `False` while another reply owns the turn |
 | `on_interim`, `on_final`, `on_reply_started`, `on_reply_cancelled`, `on_playback` | Turn events (next section), passed on to each cue |
 
 `generate` runs inside the reply attempt. When newer speech arrives, any reply but
@@ -105,13 +123,17 @@ nothing itself. It returns its effects in the outcome, and `ChatHandler` applies
 them once the exchange is saved, so a cancelled reply leaves no trace.
 
 `TurnAttempt` carries `context` (the conversation, ending with the staged user turn),
-`user_text`, `trigger` (`"automatic"`, `"reply_now"`, or `"harness"`), and
-`publish_mood`, which sends a `robot_action` emotion right away unless newer speech
-has already cancelled the reply.
+`user_text`, `trigger` (`"automatic"`, `"reply_now"`, or `"harness"`), and two
+publishers that send right away unless newer speech has already cancelled the
+reply: `publish_mood` (a `robot_action` emotion) and `publish_plan` (an avatar plan,
+for a plan-driven chat type).
 
 `ResponseOutcome` carries `message`, `state` (entered in `on_reply_saved`),
-`pause_listening`, and `close_after` (send `chat_ended` and close once the reply has
-gone out).
+`pause_listening`, `close_after` (send `chat_ended` and close once the reply has
+gone out), and `avatar_plan`: a plan sent just before the reply's `llm_response`, so
+its reply moments mean this reply (`consumers/HARNESS_PROTOCOL.md` §4.1). A harness
+may return a subclass of `ResponseOutcome` that carries more for its own
+`on_reply_saved` (the planning harness's `PlanningOutcome`).
 
 <br>
 
@@ -159,15 +181,17 @@ skipped; the chat and the other cues carry on.
   finishes and restarts from the end of newer speech. It stops while a reply is
   prepared or playing, and nothing fires while listening is paused.
 
-**Harness turns.** A cue that wants the avatar to speak first (a re-prompt after a
-silence, an opening line) calls `ChatHandler.request_harness_turn(consumer)`. That
-runs a normal reply attempt with `trigger="harness"`: it answers any staged speech,
+**Harness turns.** A harness or cue that wants the avatar to speak first (a
+re-prompt after a silence, an opening line) calls `self.harness.request_turn()` (the
+consumer passes it to `ChatHandler.request_harness_turn`). That runs a normal reply
+attempt with `trigger="harness"`: it answers any staged speech,
 or speaks on its own when nothing is staged (`user_text` is `""` and only the reply
 is saved). Newer speech cancels it like an automatic reply. It starts nothing while
 another reply owns the turn, so the cue can ask again later.
 
 A Map Task cue that looks toward a direction as soon as it is heard might look
-like this (the gaze frame itself comes with the avatar plans):
+like this (`gaze_toward` would build the plan; the planning harness's `cues.py` has
+working ones):
 
 ```python
 # Look toward a side of the map the moment the user names it
@@ -181,7 +205,7 @@ class DirectionGaze(KeywordCue):
 
     # Send a gaze plan toward that side
     def on_match(self, name: str, text: str) -> None:
-        fire_and_log(send_plan(self.harness.consumer, gaze_toward(name)), name="map_task::direction_gaze")
+        fire_and_log(send_avatar_plan(self.harness.consumer, gaze_toward(name)), name="map_task::direction_gaze")
 ```
 
 The harness then switches it on for one condition only, in its `__init__`:
