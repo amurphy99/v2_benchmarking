@@ -264,6 +264,49 @@ export interface ChatSession {
 }
 
 // =======================================================================
+// Map Task maps (`backend/chat_app/websocket/harnesses/map_task/maps.py`:
+// `giver_view`, `follower_view`, and `map_file_previews`)
+// =======================================================================
+// A point on a Map Task map: 0-1 across and down from its top-left, as the avatar reads it
+export type MapPoint = [number, number];
+
+// The paper a Map Task map is on: wide, or tall (the HCRC corpus's maps)
+export type MapShape = "landscape" | "portrait";
+
+// One landmark as a map draws it
+export interface MapTaskLandmark {
+    id     : string;     // The same on both maps
+    label  : string;     // What this map calls it
+    icon   : string;     // Picture name (`components/map_task/mapTaskIcons.ts`)
+    at     : MapPoint;   // Its center
+    radius : number;     // How far it reaches from its center, in map widths
+}
+
+// The participant's map: its paper, its landmarks, and the route from the start to the finish
+export interface MapTaskGiverMap {
+    shape     : MapShape;
+    landmarks : MapTaskLandmark[];
+    route     : MapPoint[];   // The first point is the start, the last the finish
+}
+
+// The avatar's map: its paper, its landmarks, and where it starts
+export interface MapTaskFollowerMap {
+    shape     : MapShape;
+    landmarks : MapTaskLandmark[];
+    start     : MapPoint;
+}
+
+// One map file in the staff preview (`error` instead of its maps when it doesn't load)
+export interface MapTaskMapFile {
+    variant     : string;                      // The file's name, which a client picks it by
+    registered  : boolean;                     // Listed in `MAP_TASK_VARIANTS`, so clients can pick it
+    error       : string | null;               // Why it doesn't load (null when it does)
+    description : string | null;
+    giver       : MapTaskGiverMap    | null;
+    follower    : MapTaskFollowerMap | null;
+}
+
+// =======================================================================
 // Auth
 // =======================================================================
 // User verification token

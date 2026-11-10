@@ -64,16 +64,17 @@ async def send_initial_data(session_data, consumer):
     #       action names in the control panel. Physical robots ignore it.
     start_dt = await ChatService.get_start_ts(session)
     session_info = {
-        "sessionId"   : session.id,
-        "username"    : getattr(chat_user, "username", str(chat_user)),
-        "source"      : getattr(session,   "source",   "unknown"     ),
-        "avatarModel" : getattr(settings,  "modelChoice", None       ),
-        "isActive"    : getattr(session,   "is_active", None         ),
-        "startTs"     : start_dt.timestamp() if start_dt else None,
-        "messageCount": 0, # TODO: This just needs to be handled on the frontend
-        "chat_type"   : session.chat_type,   # What ran ("" for none, and on sessions from before chat types were recorded)
-        "condition"   : session.condition,
-        "variant"     : session.variant,
+        "sessionId"      : session.id,
+        "username"       : getattr(chat_user, "username",    str(chat_user)),
+        "source"         : getattr(session,   "source",      "unknown"     ),
+        "avatarModel"    : getattr(settings,  "modelChoice", None          ),
+        "isActive"       : getattr(session,   "is_active",   None          ),
+        "startTs"        : start_dt.timestamp() if start_dt else None,
+        "messageCount"   : 0, # TODO: This just needs to be handled on the frontend
+        "chat_type"      : session.chat_type,                       # What ran ("" for none, and on sessions from before chat types were recorded)
+        "condition"      : session.condition,
+        "variant"        : session.variant,
+        "run_biomarkers" : session_data["profile"].run_biomarkers,  # The participant's biomarker switch (off: the page hides the Biomarkers tab)
     }
     await consumer.send_json({"type": "session_info", "data": session_info})
 

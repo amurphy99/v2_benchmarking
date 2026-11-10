@@ -3,10 +3,10 @@
 `@frontend/src/pages/chat/Chat`
 
 The avatar is the center of the page, with its latest reply in large type under
-it. For the tasks, the panel beside it holds what the participant works from:
-their planning card, filled in live from the backend's `task_card` frames, or
-the Map Task's instructions. Before the chat starts, the picker chooses the chat
-type (`chatModes.ts`).
+it. For the tasks, the panel beside it holds what the participant works from,
+from the backend's `task_card` frames: their planning card, filled in live, or
+their Map Task map with its route (which gets the wider column). Before the chat
+starts, the pickers choose the chat type and its task version (`chatModes.ts`).
 
 The avatar dozes until the chat starts and follows the conversation while it
 runs (`useChatAvatar`). A chat type that drives it from the backend sends plans,
@@ -20,22 +20,22 @@ import      { useEffect, useRef, useState } from "react";
 import      { useNavigate                 } from "react-router-dom";
 
 // From this project
-import        SaveChatModal               from "@/components/modals/SaveChatModal";
-import      { useLocalChatSession       } from "@/hooks/live-chat";
-import type { TaskCard                  } from "@/hooks/live-chat/taskCardFrame";
-import      { useUserSettings           } from "@/hooks/queries/useUserSettings";
-import        useLiveChat                 from "@/hooks/useLiveChat";
-import      { Avatar                    } from "@/pages/common/avatar/Avatar";
-import type { AvatarHandle, RobotAction } from "@/pages/common/avatar/avatarRegistry";
-import type { ChatMode                  } from "./chatModes";
-import      { CHAT_MODES, variantLabel  } from "./chatModes";
-import      { useChatAvatar             } from "./useChatAvatar";
+import        SaveChatModal                      from "@/components/modals/SaveChatModal";
+import      { useLocalChatSession              } from "@/hooks/live-chat";
+import type { TaskCard                         } from "@/hooks/live-chat/taskCardFrame";
+import      { useUserSettings                  } from "@/hooks/queries/useUserSettings";
+import        useLiveChat                        from "@/hooks/useLiveChat";
+import      { Avatar                           } from "@/pages/common/avatar/Avatar";
+import type { AvatarHandle, RobotAction        } from "@/pages/common/avatar/avatarRegistry";
+import type { ChatMode, ChatPanel, ChatVariant } from "./chatModes";
+import      { CHAT_MODES                       } from "./chatModes";
+import      { useChatAvatar                    } from "./useChatAvatar";
 
 // Components
 import type { DebugTurn          } from "./components/ActivityDebugPanel";
 import        ActivityDebugPanel   from "./components/ActivityDebugPanel";
 import        ChatControls         from "./components/ChatControls";
-import        MapTaskNote          from "./components/MapTaskNote";
+import        MapTaskMapPanel      from "./components/MapTaskMapPanel";
 import        PlanningCardPanel    from "./components/PlanningCardPanel";
 import        ReplyCaption         from "./components/ReplyCaption";
 
@@ -45,12 +45,22 @@ const CHAT_IDLE_TEXT = "Press Start when you're ready.";
 // The chat type and task version pickers
 const CHAT_PICKER_CLASS = "rounded-xl border border-chat-border bg-chat-panel px-4 py-2 text-base text-chat-text disabled:opacity-50";
 
-// Where the participant's card goes until the backend sends it (it comes once the chat starts)
-const CARD_WAITING = (
-    <div className="rounded-2xl border border-dashed border-chat-border bg-chat-panel/60 p-6 text-lg text-chat-subtext">
-        Your card appears here when the chat starts.
-    </div>
-);
+// How wide the page is, and how its two columns split, by what sits beside the avatar (a map needs the most room)
+const CHAT_PANEL_LAYOUT: Record<ChatPanel, {page: string; columns: string}> = {
+    none           : {page: "max-w-3xl", columns: ""                                            },
+    card           : {page: "max-w-6xl", columns: "lg:grid-cols-[minmax(0,1fr)_24rem]"          },
+    activity_debug : {page: "max-w-6xl", columns: "lg:grid-cols-[minmax(0,1fr)_24rem]"          },
+    map            : {page: "max-w-7xl", columns: "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"},
+};
+
+// Where the participant's task materials go until the backend sends them (they come once the chat starts)
+function taskWaiting(what: string): ReactElement {
+    return (
+        <div className="rounded-2xl border border-dashed border-chat-border bg-chat-panel/60 p-6 text-lg text-chat-subtext">
+            Your {what} appears here when the chat starts.
+        </div>
+    );
+}
 
 
 // ================================================================================
@@ -64,7 +74,7 @@ export function Chat(): ReactElement {
 
     // Which chat type to open, and its task content (both picked before the chat starts; null for a type without variants)
     const [mode,    setMode   ] = useState<ChatMode>(CHAT_MODES[0]);
-    const [variant, setVariant] = useState<string | null>(CHAT_MODES[0].variants[0] ?? null);
+    const [variant, setVariant] = useState<string | null>(CHAT_MODES[0].variants[0]?.value ?? null);
 
     // What the participant sees: their last words, the latest reply, and their task card
     const [heard,         setHeard        ] = useState<string   | null>(null);
@@ -123,7 +133,7 @@ export function Chat(): ReactElement {
     // Picking another chat type starts its view fresh, on its default variant
     const pickMode = (index: number): void => {
         setMode(CHAT_MODES[index]);
-        setVariant(CHAT_MODES[index].variants[0] ?? null);
+        setVariant(CHAT_MODES[index].variants[0]?.value ?? null);
         setTaskCard(null);
         setDebugTurns([]);
         setHeard(null);
@@ -142,18 +152,19 @@ export function Chat(): ReactElement {
     // Wait for this visit's settings (a cached copy could still name an avatar changed since)
     if (model === null) { return <div className="p-8 text-lg text-chat-subtext">Loading...</div>; }
 
-    // The panel beside the avatar (the task's materials), and the avatar's framing (a held card or map needs its body)
+    // The panel beside the avatar (the task's materials), the page's layout for it, and the avatar's framing (a held card or map needs its body)
     const panel =
-        (mode.panel === "card")           ? ((taskCard !== null) ? <PlanningCardPanel card={taskCard} /> : CARD_WAITING) :
-        (mode.panel === "map")            ? <MapTaskNote /> :
+        (mode.panel === "card")           ? ((taskCard?.kind === "cooperative_planning") ? <PlanningCardPanel card={taskCard} /> : taskWaiting("card")) :
+        (mode.panel === "map")            ? ((taskCard?.kind === "map_task")             ? <MapTaskMapPanel   map={taskCard}  /> : taskWaiting("map" )) :
         (mode.panel === "activity_debug") ? <ActivityDebugPanel turns={debugTurns} /> :
                                             null;
-    const zoom = (window.isMobile && (panel === null)) ? "head" : "body";
+    const layout = CHAT_PANEL_LAYOUT[mode.panel];
+    const zoom   = (window.isMobile && (panel === null)) ? "head" : "body";
 
     return (
         <>
             <div className="min-h-[85vh] bg-chat-surface px-4 py-6 md:px-8">
-                <div className={`mx-auto flex flex-col gap-6 ${(panel !== null) ? "max-w-6xl" : "max-w-3xl"}`}>
+                <div className={`mx-auto flex flex-col gap-6 ${layout.page}`}>
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Chat Type */}
                     {/* -------------------------------------------------------------------------------- */}
@@ -182,7 +193,7 @@ export function Chat(): ReactElement {
                                     onChange   = {(event) => setVariant(event.target.value)}
                                     value      = {variant}
                                 >
-                                    {mode.variants.map((option: string) => <option key={option} value={option}>{variantLabel(option)}</option>)}
+                                    {mode.variants.map((option: ChatVariant) => <option key={option.value} value={option.value}>{option.label}</option>)}
                                 </select>
                             ) : null}
                         </div>
@@ -191,7 +202,7 @@ export function Chat(): ReactElement {
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Avatar and Task */}
                     {/* -------------------------------------------------------------------------------- */}
-                    <main className={`grid gap-6 ${(panel !== null) ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}>
+                    <main className={`grid gap-6 ${layout.columns}`}>
                         <section className="flex flex-col overflow-hidden rounded-3xl border border-chat-border bg-chat-stage shadow-sm">
                             <div className="h-[46vh] md:h-[56vh]">
                                 <Avatar model={model} zoom={zoom} ref={avatarRef} />

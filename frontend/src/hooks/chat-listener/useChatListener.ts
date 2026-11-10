@@ -34,6 +34,7 @@ export default function useChatListener({
     onControlState    = noopAny, // Relay new control states (depending on result of commands)
     onStreamStatus    = noopAny, // Relay stream status changes ("active" | "paused" | "ended")
     onRecordingStatus = noopAny, // Relay recording toggle changes from the primary consumer
+    onTaskMonitor     = noopAny, // The chat type's task panel view (as we join, and after each change)
 }) {
     // --------------------------------------------------------------------------------
     // Timing (header UI)
@@ -67,9 +68,9 @@ export default function useChatListener({
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
     // Acks (command success/failure confirmation communications with the backend)
-    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus });
-    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus };
-    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus ]);
+    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor };
+    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor ]);
 
     // --------------------------------------------------------------------------------
     // Message Handling
@@ -84,6 +85,7 @@ export default function useChatListener({
             onControlState    : (st ) => controlHandlersRef.current.onControlState   (st ),
             onStreamStatus    : (st ) => controlHandlersRef.current.onStreamStatus   (st ),
             onRecordingStatus : (st ) => controlHandlersRef.current.onRecordingStatus(st ),
+            onTaskMonitor     : (vw ) => controlHandlersRef.current.onTaskMonitor    (vw ),
         });
     }, []);
 

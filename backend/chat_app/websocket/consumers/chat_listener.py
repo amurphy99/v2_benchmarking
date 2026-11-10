@@ -7,6 +7,7 @@ Receives live updates about the current chat's status, including:
 - Messages (from user & backend)
 - Biomarker scores
 - Structured chat elements (e.g. "conversation_state")
+- The chat type's task panel view (`task_monitor`, for chat types that have one)
 
 See `CLIENT_PROTOCOL.md` in this directory for the full command vocabulary and payloads.
 
@@ -116,6 +117,9 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
             self.control_group,
             {"type": "ws.command", "payload": {"id": str(uuid4()), "name": "get_control_state"}, "reply_channel": self.channel_name},
         )
+
+        # ...and for its chat type's task panel view (a chat type without one sends nothing)
+        await self.channel_layer.group_send(self.control_group, {"type": "ws.listener_joined", "reply_channel": self.channel_name})
         log.log_connect_done(num_messages, num_biomarkers)
 
     # --------------------------------------------------------------------------------
@@ -163,6 +167,10 @@ class ChatListenerConsumer(AsyncJsonWebsocketConsumer):
     # Receives complete control state after any accepted command
     async def ws_control_state(self, event: dict) -> None:
         await self.send_json({"type": "control_state", "data": event.get("data", {})})
+
+    # Receives the chat type's task panel view (as this listener joins, and after each change)
+    async def ws_task_monitor(self, event: dict) -> None:
+        await self.send_json({"type": "task_monitor", "data": event["data"]})
 
     # ================================================================================
     # Client Event Handler | Handle messages from the client we are connected to

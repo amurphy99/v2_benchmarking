@@ -7,6 +7,10 @@ export const PATIENT_HEX    = "#0ac945"; // #0ac945
 export const CAREGIVER_OKLCH = "#7f22fe";
 export const PATIENT_OKLCH   = "#00a63e";
 
+// Map Task maps: the route in red pen, and the avatar's path in blue (`components/map_task/MapTaskMap`, and legends for it)
+export const MAP_TASK_ROUTE_HEX = "#c2410c";
+export const MAP_TASK_PATH_HEX  = "#2563eb";
+
 
 
 // Helper to style navigation links

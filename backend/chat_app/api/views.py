@@ -11,6 +11,7 @@ instructions, account creation, and caregiver links require `is_staff`.
 
 """
 from rest_framework                       import viewsets, generics, mixins, permissions
+from rest_framework.request               import Request
 from rest_framework.response              import Response
 from rest_framework.views                 import APIView
 from rest_framework_simplejwt.views       import TokenObtainPairView, TokenRefreshView
@@ -29,6 +30,8 @@ from  .serializers import AdminCaregiverSerializer, AdminCreateAccountSerializer
 from  .mixins      import ProfileMixin, accessible_chat_sessions, monitored_profiles
 from ..helpers.downloadHelpers             import get_download_data
 from ..services.session_audio_storage      import create_recording_playback_url
+from ..websocket.harnesses.map_task.harness import MAP_TASK_VARIANTS
+from ..websocket.harnesses.map_task.maps    import map_file_previews
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
 # `ChatSession` fields recording what ran, each an optional exact-match filter on the session list
@@ -309,6 +312,20 @@ class AdminCaregiverViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, view
                 .select_related("user")
                 .prefetch_related("account_access__profile__account__user")
                 .order_by("user__username"))
+
+# Let staff check every Map Task map file: both maps drawn from it, or why it doesn't load
+class MapTaskMapsView(APIView):
+    """
+    GET /api/map-task/maps/ => every file in `websocket/harnesses/map_task/maps/`, read fresh
+                               from disk (`maps.map_file_previews`)
+
+    Staff only: it shows the avatar's map, which a participant must never see.
+    """
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    # Every map file, the ones clients can pick first
+    def get(self, request: Request) -> Response:
+        return Response(map_file_previews(MAP_TASK_VARIANTS))
 
 
 # ======================================================================= ===================================

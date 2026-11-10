@@ -15,12 +15,14 @@ build up before the assistant responds), sending commands for it to respond
 immediately, a text box for admin users to have the bot say whatever they want,
 and the recording toggle.
 
-The side column has two tabs. "Avatar" holds the buttons for the avatar or
-robot actions, which change based on the "source" attribute of the ChatSession
-we are listening in on (the web interface with a virtual avatar, or either of
-the two robots we also have configured to work with our system), such as
-expressions (e.g. happy, sad, thinking) or movements (e.g. nodding yes or no).
-"Biomarkers" holds the live biomarker scores.
+The side column has tabs. "Avatar" holds the buttons for the avatar or robot
+actions, which change based on the "source" attribute of the ChatSession we are
+listening in on (the web interface with a virtual avatar, or either of the two
+robots we also have configured to work with our system), such as expressions
+(e.g. happy, sad, thinking) or movements (e.g. nodding yes or no). A chat type
+that sends a task view gets its own tab ("Map" for the Map Task: both maps and
+where the avatar has been). "Biomarkers" holds the live biomarker scores, and
+shows only when the participant's chats run biomarkers.
 
 On a wide screen the page fits the window and only the panels scroll; on a
 narrow one everything stacks and the page itself scrolls.
@@ -41,16 +43,18 @@ import type { StreamStatus } from "./components/admin_header/StatusComponents";
 import { getCapabilityProfile } from "./capabilities/profiles";
 
 // Data received from the backend
-import { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
-import { useLocalChatSession } from "@/hooks/live-chat";
-import { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
+import      { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
+import      { useLocalChatSession } from "@/hooks/live-chat";
+import      { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
+import type { TaskMonitor         } from "@/hooks/chat-listener/data_utils/taskMonitor";
 
 // Components
-import { SessionHeader      } from "./components/admin_header/SessionHeader";
-import { ChatMessages       } from "./components/common/ChatMessages";
-import { AdminControlsPanel } from "./components/AdminControlsPanel";
-import { LiveSidePanel      } from "./components/LiveSidePanel";
-import { AdminButton        } from "./components/ui/AdminButton";  // Experimental Buddy media (Robot view link)
+import { SessionHeader       } from "./components/admin_header/SessionHeader";
+import { ChatMessages        } from "./components/common/ChatMessages";
+import { AdminControlsPanel  } from "./components/AdminControlsPanel";
+import { LiveSidePanel       } from "./components/LiveSidePanel";
+import { MapTaskMonitorPanel } from "./components/MapTaskMonitorPanel";
+import { AdminButton         } from "./components/ui/AdminButton";  // Experimental Buddy media (Robot view link)
 
 // Misc. Helpers
 import { makeSampleMessage, makeSampleBiomarkerEvent } from "@/hooks/chat-listener/data_utils/adminChatSamples";
@@ -68,6 +72,9 @@ export function AdminChat() {
     // Chat Messages & Biomarker Scores
     const { session, setMessages, pushMessageObj } = useLocalChatSession();
     const { series,  setScores,   pushScoreObj   } = useLocalBiomarkers ();
+
+    // The chat type's task view (the Map Task's maps), null until one arrives
+    const [taskMonitor, setTaskMonitor] = useState<TaskMonitor | null>(null);
 
     // --------------------------------------------------------------------------------
     // WebSocket Setup
@@ -98,6 +105,7 @@ export function AdminChat() {
         onRecordingStatus : (st)   => {
             setControlState((s) => ({...s, recording_enabled: st?.enabled ?? s.recording_enabled}));
         },
+        onTaskMonitor     : setTaskMonitor,
     });
 
     // [DEBUGGING] Sample Data Methods
@@ -128,6 +136,10 @@ export function AdminChat() {
     // Which action buttons to offer, based on what the monitored frontend can actually do.
     // `avatarModel` only matters for the webapp, where the avatar is a per-user setting.
     const capabilities = getCapabilityProfile(sessionInfo?.source, sessionInfo?.avatarModel);
+
+    // The side column's chat-specific tabs: the task view this chat type sends, and biomarkers when the chat runs them (or has scores)
+    const taskTab        = (taskMonitor?.kind === "map_task") ? {label: "Map", panel: <MapTaskMonitorPanel view={taskMonitor} />} : null;
+    const showBiomarkers = (sessionInfo?.run_biomarkers === true) || (series.points.length > 0);
 
     // Experimental Buddy media: link to the robot view (see backend/chat_app/websocket/experimental/buddy/README.md)
     const navigate        = useNavigate();
@@ -185,6 +197,8 @@ export function AdminChat() {
                     pendingAnimation = {pending.robot_animation}
                     onEmotion        = {actions.robotEmotion}
                     onAnimation      = {actions.robotAnimation}
+                    taskTab          = {taskTab}
+                    showBiomarkers   = {showBiomarkers}
                     series           = {series}
                 />
             </main>

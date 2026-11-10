@@ -16,6 +16,7 @@ from .views import (
     AdminProfileViewSet,                     # Admin participant settings
     AdminCaregiverViewSet,                   # Admin caregiver links
     AdminCreateAccountView,                  # Admin account creation
+    MapTaskMapsView,                         # Staff Map Task map preview
     GoalView, UserSettingsView,              # One-off endpoints
     ProfileView, AccountView,                # Profile & account
     AccessViewSet,                           # Who a profile is shared with
@@ -65,8 +66,9 @@ urlpatterns = [
     path("profile/", ProfileView.as_view(), name="profile"),
     path("account/", AccountView.as_view(), name="account"),
 
-    # Staff-only account creation
+    # Staff-only account creation, and the Map Task map files
     path("admin/accounts/", AdminCreateAccountView.as_view(), name="admin_create_account"),
+    path("map-task/maps/",  MapTaskMapsView       .as_view(), name="map_task_maps"       ),
     
     # Single-row resources
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),

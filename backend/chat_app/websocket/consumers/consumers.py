@@ -270,6 +270,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def ws_monitor         (self, event): await forward_payload_to_client(self, event)
     async def ws_recording_status(self, event): pass  # Primary consumer echoes its own broadcast; no action needed
 
+    # A listener just joined: send it the chat type's task panel view (nothing for a chat type without one)
+    async def ws_listener_joined(self, event: dict) -> None:
+        view = self.harness.monitor_view()
+        if view is not None: await self.channel_layer.send(event["reply_channel"], {"type": "ws.task_monitor", "data": view})
+
     # A newer primary connection for this account has taken ownership of live chat traffic.
     async def ws_session_replaced(self, event):
         if event.get("replacement_channel") == self.channel_name: return
@@ -298,6 +303,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     # Broadcasts the complete canonical control state to every listener
     async def _broadcast_control_state(self, state: dict[str, object]) -> None:
         await self.channel_layer.group_send(self.monitor_group, {"type": "ws.control_state", "data": state})
+
+    # Broadcasts the chat type's task panel view to every listener (its harness calls this after a change)
+    async def broadcast_task_monitor(self, view: dict[str, object]) -> None:
+        await self.channel_layer.group_send(self.monitor_group, {"type": "ws.task_monitor", "data": view})
 
 
     # ================================================================================

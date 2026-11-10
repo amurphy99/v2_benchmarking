@@ -1,4 +1,6 @@
-import type { WsEnvelope } from "./types";
+import type { TaskMonitor      } from "../data_utils/taskMonitor";
+import      { parseTaskMonitor } from "../data_utils/taskMonitor";
+import type { WsEnvelope       } from "./types";
 
 // ================================================================================
 // Handle incoming messages from the backend
@@ -14,6 +16,7 @@ export function createWsRouter({
     onControlState,
     onStreamStatus,
     onRecordingStatus,
+    onTaskMonitor,
 }: {
     setLastEventAt : (d: Date         ) => void;
     setLatencyMs   : (n: number | null) => void;
@@ -30,6 +33,7 @@ export function createWsRouter({
     onControlState    : (state   : any) => void;
     onStreamStatus    : (status  : any) => void;
     onRecordingStatus : (status  : any) => void;
+    onTaskMonitor     : (view    : TaskMonitor) => void;   // The chat type's task panel view (checked first)
 }) {
     return function onMessage(event: MessageEvent) {
         // Parse the initial event
@@ -67,6 +71,13 @@ export function createWsRouter({
         else if (type === "control_state"    )   onControlState   (data);
         else if (type === "stream_status"    )   onStreamStatus   (data);
         else if (type === "recording_status" )   onRecordingStatus(data);
+
+        // The chat type's task panel view, dropped whole when it isn't one this page can show
+        else if (type === "task_monitor") {
+            const view = parseTaskMonitor(data);
+            if (view !== null) onTaskMonitor(view);
+            else               console.warn("Dropped a task_monitor frame this page can't show");
+        }
 
         // Unhandled events
         else { console.debug("Unhandled WS event type:", type, response); }

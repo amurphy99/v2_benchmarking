@@ -471,8 +471,6 @@ has the details.
 
 **Not built yet:**
 
-* **The Map Task's plans:** the chat page can pick it, but its harness sends no
-  setup or plans yet, so its avatar never holds the map.
 * **Other avatars:** only the Smiley has a plan catalog. The 3D QT and Buddy
   avatars reject plans, and the physical robots don't know about them.
 * **Strength on `robot_action`:** not on the wire (plans have it).
@@ -515,15 +513,11 @@ has the details.
   sway and head cock, and raising the map are the backend's job (the Map Task
   setup turns the automatic ones off).
 
-**Open** (raised in discussion, not designed yet):
-
-* What decides the avatar's moves in the Map Task: a programmatic harness, the
-  LLM, or both.
-* Reacting to interim speech (direction words, silences) within a few hundred
-  milliseconds, before any reply exists.
-* Barge-in: when the participant talks over the avatar's thinking or reply
-  (back to listening, map down). The demo's Barge-In example shows the client
-  side.
+**Settled since:** the Map Task's moves come from its harness (code reads each
+turn, the LLM picks the move, code applies it), its cues react to interim speech
+(landmark and direction glances), and newer speech cancelling a reply sends the
+avatar back to listening with its map down (the shared `BackToListening` cue). See
+`backend/chat_app/websocket/harnesses/map_task/README.md`.
 * How often to send plans: every plan cuts the one before short, so each new
   plan has to carry everything still wanted.
 * Whether the admin panel should see plans and feedback, and whether its action
@@ -569,7 +563,7 @@ has the details.
      │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
      │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`, `variant`)
      │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
-     │   └── components/                   # The reply caption, the controls, the planning card, and the task notes
+     │   └── components/                   # The reply caption, the controls, the planning card, and the Map Task map
      │
      ├── avatar_demo/
      │   ├── AvatarDemo.tsx                # The demo page

@@ -5,10 +5,14 @@
 Some chat types show the participant their task materials beside the avatar
 (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md` §13). Each card
 replaces the last. `kind` says which chat type's card it is: this page shows
-`cooperative_planning` cards, and drops any other kind, or a card that doesn't
-match the shape below. Field names keep the wire's spelling.
+`cooperative_planning` cards and `map_task` maps, and drops any other kind, or a
+card that doesn't match its shape. Field names keep the wire's spelling.
 
 */
+// From this project
+import type { MapTaskGiverMap } from "@/api";
+import      { parseGiverMap   } from "@/components/map_task/mapTaskViews";
+
 // One item's line on a planning card
 export type PlanningCardItem = {
     id      : string;          // Item id ("starter")
@@ -26,8 +30,11 @@ export type PlanningCard = {
     complete    : boolean;              // The whole plan was approved
 };
 
+// The participant's Map Task map: its landmarks, and the route from the start to the finish
+export type MapTaskCard = {kind: "map_task"} & MapTaskGiverMap;
+
 // Every kind of card this page can show
-export type TaskCard = PlanningCard;
+export type TaskCard = PlanningCard | MapTaskCard;
 
 
 // --------------------------------------------------------------------------------
@@ -35,7 +42,20 @@ export type TaskCard = PlanningCard;
 // --------------------------------------------------------------------------------
 // A `task_card` frame's data as a card (null for a kind this page can't show, or a malformed card)
 export function parseTaskCard(data: unknown): TaskCard | null {
-    if (!isRecord(data) || (data.kind !== "cooperative_planning")) return null;
+    if (!isRecord(data)) return null;
+    if (data.kind === "cooperative_planning") return parsePlanningCard(data);
+    if (data.kind === "map_task")             return parseMapCard(data);
+    return null;
+}
+
+// The participant's Map Task map (null when malformed)
+function parseMapCard(data: Record<string, unknown>): MapTaskCard | null {
+    const map = parseGiverMap(data);
+    return (map === null) ? null : {kind: "map_task", ...map};
+}
+
+// A cooperative planning card (null when malformed)
+function parsePlanningCard(data: Record<string, unknown>): PlanningCard | null {
     const {title, constraints, items, complete} = data;
     if ((typeof title !== "string") || !isStringList(constraints) || !Array.isArray(items) || (typeof complete !== "boolean")) return null;
 

@@ -20,7 +20,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider                                                                     } from "@/context/AuthProvider";
 import { AppLayout, HomeRedirect, IsCaregiver, IsPatient, IsStaff, Protected, Unprotected } from "@/routes";
 import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, AdminCreateAccount     } from "@/pages";
-import { AdminParticipants                                                                } from "@/pages";
+import { AdminMapTaskMaps, AdminParticipants                                              } from "@/pages";
 import { AdminRobotView                                                                   } from "@/pages";  // Experimental Buddy media
 import { Alert, Analysis, AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails       } from "@/pages";
 import { ChatEnd, Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile   } from "@/pages";
@@ -126,6 +126,7 @@ export default function App() {
                         <Route element={<IsStaff />}>
                             <Route path="/admin/chat/activities" element={<AdminChatActivities />} />
                             <Route path="/admin/accounts/new"    element={<AdminCreateAccount  />} />
+                            <Route path="/admin/map-task/maps"   element={<AdminMapTaskMaps    />} />
                         </Route>
                     </Route>
 

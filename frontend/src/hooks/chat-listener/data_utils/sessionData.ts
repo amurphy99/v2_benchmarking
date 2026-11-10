@@ -17,6 +17,7 @@ type SessionInfo = {
     chat_type     : string;                   // Harness that ran ("" on sessions from before chat types were recorded)
     condition     : string;                   // Its cue set ("" for none)
     variant       : string;                   // Its task content ("" for none)
+    run_biomarkers: boolean;                  // The participant's biomarker switch (off: no biomarker scores are coming)
 };
 
 export { SessionInfo }

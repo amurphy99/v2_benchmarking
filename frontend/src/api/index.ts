@@ -10,3 +10,4 @@ export * from "./endpoints/download";
 export * from "./endpoints/raginstructions";
 export * from "./endpoints/adminProfiles";
 export * from "./endpoints/adminAccounts";
+export * from "./endpoints/mapTask";
