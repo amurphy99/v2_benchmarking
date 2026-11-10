@@ -16,6 +16,10 @@ frames, or a turn of its own). A reply proposes its effects in a
 saved, so a reply cancelled by newer speech never leaves the chat in a state the
 user never heard.
 
+A chat type with state worth watching gives the admin listener a view of it
+(`monitor_view`): it goes to every listener whenever a saved reply changes the
+state, and to each listener as it joins.
+
 """
 from __future__  import annotations
 from abc         import ABC, abstractmethod
@@ -28,7 +32,8 @@ logger = logging.getLogger(__name__)
 
 # From this project
 from ...services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
-from  .avatar                  import AvatarPlan, ResponseMood
+from  ..services.bg_helpers    import fire_and_log
+from   .avatar                 import AvatarPlan, ResponseMood
 
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
 
@@ -47,6 +52,9 @@ MoodPublisher = Callable[[ResponseMood], Awaitable[None]]
 
 # Sends an avatar plan before the reply (dropped if newer speech cancelled it)
 PlanPublisher = Callable[[AvatarPlan], Awaitable[None]]
+
+# What the admin listener's task panel shows about a chat, in the wire format (`task_monitor`)
+MonitorView = dict[str, object]
 
 
 # --------------------------------------------------------------------------------
@@ -119,6 +127,7 @@ class ChatHarness(ABC):
         self.condition       = condition
         self.variant         = variant
         self.cues: list[Cue] = []
+        self.turn_number     = 0   # Reply attempts so far (avatar plans carry it as their `turn`)
 
     # --------------------------------------------------------------------------------
     # Replies
@@ -127,9 +136,11 @@ class ChatHarness(ABC):
     @abstractmethod
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome: ...
 
-    # Enter the state a reply proposed, now that its exchange is saved, then tell the cues
+    # Enter the state a reply proposed, now that its exchange is saved (the listeners see it), then tell the cues
     def on_reply_saved(self, outcome: ResponseOutcome) -> None:
-        if outcome.state is not None: self.state = outcome.state
+        if outcome.state is not None:
+            self.state = outcome.state
+            self.publish_monitor_view()
         self._tell_cues("on_reply_saved", outcome)
 
     # Ask for a reply of the harness's own (an opening line, a re-prompt); False while another reply owns the turn
@@ -148,14 +159,30 @@ class ChatHarness(ABC):
         self._tell_cues("stop")
 
     # --------------------------------------------------------------------------------
+    # Monitoring
+    # --------------------------------------------------------------------------------
+    # What the admin listener's task panel shows about this chat now (None for a chat type without one)
+    def monitor_view(self) -> MonitorView | None:
+        return None
+
+    # Send the task panel's view to every admin listener (nothing for a chat type without one)
+    def publish_monitor_view(self) -> None:
+        view = self.monitor_view()
+        if view is not None: fire_and_log(self.consumer.broadcast_task_monitor(view), name=f"{self.NAME}::monitor")
+
+    # --------------------------------------------------------------------------------
     # Turn Events (each one is described on `Cue`)
     # --------------------------------------------------------------------------------
     # Pass each turn event on to every cue
     def on_interim        (self, speech:      InterimSpeech           ) -> None: self._tell_cues("on_interim",         speech            )
     def on_final          (self, utterance:   FinalUtterance          ) -> None: self._tell_cues("on_final",           utterance         )
-    def on_reply_started  (self, attempt:     TurnAttempt             ) -> None: self._tell_cues("on_reply_started",   attempt           )
     def on_reply_cancelled(self, attempt:     TurnAttempt, saved: bool) -> None: self._tell_cues("on_reply_cancelled", attempt,     saved)
     def on_playback       (self, response_id: int,         state: str ) -> None: self._tell_cues("on_playback",        response_id, state)
+
+    # Number every reply attempt before the cues hear about it (their plans carry the number)
+    def on_reply_started(self, attempt: TurnAttempt) -> None:
+        self.turn_number += 1
+        self._tell_cues("on_reply_started", attempt)
 
     # Hand one event to each cue in turn (a cue that raises is logged, and the rest still hear it)
     def _tell_cues(self, hook: str, *args: object) -> None:

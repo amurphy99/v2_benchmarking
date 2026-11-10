@@ -380,12 +380,16 @@ class DirectionCue(KeywordCue):
         self.matches: list[str] = []
 
     # Keep the order directions were heard in
-    def on_match(self, name: str, text: str) -> None:
+    def on_match(self, name: str, match: re.Match[str]) -> None:
         self.matches.append(name)
 
 # The same directions, checked only once each utterance is final
 class FinalDirectionCue(DirectionCue):
     ON = "final"
+
+# The same directions, never reacted to while a reply owns the avatar
+class QuietDirectionCue(DirectionCue):
+    QUIET_WHILE_REPLYING = True
 
 
 class KeywordCueTests(unittest.TestCase):
@@ -424,6 +428,25 @@ class KeywordCueTests(unittest.TestCase):
         self.assertEqual(cue.matches, [])
 
         cue.on_final(FinalUtterance(text="go left", words=()))
+        self.assertEqual(cue.matches, ["left"])
+
+    # Words heard while a reply is prepared or played (or first in a final) are counted but never fired, and the next utterance fires again
+    def test_a_quiet_cue_waits_out_the_reply(self) -> None:
+        cue = QuietDirectionCue(SimpleNamespace())
+        cue.on_reply_started(SimpleNamespace())
+        cue.on_interim(make_interim("go left"))
+        cue.on_reply_saved(SimpleNamespace())
+        cue.on_playback(1, "started")
+        cue.on_interim(make_interim("go left and up"))
+        cue.on_playback(1, "finished")
+        cue.on_final(FinalUtterance(text="go left and up", words=()))
+        self.assertEqual(cue.matches, [])
+
+        cue.on_interim(make_interim("left"))
+        self.assertEqual(cue.matches, ["left"])
+
+        # A word first heard in a final is only counted (the reply starting right after it takes the avatar over)
+        cue.on_final(FinalUtterance(text="left then up", words=()))
         self.assertEqual(cue.matches, ["left"])
 
 

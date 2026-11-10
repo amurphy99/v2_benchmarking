@@ -44,3 +44,11 @@ async def send_avatar_setup(consumer: ChatConsumer, setup: AvatarSetup) -> None:
 # Send a plan to the primary client (it drops every older plan's waiting steps)
 async def send_avatar_plan(consumer: ChatConsumer, plan: AvatarPlan) -> None:
     await consumer.send_json({"type": "avatar_plan", "data": plan})
+
+
+# --------------------------------------------------------------------------------
+# Shared Plans
+# --------------------------------------------------------------------------------
+# Back to listening at once: the held prop down and the eyes free (newer speech cancelled the reply)
+def listening_plan(turn: int) -> AvatarPlan:
+    return {"id": f"t{turn}-listen", "turn": turn, "steps": [{"state": "listening", "prop": {"raise": 0}, "gaze": "release"}]}

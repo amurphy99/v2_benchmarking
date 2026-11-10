@@ -15,9 +15,9 @@ closing line.
 
 With the `cues` condition the avatar holds its own card, reads it over while it
 works out each reply, every reply carries an avatar plan for the behavior it
-picked (`behaviors.py`), and the cues in `cues.py` run. With `no_cues` the reply
-calls still pick a behavior (it's logged), but no plan is sent and the avatar
-only idles.
+picked (`behaviors.py`), and the cues run (`cues.py`, and the shared
+`BackToListening`). With `no_cues` the reply calls still pick a behavior (it's
+logged), but no plan is sent and the avatar only idles.
 
 The participant's card goes out as a `task_card` frame when the chat starts and
 whenever the plan on it changes.
@@ -36,9 +36,10 @@ from ....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN
 from  ...services.bg_helpers         import fire_and_log
 from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
+from   ..cues                        import BackToListening
 from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan, writing_plan
 from    .config                      import PLANNING_PIPELINE
-from    .cues                        import BackToListening, ItemGlance, QuietNudge
+from    .cues                        import ItemGlance, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
 from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
@@ -95,7 +96,6 @@ class CooperativePlanningHarness(ChatHarness):
         self.models      = models_for_scenario(self.scenario.item_ids, self.scenario.avatar_constraint_ids)
         self.state       = initial_state(self.scenario)
         self.with_cues   = (condition == "cues")
-        self.turn_number = 0                                      # Reply attempts so far (in each avatar plan's id)
         self._tracking   : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
         if self.with_cues: self.cues = [BackToListening(self), ItemGlance(self), QuietNudge(self)]
 
@@ -105,11 +105,6 @@ class CooperativePlanningHarness(ChatHarness):
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())
         await send_task_card(self.consumer, self.scenario, self.state)
         self.request_turn()
-
-    # Number every reply attempt before the cues hear it (their plans carry the number)
-    def on_reply_started(self, attempt: TurnAttempt) -> None:
-        self.turn_number += 1
-        super().on_reply_started(attempt)
 
     # --------------------------------------------------------------------------------
     # Answer one turn through the pipeline, and propose the plan its changes leave

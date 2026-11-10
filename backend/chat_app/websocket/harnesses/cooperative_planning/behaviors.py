@@ -85,10 +85,6 @@ def thinking_plan(turn: int) -> AvatarPlan:
     read_over = {"on": "card", "scan": {"around": [0.5, 0.55], "radius": PLANNING_CARD_READ_RADIUS}}
     return {"id": f"t{turn}-think", "turn": turn, "steps": [{"state": "thinking", "prop": {"raise": PLANNING_CARD_THINK_RAISE}, "gaze": read_over}]}
 
-# Back to listening at once, card down (newer speech cancelled the reply)
-def listening_plan(turn: int) -> AvatarPlan:
-    return {"id": f"t{turn}-listen", "turn": turn, "steps": [{"state": "listening", "prop": {"raise": 0}, "gaze": "release"}]}
-
 # A quick look at an item's line on the card, the moment the user names it
 def glance_plan(scenario: Scenario, item_id: str, count: int) -> AvatarPlan:
     return {"id": f"glance-{item_id}-{count}", "steps": [{"gaze": {"on": "card", "at": item_spot(scenario, item_id), "hold_ms": PLANNING_GLANCE_MS}}]}

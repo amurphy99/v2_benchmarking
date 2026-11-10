@@ -6,7 +6,8 @@ Shared cues: react to words in the user's speech, or to the user's silence.
 Building blocks a chat type subclasses for its own cues. `KeywordCue` fires once
 for each new occurrence of a pattern while the user speaks, and `SilenceWatcher`
 times the user's silence on their turn. Each subclass decides what the avatar
-does when it fires.
+does when it fires. `BackToListening` is a whole cue every plan-driven chat type
+can use as is.
 
 """
 from __future__  import annotations
@@ -17,7 +18,9 @@ from typing      import Literal
 import asyncio, re, time
 
 # From this project
-from .base import ChatHarness, Cue, FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
+from ..services.bg_helpers import fire_and_log
+from  .avatar              import listening_plan, send_avatar_plan
+from  .base                import ChatHarness, Cue, FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
 
 
 # --------------------------------------------------------------------------------
@@ -34,34 +37,53 @@ class KeywordCue(Cue):
     interim), and then the count starts over for the next utterance.
 
     With `ON = "final"`, only finals are checked: later, but never on a misheard interim.
-    """
-    PATTERNS : dict[str, re.Pattern[str]]  = {}         # Match name -> compiled pattern
-    ON       : Literal["interim", "final"] = "interim"  # The earliest result to react to
 
-    # Start with nothing counted
+    With `QUIET_WHILE_REPLYING`, an occurrence heard while a reply is being prepared
+    or its audio plays is counted but not reacted to: a cue's plan would drop the
+    reply plan's waiting steps. Neither is one first heard in a final, because the
+    reply starts right after it and its own plan takes the avatar over.
+
+    NOTE: Only clients that send `tts_playback` (the web app) report a reply's audio,
+          so with any other client the quiet ends once the reply's text is saved.
+    """
+    PATTERNS             : dict[str, re.Pattern[str]]  = {}         # Match name -> compiled pattern
+    ON                   : Literal["interim", "final"] = "interim"  # The earliest result to react to
+    QUIET_WHILE_REPLYING : bool                        = False      # Ignore occurrences while a reply owns the avatar
+
+    # Start with nothing counted, and no reply under way
     def __init__(self, harness: ChatHarness) -> None:
         super().__init__(harness)
-        self._fired : Counter[str] = Counter()  # Occurrences already fired per name, in the current utterance
+        self._fired     : Counter[str] = Counter()  # Occurrences already fired per name, in the current utterance
+        self._preparing : bool         = False      # A reply attempt is running
+        self._playing   : bool         = False      # A reply's audio is playing
 
-    # React to one new occurrence (the subclass decides what the avatar does)
+    # React to one new occurrence (the match holds what was said; the subclass decides what the avatar does)
     @abstractmethod
-    def on_match(self, name: str, text: str) -> None: ...
+    def on_match(self, name: str, match: re.Match[str]) -> None: ...
 
     # Check the utterance so far while the user is still speaking
     def on_interim(self, speech: InterimSpeech) -> None:
-        if self.ON == "interim": self._check(speech.text)
+        if self.ON == "interim": self._check(speech.text, quiet=False)
 
-    # Check the finished utterance, then start counting the next one
+    # Check the finished utterance (a quiet cue only counts it), then start counting the next one
     def on_final(self, utterance: FinalUtterance) -> None:
-        self._check(utterance.text)
+        self._check(utterance.text, quiet=self.QUIET_WHILE_REPLYING)
         self._fired.clear()
 
+    # A reply owns the avatar from when it starts being prepared until its audio finishes, or it is cancelled
+    def on_reply_started  (self, attempt: TurnAttempt             ) -> None: self._preparing = True
+    def on_reply_saved    (self, outcome: ResponseOutcome         ) -> None: self._preparing = False
+    def on_playback       (self, response_id: int,     state: str ) -> None: self._playing   = (state == "started")
+    def on_reply_cancelled(self, attempt: TurnAttempt, saved: bool) -> None: self._preparing, self._playing = False, False
+
     # Fire once for each occurrence beyond those already fired (a revision never lowers the count)
-    def _check(self, text: str) -> None:
+    def _check(self, text: str, *, quiet: bool) -> None:
+        quiet = quiet or (self.QUIET_WHILE_REPLYING and (self._preparing or self._playing))
         for name, pattern in self.PATTERNS.items():
-            found = len(pattern.findall(text))
-            for _ in range(self._fired[name], found): self.on_match(name, text)
-            self._fired[name] = max(self._fired[name], found)
+            matches = list(pattern.finditer(text))
+            if not quiet:
+                for match in matches[self._fired[name]:]: self.on_match(name, match)
+            self._fired[name] = max(self._fired[name], len(matches))
 
 
 # ================================================================================
@@ -147,3 +169,13 @@ class SilenceWatcher(Cue):
     def _clear(self) -> None:
         for timer in self._timers: timer.cancel()
         self._timers = []
+
+
+# --------------------------------------------------------------------------------
+# Back to Listening
+# --------------------------------------------------------------------------------
+# Lower the held prop and free the eyes when newer speech cancels a reply (for chat types that send plans)
+class BackToListening(Cue):
+    # Newer speech cancelled the reply: back to listening at once
+    def on_reply_cancelled(self, attempt: TurnAttempt, saved: bool) -> None:
+        fire_and_log(send_avatar_plan(self.harness.consumer, listening_plan(self.harness.turn_number)), name=f"{self.harness.NAME}::back_to_listening")
