@@ -1,0 +1,36 @@
+{
+    "description": "HCRC Map Task Corpus map 3 (scans map2g and map2f), from the Human Communication Research Centre, University of Edinburgh, CC BY 4.0 (https://groups.inf.ed.ac.uk/maptask/). Landmark spots and the route were traced from the scans; the icons stand in for the original drawings.",
+    "shape": "portrait",
+    "route": [
+        [0.261, 0.025], [0.224, 0.047], [0.212, 0.074], [0.214, 0.131], [0.226, 0.156], [0.254, 0.176],
+        [0.291, 0.186], [0.332, 0.186], [0.496, 0.165], [0.538, 0.157], [0.613, 0.132], [0.625, 0.111],
+        [0.608, 0.072], [0.619, 0.053], [0.675, 0.026], [0.711, 0.017], [0.747, 0.013], [0.785, 0.020],
+        [0.813, 0.035], [0.834, 0.056], [0.845, 0.080], [0.847, 0.103], [0.842, 0.156], [0.829, 0.206],
+        [0.809, 0.231], [0.655, 0.333], [0.620, 0.350], [0.582, 0.360], [0.550, 0.365], [0.519, 0.363],
+        [0.361, 0.327], [0.320, 0.327], [0.284, 0.335], [0.251, 0.352], [0.225, 0.375], [0.189, 0.425],
+        [0.172, 0.483], [0.175, 0.567], [0.200, 0.619], [0.220, 0.639], [0.245, 0.652], [0.314, 0.663],
+        [0.388, 0.651], [0.576, 0.588], [0.703, 0.557], [0.823, 0.559], [0.900, 0.579], [0.927, 0.598],
+        [0.951, 0.655], [0.959, 0.773], [0.953, 0.833], [0.925, 0.879], [0.859, 0.916], [0.820, 0.927],
+        [0.744, 0.931], [0.694, 0.904], [0.660, 0.896], [0.584, 0.897], [0.548, 0.907], [0.476, 0.958],
+        [0.369, 0.989], [0.286, 0.992], [0.212, 0.981], [0.177, 0.971], [0.116, 0.942], [0.074, 0.897],
+        [0.073, 0.875]
+    ],
+    "landmarks": [
+        {"id": "diamond_mine",    "label": "diamond mine",    "icon": "mine",        "at": [0.322, 0.107]},
+        {"id": "wagon_wheel",     "label": "wagon wheel",     "icon": "wagon_wheel", "at": [0.569, 0.099], "also_called": ["wheel", "cartwheel"], "on": "giver"},
+        {"id": "rift_valley",     "label": "rift valley",     "icon": "valley",      "at": [0.846, 0.041], "also_called": ["valley"], "radius": 0.06},
+        {"id": "swamp",           "label": "swamp",           "icon": "swamp",       "at": [0.11, 0.244],  "radius": 0.05},
+        {"id": "stone_creek_2",   "label": "stone creek",     "icon": "river",       "at": [0.519, 0.299], "on": "giver"},
+        {"id": "rocks",           "label": "rocks",           "icon": "rock",        "at": [0.869, 0.322], "also_called": ["rock", "boulders"], "radius": 0.06},
+        {"id": "white_water",     "label": "white water",     "icon": "rapids",      "at": [0.351, 0.372], "radius": 0.05, "follower": {"label": "rapids"}},
+        {"id": "outlaws_hideout", "label": "outlaws hideout", "icon": "cave",        "at": [0.792, 0.497], "also_called": ["hideout"]},
+        {"id": "stone_slabs",     "label": "stone slabs",     "icon": "stone_block", "at": [0.605, 0.705], "also_called": ["slabs", "stone slab"], "radius": 0.05},
+        {"id": "stone_creek",     "label": "stone creek",     "icon": "river",       "at": [0.337, 0.794], "also_called": ["creek"]},
+        {"id": "noose",           "label": "noose",           "icon": "gallows",     "at": [0.871, 0.805], "also_called": ["gallows"]},
+        {"id": "saloon_bar",      "label": "saloon bar",      "icon": "saloon",      "at": [0.266, 0.925], "also_called": ["saloon"]},
+        {"id": "swan_pond",       "label": "swan pond",       "icon": "swan",        "at": [0.622, 0.935], "also_called": ["pond", "swans"], "on": "giver"},
+        {"id": "cactus",          "label": "cactus",          "icon": "cactus",      "at": [0.77, 0.176],  "on": "follower"},
+        {"id": "manned_fort",     "label": "manned fort",     "icon": "fort",        "at": [0.292, 0.59],  "also_called": ["fort"], "on": "follower"},
+        {"id": "gold_mine",       "label": "gold mine",       "icon": "mine",        "at": [0.873, 0.602], "on": "follower"}
+    ]
+}

@@ -3,7 +3,7 @@ The Map Task's structured LLM outputs, and the reply every pipeline returns.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.map_task.response_models`
 
-A move is one of three shapes (stay, go to a landmark, go one direction), so a
+A move is a stay, landmark destination, direction, or free path, so a
 response can't mix their fields. The responses that carry a move are built once
 per map (`models_for_map`), with the landmark limited to that map's ids: the
 schema the endpoint decodes against then only allows landmarks the avatar has.
@@ -27,6 +27,12 @@ from .geometry import Direction, Side, StepSize
 # What the follower's reply does
 FollowerAct = Literal["acknowledge", "answer", "clarify", "report_missing", "other"]
 
+# Waypoints per reply (with its starting point, the gaze trace stays below 64)
+MAP_TASK_MAX_WAYPOINTS = 32
+
+# Coordinates from the model must be finite numbers on the paper
+Coordinate = Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
+
 
 # --------------------------------------------------------------------------------
 # Moves
@@ -37,13 +43,13 @@ class Stay(BaseModel):
 
     kind : Literal["stay"]
 
-# Go to a landmark on the avatar's map, stopping on it or beside it
+# Go to a landmark on the avatar's map, stopping at its edge or beside it
 class ToLandmark(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind     : Literal["to_landmark"]
     landmark : str   # Landmark id (`models_for_map` limits it to one map's ids)
-    side     : Side  # Stop on it ("at"), or just above, below, left of, or right of it
+    side     : Side  # Reach its edge ("at"), or stop above, below, left of, or right of it
 
 # Go one way without a landmark to aim for
 class InDirection(BaseModel):
@@ -53,8 +59,15 @@ class InDirection(BaseModel):
     direction : Direction  # Which way on the map (up is toward the top)
     size      : StepSize   # A bit, some way, or a long way
 
+# Trace a route through open space, preserving each bend in the spoken instruction
+class AlongPath(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind   : Literal["path"]
+    points : list[tuple[Coordinate, Coordinate]] = Field(..., min_length=1, max_length=MAP_TASK_MAX_WAYPOINTS)
+
 # Any one move, told apart by its `kind`
-Move = Annotated[Stay | ToLandmark | InDirection, Field(discriminator="kind")]
+Move = Annotated[Stay | ToLandmark | InDirection | AlongPath, Field(discriminator="kind")]
 
 # The move every reply that moves nothing carries
 NO_MOVE = Stay(kind="stay")
@@ -115,7 +128,7 @@ class MapModels:
 @functools.cache
 def models_for_map(landmark_ids: tuple[str, ...]) -> MapModels:
     to_landmark = create_model("ToLandmark", __base__=ToLandmark, landmark=(Literal[landmark_ids], ...))
-    move        = Annotated[Stay | to_landmark | InDirection, Field(discriminator="kind")]
+    move        = Annotated[Stay | to_landmark | InDirection | AlongPath, Field(discriminator="kind")]
     return MapModels(
         follower_turn = create_model("FollowerTurn",   __base__=FollowerTurn,   move=(move, ...)),
         assessment    = create_model("TurnAssessment", __base__=TurnAssessment, move=(move, ...)),

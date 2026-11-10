@@ -8,21 +8,21 @@ their task card. A client that never picks one of these chat types never receive
 plan frames were designed from what the web app's Smiley avatar can do and what the client
 can observe.
 
-> **Status:** the `cooperative_planning` chat type sends setups, plans, and task cards (its
-> harness is in `websocket/harnesses/cooperative_planning/`), every `audio_chunk` carries
+> **Status:** the `map_task` and `cooperative_planning` chat types send setups, plans, and
+> task cards (their harnesses are in `websocket/harnesses/`), every `audio_chunk` carries
 > `sentence`, and `avatar_feedback` is logged. The web app's chat page runs them, and the
-> avatar demo page (`/avatar-demo`) plays the backend's part with example plans. The Map Task
-> doesn't send plans yet. The existing pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is
-> unchanged, and every client and chat type that doesn't use plans works exactly as before.
-> How the frontend runs a plan is in `frontend/src/pages/common/avatar/README.md`.
+> avatar demo page (`/avatar-demo`) plays the backend's part with example plans. The existing
+> pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and every client and chat
+> type that doesn't use plans works exactly as before. How the frontend runs a plan is in
+> `frontend/src/pages/common/avatar/README.md`.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Overview                                                                         -->
 <!-- -------------------------------------------------------------------------------- -->
 ## 1. Overview
 
-**Who uses it:** chat types that drive the avatar from the backend (`cooperative_planning`,
-and the Map Task next). The backend picks the pathway by chat type; there is no handshake. A
+**Who uses it:** chat types that drive the avatar from the backend (`map_task` and
+`cooperative_planning`). The backend picks the pathway by chat type; there is no handshake. A
 plan uses the avatar's own names (§9), kept in sync with this document by hand, and the
 client rejects any plan it can't run completely (§7).
 
@@ -568,3 +568,23 @@ agree on.
 | `items[].value` | string or `null` | The agreed choice, written on the line (`null` while open) |
 | `items[].pending` | string or `null` | A choice one side asked to settle on, waiting for the other side's yes |
 | `complete` | boolean | The participant approved the whole plan (the chat ends next) |
+
+**`map_task`:** the participant's map, sent once as the chat starts: its paper (`shape`:
+`"landscape"`, 210 by 148, or `"portrait"`, 148 by 210), every landmark on it, and the route
+from the start (its first point) to the finish (its last). Points are 0-1 across and down the
+paper, the same frame as the avatar's own map (§8.2). `icon` names one of the landmark
+pictures in `harnesses/map_task/map_icons.py`, and `radius` is how far the landmark reaches, in
+lengths of the paper's longer side (a client can draw a big landmark bigger). The avatar's
+map, which differs in places, never goes to the participant's client.
+
+```json
+{"type": "task_card", "data": {
+  "kind": "map_task",
+  "shape": "landscape",
+  "landmarks": [
+    {"id": "bridge", "label": "bridge", "icon": "bridge", "at": [0.14, 0.14], "radius": 0.04},
+    {"id": "castle", "label": "castle", "icon": "castle", "at": [0.40, 0.16], "radius": 0.04}
+  ],
+  "route": [[0.30, 0.66], [0.66, 0.60], [0.60, 0.44], [0.14, 0.22]]
+}}
+```

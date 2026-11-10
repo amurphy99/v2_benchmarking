@@ -5,7 +5,8 @@ System prompts for the Map Task's calls, and the map facts each call gets.
 
 Every call gets the same follower instructions, then its own task, then the facts
 about the avatar's map worked out in code for this turn (`understanding.py`). The
-model never sees coordinates, only directions, distances, and parts of the map.
+model sees its own coordinates, landmark extents, and recent committed trail.
+It never receives the giver's route or the giver's landmark coordinates.
 Each task lists the fields its response fills in, because the model never sees
 the schema's field descriptions (`response_models.py`).
 
@@ -14,7 +15,8 @@ from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from .geometry import region
+from .geometry        import MAP_TASK_BESIDE_GAP, MAP_TASK_STEPS, region
+from .response_models import MAP_TASK_MAX_WAYPOINTS
 
 if TYPE_CHECKING: from .understanding import TurnReading
 
@@ -32,6 +34,9 @@ MAP_TASK_DIRECTION_WORDS = {
 
 # How far a landmark is, in words (one right next to the avatar is described on its own)
 MAP_TASK_DISTANCE_WORDS = {"near": "nearby", "far": "far away"}
+
+# Recent committed points supplied for instructions such as "keep going"
+MAP_TASK_CONTEXT_POINTS = 8
 
 
 # --------------------------------------------------------------------------------
@@ -52,7 +57,10 @@ How to play:
 - When they name a landmark you don't have, say so, and mention what you do have nearby if it helps.
 - When a direction is unclear, ask one short question instead of guessing.
 - Talk like a person playing the game: short, plain sentences, usually under 15 words.
-- Never mention ids, coordinates, or numbers.
+- Use coordinates internally to draw your path; never read ids or coordinates aloud.
+- Move only when instructed. Questions, acknowledgements, and requests for clarification
+  do not authorize a move. If you need clarification, choose stay.
+- You do not know the giver's route or finish. Never invent the rest of the route.
 """.strip()
 
 # The `act` field, for the calls that fill it in
@@ -63,14 +71,36 @@ ACT_FIELD = """
 """.strip()
 
 # The `move` field, for the calls that fill it in
-MOVE_FIELD = """
+MOVE_FIELD = f"""
 - move: where the giver told you to go, as one of these kinds:
   - stay: they didn't tell you to move, or you can't tell where yet.
   - to_landmark: go to a landmark on your map. landmark is its id, and side is where you stop:
-    at (on it), above, below, left_of, or right_of.
+    at (reach its nearest edge), above, below, left_of, or right_of.
   - direction: go one way with no landmark to aim for. direction is up, up_right, right,
     down_right, down, down_left, left, or up_left (up is toward the top of the map), and size
     is how far: small (a bit), medium, or large (a long way).
+  - path: draw through open space using points, an ordered list of 1 to
+    {MAP_TASK_MAX_WAYPOINTS} [x, y] waypoints. Start from your current position; include
+    every bend and the final stop, without repeating the starting point. Use this for
+    multiple directions in one turn, precise distances, passing beside a landmark,
+    going between landmarks, and curving around them. Do not reduce these to a jump
+    to a landmark. Paths are straight segments between successive points; approximate
+    a curve with enough points to keep the segments outside the landmark's radius.
+    Landmarks are regions, not point targets. Keep the requested side and clearance
+    along the whole path, not just at its endpoint. Crossing a region is allowed when
+    explicitly requested (for example crossing a bridge).
+
+Coordinate rules: x increases rightward, y downward, both in [0, 1]. Distances are
+in map units (1 = the paper's longer side). For a distance d, a horizontal change
+is d / scale[0], and a vertical change is d / scale[1]. A circular landmark reaches
+radius / scale[0] across and radius / scale[1] down from its center. A usual gap
+beside its edge is {MAP_TASK_BESIDE_GAP}. Direction step lengths are {MAP_TASK_STEPS}.
+For "continue", use the last distinct segment of your committed trail. Ask which
+way if there is no established direction. Stop at the paper's boundary.
+
+Example on a landscape map with scale [1, 0.704762], starting at [0.30, 0.66]:
+"right a little, then up a little" becomes path points [[0.38, 0.66], [0.38, 0.546486]].
+Both legs have length 0.08 map units. Do not jump diagonally to the final point.
 """.strip()
 
 # The single-call pipeline's task
@@ -125,6 +155,8 @@ def build_messages(task: str, reading: TurnReading, history: list[dict[str, str]
 # The avatar's map as seen from its spot: every landmark, the ones just named first
 def facts_block(reading: TurnReading) -> str:
     lines = [f"YOUR MAP (you are {region(reading.position)}):"]
+    lines.append(f"Your position: {list(reading.position)}; paper scale: {list(reading.task_map.scale)}.")
+    lines.append(f"Recent committed trail: {[list(point) for point in reading.path[-MAP_TASK_CONTEXT_POINTS:]]}")
     for fact in reading.facts:
         # Where it is from the avatar (one right next to it needs no direction)
         if fact.distance == "here": where = "right next to you"
@@ -134,6 +166,7 @@ def facts_block(reading: TurnReading) -> str:
         aliases = f" (also called: {', '.join(fact.landmark.names[1:])})" if fact.landmark.names[1:] else ""
         named   = "; the giver just named it" if fact.mentioned else ""
         lines.append(f"- {fact.landmark.label}{aliases} [id: {fact.landmark.id}]: {where}; it's {fact.region}{named}")
+        lines.append(f"  center: {list(fact.landmark.at)}; radius: {fact.landmark.radius} map units")
 
     # Names the giver said that the avatar's map lacks
     if reading.missing: lines.append(f"NOT ON YOUR MAP (the giver named these, but your map doesn't have them): {', '.join(reading.missing)}")

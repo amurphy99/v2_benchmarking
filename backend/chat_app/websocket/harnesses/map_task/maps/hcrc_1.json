@@ -1,0 +1,34 @@
+{
+    "description": "HCRC Map Task Corpus map 1 (scans map0g and map0f), from the Human Communication Research Centre, University of Edinburgh, CC BY 4.0 (https://groups.inf.ed.ac.uk/maptask/). Landmark spots and the route were traced from the scans; the icons stand in for the original drawings.",
+    "shape": "portrait",
+    "route": [
+        [0.064, 0.693], [0.029, 0.703], [0.011, 0.725], [0.006, 0.750], [0.000, 0.822], [0.005, 0.894],
+        [0.025, 0.930], [0.050, 0.946], [0.080, 0.951], [0.148, 0.949], [0.175, 0.939], [0.192, 0.920],
+        [0.197, 0.892], [0.193, 0.813], [0.202, 0.792], [0.223, 0.780], [0.647, 0.722], [0.673, 0.710],
+        [0.684, 0.689], [0.687, 0.640], [0.685, 0.570], [0.675, 0.518], [0.637, 0.452], [0.618, 0.431],
+        [0.589, 0.415], [0.551, 0.408], [0.480, 0.411], [0.423, 0.434], [0.352, 0.480], [0.282, 0.494],
+        [0.245, 0.493], [0.178, 0.478], [0.134, 0.452], [0.124, 0.430], [0.128, 0.331], [0.138, 0.315],
+        [0.249, 0.298], [0.262, 0.279], [0.271, 0.212], [0.279, 0.196], [0.305, 0.187], [0.340, 0.187],
+        [0.370, 0.190], [0.394, 0.202], [0.542, 0.300], [0.719, 0.432], [0.740, 0.443], [0.771, 0.449],
+        [0.857, 0.447], [0.901, 0.427], [0.894, 0.380], [0.883, 0.356], [0.801, 0.323], [0.777, 0.303],
+        [0.763, 0.281], [0.754, 0.263], [0.753, 0.193], [0.746, 0.173], [0.724, 0.160], [0.590, 0.139],
+        [0.563, 0.136]
+    ],
+    "landmarks": [
+        {"id": "picket_fence",      "label": "picket fence",      "icon": "fence",      "at": [0.094, 0.121], "also_called": ["fence"]},
+        {"id": "parked_van",        "label": "parked van",        "icon": "van",        "at": [0.362, 0.075], "also_called": ["van"]},
+        {"id": "east_lake",         "label": "east lake",         "icon": "lake",       "at": [0.742, 0.086], "radius": 0.1},
+        {"id": "youth_hostel",      "label": "youth hostel",      "icon": "house",      "at": [0.338, 0.226], "also_called": ["hostel"], "on": "giver"},
+        {"id": "thatched_mud_hut",  "label": "thatched mud hut",  "icon": "hut",        "at": [0.835, 0.231], "also_called": ["mud hut", "hut"], "on": "giver"},
+        {"id": "alpine_garden",     "label": "alpine garden",     "icon": "flowers",    "at": [0.217, 0.336], "also_called": ["garden"]},
+        {"id": "telephone_box",     "label": "telephone box",     "icon": "telephone",  "at": [0.818, 0.393], "also_called": ["phone box", "phone booth", "telephone booth"]},
+        {"id": "disused_monastery", "label": "disused monastery", "icon": "ruins",      "at": [0.514, 0.436], "also_called": ["monastery"]},
+        {"id": "camera_shop",       "label": "camera shop",       "icon": "shop",       "at": [0.071, 0.751], "also_called": ["shop"]},
+        {"id": "allotments",        "label": "allotments",        "icon": "vegetables", "at": [0.307, 0.804], "also_called": ["allotment"]},
+        {"id": "parked_van_2",      "label": "parked van",        "icon": "van",        "at": [0.107, 0.917], "on": "giver"},
+        {"id": "yacht_club",        "label": "yacht club",        "icon": "sailboat",   "at": [0.784, 0.896], "also_called": ["yacht"]},
+        {"id": "level_crossing",    "label": "level crossing",    "icon": "railway",    "at": [0.677, 0.222], "also_called": ["crossing", "railway crossing"], "on": "follower"},
+        {"id": "west_lake",         "label": "west lake",         "icon": "lake",       "at": [0.181, 0.556], "radius": 0.1, "on": "follower"},
+        {"id": "flight_museum",     "label": "flight museum",     "icon": "airplane",   "at": [0.591, 0.665], "also_called": ["museum"], "on": "follower"}
+    ]
+}

@@ -58,19 +58,20 @@ copies each chat type's `VARIANTS`).
 | `unguided` | Open conversation (the default). Spoken end-chat and pause requests get scripted replies; everything else goes to the single-stage LLM | none | none |
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
-| `map_task` | The Map Task: the user gives directions, and the avatar follows them on its own map (see its README) | none yet | `demo` |
+| `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
 | `cooperative_planning` | The user and the avatar plan an event together, each with private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party` |
 
-Only `cooperative_planning` uses cues so far. It is also the only chat type that drives
-the avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the others send `robot_action`
-moods.
+`map_task` and `cooperative_planning` use cues, drive the avatar with plans
+(`consumers/HARNESS_PROTOCOL.md`), and show the participant their task materials
+(`task_card`); the others send `robot_action` moods. `map_task` also gives the admin
+live chat page a view of its state (Monitoring, below).
 
 ```diff
 +harnesses/
  ├── base.py                      # ChatHarness, Cue, the turn events, TurnAttempt, ResponseOutcome
- ├── cues.py                      # Shared cues to build on: KeywordCue, SilenceWatcher
+ ├── cues.py                      # Shared cues: KeywordCue and SilenceWatcher to build on, and BackToListening as is
  ├── registry.py                  # chat_type names -> harnesses, the default, and the condition/variant checks
- ├── avatar.py                    # The robot mood vocabulary (ResponseMood), and the mood, setup, and plan frames
+ ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, and the shared listening plan
  │
 +├── unguided/
  │   ├── harness.py               # Scripted end-chat and pause replies, otherwise the LLM
@@ -85,8 +86,10 @@ moods.
  │   └── harness.py               # Wraps the RAG pipeline that still lives in `websocket/services/`
  │
 +├── map_task/                    # The avatar as instruction follower (see its README)
- │   ├── harness.py               # Reads each turn, replies through its route's pipeline, and moves the avatar
- │   ├── maps/                    # One map file per variant
+ │   ├── harness.py               # Sends both maps out, reads each turn, replies through its route's pipeline, and moves the avatar
+ │   ├── maps/                    # One map file per variant (both maps, drawn from data)
+ │   ├── behaviors.py             # The avatar's setup, its map, and each reply's plan
+ │   ├── cues.py                  # LandmarkGlance, DirectionGlance
  │   └── ...
  │
 +└── cooperative_planning/        # Planning an event together, each side with private constraints
@@ -100,7 +103,7 @@ moods.
      ├── pipelines.py             # track_then_reply, single_call, reply_then_track
      ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
      ├── behaviors.py             # The avatar's setup, its card, and the plan for each named behavior
-     ├── cues.py                  # BackToListening, ItemGlance, QuietNudge
+     ├── cues.py                  # ItemGlance, QuietNudge (with the shared BackToListening)
      └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
 ```
 
@@ -120,9 +123,11 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `state` | The chat type's dialogue state. The class value is where every chat starts |
 | `cues` | This connection's cues, built in the subclass's `__init__` from its condition |
 | `generate(attempt)` | Required. Returns one `ResponseOutcome` for the staged user turn |
-| `on_reply_saved(outcome)` | Called once that reply's exchange is saved. Enters `outcome.state`, unless it is `None`, then tells the cues |
+| `on_reply_saved(outcome)` | Called once that reply's exchange is saved. Enters `outcome.state`, unless it is `None` (then sends the listeners the new `monitor_view`), and tells the cues |
 | `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue). A plan-driven harness sends its `avatar_setup` from `start()` |
 | `request_turn()` | Asks for a reply of the harness's own (next section); `False` while another reply owns the turn |
+| `turn_number` | Reply attempts so far, counted in `on_reply_started` (avatar plans carry it as their `turn`) |
+| `monitor_view()` | What the admin listener's task panel shows about this chat now; `None` (the default) for a chat type without one (Monitoring, below) |
 | `on_interim`, `on_final`, `on_reply_started`, `on_reply_cancelled`, `on_playback` | Turn events (next section), passed on to each cue |
 
 `generate` runs inside the reply attempt. When newer speech arrives, any reply but
@@ -178,17 +183,22 @@ dialogue state. Every hook runs on the chat's event loop and must not block, so
 async work starts with `fire_and_log`. A cue that raises is logged once and
 skipped; the chat and the other cues carry on.
 
-`cues.py` has two to build on:
+`cues.py` has two to build on, and one to use as is:
 
-- **`KeywordCue`** fires `on_match(name, text)` once for each new occurrence of a
-  pattern in `PATTERNS`. Every interim repeats and revises the whole utterance so
-  far, so it counts occurrences per utterance rather than firing on every interim,
-  and a revision that drops a word and brings it back doesn't fire it twice. Set
-  `ON = "final"` to react only to finals.
+- **`KeywordCue`** fires `on_match(name, match)` once for each new occurrence of a
+  pattern in `PATTERNS` (the `re.Match` holds what was said). Every interim repeats
+  and revises the whole utterance so far, so it counts occurrences per utterance
+  rather than firing on every interim, and a revision that drops a word and brings
+  it back doesn't fire it twice. Set `ON = "final"` to react only to finals. Set
+  `QUIET_WHILE_REPLYING` for a cue that sends plans: it then ignores words heard
+  while a reply is prepared or played, and words first heard in a final (the reply
+  starts right after one), because its plan would cut the reply's plan short.
 - **`SilenceWatcher`** calls `on_silence(seconds)` as each of `THRESHOLDS_SEC`
   passes without speech on the user's turn. The clock starts when the reply's audio
   finishes and restarts from the end of newer speech. It stops while a reply is
   prepared or playing, and nothing fires while listening is paused.
+- **`BackToListening`** lowers the held prop and frees the eyes when newer speech
+  cancels a reply, for any chat type that sends plans.
 
 **Harness turns.** A harness or cue that wants the avatar to speak first (a
 re-prompt after a silence, an opening line) calls `self.harness.request_turn()` (the
@@ -198,27 +208,44 @@ or speaks on its own when nothing is staged (`user_text` is `""` and only the re
 is saved). Newer speech cancels it like an automatic reply. It starts nothing while
 another reply owns the turn, so the cue can ask again later.
 
-A Map Task cue that looks toward a direction as soon as it is heard might look
-like this (`gaze_toward` would build the plan; the planning harness's `cues.py` has
-working ones):
+The Map Task's `DirectionGlance` (`map_task/cues.py`) is a complete cue. It looks
+from the avatar's spot toward a direction as soon as the user says it:
 
 ```python
-# Look toward a side of the map the moment the user names it
-class DirectionGaze(KeywordCue):
-    PATTERNS = {
-        "left"  : re.compile(r"\b(to the|go|turn|head)\s+left\b",  re.IGNORECASE),
-        "right" : re.compile(r"\b(to the|go|turn|head)\s+right\b", re.IGNORECASE),
-        "up"    : re.compile(r"\b(go|move|head)\s+up\b",           re.IGNORECASE),
-        "down"  : re.compile(r"\b(go|move|head)\s+down\b",         re.IGNORECASE),
-    }
+# Look from the avatar's spot toward a direction as the user says it
+class DirectionGlance(KeywordCue):
+    harness              : MapTaskHarness
+    PATTERNS             = MAP_TASK_SPOKEN_DIRECTIONS
+    QUIET_WHILE_REPLYING = True
 
-    # Send a gaze plan toward that side
-    def on_match(self, name: str, text: str) -> None:
-        fire_and_log(send_avatar_plan(self.harness.consumer, gaze_toward(name)), name="map_task::direction_gaze")
+    # Look toward the direction just said, from where the avatar is now
+    def on_match(self, name: str, match: re.Match[str]) -> None:
+        self._looks += 1
+        _send_plan(self.harness, direction_plan(self.harness.state.position, name, self._looks), "direction_glance")
 ```
 
-The harness then switches it on for one condition only, in its `__init__`:
-`if condition == "cues": self.cues = [DirectionGaze(self)]`.
+The harness switches its cues on for one condition only, in its `__init__`:
+`if self.with_cues: self.cues = [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]`.
+
+<br>
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Monitoring                                                                       -->
+<!-- -------------------------------------------------------------------------------- -->
+## Monitoring
+
+A chat type with state worth watching returns it from `monitor_view()` as a JSON
+object with a `kind` (its own chat type name). The admin listener gets it as a
+`task_monitor` frame twice over: from `on_reply_saved` whenever a saved reply
+changes the state (`ChatConsumer.broadcast_task_monitor`, to every listener), and
+as each listener joins (the listener sends the primary connection a
+`ws.listener_joined` event, and `ChatConsumer.ws_listener_joined` answers that
+listener alone). The admin live chat page shows each kind it knows in its own tab
+(`frontend/src/pages/admin/components/LiveSidePanel.tsx`). Only the listeners get
+it: the participant's client never sees it.
+
+The Map Task's view is both maps, where the avatar is, and every spot it has
+stopped at (`map_task/harness.py`, and its README).
 
 <br>
 

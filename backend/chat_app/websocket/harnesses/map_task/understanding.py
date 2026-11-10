@@ -18,7 +18,7 @@ import math, re
 # From this project
 from .geometry import Direction, DistanceBand, direction, distance_band, region
 
-if TYPE_CHECKING: from .maps import Landmark, Point, TaskMap
+if TYPE_CHECKING: from .maps import Landmark, Point, Scale, TaskMap
 
 # Which kind of turn this is, for choosing its pipeline
 Route = Literal["simple_question", "instruction", "mismatch", "other"]
@@ -57,6 +57,7 @@ class TurnReading:
     text     : str                       # What the user said
     task_map : TaskMap                   # The avatar's map (and the giver's names)
     position : Point                     # Where the avatar is
+    path     : tuple[Point, ...]          # Committed trail, for continuing the last direction
     mentions : tuple[Mention, ...]       # Landmarks named, in the order said, each once
     missing  : tuple[str, ...]           # Names said that aren't on the avatar's map
     facts    : tuple[LandmarkFact, ...]  # Every landmark: the named ones first, then nearest first
@@ -69,7 +70,12 @@ class TurnReading:
 # Read a Turn
 # ================================================================================
 # Find everything the pipelines need about one turn
-def read_turn(text: str, task_map: TaskMap, position: Point) -> TurnReading:
+def read_turn(
+    text     : str,                    # The giver's latest words
+    task_map : TaskMap,                # This session's paired maps
+    position : Point,                  # The follower's current spot
+    path     : tuple[Point, ...] = (),  # Committed waypoints, when reading a live turn
+) -> TurnReading:
     mentions = spot_mentions(text, task_map)
     named    = [mention.landmark for mention in mentions if mention.landmark is not None]
     missing  = tuple(mention.name for mention in mentions if mention.landmark is None)
@@ -78,13 +84,14 @@ def read_turn(text: str, task_map: TaskMap, position: Point) -> TurnReading:
 
     # Named landmarks first (in the order said), then the rest from nearest to farthest
     named_ids = [landmark.id for landmark in named]
-    others    = sorted((landmark for landmark in task_map.landmarks.values() if landmark.id not in named_ids), key=lambda landmark: math.dist(position, landmark.at))
-    facts     = tuple(_fact(landmark, position, mentioned=(landmark.id in named_ids)) for landmark in (*named, *others))
+    others    = sorted((landmark for landmark in task_map.landmarks.values() if landmark.id not in named_ids), key=lambda landmark: _map_distance(position, landmark.at, task_map.scale))
+    facts     = tuple(_fact(landmark, position, task_map.scale, mentioned=(landmark.id in named_ids)) for landmark in (*named, *others))
 
     return TurnReading(
         text     = text,
         task_map = task_map,
         position = position,
+        path     = path,
         mentions = mentions,
         missing  = missing,
         facts    = facts,
@@ -101,14 +108,18 @@ def _route(named_count: int, missing: tuple[str, ...], question: bool, movement:
     return "other"
 
 # Describe one landmark from the avatar's spot
-def _fact(landmark: Landmark, position: Point, *, mentioned: bool) -> LandmarkFact:
+def _fact(landmark: Landmark, position: Point, scale: Scale, *, mentioned: bool) -> LandmarkFact:
     return LandmarkFact(
         landmark  = landmark,
-        direction = direction(position, landmark.at),
-        distance  = distance_band(position, landmark),
+        direction = direction(position, landmark.at, scale),
+        distance  = distance_band(position, landmark, scale),
         region    = region(landmark.at),
         mentioned = mentioned,
     )
+
+# How far apart two points are in map units (for ordering landmarks nearest first)
+def _map_distance(a: Point, b: Point, scale: Scale) -> float:
+    return math.hypot((b[0] - a[0]) * scale[0], (b[1] - a[1]) * scale[1])
 
 
 # --------------------------------------------------------------------------------
@@ -116,12 +127,11 @@ def _fact(landmark: Landmark, position: Point, *, mentioned: bool) -> LandmarkFa
 # --------------------------------------------------------------------------------
 # Every landmark name in the text, each landmark once (the longest name wins where two overlap)
 def spot_mentions(text: str, task_map: TaskMap) -> tuple[Mention, ...]:
-    by_name = {name: landmark for landmark in task_map.landmarks.values() for name in landmark.names}
-    pattern = re.compile(r"\b(" + "|".join(re.escape(name) for name in task_map.lexicon) + r")" + MAP_TASK_PLURAL + r"\b", re.IGNORECASE)
+    by_name = names_on_map(task_map)
 
     # A landmark said by two of its names ("the rope bridge ... the bridge") counts once
     mentions, seen = [], set()
-    for match in pattern.finditer(text):
+    for match in lexicon_pattern(task_map).finditer(text):
         name     = match.group(1).lower()
         landmark = by_name.get(name)
         key      = landmark.id if landmark is not None else name
@@ -129,3 +139,11 @@ def spot_mentions(text: str, task_map: TaskMap) -> tuple[Mention, ...]:
         seen.add(key)
         mentions.append(Mention(name=name, landmark=landmark))
     return tuple(mentions)
+
+# Every landmark name on either map as one pattern, longest first (the name is group 1, and a plural ending is matched too)
+def lexicon_pattern(task_map: TaskMap) -> re.Pattern[str]:
+    return re.compile(r"\b(" + "|".join(re.escape(name) for name in task_map.lexicon) + r")" + MAP_TASK_PLURAL + r"\b", re.IGNORECASE)
+
+# The avatar's landmark each of its names belongs to (a name only the participant's map has is not here)
+def names_on_map(task_map: TaskMap) -> dict[str, Landmark]:
+    return {name: landmark for landmark in task_map.landmarks.values() for name in landmark.names}

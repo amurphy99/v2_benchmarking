@@ -1,0 +1,31 @@
+{
+    "description": "HCRC Map Task Corpus map 4 (scans map3g and map3f), from the Human Communication Research Centre, University of Edinburgh, CC BY 4.0 (https://groups.inf.ed.ac.uk/maptask/). Landmark spots and the route were traced from the scans; the icons stand in for the original drawings.",
+    "shape": "portrait",
+    "route": [
+        [0.122, 0.058], [0.132, 0.082], [0.165, 0.116], [0.169, 0.135], [0.161, 0.155], [0.127, 0.190],
+        [0.117, 0.213], [0.118, 0.238], [0.136, 0.255], [0.168, 0.263], [0.205, 0.263], [0.266, 0.244],
+        [0.312, 0.213], [0.362, 0.144], [0.384, 0.135], [0.554, 0.151], [0.582, 0.167], [0.660, 0.261],
+        [0.739, 0.296], [0.755, 0.314], [0.759, 0.333], [0.753, 0.354], [0.727, 0.392], [0.827, 0.405],
+        [0.862, 0.416], [0.887, 0.436], [0.897, 0.458], [0.898, 0.479], [0.880, 0.499], [0.851, 0.510],
+        [0.814, 0.513], [0.644, 0.495], [0.616, 0.506], [0.612, 0.524], [0.625, 0.606], [0.612, 0.626],
+        [0.584, 0.635], [0.459, 0.631], [0.431, 0.653], [0.398, 0.695], [0.372, 0.709], [0.335, 0.715],
+        [0.220, 0.720], [0.157, 0.750], [0.022, 0.842], [0.015, 0.867], [0.015, 0.914], [0.031, 0.937],
+        [0.093, 0.958], [0.145, 0.962]
+    ],
+    "landmarks": [
+        {"id": "cliffs",           "label": "cliffs",           "icon": "cliff",      "at": [0.223, 0.096], "also_called": ["cliff"], "follower": {"label": "sandstone cliffs"}},
+        {"id": "forge",            "label": "forge",            "icon": "anvil",      "at": [0.193, 0.209], "also_called": ["blacksmith"], "on": "giver"},
+        {"id": "old_pine",         "label": "old pine",         "icon": "pine_tree",  "at": [0.375, 0.203], "also_called": ["pine tree"]},
+        {"id": "pine_forest",      "label": "pine forest",      "icon": "forest",     "at": [0.72, 0.191],  "also_called": ["forest"], "radius": 0.05},
+        {"id": "wheatfields",      "label": "wheatfields",      "icon": "wheat",      "at": [0.287, 0.369], "also_called": ["wheatfield", "wheat field", "wheat fields"], "radius": 0.05},
+        {"id": "canal",            "label": "canal",            "icon": "river",      "at": [0.572, 0.474], "on": "giver"},
+        {"id": "bakery",           "label": "bakery",           "icon": "bread",      "at": [0.783, 0.452]},
+        {"id": "wheatfields_2",    "label": "wheatfields",      "icon": "wheat",      "at": [0.302, 0.642], "radius": 0.05, "on": "giver"},
+        {"id": "crane_bay",        "label": "crane bay",        "icon": "lake",       "at": [0.634, 0.71],  "radius": 0.15},
+        {"id": "rocket_warehouse", "label": "rocket warehouse", "icon": "factory",    "at": [0.239, 0.786], "also_called": ["warehouse"]},
+        {"id": "old_lighthouse",   "label": "old lighthouse",   "icon": "lighthouse", "at": [0.208, 0.952], "also_called": ["lighthouse"]},
+        {"id": "green_bay",        "label": "green bay",        "icon": "lake",       "at": [0.42, 0.059],  "radius": 0.12, "on": "follower"},
+        {"id": "forest_stream",    "label": "forest stream",    "icon": "river",      "at": [0.757, 0.317], "also_called": ["stream"], "radius": 0.05, "on": "follower"},
+        {"id": "cave",             "label": "cave",             "icon": "cave",       "at": [0.097, 0.887], "on": "follower"}
+    ]
+}

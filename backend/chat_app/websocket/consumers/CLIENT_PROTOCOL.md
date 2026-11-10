@@ -21,10 +21,10 @@ the implementation is authoritative.
 > first; it describes that loop and the rules the audio stream has to follow.
 >
 > **Harness frames:** chat types that drive a capable avatar from the backend
-> (`cooperative_planning` today) also send `avatar_setup`, `avatar_plan`, and `task_card`, and
-> accept `avatar_feedback`. They are documented separately in `HARNESS_PROTOCOL.md` beside
-> this file. A client that never picks those chat types never receives them, and can skip
-> that file.
+> (`map_task` and `cooperative_planning` today) also send `avatar_setup`, `avatar_plan`,
+> and `task_card`, and accept `avatar_feedback`. They are documented separately in
+> `HARNESS_PROTOCOL.md` beside this file. A client that never picks those chat types never
+> receives them, and can skip that file.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Connecting                                                                       -->
@@ -131,7 +131,11 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   and ignores `chat_type`.
 - `map_task` -- the Map Task. The user gives directions from their map, and the avatar follows
   them on its own map, which differs in places. `variant` picks the map: `demo` (the default) is
-  a made-up test map. It has no spoken end-chat or pause; the client ends the chat.
+  a made-up test map, and `hcrc_1` to `hcrc_4` are maps 1 to 4 of the HCRC Map Task Corpus.
+  `condition` is `cues` (the default: the avatar holds its own map and is
+  driven by plans) or `no_cues` (it only idles). It sends the participant's map as a
+  `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`, and sends no
+  `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
 - `cooperative_planning` -- the user and the avatar plan an event together, agreeing on one
   choice for each item while each side has private constraints. The avatar speaks first, and
   once the user approves the finished plan it says goodbye and the backend sends `chat_ended`.
@@ -139,8 +143,7 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   default: the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
   It drives the avatar with the frames in `HARNESS_PROTOCOL.md` and sends no `robot_action`.
 
-Only `map_task` and `cooperative_planning` take a `variant` so far, and only
-`cooperative_planning` has conditions. Sending a `condition` or `variant` the chat type doesn't
+Only `map_task` and `cooperative_planning` take a `variant` or a `condition` so far. Sending a `condition` or `variant` the chat type doesn't
 have is refused. Values are exact (they are not lowercased the way `source` is). The chat
 type, condition, and variant are saved with the session. The list lives in
 `websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.
