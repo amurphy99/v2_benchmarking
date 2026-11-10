@@ -53,7 +53,7 @@ export function AdminParticipants(): ReactElement {
                 subtitle = {isStaff
                     ? "Create accounts, choose which participants each caregiver monitors, and change each participant's settings."
                     : "Choose each of your participants' avatar, language, audio saving, and biomarker analysis."}
-                backTo   = "/admin"
+                backTo   = {isStaff ? undefined : "/admin"}   // Staff move between Monitor pages with the admin header
                 actions  = {isStaff ? <AdminButton variant="primary" size="sm" onClick={() => navigate("/admin/accounts/new")}>Create account</AdminButton> : undefined}
             />
 

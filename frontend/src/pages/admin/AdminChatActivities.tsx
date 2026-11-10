@@ -13,7 +13,6 @@ Admins can:
 
 */
 import { useState, useCallback } from "react";
-import { useNavigate }           from "react-router-dom";
 
 import { AdminPage     } from "./components/ui/AdminPage";
 import { AdminCard     } from "./components/ui/AdminCard";
@@ -28,7 +27,6 @@ import RAGInstructionModal from "@/components/modals/RAGInstructionModal";
 type Mode = "create" | "edit";
 
 export function AdminChatActivities() {
-    const navigate     = useNavigate();
     const queryClient  = useQueryClient();
 
     // Fetch all global instructions
@@ -107,15 +105,8 @@ export function AdminChatActivities() {
         <AdminPage>
             <div className="flex flex-col gap-6 pt-6">
 
-                {/* Header Container */}
+                {/* Header Container (staff move between Monitor pages with the admin header) */}
                 <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-                    <button
-                        className="text-sm text-admin-subtext hover:text-admin-text transition-colors mb-4 w-fit"
-                        onClick={() => navigate("/admin")}
-                    >
-                        ← Back to Monitor
-                    </button>
-                    
                     {/* Page header */}
                     <SectionHeader
                         title    = "Activity Instructions"

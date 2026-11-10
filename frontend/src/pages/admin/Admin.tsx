@@ -15,9 +15,10 @@ to the "Live Chat" (AdminChat.tsx) page, and clicking on a ChatSessionCard from
 the inactive  chat list takes you to the "Inactive Chat" (AdminChatInactive.tsx)
 page.
 
-Between the two lists, cards link to the Participant Settings page (Accounts for
-staff) and, for staff only, the Activity Instructions page. A filter bar above
-the lists narrows both to one chat type, condition, or variant
+Staff reach the Activity Instructions, Map Task Maps, and Accounts pages from the
+admin header (`components/Header.tsx`); a caregiver gets a card between the two
+lists that links to their Participant Settings page. A filter bar above the lists
+narrows both to one chat type, condition, or variant
 (`components/chat_lists/ChatRunFilterBar`).
 
 */
@@ -93,43 +94,24 @@ export function Admin() {
                     variant     = "active"
                 />
 
-                {/* Activity & Instructions Management (staff only: the instructions are shared by every user) */}
-                {isStaff ? (
+                {/* Participant settings (caregivers; staff reach Accounts from the admin header) */}
+                {!isStaff ? (
                     <AdminCard
                         header={
                             <SectionHeader
-                                title    = "Activity Instructions"
-                                subtitle = "Manage chat activities and their conversation instructions. Define and edit the instructions that guide the AI during memory activity chat sessions. Changes here affect all users."
+                                title    = "Participant Settings"
+                                subtitle = "Choose each of your participants' web avatar and language, and whether their chat audio is saved automatically."
                             />
                         }
                     >
                         <button
-                            className="px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                            onClick={() => navigate("/admin/chat/activities")}
+                            className = "px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                            onClick   = {() => navigate("/admin/participants")}
                         >
-                            Manage Activity Instructions
+                            Manage Participants
                         </button>
                     </AdminCard>
                 ) : null}
-
-                {/* Participant settings, plus account creation and caregiver links for staff */}
-                <AdminCard
-                    header={
-                        <SectionHeader
-                            title    = {isStaff ? "Accounts" : "Participant Settings"}
-                            subtitle = {isStaff
-                                ? "Create accounts, choose which participants each caregiver monitors, and set each participant's avatar, language, and recording default."
-                                : "Choose each of your participants' web avatar and language, and whether their chat audio is saved automatically."}
-                        />
-                    }
-                >
-                    <button
-                        className = "px-4 py-2 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                        onClick   = {() => navigate("/admin/participants")}
-                    >
-                        {isStaff ? "Manage Accounts" : "Manage Participants"}
-                    </button>
-                </AdminCard>
 
                 {/* All Sessions */}
                 <ChatList

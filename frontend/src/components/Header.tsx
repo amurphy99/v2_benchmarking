@@ -2,6 +2,10 @@
 --------------------------------------------------------------------------------
 `@frontend/src/components/Header`
 
+Staff on the Monitor page and its staff tools (Activity Instructions, Map Task
+Maps, Accounts) get the admin version: the same profile menu and "Monitor" title,
+with a link to each of those four pages.
+
 */
 import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState             } from "react";
@@ -14,6 +18,22 @@ import { Icon } from "@iconify/react/dist/iconify.js";
 import { Profile } from "@/api";
 import { useProfile } from "@/hooks/queries/useProfile";
 import { Spinner } from "react-bootstrap";
+import type { IconType } from "react-icons";
+import { LuClipboardList, LuMap, LuMessagesSquare, LuUsers } from "react-icons/lu";
+
+// The admin header's pages, in order, each with its icon (staff see the admin header on each of them)
+const ADMIN_NAV: {to: string; label: string; icon: IconType}[] = [
+    {to: "/admin",                 label: "Monitor",               icon: LuMessagesSquare},
+    {to: "/admin/chat/activities", label: "Activity Instructions", icon: LuClipboardList },
+    {to: "/admin/map-task/maps",   label: "Map Task Maps",         icon: LuMap           },
+    {to: "/admin/participants",    label: "Accounts",              icon: LuUsers         },
+];
+
+// One admin header tab's look (on a span inside the link: Bootstrap's link color and underline beat Tailwind's on the link itself)
+function adminTabClass(isActive: boolean): string {
+    const base = "flex items-center gap-2 rounded-full px-4 py-2 text-base font-medium transition-colors";
+    return isActive ? `${base} bg-admin-panel text-admin-accent2 shadow-sm ring-1 ring-admin-border` : `${base} text-admin-subtext hover:bg-admin-panel/70 hover:text-admin-text`;
+}
 
 // Page title
 const TITLES: Record<string, string> = {
@@ -62,6 +82,37 @@ export default function Header() {
     }
 
     const title  = TITLES[pathname] ?? TITLES.default;
+
+    // Staff on the Monitor pages: the admin header, with a link to each one
+    if (account.user.is_staff && ADMIN_NAV.some(({to}) => to === pathname)) {
+        return (
+            <header className="border-b border-admin-border bg-admin-panel text-admin-text">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 md:px-6 py-2.5">
+                    {/* Profile menu and the section's name */}
+                    <div className="flex items-center gap-3">
+                        <ProfileInfo isCare={isCare} user={account.user} />
+                        <h1 className="m-0 text-2xl md:text-3xl font-semibold whitespace-nowrap">{TITLES["/admin"]}</h1>
+                    </div>
+
+                    {/* The four Monitor pages (Monitor matches only itself, not the pages under it) */}
+                    <nav aria-label="Monitor pages" className="flex flex-wrap gap-1 rounded-full border border-admin-border bg-admin-muted p-1">
+                        {ADMIN_NAV.map(({to, label, icon: TabIcon}) => (
+                            <NavLink key={to} to={to} end style={{textDecoration: "none"}}>
+                                {({isActive}) => <span className={adminTabClass(isActive)}><TabIcon aria-hidden="true" size={18} /> {label}</span>}
+                            </NavLink>
+                        ))}
+                    </nav>
+
+                    {/* Settings */}
+                    {(isCare && profile.account) ? (
+                        <NavLink to="/settings" aria-label="Settings" className="ml-auto flex h-10 w-10 items-center justify-center rounded-md hover:bg-admin-muted">
+                            <Icon icon="fluent-color:settings-28" width={"2rem"} height={"2rem"} />
+                        </NavLink>
+                    ) : null}
+                </div>
+            </header>
+        );
+    }
 
     // Return UI component
     if (SIMPLE_HEADER.includes(pathname)) {
