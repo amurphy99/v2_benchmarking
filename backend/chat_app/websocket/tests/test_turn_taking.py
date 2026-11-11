@@ -31,6 +31,7 @@ CHAT_MODULE = "chat_app.websocket.services.chatHelpers"
 
 class FixtureHarness(ChatHarness):
     NAME = "test"
+    ALLOW_SPEECH_INTERRUPTION = True  # This test double exercises activity-style interruption behavior.
 
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome:
         return ResponseOutcome(message="Hello")
@@ -79,6 +80,10 @@ def make_attempt(harness: ChatHarness) -> TurnAttempt:
 
 
 class SourceAndDelayTests(unittest.TestCase):
+    def test_only_activity_opts_in_to_speech_interruption_by_default(self):
+        self.assertFalse(ChatHarness.ALLOW_SPEECH_INTERRUPTION)
+        self.assertTrue(ActivityHarness.ALLOW_SPEECH_INTERRUPTION)
+
     def test_reachy_is_an_accepted_source_and_model_choice(self):
         self.assertIn("reachyrobot", ALLOWED_SOURCES)
         self.assertIn("reachyrobot", dict(ChatSession.SOURCE_CHOICES))
@@ -316,6 +321,87 @@ class SpeechEventTests(unittest.IsolatedAsyncioTestCase):
 
 
 class InterruptionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_non_activity_buffered_audio_is_not_interrupted(self):
+        value = make_consumer()
+        value.harness.ALLOW_SPEECH_INTERRUPTION = False
+        state = turn_taking(value)
+        state.queue_reply(42, "Finish this reply.", "automatic")
+        state.playback(42, "started")
+
+        self.assertFalse(ChatHandler.note_stt_progress(value))
+        await asyncio.sleep(0)
+
+        self.assertFalse(state.replies[42].interrupted)
+        self.assertEqual(value.harness.pending_interruptions, ())
+        value.send.assert_not_called()
+
+    async def test_live_tts_yields_to_speech_only_when_the_harness_opts_in(self):
+        for allowed in (False, True):
+            with self.subTest(allowed=allowed):
+                value = make_consumer()
+                value.harness.ALLOW_SPEECH_INTERRUPTION = allowed
+                value._tts_streaming = True
+                pending = Mock()
+                pending.done.return_value = False
+                pending.cancelling.return_value = 0
+                value._pending_response_task = pending
+                state = turn_taking(value)
+                state.queue_reply(42, "Speaking now.", "automatic")
+                state.playback(42, "started")
+
+                self.assertEqual(ChatHandler.note_stt_progress(value), allowed)
+                await asyncio.sleep(0)
+
+                self.assertEqual(pending.cancel.call_count, int(allowed))
+                self.assertEqual(state.replies[42].interrupted, allowed)
+                self.assertEqual(value.send.await_count, int(allowed))
+                self.assertEqual(value._stt_progress_revision, 1)
+
+    async def test_non_activity_still_cancels_outdated_generation_before_tts(self):
+        value = make_consumer()
+        value.harness.ALLOW_SPEECH_INTERRUPTION = False
+        value._tts_streaming = False
+        pending = Mock()
+        pending.done.return_value = False
+        pending.cancelling.return_value = 0
+        value._pending_response_task = pending
+
+        self.assertTrue(ChatHandler.note_stt_progress(value))
+        pending.cancel.assert_called_once_with()
+        value.send.assert_not_called()
+
+    async def test_non_activity_does_not_interrupt_a_reply_registered_during_commit(self):
+        """The shielded-commit cancellation path must obey the same harness policy."""
+        value = make_consumer()
+        value.harness.ALLOW_SPEECH_INTERRUPTION = False
+        value._staged_utterances.append(text="first", words=None, timestamp=0)
+        committing = asyncio.Event()
+        release = asyncio.Event()
+
+        async def commit(*args, **kwargs):
+            committing.set()
+            await release.wait()
+            turn_taking(value).queue_reply(42, "Saved reply.", "automatic")
+            return SimpleNamespace(id=42)
+
+        with patch.object(ChatHandler, "_commit_response", new=commit):
+            task = asyncio.create_task(ChatHandler._execute_response(value))
+            value._pending_response_task = task
+            try:
+                await asyncio.wait_for(committing.wait(), 2)
+                self.assertTrue(ChatHandler.note_stt_progress(value))
+                release.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 2)
+            finally:
+                release.set()
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+        self.assertFalse(turn_taking(value).replies[42].interrupted)
+        self.assertEqual(value.harness.pending_interruptions, ())
+        value.send.assert_not_called()
+
     async def test_pending_context_accessor_is_a_tuple_property(self):
         """Protect the public API used without parentheses by both pipelines."""
         value = make_consumer()

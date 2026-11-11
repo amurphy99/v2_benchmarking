@@ -111,6 +111,7 @@ class ChatHarness(ABC):
     NAME       : str                   # `chat_type` value that selects this harness (saved on the session)
     CONDITIONS : tuple[str, ...] = ()  # Cue sets a client can pick with `condition`
     VARIANTS   : tuple[str, ...] = ()  # Task content (a map, a scenario) a client can pick with `variant`
+    ALLOW_SPEECH_INTERRUPTION: bool = False  # Whether user speech may cut off this chat type's spoken replies.
 
     # Dialogue state every chat starts in (`on_reply_saved` replaces it on the instance)
     state : object = None

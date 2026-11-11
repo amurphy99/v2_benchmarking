@@ -642,9 +642,13 @@ the timer. A one-second setting therefore adds a wait after final recognition;
 it is not one second measured from physical speech end. Zero adds no application
 wait; Google finalization and model/network latency still exist.
 
-Advancing interim text and staged final text share the cancellation path. They cancel
-automatic generation and eligible backend-TTS delivery; accepted `reply_now` and
-explicit admin speech remain protected. Cancelling generation before saving keeps
+Advancing interim text and staged final text share the cancellation path. Before
+TTS starts, they can still cancel outdated automatic generation for every chat type.
+Only `activity` opts in to speech cutting off live backend TTS or client-buffered
+audio. Other chat types finish their current TTS and leave buffered playback alone.
+Accepted `reply_now` and explicit admin speech remain protected from speech.
+Explicit stop/end controls retain their cancellation behavior; clients must still
+handle `cancel_audio` for those controls. Cancelling generation before saving keeps
 the user text staged. Interrupting saved audio preserves its generated text as
 incomplete-delivery context; it does not erase persisted conversation history.
 The activity planner and responder can use that context to continue or change topic.

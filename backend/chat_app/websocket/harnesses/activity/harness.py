@@ -37,6 +37,7 @@ class ActivityHarness(ChatHarness):
 
     NAME = "activity"
     ACTIVITY_NAME = "memory_activity"
+    ALLOW_SPEECH_INTERRUPTION = True  # Activity replies yield to new recognized user speech.
 
     def __init__(self, consumer, *, condition: str, variant: str) -> None:
         """Initialize connection-local state and the planner/responder agents.

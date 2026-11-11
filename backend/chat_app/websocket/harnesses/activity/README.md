@@ -53,6 +53,9 @@ preserves the current state and prior goal progress.
 
 ## Interrupted delivery
 
+`ActivityHarness` sets `ALLOW_SPEECH_INTERRUPTION=True`. The shared harness
+default is false, so other chat types finish their TTS/playback when the user speaks.
+
 The shared harness keeps `InterruptedReply` context containing the saved reply ID,
 full generated text, and whether playback began. Both planner and responder receive
 it as `INTERRUPTED_REPLIES`, so they can continue a relevant thought or follow the

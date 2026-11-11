@@ -133,6 +133,12 @@ class ChatHandler:
         delivery = turn_taking(consumer)
         delivery.recognized_progress()
 
+        # Other chat types finish active TTS; explicit stop/end commands still cancel it.
+        if getattr(consumer, "_tts_streaming", False):
+            harness = getattr(consumer, "harness", None)
+            if not getattr(harness, "ALLOW_SPEECH_INTERRUPTION", False):
+                return False
+
         if getattr(consumer, "response_mode", "automatic") == "automatic" and getattr(consumer, "use_backend_TTS", False):
             interrupted = delivery.interrupt(consumer.harness)
 

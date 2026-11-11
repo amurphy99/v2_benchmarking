@@ -97,6 +97,7 @@ A harness subclasses `ChatHarness` (`base.py`):
 |---|---|
 | `NAME` | The `chat_type` value, saved on the session |
 | `CONDITIONS`, `VARIANTS` | The names a client may send. The first is the default; `()` means none |
+| `ALLOW_SPEECH_INTERRUPTION` | Whether user speech may stop this chat type's TTS/playback. Defaults to false; activity opts in |
 | `state` | The chat type's dialogue state. The class value is where every chat starts |
 | `cues` | This connection's cues, built in the subclass's `__init__` from its condition |
 | `generate(attempt)` | Required. Returns one `ResponseOutcome` for the staged user turn |
@@ -104,11 +105,16 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue) |
 | `on_interim`, `on_final`, `on_reply_started`, `on_reply_cancelled`, `on_playback` | Turn events (next section), passed on to each cue |
 
-`generate` runs inside the reply attempt. When newer speech arrives, any reply but
-a `reply_now` one is cancelled at whatever `await` it has reached, and the staged
+`generate` runs inside the reply attempt. During generation, newer speech cancels
+any reply but a `reply_now` one at the `await` it has reached, and the staged
 turn waits for the next attempt along with the new speech. So `generate` changes
 nothing itself. It returns its effects in the outcome, and `ChatHandler` applies
 them once the exchange is saved, so a cancelled reply leaves no trace.
+
+Once backend TTS starts, new speech cancels it only for harnesses with
+`ALLOW_SPEECH_INTERRUPTION=True`. The same policy guards interruption of
+client-buffered audio, including the cancellation path after a shielded commit.
+This policy does not prevent explicit stop/end commands from cancelling speech.
 
 `TurnAttempt` carries `context` (the conversation, ending with the staged user turn),
 `user_text`, `trigger` (`"automatic"`, `"reply_now"`, or `"harness"`), and

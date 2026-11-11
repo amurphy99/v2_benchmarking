@@ -82,6 +82,9 @@ automatic gain control through `AudioStreamer` constraints. These are browser
 capabilities, not a guarantee that speaker echo will never be transcribed.
 
 Advancing interim and finalized text share the backend cancellation path.
+Activity is the only chat type that opts in to speech interrupting TTS/playback;
+this demo uses that harness. Other chat types keep speaking, while retaining
+their existing cancellation of outdated generation before TTS starts.
 Saved replies retain their generated text in harness interruption context even
 after their buffered audio is stopped. The activity planner and responder receive
 that context, and incomplete assistant delivery is excluded from goal evidence.

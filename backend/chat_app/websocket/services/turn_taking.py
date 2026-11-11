@@ -127,6 +127,10 @@ class TurnTakingState:
         harness (ChatHarness) receives InterruptedReply records independently of
         its dialogue state. Exact heard words are intentionally not inferred.
         """
+        # Apply the same policy to every interruption path, including commit races.
+        if not getattr(harness, "ALLOW_SPEECH_INTERRUPTION", False):
+            return ()
+            
         from ..harnesses.base import InterruptedReply
 
         pending = [
