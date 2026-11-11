@@ -163,12 +163,12 @@ export function Chat(): ReactElement {
 
     return (
         <>
-            <div className="min-h-[85vh] bg-chat-surface px-4 py-6 md:px-8">
+            <div className="min-h-dvh bg-chat-surface px-4 py-4 md:px-8">
                 <div className={`mx-auto flex flex-col gap-6 ${layout.page}`}>
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Chat Type */}
                     {/* -------------------------------------------------------------------------------- */}
-                    <header className="flex flex-wrap items-end justify-between gap-4">
+                    <header className="flex flex-wrap items-end justify-between gap-4 pl-14">
                         <div>
                             <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Chat</div>
                             <h1 className="text-3xl font-semibold text-chat-text">{mode.label}</h1>

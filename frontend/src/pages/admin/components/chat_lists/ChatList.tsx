@@ -1,6 +1,6 @@
 /* List view for admin navigation via ChatSessionCards.
 --------------------------------------------------------------------------------
-`frontend/src/pages/admin/components/chat_lists/ChatList.tsx`
+`@frontend/src/pages/admin/components/chat_lists/ChatList`
 
 Separated into two lists: one for all currently active chats and one for all 
 completed chats. 
@@ -11,14 +11,12 @@ grouped by week.
 */
 import { memo, useMemo } from "react";
 import { useNavigate   } from "react-router-dom";
-import { LuRefreshCw   } from "react-icons/lu";
 
 // From this project
 import { ChatSession     } from "@/api";
 import { ChatSessionCard } from "./ChatSessionCard";
 import { SectionHeader   } from "../ui/SectionHeader";
 import { Pill            } from "../ui/Pill";
-import { AdminButton     } from "../ui/AdminButton";
 import { groupByRecency  } from "./timeGrouping";
 
 // ================================================================================
@@ -28,7 +26,6 @@ export const ChatList = memo(function ChatList({
     title,
     subtitle = "",
     sessions,
-    onRefresh,
     navigate_to,
     variant = "completed",
     grouped = false,
@@ -36,7 +33,6 @@ export const ChatList = memo(function ChatList({
     title       : string;
     subtitle  ? : string | null;
     sessions    : ChatSession[];
-    onRefresh ? : () => void;
     navigate_to : string;
     variant   ? : "active" | "completed";
     grouped   ? : boolean;
@@ -54,17 +50,12 @@ export const ChatList = memo(function ChatList({
         <section>
 
             {/* -------------------------------------------------------------------------------- */}
-            {/* "Header" with a title for the list and the refresh button */}
+            {/* List heading and session count */}
             {/* -------------------------------------------------------------------------------- */}
             <SectionHeader
                 title    = {title}
                 subtitle = {subtitle}
                 badge    = {<Pill variant={variant === "active" ? "live" : "info"} dot={variant === "active"} value={sessions.length ?? 0} />}
-                actions  = {onRefresh && (
-                    <AdminButton variant="outline" size="sm" iconLeft={<LuRefreshCw size={14} />} onClick={onRefresh}>
-                        Refresh
-                    </AdminButton>
-                )}
                 className = "mb-3"
             />
 

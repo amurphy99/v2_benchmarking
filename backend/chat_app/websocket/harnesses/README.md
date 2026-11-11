@@ -127,6 +127,7 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue). A plan-driven harness sends its `avatar_setup` from `start()` |
 | `request_turn()` | Asks for a reply of the harness's own (next section); `False` while another reply owns the turn |
 | `turn_number` | Reply attempts so far, counted in `on_reply_started` (avatar plans carry it as their `turn`) |
+| `history_view()` | Private task materials and current state for the initial session snapshot; `None` for chat types without archived materials |
 | `monitor_view()` | What the admin listener's task panel shows about this chat now; `None` (the default) for a chat type without one (Monitoring, below) |
 | `on_interim`, `on_final`, `on_reply_started`, `on_reply_cancelled`, `on_playback` | Turn events (next section), passed on to each cue |
 
@@ -143,6 +144,7 @@ reply: `publish_mood` (a `robot_action` emotion) and `publish_plan` (an avatar p
 for a plan-driven chat type).
 
 `ResponseOutcome` carries `message`, `state` (entered in `on_reply_saved`),
+`task_snapshot` (private materials and proposed state, saved in the same transaction as the reply),
 `pause_listening`, `close_after` (send `chat_ended` and close once the reply has
 gone out), and `avatar_plan`: a plan sent just before the reply's `llm_response`, so
 its reply moments mean this reply (`consumers/HARNESS_PROTOCOL.md` §4.1). A harness
@@ -290,3 +292,25 @@ moving it:
 Left as they are for now: the `taskType` and `taskSubtype` fields on `UserSettings`
 and `ChatSession`, which the settings page's chat-type form sets. They are separate
 from `chat_type`.
+
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Completed Task History                                                           -->
+<!-- -------------------------------------------------------------------------------- -->
+## Completed task history
+
+`ChatSession.task_snapshot` holds the task materials and last committed state. The consumer
+stores `history_view()` before the harness starts, and each task reply carries its proposed
+snapshot in `ResponseOutcome.task_snapshot`. Saving the exchange also saves that snapshot,
+so a failed commit or cancelled generation cannot archive an uncommitted decision or move.
+The planning harness also awaits a snapshot write when `reply_then_track` finishes tracking.
+
+Map Task snapshots include both maps and the follower's full path. Planning snapshots include
+the scenario, both sides' constraints, agreements, pending choices, suggestions, refusals,
+and approval stage. This is the final state, not a replayable sequence of task events.
+
+Staff and linked caregivers read `/api/chatsession/<id>/task-history/`; participants cannot
+read this private view, and it is not in the ordinary session serializer. The response is
+`{recorded, view}`. When `recorded` is false, an older session may identify the current
+materials for its registered variant, but its path and decisions remain unknown. The admin
+history page labels these as current materials, never as an archived outcome.

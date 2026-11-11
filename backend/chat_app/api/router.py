@@ -26,6 +26,7 @@ from .views import (
     ChatSessionViewSet, ReminderViewSet,     # Collection endpoints
     ChatSessionView,
     SessionAudioPlaybackView,
+    SessionTaskHistoryView,
     DownloadDataView,                        # Download data endpoint
     RAGInstructionsView,                     # RAG Instructions endpoint
     RAGInstructionsViewSet                   # RAG Instructions list endpoint
@@ -73,6 +74,7 @@ urlpatterns = [
     # Single-row resources
     path("rag/<int:ragid>/", RAGInstructionsView.as_view(), name="rag_instructions"),
     path("chatsession/<int:sessionid>/", ChatSessionView.as_view(), name="chatsession"),
+    path("chatsession/<int:sessionid>/task-history/", SessionTaskHistoryView.as_view(), name="session_task_history"),
     path("chatsession/<int:sessionid>/audio-playback/", SessionAudioPlaybackView.as_view(), name="session_audio_playback"),
     path("chatsession/latest/", LatestChatSessionView.as_view(), name="latest_chatsession"),
 

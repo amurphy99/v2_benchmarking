@@ -8,6 +8,7 @@ caregiver navigation bar there, so they also get a link to the caregiver pages.
 */
 import { useState                } from "react";
 import { OverlayTrigger, Popover, Spinner } from "react-bootstrap";
+import { LuUserRound } from "react-icons/lu";
 import { FaCircleUser } from "react-icons/fa6";
 import { User              } from "@/api";
 import { CAREGIVER_OKLCH, PATIENT_OKLCH } from "@/utils/styling/colors";
@@ -21,7 +22,11 @@ import { useProfile } from "@/hooks/queries/useProfile";
 // ====================================================================
 // Profile Information 
 // ====================================================================
-export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: User }) {
+export default function ProfileInfo({isCare, user, variant = "default"}: {
+    isCare   : boolean;                 // Caregiver navigation
+    user     : User;                    // Signed-in user
+    variant? : "default" | "admin";   // Admin header uses outline icons
+}) {
     const { account, logout } = useAuth();
     const {data: profile, isLoading} =  useProfile();
 
@@ -94,8 +99,8 @@ export default function ProfileInfo({ isCare, user } : { isCare: boolean, user: 
     const overlayStyle = "flex items-center gap-2 align-middle hover:text-decoration-underline";
     return (
     <OverlayTrigger show={show} placement="bottom" overlay={popover} trigger={[]} delay={{show: 250, hide: 400}}>
-        <button onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} className={overlayStyle}>
-            <FaCircleUser size={"2.5rem"} color={isCare ? CAREGIVER_OKLCH : PATIENT_OKLCH}/>
+        <button type="button" aria-label="Profile menu" onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} className={overlayStyle}>
+            {variant === "admin" ? <span className="flex h-10 w-10 items-center justify-center rounded-full border border-admin-border bg-admin-muted text-admin-subtext"><LuUserRound size={22} /></span> : <FaCircleUser size="2.5rem" color={isCare ? CAREGIVER_OKLCH : PATIENT_OKLCH} />}
         </button>
     </OverlayTrigger>
     );

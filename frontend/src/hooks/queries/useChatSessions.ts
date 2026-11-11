@@ -50,14 +50,16 @@ export const useLatestChatSession = () => {
 // (need to do separately because the query is "saving" the results for both)
 export const useActiveChatSessions = (demo: number = 2) =>
     useModelQuery<ChatSession[]>({
-        queryKey: "activeChatSessions",
-        queryFn : () => listChatSessions(1, demo),
-        empty   : [],
+        queryKey  : "activeChatSessions",
+        staleTime : 0,
+        queryFn   : () => listChatSessions(1, demo),
+        empty     : [],
     });
 
 export const useInactiveChatSessions = (demo: number = 2) =>
     useModelQuery<ChatSession[]>({
-        queryKey: "inactiveChatSessions",
-        queryFn : () => listChatSessions(0, demo),
-        empty   : [],
+        queryKey  : "inactiveChatSessions",
+        staleTime : 0,
+        queryFn   : () => listChatSessions(0, demo),
+        empty     : [],
     });

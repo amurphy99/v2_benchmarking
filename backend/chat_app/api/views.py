@@ -30,6 +30,7 @@ from  .serializers import AdminCaregiverSerializer, AdminCreateAccountSerializer
 from  .mixins      import ProfileMixin, accessible_chat_sessions, monitored_profiles
 from ..helpers.downloadHelpers             import get_download_data
 from ..services.session_audio_storage      import create_recording_playback_url
+from ..services.session_task_history       import session_task_history
 from ..websocket.harnesses.map_task.harness import MAP_TASK_VARIANTS
 from ..websocket.harnesses.map_task.maps    import map_file_previews
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
@@ -103,6 +104,21 @@ class ChatSessionView(generics.RetrieveAPIView):
                     .select_related  ("profile", "image", "audio")
                     .prefetch_related("messages__words", "biomarker_scores"))
         return get_object_or_404(sessions, id=sessionid)
+
+
+# Private task materials and results, scoped to staff or the participant's caregiver
+class SessionTaskHistoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    # A participant must not receive the follower map or the avatar's private constraints
+    def get(self, request: Request, sessionid: int) -> Response:
+        if (not request.user.is_staff) and (not Account.objects.filter(user=request.user, role="caregiver").exists()):
+            raise PermissionDenied("Task history is available to staff and linked caregivers.")
+        session = get_object_or_404(accessible_chat_sessions(request.user), id=sessionid)
+        response = Response(session_task_history(session))
+        response["Cache-Control"] = "private, no-store"
+        return response
+
 
 class SessionAudioPlaybackView(APIView):
     """Issue a short-lived playback URL for an authorized session recording."""

@@ -24,7 +24,7 @@ choice waiting for a yes. It goes out as a `task_card` frame
 
 """
 from __future__  import annotations
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing      import Literal, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -236,3 +236,31 @@ def _card_line(item_id: str, label: str, item: ItemState) -> dict[str, object]:
 # Send the participant's card to the primary client
 async def send_task_card(consumer: ChatConsumer, scenario: Scenario, state: PlanningState) -> None:
     await consumer.send_json(card_frame(scenario, state))
+
+
+# --------------------------------------------------------------------------------
+# Completed Task History
+# --------------------------------------------------------------------------------
+# Preserve both sides' materials and decisions; None means an older unsaved state
+def planning_history(scenario: Scenario, state: PlanningState | None) -> dict[str, object]:
+    return {
+        "kind"                    : "cooperative_planning",
+        "title"                   : scenario.title,
+        "event"                   : scenario.event,
+        "participant_constraints" : [constraint.text for constraint in scenario.participant.constraints],
+        "avatar_constraints"      : [constraint.text for constraint in scenario.avatar.constraints],
+        "stage"                   : None if (state is None) else state.stage,
+        "items"                   : [{"id": item.id, "label": item.label, "state": None if (state is None) else _item_history(state.items[item.id])} for item in scenario.items],
+        "user_wants"              : [] if (state is None) else list(state.user_wants),
+        "user_avoids"             : [] if (state is None) else list(state.user_avoids),
+    }
+
+
+# JSON-native collections keep the saved snapshot identical to the API view
+def _item_history(item: ItemState) -> dict[str, object]:
+    return {
+        "agreed"      : item.agreed,
+        "settling"    : None if (item.settling is None) else asdict(item.settling),
+        "suggestions" : [asdict(idea) for idea in item.suggestions],
+        "refused"     : [asdict(idea) for idea in item.refused],
+    }

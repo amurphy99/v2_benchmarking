@@ -30,7 +30,10 @@ from typing      import Awaitable, Callable, TYPE_CHECKING
 import asyncio, logging, time
 logger = logging.getLogger(__name__)
 
+from channels.db import database_sync_to_async as db_s2a
+
 # From this project
+from ....services.db_services        import ChatService
 from ....services.llm.chat_utilities import prepare_LLM_messages
 from ....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN
 from  ...services.bg_helpers         import fire_and_log
@@ -41,7 +44,7 @@ from    .behaviors                   import reply_plan, setup_for, start_plan, t
 from    .config                      import PLANNING_PIPELINE
 from    .cues                        import ItemGlance, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
-from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, send_task_card
+from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
 from    .response_models             import models_for_scenario
 from    .scenarios                   import load_scenario
@@ -152,14 +155,19 @@ class CooperativePlanningHarness(ChatHarness):
     ) -> PlanningOutcome:
         plan = reply_plan(self.scenario, self.turn_number, behavior, about, _settled(self.state, state)) if self.with_cues else None
         return PlanningOutcome(
-            message     = message,
-            state       = state,
-            close_after = (state.stage == "approved"),
-            avatar_plan = plan,
-            behavior    = behavior,
-            results     = results,
-            follow_up   = follow_up,
+            message       = message,
+            task_snapshot = self.history_view(state),
+            state         = state,
+            close_after   = (state.stage == "approved"),
+            avatar_plan   = plan,
+            behavior      = behavior,
+            results       = results,
+            follow_up     = follow_up,
         )
+
+    # Freeze the scenario, private constraints, and proposed or committed decisions
+    def history_view(self, state: PlanningState | None = None) -> dict[str, object]:
+        return planning_history(self.scenario, self.state if (state is None) else state)
 
     # --------------------------------------------------------------------------------
     # Once a reply is saved: show the card it changed, and start any tracking it left
@@ -179,6 +187,7 @@ class CooperativePlanningHarness(ChatHarness):
 
         # The exchange has been heard already, so its changes apply at once
         settled    = _settled(self.state, state)
+        await db_s2a(ChatService.save_task_snapshot)(self.consumer.session_id, self.history_view(state))
         self.state = state
         await send_task_card(self.consumer, self.scenario, state)
         if self.with_cues and settled: await send_avatar_plan(self.consumer, writing_plan(self.scenario, self.turn_number, settled))

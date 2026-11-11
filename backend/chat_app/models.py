@@ -141,6 +141,9 @@ class ChatSession(models.Model):
     condition = models.CharField(max_length=32, blank=True, default="")
     variant   = models.CharField(max_length=32, blank=True, default="")
 
+    # Private task materials and the last committed task state (admin history only)
+    task_snapshot = models.JSONField(null=True, blank=True, default=None)
+
     # TODO: Future field for what LLM version was used
     llmVersion = models.CharField(max_length=255, default="phi3_finetuned")
 

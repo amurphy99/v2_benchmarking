@@ -1,5 +1,7 @@
-/* AdminChatInactive.tsx
+/* Review a completed conversation or task, with its transcript and saved results.
 --------------------------------------------------------------------------------
+`@frontend/src/pages/admin/AdminChatInactive`
+
 This is the inactive counterpart of the AdminChat page. On this page, Admin 
 users can view all analysis for a ChatSession that has already been completed. 
 
@@ -13,17 +15,18 @@ the secondary analysis page, "TranscriptPlayback.tsx".
 */
 import { useNavigate, useParams } from "react-router-dom";
 import { LuPlay                 } from "react-icons/lu";
-import   toast                    from "react-hot-toast";
 
 // Components
-import { SessionHeader  } from "./components/admin_header/SessionHeader";
-import { SessionHistory } from "./components/common/SessionHistory";
-import { AnalysisPanel  } from "./components/analysis/AnalysisPanel";
-import { AdminPage      } from "./components/ui/AdminPage";
-import { AdminButton    } from "./components/ui/AdminButton";
+import   CompletedTaskHistory   from "./components/CompletedTaskHistory";
+import { SessionHeader        } from "./components/admin_header/SessionHeader";
+import { SessionHistory       } from "./components/common/SessionHistory";
+import { AnalysisPanel        } from "./components/analysis/AnalysisPanel";
+import { AdminPage            } from "./components/ui/AdminPage";
+import { AdminButton          } from "./components/ui/AdminButton";
 
 // Misc. Helpers
 import { useChatSession } from "@/hooks/queries/useChatSessions";
+import { isTaskChatType } from "./components/chat_lists/chatTypePresentation";
 
 
 // ================================================================================
@@ -35,11 +38,9 @@ export function AdminChatInactive() {
     const { data: session, isLoading, isError } = useChatSession(id ?? "");
     const navigate = useNavigate();
 
-    if (isLoading || !session.id) { return <div className="p-6 text-admin-subtext">Loading session...</div>; }
-    if (isError) {
-        toast.error("Error fetching chat session data. Returning to admin dashboard.");
-        navigate("/admin");
-    }
+    if (isError) return <div role="alert" className="p-6 text-admin-subtext">Unable to load this session. <AdminButton onClick={() => navigate("/admin")}>Back to Chat History</AdminButton></div>;
+    if (isLoading || !session.id) return <div className="p-6 text-admin-subtext">Loading session...</div>;
+    const isTask = isTaskChatType(session.chat_type);
 
     // "Transcript Playback" button takes us to the biomarker highlighting analysis page
     // (pass only the session ID so the playback page always re-fetches fresh data)
@@ -77,8 +78,7 @@ export function AdminChatInactive() {
 
             {/* Page Body */}
             <div className="px-4 md:px-6 pt-4 pb-6 flex flex-col gap-6">
-                <AnalysisPanel  session={session} /> {/* Analysis Panel (topics, sentiment, summary, risk factors) */}
-                <SessionHistory session={session} /> {/* Chat Messages & Biomarker History */}
+                {isTask ? <CompletedTaskHistory session={session} /> : <><AnalysisPanel session={session} /><SessionHistory session={session} /></>}
             </div>
         </AdminPage>
     );

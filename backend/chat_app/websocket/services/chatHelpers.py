@@ -440,8 +440,9 @@ class ChatHandler:
     ) -> ChatMessage:
         # Save the matching turn atomically, then publish it before consuming its staged prefix
         # (a harness turn with nothing staged saves only its reply)
-        if staged_snapshot: user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts)
-        else:               user_msg, assistant_msg = None, await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
+        task_snapshot = response_outcome.task_snapshot
+        if staged_snapshot: user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts, task_snapshot=task_snapshot)
+        else:               user_msg, assistant_msg = None, await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts, task_snapshot=task_snapshot)
         consumer._staged_utterances.consume(staged_snapshot)
         consumer.last_response = system_resp
 

@@ -92,6 +92,7 @@ class TurnAttempt:
 class ResponseOutcome:
     message         : str                        # Spoken assistant reply
     state           : object            = None   # Harness state to enter once the exchange is saved (None keeps the current one)
+    task_snapshot   : dict | None       = None   # Private task history, saved atomically with this reply
     pause_listening : bool              = False  # Stop the STT stream once the reply is saved
     close_after     : bool              = False  # Send `chat_ended` and close once the reply has gone out
     avatar_plan     : AvatarPlan | None = None   # Plan sent just before the reply's text, so its reply moments mean this reply
@@ -163,6 +164,10 @@ class ChatHarness(ABC):
     # --------------------------------------------------------------------------------
     # What the admin listener's task panel shows about this chat now (None for a chat type without one)
     def monitor_view(self) -> MonitorView | None:
+        return None
+
+    # Private materials and committed state for completed-session history
+    def history_view(self) -> dict[str, object] | None:
         return None
 
     # Send the task panel's view to every admin listener (nothing for a chat type without one)

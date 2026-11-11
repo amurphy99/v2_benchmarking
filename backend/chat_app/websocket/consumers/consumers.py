@@ -152,6 +152,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await claim_primary_connection(self)
 
         # The chat type's harness starts once its session and STT are ready
+        snapshot = self.harness.history_view()
+        if snapshot is not None: await db_s2a(ChatService.save_task_snapshot)(self.session_id, snapshot)
         await self.harness.start()
 
         # Log the successful connection

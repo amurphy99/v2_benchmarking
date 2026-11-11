@@ -298,12 +298,11 @@ export interface MapTaskFollowerMap {
 
 // One map file in the staff preview (`error` instead of its maps when it doesn't load)
 export interface MapTaskMapFile {
-    variant     : string;                      // The file's name, which a client picks it by
-    registered  : boolean;                     // Listed in `MAP_TASK_VARIANTS`, so clients can pick it
-    error       : string | null;               // Why it doesn't load (null when it does)
-    description : string | null;
-    giver       : MapTaskGiverMap    | null;
-    follower    : MapTaskFollowerMap | null;
+    variant    : string;                      // The file's name, which a client picks it by
+    registered : boolean;                     // Listed in `MAP_TASK_VARIANTS`, so clients can pick it
+    error      : string | null;               // Why it doesn't load (null when it does)
+    giver      : MapTaskGiverMap    | null;
+    follower   : MapTaskFollowerMap | null;
 }
 
 // =======================================================================
@@ -316,3 +315,40 @@ export interface Download {
     fileName            : string;
     fileContents        : string;
 }
+
+// Private task history from /api/chatsession/<id>/task-history/ (staff and linked caregivers)
+export type MapTaskHistory = {
+    kind     : "map_task";
+    giver    : MapTaskGiverMap;
+    follower : MapTaskFollowerMap;
+    path     : MapPoint[] | null;
+    position : MapPoint | null;
+};
+
+// Planning choices retain pending proposals and refusals, separately from agreements
+export type PlanningItemHistory = {
+    id    : string;
+    label : string;
+    state : {
+        agreed      : string | null;
+        settling    : {choice: string; by: "user" | "avatar"} | null;
+        suggestions : {choice: string; by: "user" | "avatar"}[];
+        refused     : {choice: string; by: "user" | "avatar"; reason: string}[];
+    } | null;
+};
+
+// The scenario and both sides' constraints are private task materials
+export type PlanningTaskHistory = {
+    kind                    : "cooperative_planning";
+    title                   : string;
+    event                   : string;
+    participant_constraints : string[];
+    avatar_constraints      : string[];
+    stage                   : "planning" | "final_check" | "approved" | null;
+    items                   : PlanningItemHistory[];
+    user_wants              : string[];
+    user_avoids             : string[];
+};
+
+// Unsaved older sessions may show current variant materials, without historical outcomes
+export type SessionTaskHistory = {recorded: boolean; view: MapTaskHistory | PlanningTaskHistory | null};

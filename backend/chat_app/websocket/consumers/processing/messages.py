@@ -35,17 +35,18 @@ if TYPE_CHECKING:
 # Commit ChatMessage objects
 # ================================================================================
 async def commit_chat_message(
-    consumer  : ChatConsumer,  # Active chat connection that owns the session state
-    role      : str,           # Message author (currently "user" or "assistant")
-    text      : str,           # Final message text to persist and publish
-    timestamp : float,         # Timestamp used by the context and listener broadcast
+    consumer      : ChatConsumer,        # Active chat connection that owns the session state
+    role          : str,                 # Message author (currently "user" or "assistant")
+    text          : str,                 # Final message text to persist and publish
+    timestamp     : float,               # Timestamp used by the context and listener broadcast
+    task_snapshot : dict | None = None,  # Private task history saved in the same transaction
 ) -> ChatMessage:
     """
     Persist one standalone message before adding it to the local context and
     publishing it. This path is used for unanswered user speech flushed during
     disconnect and for manually supplied assistant responses.
     """
-    message = await db_s2a(ChatService.add_message)(consumer.session_id, role, text)
+    message = await db_s2a(ChatService.add_message)(consumer.session_id, role, text, task_snapshot=task_snapshot)
     await _publish_chat_message(consumer, role, text, timestamp)
     return message
 
@@ -53,18 +54,19 @@ async def commit_chat_message(
 # Commit a matched response turn without allowing a partial database write
 # --------------------------------------------------------------------------------
 async def commit_chat_exchange(
-    consumer            : ChatConsumer,  # Active chat connection that owns the session state
-    user_text           : str,           # Finalized user text used for response generation
-    user_timestamp      : float,         # User timestamp used by context and listeners
-    assistant_text      : str,           # Completed assistant response
-    assistant_timestamp : float,         # Assistant timestamp used by context and listeners
+    consumer            : ChatConsumer,        # Active chat connection that owns the session state
+    user_text           : str,                 # Finalized user text used for response generation
+    user_timestamp      : float,               # User timestamp used by context and listeners
+    assistant_text      : str,                 # Completed assistant response
+    assistant_timestamp : float,               # Assistant timestamp used by context and listeners
+    task_snapshot       : dict | None = None,  # Private task history saved with the exchange
 ) -> tuple[ChatMessage, ChatMessage]:
     """
     Persist a matching user/assistant exchange in one database transaction, then
     publish both messages in their original order. Normal cancellable responses use
     this path only after response generation succeeds.
     """
-    user_message, assistant_message = await db_s2a(ChatService.add_exchange)(consumer.session_id, user_text, assistant_text)
+    user_message, assistant_message = await db_s2a(ChatService.add_exchange)(consumer.session_id, user_text, assistant_text, task_snapshot=task_snapshot)
     await _publish_chat_message(consumer, "user",           user_text,      user_timestamp)
     await _publish_chat_message(consumer, "assistant", assistant_text, assistant_timestamp)
     return user_message, assistant_message

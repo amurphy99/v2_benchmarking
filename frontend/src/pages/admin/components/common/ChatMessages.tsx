@@ -43,7 +43,8 @@ function MessageBubble({ msg, elapsed }: { msg: LocalChatMessage | ChatMessage, 
 // ================================================================================
 // ChatMessages (scroll view)
 // ================================================================================
-export function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=true } : {
+export function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=true, heading="Chat History" } : {
+    heading?        : string | null;  // Null when the containing panel supplies its heading
     messages        : LocalChatMessage[] | ChatMessage[];
     chatStartTsIso? : string  | null;
     do_auto_scroll? : boolean | null; // False for inactive chat sessions
@@ -95,9 +96,9 @@ export function ChatMessages({ messages, chatStartTsIso, do_auto_scroll=true } :
         <div className="flex flex-col h-full min-h-0">
 
             {/* Header */}
-            <div className="flex justify-center py-2 border-b border-admin-border shrink-0">
-                <p className="text-sm font-semibold text-admin-text m-0">Chat History</p>
-            </div>
+            {heading !== null ? <div className="flex justify-center py-2 border-b border-admin-border shrink-0">
+                <p className="text-sm font-semibold text-admin-text m-0">{heading}</p>
+            </div> : null}
 
             {/* Messages (scrollable area) */}
             <div

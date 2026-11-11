@@ -427,3 +427,10 @@ closes the underlying chat session.
   coordination in `processing/messages.py`.
 - Put behavior that differs between chat types in that chat type's harness
   (`../harnesses/`), never in the consumer, `ChatHandler`, or the frame routers.
+
+
+Completed task materials and state are archived privately in `ChatSession.task_snapshot`.
+`processing/messages.py` passes a reply's snapshot to the same database transaction as its
+messages. The consumer saves initial materials before calling `harness.start()`. This adds
+no primary-client frame; the admin history page uses the scoped REST task-history endpoint
+(documented in `harnesses/README.md`).

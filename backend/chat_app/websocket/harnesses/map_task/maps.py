@@ -251,9 +251,9 @@ def map_file_previews(registered: tuple[str, ...]) -> list[dict[str, object]]:
     """
     previews = []
     for path in sorted(MAP_TASK_MAPS_DIR.glob("*.json"), key=lambda path: (path.stem not in registered, path.stem)):
-        preview = {"variant": path.stem, "registered": path.stem in registered, "error": None, "description": None, "giver": None, "follower": None}
+        preview = {"variant": path.stem, "registered": path.stem in registered, "error": None, "giver": None, "follower": None}
         try:                        task_map = load_map(path.stem)
         except ValueError as error: preview["error"] = str(error)
-        else:                       preview.update(description=task_map.description, giver=giver_view(task_map), follower=follower_view(task_map))
+        else:                       preview.update(giver=giver_view(task_map), follower=follower_view(task_map))
         previews.append(preview)
     return previews

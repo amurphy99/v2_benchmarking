@@ -82,17 +82,19 @@ export function groupByRecency(sessions: ChatSession[]): SessionGroup[] {
         if (dayOffset >= 0 && dayOffset < 7) {
             const k = `day-${dayOffset}`;
             if (!byKey.has(k)) {
-                byKey.set(k, { label: dayLabel(d, today), sessions: [], sortKey: -dayOffset });
+                byKey.set(k, { label: dayLabel(d, today), sessions: [], sortKey: startOfDay(d).getTime() });
             }
             byKey.get(k)!.sessions.push(s);
         } else {
             // Group by ISO-week (start = Monday of that week).
             const dayOfWeek = (d.getDay() + 6) % 7; // 0 = Mon
-            const weekStart = startOfDay(new Date(d.getTime() - dayOfWeek * 24 * 60 * 60 * 1000));
-            const weekEnd   = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+            const weekStart = startOfDay(d);
+            weekStart.setDate(weekStart.getDate() - dayOfWeek);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
             const k         = `week-${weekStart.toISOString().slice(0, 10)}`;
             if (!byKey.has(k)) {
-                byKey.set(k, { label: weekRangeLabel(weekStart, weekEnd), sessions: [], sortKey: weekStart.getTime() / -1e7 });
+                byKey.set(k, { label: weekRangeLabel(weekStart, weekEnd), sessions: [], sortKey: weekStart.getTime() });
             }
             byKey.get(k)!.sessions.push(s);
         }

@@ -289,7 +289,7 @@ are constants at the top of `geometry.py`.
 ## Not built yet
 
 - **Scoring** the avatar's path against the route.
-- **Keeping the avatar's path.** It lives only in the harness while the chat runs (the admin
-  view shows it live); nothing saves it with the session yet. It belongs in the research event
-  log planned for data collection, with the cues fired and the plans sent.
+- **A per-turn research event log.** Both maps and the accumulated path are saved in
+  `ChatSession.task_snapshot` with each committed reply and shown in completed-session history.
+  A timeline of moves, cues, and plans is not saved yet.
 - **HCRC maps 5 to 16.** Maps 1 to 4 are in; the rest of the corpus's 16 can be traced the same way.

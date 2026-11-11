@@ -392,8 +392,13 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(outcome, PlanningOutcome)
         self.assertEqual(outcome.state, initial_state(SCENARIO))
 
-        harness.on_reply_saved(outcome)
-        await harness.generate(make_attempt("Or salad?"))
+        consumer.session_id = 1
+        save_snapshot = AsyncMock()
+        with patch(f"{HARNESS}.db_s2a", return_value=save_snapshot):
+            harness.on_reply_saved(outcome)
+            await harness.generate(make_attempt("Or salad?"))
+        save_snapshot.assert_awaited_once()
+        self.assertEqual(save_snapshot.await_args.args[1]["items"][0]["state"]["suggestions"], [{"choice": "soup", "by": "user"}])
         self.assertEqual([s.choice for s in harness.state.items["starter"].suggestions], ["soup"])
         self.assertIn("task_card", sent_types(consumer))
 

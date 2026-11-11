@@ -55,3 +55,17 @@ Misc.
 
 </details>
 
+
+
+## Admin chat history
+
+The admin header's **Chat History** tab opens `/admin`. Its filter bar narrows both the live
+and completed lists and has one refresh button for both. Cards prominently identify chat
+type, with condition and variant underneath.
+
+Completed Map Task and Cooperative Planning sessions prioritize task materials beside a
+compact transcript. `CompletedTaskHistory` reads the private
+`/api/chatsession/<id>/task-history/` endpoint. Saved snapshots preserve the actual maps,
+scenario, constraints, path, and decisions. Older sessions show current variant materials
+with an explicit notice that historical state was not recorded. Biomarker panels appear
+only when the session has recorded scores; task chats keep them in a collapsible section.

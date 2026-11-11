@@ -1,8 +1,8 @@
-/* Monitor home: live and completed chat lists, plus links to the admin tools.
+/* Chat History: live and completed chat lists, plus links to the admin tools.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/Admin`
 
-Shown as "Monitor" in the UI. Staff see every participant's chats; a caregiver
+Shown as "Chat History" in the admin navigation. Staff see every participant's chats; a caregiver
 sees only the chats of the participants linked to them (the backend scopes both
 lists).
 
@@ -22,7 +22,7 @@ narrows both to one chat type, condition, or variant
 (`components/chat_lists/ChatRunFilterBar`).
 
 */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate                               } from "react-router-dom";
 
 // From this project
@@ -46,27 +46,13 @@ export function Admin() {
     const isStaff  = useAuth().account.user.is_staff;
 
     // Query the DB for a list of ChatSessions
-    const { data:   active, isLoading: loading_1, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
-    const { data: inactive, isLoading: loading_2, refetch: refetchInactive } = useInactiveChatSessions(NON_DEMO_ONLY);
+    const { data:   active, isLoading: loading_1, isFetching: fetchingActive, refetch: refetchActive   } =   useActiveChatSessions(NON_DEMO_ONLY);
+    const { data: inactive, isLoading: loading_2, isFetching: fetchingInactive, refetch: refetchInactive } = useInactiveChatSessions(NON_DEMO_ONLY);
 
-    // Refreshes to either list always update both lists.
-    // Completing a chat always moves it from one list to the other; so we need 
-    // to refresh both to reflect that in the UI.
-    const refreshBoth = useCallback(() => {
-        refetchActive  ();
-        refetchInactive();
+    // Refresh both lists together so completed sessions move between them
+    const refreshBoth = useCallback(async (): Promise<void> => {
+        await Promise.all([refetchActive(), refetchInactive()]);
     }, [refetchActive, refetchInactive]);
-
-    // Re-fetch from the DB whenever the page gains "focus".
-    // This covers when users use the "back" navigation button from a chat 
-    // detail page; before the 5 minute stale time was preventing the 
-    // "refetchOnWindowFocus" from TanStack.
-    useEffect(() => {
-        refreshBoth();
-        const onFocus = () => refreshBoth();
-        window.addEventListener("focus", onFocus);
-        return () => window.removeEventListener("focus", onFocus);
-    }, [refreshBoth]);
 
     // Both lists narrowed to the chat type, condition, and variant picked (the dropdowns offer what either list holds)
     const [runFilter, setRunFilter] = useState<ChatRunFilter>(CHAT_RUN_ANY);
@@ -82,14 +68,13 @@ export function Admin() {
                 )}
 
                 {/* Chat type, condition, and variant filters for both lists */}
-                <ChatRunFilterBar sessions={allSessions} filter={runFilter} onChange={setRunFilter} />
+                <ChatRunFilterBar sessions={allSessions} filter={runFilter} onChange={setRunFilter} onRefresh={refreshBoth} refreshing={fetchingActive || fetchingInactive} />
 
                 {/* Active Sessions */}
                 <ChatList
                     title       = "Currently Active Chat Sessions"
                     subtitle    = "Live sessions you can open in the listener view."
                     sessions    = {filteredActive}
-                    onRefresh   = {refreshBoth}
                     navigate_to = {"/admin/chat/"}
                     variant     = "active"
                 />
@@ -116,9 +101,8 @@ export function Admin() {
                 {/* All Sessions */}
                 <ChatList
                     title       = "Completed Chat Sessions"
-                    subtitle    = "View post-chat analysis results."
+                    subtitle    = "Review task details, transcripts, and available analysis."
                     sessions    = {filteredInactive}
-                    onRefresh   = {refreshBoth}
                     navigate_to = {"/admin/chat/inactive/"}
                     variant     = "completed"
                     grouped     = {true}

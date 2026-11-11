@@ -297,21 +297,46 @@ class ChatService:
             command_id      = command_id,
         )
 
-    # Messages
+    # Save one message and its optional task snapshot together
     @staticmethod
-    def add_message(session_id, role, text, *, start_ts=None, end_ts=None):
+    @transaction.atomic
+    def add_message(
+        session_id    : int,                    # Session owning the message and snapshot
+        role          : str,                    # Message author
+        text          : str,                    # Final message text
+        *,
+        start_ts      : datetime | None = None,  # Optional speech boundary
+        end_ts        : datetime | None = None,  # Optional speech boundary
+        task_snapshot : dict | None     = None,  # Private task state for this reply
+    ) -> ChatMessage:
         session = ChatSession.objects.get(id=session_id)
-        return ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
+        message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
+        if task_snapshot is not None: ChatService.save_task_snapshot(session_id, task_snapshot)
+        return message
 
     # Save the matching user/assistant turn together so a failed second write cannot split it
     @staticmethod
     @transaction.atomic
-    def add_exchange(session_id: int, user_text: str, assistant_text: str) -> tuple[ChatMessage, ChatMessage]:
+    def add_exchange(
+        session_id     : int,                # Session owning both messages
+        user_text      : str,                # Finalized participant speech
+        assistant_text : str,                # Generated reply
+        *,
+        task_snapshot  : dict | None = None,  # Private task state saved with this exchange
+    ) -> tuple[ChatMessage, ChatMessage]:
         session       = ChatSession.objects.get   (id=session_id)
         user_message  = ChatMessage.objects.create(session=session, role="user",      content=user_text     )
         assistant_msg = ChatMessage.objects.create(session=session, role="assistant", content=assistant_text)
+        if task_snapshot is not None: ChatService.save_task_snapshot(session_id, task_snapshot)
         return user_message, assistant_msg
     
+    # Store private task history without exposing it in the participant session serializer
+    @staticmethod
+    def save_task_snapshot(session_id: int, snapshot: dict) -> None:
+        session = ChatSession.objects.get(id=session_id)
+        session.task_snapshot = snapshot
+        session.save(update_fields=["task_snapshot"])
+
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
     # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
     # TODO: IDK what types to set for the timestamps

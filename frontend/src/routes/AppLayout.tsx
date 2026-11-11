@@ -4,6 +4,7 @@
 
 Staff work on the Monitor pages, so they don't get the caregiver navigation bar
 there; it appears once they open the caregiver pages from the profile menu.
+The participant chat uses a corner menu instead of the full header and footer.
 
 */
 import { Outlet, useLocation } from "react-router-dom";
@@ -13,15 +14,17 @@ import { Spinner             } from "react-bootstrap";
 import { useAuth } from "@/context/AuthProvider";
 import   Header    from "@/components/Header";
 import   FooterNav from "@/components/FooterNav";
+import   ChatNavigation from "@/components/ChatNavigation";
 
 // App Layout
 export function AppLayout() {
     const { account, loading } = useAuth();
     const { pathname         } = useLocation();
+    const isChat = pathname === "/chat";
 
     // Add routes with no footer
     const hideFooter =
-        pathname.startsWith("/admin/chat"         ) ||
+        isChat || pathname.startsWith("/admin/chat"         ) ||
         pathname.startsWith("/admin/chat/inactive") || // Redundant but leaving as example
         pathname.startsWith("/transcript-playback") || // TranscriptPlayback page
         (account.user?.is_staff && pathname.startsWith("/admin"));  // Staff on the Monitor pages
@@ -31,7 +34,7 @@ export function AppLayout() {
     return (
     <>
         {/* Headers */}
-        {account.user ? <Header /> : null}
+        {account.user ? (isChat ? <ChatNavigation /> : <Header />) : null}
     
         {/* Routed page component */}
         <main> <Outlet /> </main>

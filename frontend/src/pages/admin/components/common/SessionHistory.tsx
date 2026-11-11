@@ -30,11 +30,11 @@ type SessionHistoryProps =
 export function SessionHistory(props: SessionHistoryProps) {
     // Default mode  (inactive chat): natural height, scrolls with the page
     // `fillHeight` mode (live chat): take parent's height, ChatHistory scrolls internally, no page-level overflow.
-    const inactive = ("session" in props);
+    const inactive = props.session !== undefined;
 
     // Normalize inpu types once
-    const messages = useMemo(() => {return inactive ? (props.session.messages ?? [])                       : props.messages;}, [props]);
-    const series   = useMemo(() => {return inactive ? ChatBiomarkerToLocalSeries(props.session.biomarkers) : props.series;  }, [props]);
+    const messages = useMemo(() => {return props.session !== undefined ? props.session.messages                       : props.messages;}, [props]);
+    const series   = useMemo(() => {return props.session !== undefined ? ChatBiomarkerToLocalSeries(props.session.biomarkers) : props.series;  }, [props]);
 
     // Style helpers
     const cardClass     = "rounded-xl border border-admin-border bg-admin-panel shadow-sm overflow-hidden";
@@ -43,9 +43,10 @@ export function SessionHistory(props: SessionHistoryProps) {
 
     // Fixed height in inactive mode so the inner panels actually scroll
     const heightClass = props.fillHeight ? "h-full" : "h-[70vh]";
+    const showBiomarkers = series.points.length > 0;
 
     return (
-        <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] gap-4 items-stretch ${heightClass}`}>
+        <div className={`grid grid-cols-1 ${showBiomarkers ? "lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]" : ""} gap-4 items-stretch ${heightClass}`}>
 
             {/* Chat Messages */}
             <div className={messagesClass}>
@@ -53,9 +54,9 @@ export function SessionHistory(props: SessionHistoryProps) {
             </div>
 
             {/* Biomarker Scores */}
-            <div className={biomarkClass}>
+            {showBiomarkers ? <div className={biomarkClass}>
                 <BiomarkerPanel series={series} windowSeconds={"all"} />
-            </div>
+            </div> : null}
 
         </div>
     );

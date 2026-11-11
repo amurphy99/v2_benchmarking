@@ -5,11 +5,12 @@
 Every session records the chat type its harness ran, its cue condition, and its
 task variant (`ChatSession` in `backend/chat_app/models.py`; "" when it had
 none, and on sessions from before chat types were recorded). The session headers
-and cards show them in one line, and the Monitor page filters its chat lists on
-them. Field names keep the wire's spelling.
+show them in one line with readable names, and the Chat History page filters its
+chat lists on them. Field names keep the wire's spelling.
 
 */
-import type { ChatSession } from "@/api";
+import type { ChatSession                        } from "@/api";
+import      { chatRunLabel, chatTypePresentation } from "./chatTypePresentation";
 
 // What one chat ran (a REST session and the listener's `session_info` both carry these)
 export type ChatRun = {
@@ -34,9 +35,11 @@ export const CHAT_RUN_ANY: ChatRunFilter = {chat_type: null, condition: null, va
 // --------------------------------------------------------------------------------
 // Showing What Ran
 // --------------------------------------------------------------------------------
-// What a chat ran in one line ("cooperative_planning · cues · dinner_party"), null when nothing was recorded
+// What a chat ran in one line ("Cooperative Planning · With cues · dinner party"), null when nothing was recorded
 export function chatRunText(run: ChatRun): string | null {
-    const parts = CHAT_RUN_FIELDS.map((field: ChatRunField) => run[field]).filter((value: string) => value !== "");
+    const parts = CHAT_RUN_FIELDS
+        .filter((field: ChatRunField) => run[field] !== "")
+        .map((field: ChatRunField) => (field === "chat_type") ? chatTypePresentation(run[field]).label : chatRunLabel(run[field]));
     return (parts.length > 0) ? parts.join(" · ") : null;
 }
 

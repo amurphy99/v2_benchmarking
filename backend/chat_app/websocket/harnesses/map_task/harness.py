@@ -121,7 +121,7 @@ class MapTaskHarness(ChatHarness):
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...]) -> ResponseOutcome:
         plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path) if self.with_cues else None
         state = MapTaskState(position=path[-1], path=(*self.state.path, *path)) if path else None
-        return ResponseOutcome(message=reply.message, state=state, avatar_plan=plan)
+        return ResponseOutcome(message=reply.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
 
     # Resolve a move to its actual waypoints, removing only consecutive repeated points
     def _movement_path(self, move: Move) -> tuple[Point, ...]:
@@ -145,12 +145,17 @@ class MapTaskHarness(ChatHarness):
     # --------------------------------------------------------------------------------
     # The admin listener's view: both maps, the avatar's spot, and every committed waypoint
     def monitor_view(self) -> MonitorView:
+        return self.history_view()
+
+    # Freeze both maps and the proposed or current path for later review
+    def history_view(self, state: MapTaskState | None = None) -> dict[str, object]:
+        saved = self.state if (state is None) else state
         return {
             "kind"     : "map_task",
             "giver"    : giver_view(self.task_map),
             "follower" : follower_view(self.task_map),
-            "position" : list(self.state.position),
-            "path"     : [list(point) for point in self.state.path],
+            "position" : list(saved.position),
+            "path"     : [list(point) for point in saved.path],
         }
 
 
