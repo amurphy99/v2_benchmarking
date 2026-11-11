@@ -76,6 +76,7 @@ def make_consumer(gate: asyncio.Event | None = None) -> SimpleNamespace:
         use_backend_STT           = False,
         use_backend_TTS           = False,
         response_mode             = "automatic",
+        reply_delay_seconds       = 0.0,  # Scheduling tests do not depend on the production silence default.
         last_response             = None,
         streaming_active          = True,
         send                      = AsyncMock(),
@@ -233,7 +234,11 @@ class ReplyLifecycleTests(PipelineTestCase):
             await asyncio.gather(attempt, return_exceptions=True)
 
         self.assertEqual(consumer.harness.recorder.events[-2:], [("saved", "Hello there."), ("cancelled", True)])
-        self.assertEqual(json.loads(consumer.send.await_args.args[0]), {"type": "cancel_audio"})
+        # Stop the saved reply specifically so delayed cancellation cannot clear a newer reply.
+        self.assertEqual(json.loads(consumer.send.await_args.args[0]), {
+            "type": "cancel_audio",
+            "data": {"responseIds": [2]},
+        })
 
 
 # ================================================================================

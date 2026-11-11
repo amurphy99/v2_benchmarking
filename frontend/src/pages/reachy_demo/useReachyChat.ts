@@ -24,7 +24,10 @@ interface Turn {
     id: number;
     role: "user" | "assistant";
     text: string;
+    responseId?: number; // Saved assistant message ID for delivery annotations.
+    interrupted?: boolean; // Show partial delivery without removing generated text.
 }
+type AudioChunk = Parameters<ReturnType<typeof useAudioPlayer>["sendAudio"]>[0];
 
 // Also release partial initialization if permission/worklet setup failed.
 function releaseMicrophone(mic: AudioStreamer) {
@@ -54,10 +57,22 @@ export default function useReachyChat(behavior: ChatBehavior) {
     const speakingReplyRef = useRef<number | null>(null);
     const tapRef = useRef<AnalyserNode | null>(null);
 
+    const queuedRepliesRef = useRef(new Set<number>()); // Replies with scheduled audio that has not fully finished.
+    const blockedRepliesRef = useRef(new Set<number>()); // Interrupted IDs whose late chunks must be discarded.
+    const chunksRef = useRef(new Map<number, AudioChunk[]>()); // Preserve unrelated queued audio across a targeted stop.
+
+    const delayRef = useRef(1.0); // Latest selected delay, readable by long-lived socket callbacks.
+    const delayCommandRef = useRef<string | null>(null); // Correlates the latest setting request with its acknowledgement.
+    const microphoneReadyRef = useRef(false); // Capture starts once the initial setting is accepted.
+
     const [phase, setPhase] = useState<Phase>("idle");
     const [turns, setTurns] = useState<Turn[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [waiting, setWaiting] = useState(false);
+
+    const [replyDelay, setReplyDelay] = useState(1.0); // UI-selected automatic silence interval in seconds.
+    const [appliedReplyDelay, setAppliedReplyDelay] = useState<number | null>(null); // Server-confirmed value; null before acknowledgement.
+
     const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
     useEffect(() => {
@@ -114,6 +129,13 @@ export default function useReachyChat(behavior: ChatBehavior) {
         onAudioSource,
 
         onPlaybackState: (responseId, state) => {
+            if (blockedRepliesRef.current.has(responseId)) return;
+
+            if (state === "finished") {
+                queuedRepliesRef.current.delete(responseId);
+                chunksRef.current.delete(responseId);
+            }
+
             send({
                 type: "tts_playback",
                 data: { responseId, state },
@@ -134,10 +156,14 @@ export default function useReachyChat(behavior: ChatBehavior) {
         },
     });
 
-    const addTurn = (role: Turn["role"], text: string) => {
-        const id = ++nextTurnRef.current;
-        setTurns((previous) => [...previous, { id, role, text }]);
-    };
+   const addTurn = (role: Turn["role"], text: string, responseId?: number) => {
+    const id = ++nextTurnRef.current;
+
+    setTurns((previous) => [
+        ...previous,
+        { id, role, text, responseId },
+    ]);
+};
 
     const closeSession = useCallback((notifyBackend = true) => {
         const socket = socketRef.current;
@@ -149,6 +175,12 @@ export default function useReachyChat(behavior: ChatBehavior) {
         player.stopPlayer();
         clearTap();
         cancelMotion();
+
+        queuedRepliesRef.current.clear();
+        blockedRepliesRef.current.clear();
+        chunksRef.current.clear();
+        microphoneReadyRef.current = false;
+
         setWaiting(false);
 
         if (notifyBackend && socket?.readyState === WebSocket.OPEN) {
@@ -184,6 +216,12 @@ export default function useReachyChat(behavior: ChatBehavior) {
         const mic = new AudioStreamer({
             sampleRate: 16_000,
             chunkMs: 64,
+
+            audioConstraints: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
 
             onError: (cause: unknown) => {
                 if (
@@ -230,6 +268,103 @@ export default function useReachyChat(behavior: ChatBehavior) {
         }
     };
 
+    const requestDelay = (seconds: number) => {
+        const id = crypto.randomUUID();
+        delayCommandRef.current = id;
+
+        send({
+            type: "command",
+            data: {
+                id,
+                name: "set_reply_delay",
+                data: { seconds },
+            },
+        });
+    };
+
+    const changeReplyDelay = (seconds: number) => {
+        if (
+            !Number.isFinite(seconds) ||
+            seconds < 0 ||
+            seconds > 5
+        ) {
+            return;
+        }
+
+        delayRef.current = seconds;
+        setReplyDelay(seconds);
+
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+            requestDelay(seconds);
+        }
+    };
+
+    /*
+    * Stop only the requested replies. Retain other queued chunks so a delayed
+    * cancellation cannot discard a newer response.
+    */
+    const interruptPlayback = (requested?: number[]) => {
+        const ids = new Set(
+            requested ?? queuedRepliesRef.current,
+        );
+
+        ids.forEach((id) => blockedRepliesRef.current.add(id));
+
+        setTurns((previous) => previous.map((turn) =>
+            turn.responseId !== undefined && ids.has(turn.responseId)
+                ? { ...turn, interrupted: true }
+                : turn,
+        ));
+
+        const affected = [...queuedRepliesRef.current].filter(
+            (id) => ids.has(id),
+        );
+
+        if (!affected.length) return;
+
+        const current = speakingReplyRef.current;
+
+        // An old stop must not reset a newer reply already being heard.
+        if (current !== null && !ids.has(current)) return;
+
+        affected.forEach((responseId) => {
+            send({
+                type: "tts_playback",
+                data: {
+                    responseId,
+                    state: "interrupted",
+                },
+            });
+
+            replyTextsRef.current.delete(responseId);
+        });
+
+        const retained = [...chunksRef.current].filter(
+            ([id]) => !ids.has(id),
+        );
+
+        behaviorRef.current.onMotionCancel();
+        speakingReplyRef.current = null;
+        clearTap();
+
+        if (["active", "paused"].includes(phaseRef.current)) {
+            player.cancelAudio();
+        }
+
+        chunksRef.current = new Map(retained);
+        queuedRepliesRef.current = new Set(
+            retained.map(([id]) => id),
+        );
+
+        retained.forEach(([, chunks]) => {
+            chunks.forEach((chunk) => {
+                void player.sendAudio(chunk).catch(fail);
+            });
+        });
+
+        setWaiting(false);
+    };
+
     const start = () => {
         if (!["idle", "ended"].includes(phaseRef.current)) return;
 
@@ -237,6 +372,8 @@ export default function useReachyChat(behavior: ChatBehavior) {
         setTurns([]);
         setWaiting(false);
         changePhase("connecting");
+        setAppliedReplyDelay(null);
+        microphoneReadyRef.current = false;
 
         try {
             const token = getAccess();
@@ -252,7 +389,7 @@ export default function useReachyChat(behavior: ChatBehavior) {
             url.protocol =
                 window.location.protocol === "https:" ? "wss:" : "ws:";
             url.searchParams.set("token", token);
-            url.searchParams.set("source", "webapp");
+            url.searchParams.set("source", "reachyrobot");
 
             const socket = new WebSocket(url);
             socketRef.current = socket;
@@ -264,9 +401,8 @@ export default function useReachyChat(behavior: ChatBehavior) {
 
                 changePhase("active");
 
-                void startMic(socket).catch((cause) => {
-                    if (socketRef.current === socket) fail(cause);
-                });
+                // Capture starts after the server accepts the initial delay.
+                requestDelay(delayRef.current);
             };
 
             socket.onmessage = (event) => {
@@ -282,9 +418,32 @@ export default function useReachyChat(behavior: ChatBehavior) {
                 const data = frame?.data;
 
                 if (
+                    frame?.type === "command_ack" &&
+                    data?.id === delayCommandRef.current
+                ) {
+                    if (!data.ok) {
+                        setError(
+                            data.message ||
+                            "The reply delay could not be applied.",
+                        );
+
+                        if (!microphoneReadyRef.current) closeSession();
+                        return;
+                    }
+
+                    setAppliedReplyDelay(data.state.reply_delay_seconds);
+
+                    if (!microphoneReadyRef.current) {
+                        microphoneReadyRef.current = true;
+
+                        void startMic(socket).catch((cause) => {
+                            if (socketRef.current === socket) fail(cause);
+                        });
+                    }
+                } else if (
                     frame?.type === "user_utt" &&
                     typeof data === "string"
-                ) {
+                ){
                     behaviorRef.current.onMotionCancel();
                     addTurn("user", data);
                     setWaiting(true);
@@ -293,7 +452,7 @@ export default function useReachyChat(behavior: ChatBehavior) {
                         typeof data === "string" ? data : data?.text;
 
                     if (typeof text === "string") {
-                        addTurn("assistant", text);
+                        addTurn("assistant", text, frame.responseId);
 
                         if (typeof frame.responseId === "number") {
                             replyTextsRef.current.set(frame.responseId, text);
@@ -315,18 +474,29 @@ export default function useReachyChat(behavior: ChatBehavior) {
                     frame?.type === "audio_chunk" &&
                     ["active", "paused"].includes(phaseRef.current)
                 ) {
+                    const responseId = data?.responseId;
+
+                    if (typeof responseId === "number") {
+                        if (blockedRepliesRef.current.has(responseId)) return;
+
+                        queuedRepliesRef.current.add(responseId);
+
+                        const chunks = chunksRef.current.get(responseId) ?? [];
+                        chunks.push(data);
+                        chunksRef.current.set(responseId, chunks);
+                    }
+                    
                     void player.sendAudio(data).catch((cause) => {
                         if (socketRef.current === socket) fail(cause);
                     });
                 } else if (frame?.type === "cancel_audio") {
-                    cancelMotion();
-                    clearTap();
+                    const ids = Array.isArray(data?.responseIds)
+                        ? data.responseIds.filter(
+                            (id: unknown): id is number => typeof id === "number",
+                        )
+                        : undefined;
 
-                    if (["active", "paused"].includes(phaseRef.current)) {
-                        player.cancelAudio();
-                    }
-
-                    setWaiting(false);
+                    interruptPlayback(ids);
                 } else if (
                     frame?.type === "robot_action" &&
                     typeof data?.kind === "string" &&
@@ -425,5 +595,8 @@ export default function useReachyChat(behavior: ChatBehavior) {
         error,
         analyser,
         avatarState,
+        replyDelay,
+        appliedReplyDelay,
+        changeReplyDelay,
     } as const;
 }

@@ -32,7 +32,8 @@ Model, textures, Draco decoder, and emotion JSON files are served locally from
 ## Conversation flow
 
 `useReachyChat` opens `/ws/chat/activity/` with the existing access token and
-`source=webapp`. This reaches the normal `ChatConsumer` and activity harness; no
+`source=reachyrobot`. This reaches the normal
+`ChatConsumer` and activity harness; no
 Reachy-specific backend consumer or voice override is required.
 
 The microphone uses `AudioStreamer` to send 16 kHz mono signed 16-bit PCM.
@@ -40,13 +41,15 @@ The microphone uses `AudioStreamer` to send 16 kHz mono signed 16-bit PCM.
 and `audio_chunk` is scheduled by the shared `useAudioPlayer` hook. React renders
 transcript text directly, without interpreting it as HTML.
 
-The player reports `tts_playback` start/finish events using each persisted
+The player reports `tts_playback` start/finish/interrupted events using each persisted
 `responseId`. A small optional `onAudioSource` callback in the shared player
 connects those same audio sources to a demo analyser. The shared player still
 routes sound to the speakers; the demo analyser's output is unconnected, so it
 does not play a second copy.
 
-`cancel_audio` clears buffered playback and gesture state. Backend recognition
+Targeted `cancel_audio` stops the listed reply IDs, drops their buffered chunks,
+and ignores their later chunks without cutting off a newer unrelated reply.
+It also clears the affected gesture state. Backend recognition
 pause/resume events control the microphone while allowing TTS acknowledgements
 to play. On `chat_ended`, the microphone stops and buffered goodbye audio drains
 before the audio player is released. The End conversation button stops immediately.
@@ -59,6 +62,33 @@ This page tests the activity pipeline currently implemented. Persistent
 cross-session participant memories remain planned work in
 [`ACTIVITY_PIPELINE_REFACTOR_PLAN.md`](../../../../backend/chat_app/websocket/agents/ACTIVITY_PIPELINE_REFACTOR_PLAN.md).
 
+## Reply timing and interruptions
+
+The reply-delay selector sends `set_reply_delay` on socket open and whenever the
+selection changes. Its initial UI selection is one second. The hook distinguishes
+the selected value from the applied `reply_delay_seconds` in the correlated command
+acknowledgement; the server accepts finite values from 0 to 5 seconds for any source.
+This is a connection setting, not a saved participant preference.
+
+Automatic generation requires finalized text and an inactivity interval after the
+latest recognized-text progress. Advancing interims and every staged final restart
+the timer. This adds a reply delay after final recognition rather than measuring
+physical silence. Zero adds no application wait; provider and model latency remain.
+Pause/resume and explicit reply commands do not wait for this setting.
+
+The microphone remains active during assistant speech so backend STT can detect
+interruptions. It requests browser echo cancellation, noise suppression, and
+automatic gain control through `AudioStreamer` constraints. These are browser
+capabilities, not a guarantee that speaker echo will never be transcribed.
+
+Advancing interim and finalized text share the backend cancellation path.
+Saved replies retain their generated text in harness interruption context even
+after their buffered audio is stopped. The activity planner and responder receive
+that context, and incomplete assistant delivery is excluded from goal evidence.
+Explicit `reply_now` and admin-supplied speech retain their existing protection.
+The goodbye lifecycle still drains queued audio locally after server close; it adds
+no backend wait for a playback report.
+
 ## Animation and behavior
 
 The page passes a conversation `state` to `ReachyAvatar`, which forwards it to
@@ -68,8 +98,8 @@ visible neck linkages.
 
 Supported avatar states are `idle`, `listening`, `user-speaking`, `processing`
 (thinking), and `ai-speaking`. Live chat currently supplies idle, listening,
-processing, and speaking states. The preview extension can also select the
-user-speaking posture; the live hook does not expose interim user voice activity.
+processing, and speaking states. Live attention gestures use the existing listening
+state; the user-speaking posture remains available to the manual preview.
 
 Passing the assistant analyser to the avatar lets the head-wobbler follow the
 actual speech signal. `expressionPolicy.ts` additionally selects a recorded

@@ -13,8 +13,9 @@ Cues are the behaviors a condition switches on or off. The harness passes every
 turn event to each of its cues, and a cue reacts with side effects only (avatar
 frames, or a turn of its own). A reply proposes its effects in a
 `ResponseOutcome` instead, and they apply only once that reply's exchange is
-saved, so a reply cancelled by newer speech never leaves the chat in a state the
-user never heard.
+saved. Cancellation before saving discards proposed dialogue changes. A saved
+reply can still be only partly heard; interruption records describe delivery
+separately from the committed dialogue state.
 
 """
 from __future__  import annotations
@@ -74,6 +75,14 @@ class TurnAttempt:
     user_text    : str              # The staged user turn ("" for a harness turn with nothing staged)
     trigger      : ResponseTrigger  # What asked for this reply
     publish_mood : MoodPublisher    # Sends a robot mood now, before the reply text
+    interruptions: tuple[InterruptedReply, ...] = ()  # Unhandled delivery observations captured for this attempt.
+
+@dataclass(frozen=True, slots=True)
+class InterruptedReply:
+    """Saved generated text whose audio was stopped; heard words remain unknown."""
+    response_id: int        # Persisted assistant message whose delivery was interrupted.
+    text: str               # Full generated text to preserve as context, not proof of hearing.
+    playback_started: bool  # Whether the client had reported playback started before the stop.
 
 # One reply, and the effects to apply once its exchange is saved
 @dataclass(frozen=True, slots=True)
@@ -82,6 +91,7 @@ class ResponseOutcome:
     state           : object = None   # Harness state to enter once the exchange is saved (None keeps the current one)
     pause_listening : bool   = False  # Stop the STT stream once the reply is saved
     close_after     : bool   = False  # Send `chat_ended` and close once the reply has gone out
+    consume_interruptions: bool = True  # False keeps this attempt's interruption context for retry.
 
 
 # ================================================================================
@@ -114,6 +124,8 @@ class ChatHarness(ABC):
         self.condition       = condition
         self.variant         = variant
         self.cues: list[Cue] = []
+        self._interruptions: list[InterruptedReply] = []             # Unhandled delivery events, bounded to eight.
+        self._attempt_interruptions: tuple[InterruptedReply, ...] = ()  # Snapshot consumed only by an accepted save.
 
     # --------------------------------------------------------------------------------
     # Replies
@@ -124,7 +136,14 @@ class ChatHarness(ABC):
 
     # Enter the state a reply proposed, now that its exchange is saved, then tell the cues
     def on_reply_saved(self, outcome: ResponseOutcome) -> None:
-        if outcome.state is not None: self.state = outcome.state
+        if outcome.state is not None:
+            self.state = outcome.state
+
+        if outcome.consume_interruptions:
+            consumed = set(self._attempt_interruptions)
+            self._interruptions = [item for item in self._interruptions if item not in consumed]
+
+        self._attempt_interruptions = () # Clear the attempt-local interruptions now that the reply is saved
         self._tell_cues("on_reply_saved", outcome)
 
     # --------------------------------------------------------------------------------
@@ -141,10 +160,15 @@ class ChatHarness(ABC):
     # --------------------------------------------------------------------------------
     # Turn Events (each one is described on `Cue`)
     # --------------------------------------------------------------------------------
-    # Pass each turn event on to every cue
+    # The harness owns state/bookkeeping, then dispatches supported events to optional cues.
     def on_interim        (self, speech:      InterimSpeech           ) -> None: self._tell_cues("on_interim",         speech            )
     def on_final          (self, utterance:   FinalUtterance          ) -> None: self._tell_cues("on_final",           utterance         )
-    def on_reply_started  (self, attempt:     TurnAttempt             ) -> None: self._tell_cues("on_reply_started",   attempt           )
+    
+    def on_reply_started(self, attempt: TurnAttempt) -> None:
+        """Capture the interruption context this particular attempt will handle."""
+        self._attempt_interruptions = attempt.interruptions
+        self._tell_cues("on_reply_started", attempt)
+
     def on_reply_cancelled(self, attempt:     TurnAttempt, saved: bool) -> None: self._tell_cues("on_reply_cancelled", attempt,     saved)
     def on_playback       (self, response_id: int,         state: str ) -> None: self._tell_cues("on_playback",        response_id, state)
 
@@ -153,6 +177,25 @@ class ChatHarness(ABC):
         for cue in self.cues:
             try: getattr(cue, hook)(*args)
             except Exception: logger.exception(f"{CC_MAIN} Cue {CC_H}{type(cue).__name__}{CC_R} failed in {hook}.{RESET}")
+    
+    @property
+    def pending_interruptions(self) -> tuple[InterruptedReply, ...]:
+        """Return unhandled observations; cancelled attempts never consume them."""
+        return tuple(self._interruptions)
+
+    def on_interrupted(self, reply: InterruptedReply) -> None:
+        """Store delivery context so each chat type can use or ignore it."""
+        if not any(
+            item.response_id == reply.response_id
+            for item in self._interruptions
+        ):
+            self._interruptions.append(reply)
+            self._interruptions = self._interruptions[-8:]
+
+
+    def bind_response_id(self, response_id: int) -> None:
+        """Associate a saved message ID with adopted state when a harness needs it."""
+        pass
 
 
 # --------------------------------------------------------------------------------
@@ -161,7 +204,8 @@ class ChatHarness(ABC):
 # One behavior a condition switches on or off; it hears every turn event its harness does
 class Cue(ABC):
     """
-    Override only the events a cue needs. A cue reacts with side effects (avatar frames,
+    Override only the events a cue needs; pass bodies intentionally make other hooks
+    optional. A cue reacts with side effects (avatar frames,
     or a turn of its own through `ChatHandler.request_harness_turn`), and never changes
     the dialogue state.
     """
@@ -193,6 +237,6 @@ class Cue(ABC):
     def on_reply_saved(self, outcome: ResponseOutcome) -> None:
         pass
 
-    # The client heard the reply's audio "started" or "finished" (`tts_playback`)
+    # Client delivery report: started, finished, or interrupted (`tts_playback`).
     def on_playback(self, response_id: int, state: str) -> None:
         pass

@@ -18,8 +18,8 @@ Example format for the JSON:
 
 * responseId -> The database ID of the assistant ChatMessage (the backend 
                 includes it in both llm_response and audio_chunk messages).
-* state      -> Send a message with "started" when you begin TTS playback, and
-                a message with "finished" when TTS playback completes.
+* state      -> Send "started" when playback begins, "finished" only on full
+                completion, or "interrupted" when playback is cut short.
 
 NOTE: You don't need to send a timestamp with the message -- all timestamps are
       marked from the backend to keep a single relative timeframe. These events
@@ -39,11 +39,13 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services.db_services   import ChatService
 from ....services.logging_utils import RESET, CC_MAIN
+from ...services.turn_taking import turn_taking
+from ...harnesses.base import InterruptedReply
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
 # Accepted assistant playback lifecycle events
-PLAYBACK_STATES = {"started", "finished"}
+PLAYBACK_STATES = {"started", "finished", "interrupted"}
 
 
 # ================================================================================
@@ -61,6 +63,27 @@ async def handle_playback_event(consumer: ChatConsumer, data: dict[str, object])
         logger.warning(f"{CC_MAIN} Ignoring invalid assistant playback event.{RESET}")
         return
 
+    # Update owned delivery state before a database await can race new speech.
+    delivery = turn_taking(consumer)
+    reply = delivery.replies.get(response_id)
+
+    if reply is not None:
+        # Ignore late reports that contradict an already terminal delivery state.
+        if reply.finished and state != "finished":
+            return
+
+        if reply.interrupted and state in {"started", "finished"}:
+            return
+
+        if state == "interrupted" and not reply.interrupted:
+            consumer.harness.on_interrupted(InterruptedReply(
+                response_id=reply.response_id,
+                text=reply.text,
+                playback_started=reply.started,
+            ))
+
+        delivery.playback(response_id, state)
+
     # 3) Persist the playback transition in the database for this active session
     updated = await db_s2a(ChatService.mark_assistant_playback)(
         consumer.session_id, response_id, state,
@@ -71,5 +94,5 @@ async def handle_playback_event(consumer: ChatConsumer, data: dict[str, object])
         logger.warning(f"{CC_MAIN} Ignoring playback event for an unrelated assistant response.{RESET}")
         return
 
-    # 5) Let the chat type's harness hear that the reply's audio started or finished
+    # 5) Forward the accepted delivery state to the harness and its optional cues.
     consumer.harness.on_playback(response_id, state)

@@ -10,12 +10,9 @@ bit...
 NOTE: Message ID is included so frontends can respond letting us know when 
       playback starts and ends (and we can save timestamps for the message).
 
-TODO: What happens if we implement a way for assistant responses to be canceled
-      midway through? Currently, they can only be canceled before audio TTS
-      playback begins -- but if they were canceled let's say after only 1-5
-      words, we would need a way to know which words were said and which weren't
-      so that we could adjust what was saved into the DB (and context/message 
-      history).
+Speech interruptions can stop both synthesis and client-buffered audio by saved
+response ID. Generated text and committed dialogue state remain available; delivery
+observations identify partial playback without claiming which words were heard.
 
 TODO: When a `reply_now` event is received and we don't see any new user text,
       since the assistants last successful response, we should add some context
@@ -42,6 +39,7 @@ from  ..harnesses.base                import TurnAttempt
 from   .bg_helpers                    import fire_and_log, trace_await
 from   .speech.stt.audio_queue        import AudioBarrier
 from   .speech.tts.tts_streaming      import synthesize_and_stream_tts
+from .turn_taking import turn_taking
 
 # Import the class for type checking
 from typing import TYPE_CHECKING
@@ -64,8 +62,9 @@ class ChatHandler:
 
     Direct frontend transcriptions and backend STT final results both enter through
     `stage_and_schedule`. It stages the utterance and creates a cancellable response
-    task. Meaningful interim STT progress cancels that task so continued speech can be
-    accumulated before responding.
+    task. Advancing recognized text cancels automatic work;
+    finalized text stays staged for the next eligible reply. The automatic-only
+    wrapper applies the additional reply delay; explicit requests bypass that wait.
     """
     # ================================================================================
     # Stage utterance + schedule a cancellable response task
@@ -93,7 +92,7 @@ class ChatHandler:
             # response attempt whose snapshot did not contain this utterance
             ChatHandler.note_stt_progress(consumer)
 
-            # 2) If this is using STT from the backend, also send the utterance back to the frontend
+            # 2) Echo finalized text when requested. Audio transcription itself is not gated by this flag.
             if consumer.use_backend_STT:
                 await consumer.send(json.dumps({"type": "user_utt", "data": text, "time": timestamp}))
 
@@ -120,21 +119,42 @@ class ChatHandler:
 
             # Create a new cancellable automatic response task
             consumer._pending_response_trigger = "automatic"
-            consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
+            consumer._pending_response_task = asyncio.create_task(ChatHandler._automatic_response(consumer), name="chat::pending_response")
 
     # --------------------------------------------------------------------------------
     # STT progress (invalidate outdated response snapshots when we get new speech)
     # --------------------------------------------------------------------------------
     @staticmethod
     def note_stt_progress(consumer: ChatConsumer) -> bool:
-        # Advance the STT revision and report whether a live response task was cancelled
-        # NOTE: We don't cancel response tasks stemming from a `reply_now` command
+        # Advance the speech/text revision and stop eligible buffered delivery.
+        # Return whether a live response task was cancelled; explicit reply_now stays protected.
         consumer._stt_progress_revision += 1
-        task      =  getattr(consumer, "_pending_response_task",    None)
-        is_forced = (getattr(consumer, "_pending_response_trigger", None) == "reply_now")
-        if (task is not None) and (not task.done()) and (not task.cancelling()) and (not is_forced):
-            task.cancel(); return True
-        else:              return False
+
+        delivery = turn_taking(consumer)
+        delivery.recognized_progress()
+
+        if getattr(consumer, "response_mode", "automatic") == "automatic" and getattr(consumer, "use_backend_TTS", False):
+            interrupted = delivery.interrupt(consumer.harness)
+
+            if interrupted:
+                fire_and_log(
+                    consumer.send(json.dumps({"type": "cancel_audio",
+                        "data": {
+                            "responseIds": list(interrupted),
+                            "reason": "user_speech",
+                        },
+                    })),
+                    name="chat::interrupt_playback",
+                )
+
+        task = getattr(consumer, "_pending_response_task", None)
+        is_forced = getattr(consumer, "_pending_response_trigger", None) == "reply_now"
+
+        if task is not None and not task.done() and not task.cancelling() and not is_forced:
+            task.cancel()
+            return True
+
+        return False
 
     # --------------------------------------------------------------------------------
     # Forced reply coordination
@@ -219,7 +239,7 @@ class ChatHandler:
             if result:
                 if consumer.response_mode == "automatic" and consumer._staged_utterances.snapshot():
                     consumer._pending_response_trigger = "automatic"
-                    consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
+                    consumer._pending_response_task = asyncio.create_task(ChatHandler._automatic_response(consumer), name="chat::pending_response")
             return result
 
         return None
@@ -280,6 +300,23 @@ class ChatHandler:
     # Cancellable Response Task (body)
     # ================================================================================
     @staticmethod
+    async def _automatic_response(consumer: ChatConsumer) -> str | None:
+        """Wait for automatic eligibility before entering the common reply path.
+
+        consumer (ChatConsumer) owns staged text and connection timing. Explicit
+        reply requests bypass this wrapper and its cancellable silence wait.
+        """
+        await turn_taking(consumer).wait_for_silence()
+
+        # A command or disconnect may have changed eligibility during the wait.
+        if consumer.response_mode != "automatic" or getattr(
+            consumer, "_close_scheduled", False,
+        ):
+            return None
+
+        return await ChatHandler._execute_response(consumer)
+
+    @staticmethod
     async def _execute_response(consumer: ChatConsumer, trigger: ResponseTrigger = "automatic") -> str | None:
         """
         Serialize all response attempts so only one task can own a staged snapshot.
@@ -323,6 +360,7 @@ class ChatHandler:
             user_text    = combined_text,
             trigger      = trigger,
             publish_mood = lambda mood: ChatHandler._publish_response_mood(consumer, mood, trigger, response_revision),
+            interruptions=consumer.harness.pending_interruptions,
         )
         consumer.harness.on_reply_started(attempt)
 
@@ -349,6 +387,7 @@ class ChatHandler:
                     system_resp,
                     system_ts,
                     response_outcome,
+                    trigger=trigger,
                 ),
                 name="chat::commit_response",
             )
@@ -366,11 +405,11 @@ class ChatHandler:
                 consumer._tts_streaming = True
                 try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id)
 
-                # Send "cancel_audio" to frontend if interrupted mid TTS stream
-                # TODO: I don't know if we want this to work (idea is frontend cancels speaking)
+                # A cancelled synthesis also stops this response's buffered client audio.
+                # Targeting its ID prevents a late stop from clearing a newer reply.
                 except asyncio.CancelledError:
                     logger.info(f"{ORANGE}[ChatHandler] Pending response task {lu.RED}{BOLD}canceled{UNBOLD}{ORANGE}.{RESET}")
-                    try: await consumer.send(json.dumps({"type": "cancel_audio"})) 
+                    try: await consumer.send(json.dumps({"type": "cancel_audio", "data": {"responseIds": [assistant_message.id]}}))
                     except Exception: pass
                     raise
 
@@ -387,6 +426,23 @@ class ChatHandler:
 
         # Tell the harness the reply was cancelled (once its commit started, the exchange is saved)
         except asyncio.CancelledError:
+            # Speech can arrive while the shielded commit is registering this reply.
+            # Capture that reply afterward as queued/unheard.
+            if commit_task is not None and consumer._stt_progress_revision > response_revision:
+                interrupted = turn_taking(consumer).interrupt(consumer.harness)
+
+                if interrupted:
+                    try:
+                        await consumer.send(json.dumps({
+                            "type": "cancel_audio",
+                            "data": {
+                                "responseIds": list(interrupted),
+                                "reason": "user_speech",
+                            },
+                        }))
+                    except Exception:
+                        pass
+
             consumer.harness.on_reply_cancelled(attempt, saved=(commit_task is not None))
             raise
 
@@ -421,6 +477,7 @@ class ChatHandler:
         system_resp      : str,                      # Final assistant text selected for this response
         system_ts        : float,                    # Timestamp assigned to the assistant response
         response_outcome : ResponseOutcome,          # Harness reply, with the effects to apply once it is saved
+        trigger: ResponseTrigger = "automatic",
     ) -> ChatMessage:
         # Save the matching turn atomically, then publish it before consuming its staged prefix
         # (a harness turn with nothing staged saves only its reply)
@@ -431,6 +488,9 @@ class ChatHandler:
 
         # Let the harness enter the state this reply proposed, now that its exchange is durable
         consumer.harness.on_reply_saved(response_outcome)
+
+        consumer.harness.bind_response_id(assistant_msg.id)
+        turn_taking(consumer).queue_reply(assistant_msg.id, system_resp, trigger)
 
         # Send the already-persisted assistant response to the primary frontend
         await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_msg.id}))
@@ -466,6 +526,7 @@ class ChatHandler:
             system_ts              = now_ts()
             consumer.last_response = system_resp
             assistant_message = await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts)
+            turn_taking(consumer).queue_reply(assistant_message.id, system_resp, "manual")
             await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_message.id}))
 
             # Let cancellation stop both backend synthesis and already-buffered frontend audio
@@ -473,7 +534,7 @@ class ChatHandler:
                 consumer._tts_streaming = True
                 try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id)
                 except asyncio.CancelledError:
-                    try: await consumer.send(json.dumps({"type": "cancel_audio"}))
+                    try: await consumer.send(json.dumps({"type": "cancel_audio", "data": {"responseIds": [assistant_message.id]}}))
                     except Exception: pass
                     raise
                 finally: consumer._tts_streaming = False

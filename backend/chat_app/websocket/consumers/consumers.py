@@ -22,6 +22,7 @@ from  ..services.bg_helpers                import fire_and_log
 from  ..services.chatHelpers               import ChatHandler
 from  ..services.chat_state                import StagedUtteranceBuffer
 from  ..services.speech.stt.speechProvider import SpeechToTextProvider
+from ..services.turn_taking import DEFAULT_REPLY_DELAY_SECONDS
 
 from chat_app.websocket.services.speech.audio_recorder import SessionAudioRecorder
 from chat_app.services.session_audio_storage             import delete_recording
@@ -77,10 +78,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # Get the user information and any additional parameters sent in the URL (e.g. "source" here)
         # Configuration based on the source platform for the chat
-        self.use_backend_STT = (self.source == "webapp")  # Send the user text to the frontend so it can see it too
-        self.use_backend_TTS = (self.source == "webapp")  # Should the ChatHandler reply with audio bytes as well as text
+        self.use_backend_STT = self.source in {"webapp", "reachyrobot"}  # Send the user text to the frontend so it can see it too
+        self.use_backend_TTS = self.source in {"webapp", "reachyrobot"}  # Synthesize and stream reply PCM; other clients speak returned text.
 
-        # "automatic" replies on every finalized utterance; "manual" waits for an explicit command
+        # Automatic replies require finalized text and the session silence wait.
+        # Manual replies require an explicit command and bypass the automatic wait.
         # qtrobot starts manual so the robot itself decides when to reply
         self.response_mode = "manual" if (self.source == "qtrobot") else "automatic"
 
@@ -364,10 +366,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._manual_response_task     = None                       # Current admin-supplied or repeated response task
         self._reply_now_task           = None                       # Coordinator retaining a forced-reply request across retries
         self._reply_now_generation     = 0                          # Newer reply requests supersede older queue boundaries
-        self._stt_progress_revision    = 0                          # Meaningful interim/final progress (lets a response drop a stale mood update)
+        self._stt_progress_revision    = 0                          # Voice-start/transcript revision used to invalidate stale automatic work.
         self._stage_lock               = asyncio.Lock()             # Serializes final-transcript scheduling decisions
         self._response_lock            = asyncio.Lock()             # Gives one response task ownership of staged text
 
         # Chat status tracking (not always used)
         self.streaming_active = False  # True while STT stream is active (paused state)
-        self._tts_streaming   = False  # True while audio chunks are actively being sent to the frontend
+        self._tts_streaming   = False  # Server synthesis/streaming only; client-buffered audio can outlive it.
+        
+        self.reply_delay_seconds = DEFAULT_REPLY_DELAY_SECONDS  # Initial automatic silence interval, in seconds.
+        self._turn_taking = None  # Connection-local timing and delivery state; created when first needed.

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # From this project
 from ....services.logging_utils import RESET, CC_MAIN, CC_H, CC_R
+from ...services.turn_taking import turn_taking
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
@@ -30,6 +31,9 @@ async def set_streaming_active(consumer: ChatConsumer, active: bool) -> None:
     """
     Apply one explicit STT streaming state and notify the primary frontend and all
     listener clients after the provider accepts the transition.
+
+    active (bool) also pauses/resumes the automatic silence wait. No reply delay
+    is applied to this command, and existing TTS acknowledgements remain playable.
     """
     current_status = "active" if consumer.streaming_active else "paused"
     next_status    = "active" if active                    else "paused"
@@ -46,6 +50,7 @@ async def set_streaming_active(consumer: ChatConsumer, active: bool) -> None:
         consumer.stt_provider  .stop()
         consumer.audio_recorder.pause(time.monotonic())
     consumer.streaming_active = active
+    turn_taking(consumer).set_listening(active)
 
     # Notify the primary client directly, then broadcast to every listener
     # Both transports get the same {"status": ...} body so client code can be shared

@@ -187,10 +187,12 @@ class ChatService:
     @transaction.atomic
     def mark_assistant_playback(session_id: int, message_id: int, state: str) -> bool:
         """
-        We can't actually track when TTS playback starts or ends on any of the frontend
-        clients from the backend, but they have the option of sending us messages to
-        inform us when playback has started and/or ended. When we get those messages,
-        we add the timestamp to the associated assistant ChatMessage entry in the DB.
+        Record an owned assistant message's client-reported delivery boundary.
+
+        session_id/message_id (int) identify the saved assistant row. state (str)
+        is started, finished, or interrupted; both terminal states set end_ts.
+        Returns bool ownership acceptance, including duplicate reports. Timestamps
+        reflect receipt of the report, not exact device playback or heard words.
         """
         # Grab the associated ChatMessage object (we are supplied with the ID)
         message = (ChatMessage.objects.select_for_update()
@@ -202,8 +204,8 @@ class ChatService:
             message.start_ts = timezone.now()
             message.save(update_fields=["start_ts"])
 
-        # Add a timestamp for the `end_ts` field
-        elif (state == "finished") and (message.end_ts is None):
+        # Record the delivery end for completion OR interruption; do not infer full hearing.
+        elif (state in {"finished", "interrupted"}) and (message.end_ts is None):
             message.end_ts = timezone.now()
             message.save(update_fields=["end_ts"])
 

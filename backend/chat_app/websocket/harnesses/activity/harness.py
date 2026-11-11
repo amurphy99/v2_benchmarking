@@ -6,11 +6,7 @@ from channels.db import database_sync_to_async as db_s2a
 
 from chat_app import config as cf
 from chat_app.services.db_services import ChatService
-from chat_app.websocket.harnesses.base import (
-    ChatHarness,
-    ResponseOutcome,
-    TurnAttempt,
-)
+from chat_app.websocket.harnesses.base import ChatHarness, ResponseOutcome, TurnAttempt, InterruptedReply
 from chat_app.websocket.services.bg_helpers import fire_and_log
 
 from chat_app.websocket.agents.planner import PlannerAgent
@@ -32,8 +28,8 @@ class ActivityTurn:
         llm_log (dict | None): Normal-turn metadata; None for closing replies.
     """
 
-    rag_state: dict
-    llm_log: dict | None = None
+    rag_state: dict              # Proposed/adopted histories, goals, memory, counters, and closing flags.
+    llm_log: dict | None = None  # Normal-turn diagnostics; closing replies have no planner log.
 
 
 class ActivityHarness(ChatHarness):
@@ -78,7 +74,8 @@ class ActivityHarness(ChatHarness):
         """Prepare a normal or closing reply without committing dialogue changes.
 
         Args:
-            attempt (TurnAttempt): Finalized user text, shared context, and trigger.
+            attempt (TurnAttempt): Finalized user text, shared context, trigger,
+                and unhandled interruptions from earlier assistant delivery.
 
         Returns:
             ResponseOutcome: Reply and attempt-local ActivityTurn to adopt after
@@ -122,12 +119,56 @@ class ActivityHarness(ChatHarness):
             known_name=getattr(self.consumer.user, "first_name", ""),
             planner=self.planner,
             responder=self.responder,
+            interruptions=getattr(attempt, "interruptions", ()),
         )
 
         return ResponseOutcome(
             message=text,
             state=ActivityTurn(working_state, llm_log),
+            consume_interruptions=not (
+                (llm_log or {})
+                .get("agents_data", {})
+                .get("responder_error", False)
+            ),
         )
+
+    def bind_response_id(self, response_id: int) -> None:
+        """Bind response_id (int ChatMessage ID) to the adopted assistant history entry."""
+        history = self.rag_state.get("_history", [])
+
+        if self.state.llm_log and history and history[-1]["role"] == "assistant":
+            history[-1]["response_id"] = response_id
+
+
+    def on_interrupted(self, reply: InterruptedReply) -> None:
+        """Keep reply (InterruptedReply) text but invalidate goals based on its delivery."""
+        super().on_interrupted(reply)
+        self._mark_interrupted(self.rag_state, reply)
+
+
+    @staticmethod
+    def _mark_interrupted(rag_state: dict, reply: InterruptedReply) -> None:
+        """Mark reply (InterruptedReply) in rag_state (dict) and remove its goal evidence.
+
+        Mutates the supplied ledger; no exact heard-word boundary is inferred.
+        """
+        for message in rag_state.get("_history", []):
+            if message.get("response_id") != reply.response_id:
+                continue
+
+            message["delivery"] = "interrupted"
+
+            ledger = (
+                rag_state.get("_goal_progress", {})
+                .get(message["state"], {})
+            )
+
+            for goal_id, evidence in list(ledger.items()):
+                if evidence.get("message_id") == message["id"]:
+                    del ledger[goal_id]
+                    rag_state.get("_completed_states", set()).discard(
+                        message["state"],
+                    )
 
     def on_reply_saved(self, outcome: ResponseOutcome) -> None:
         """Adopt saved reply state, report progress, and schedule its turn log.
@@ -140,6 +181,12 @@ class ActivityHarness(ChatHarness):
         """
         # Retain the old ledger so we can identify newly satisfied goals.
         previous_progress = self.rag_state.get("_goal_progress", {})
+
+        # An interruption may arrive while this reply's DB commit is shielded.
+        # Preserve that observation when adopting the newer state copy.
+        if isinstance(outcome.state, ActivityTurn):
+            for reply in self.pending_interruptions:
+                self._mark_interrupted(outcome.state.rag_state, reply)
 
         # The shared response lock serializes attempts;
         # its shielded commit calls this once.

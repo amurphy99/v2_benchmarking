@@ -328,7 +328,9 @@ returned by the session serializer.
     * `QueryAuthMiddleware`
         - Extracts `token`, verifies it, and sets `scope["user"]`
         - Passes `source` string into `scope`
-            * ```webapp``` | ```mobile``` | ```qtrobot``` | ```buddyrobot```
+            * ```webapp``` | ```mobile``` | ```qtrobot``` | ```buddyrobot``` | ```reachyrobot```
+            * Reachy uses backend STT/TTS and automatic replies; QT streams audio to backend STT and starts in manual reply mode.
+            * See [CLIENT_PROTOCOL.md](chat_app/websocket/consumers/CLIENT_PROTOCOL.md) for configurable silence timing, interruption events, and current message formats.
 
 2. **`ChatConsumer.connect()`**
     * Calls `ChatService.get_or_create_active_session(user, source)`, which fetches or creates `ChatSession(is_active=True)`

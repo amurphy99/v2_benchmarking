@@ -64,6 +64,13 @@ Use user_declined_state only for a clear refusal of the current topic/activity.
 Use user_requested_end only for an explicit request to end the whole chat.
 For either user exit, include the exact relevant quote from CURRENT_USER_TEXT.
 
+INTERRUPTED_REPLIES contains saved generated text whose playback was interrupted.
+The full text is context, not proof the user heard it; exact heard words are unknown.
+Prioritize the user's new contribution. Briefly acknowledge the interruption when
+helpful, then reuse unfinished information only if it is still relevant. Never
+restart the whole speech automatically or cite an interrupted assistant message
+as evidence that an assistant goal was completed.
+
 Carry forward concise working memory; it is provisional until the reply is saved.
 Return the requested structured output without commentary.
 """.strip()

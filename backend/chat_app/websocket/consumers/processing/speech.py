@@ -5,9 +5,9 @@ Hand each speech result to the reply pipeline and the chat type's harness.
 
 The STT provider calls these on the chat's event loop, in the order Google
 returned the results, and a text client's `transcription` reaches `handle_final`
-as well. An interim with new speech cancels an automatic reply before the harness
-hears it. Staging a final for the next reply stays with `ChatHandler`, which the
-caller schedules right after `handle_final`.
+as well. Advancing interim/final text restarts the reply delay and invalidates
+outdated automatic work through ChatHandler.note_stt_progress.
+Staging final text stays with ChatHandler, scheduled right after handle_final.
 
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from  ..consumers      import ChatConsumer
 
 
-# Cancel an automatic reply when the user says more, then let the harness hear the interim
+# Cancel on advancing recognized text, not a repeated hypothesis, then notify the harness.
 def handle_interim(consumer: ChatConsumer, speech: InterimSpeech) -> None:
     if consumer._close_scheduled: return
     if speech.new_speech and ChatHandler.note_stt_progress(consumer):

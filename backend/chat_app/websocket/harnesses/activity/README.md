@@ -5,7 +5,7 @@ controlled closing workflow. The harness owns conversation state; the planner an
 responder generate proposals without modifying the committed state.
 
 The implementation roadmap and progress history are in
-[ACTIVITY_PIPELINE_REFACTOR_PLAN.md](../../../../../ACTIVITY_PIPELINE_REFACTOR_PLAN.md).
+[ACTIVITY_PIPELINE_REFACTOR_PLAN.md](../../agents/ACTIVITY_PIPELINE_REFACTOR_PLAN.md).
 
 ## Responsibilities
 
@@ -50,6 +50,23 @@ still have its audio interrupted; persistence does not establish that the entire
 reply was heard. Request failures are logged. Planner failure falls back to the
 current instructions/goals; responder failure produces a clarification reply and
 preserves the current state and prior goal progress.
+
+## Interrupted delivery
+
+The shared harness keeps `InterruptedReply` context containing the saved reply ID,
+full generated text, and whether playback began. Both planner and responder receive
+it as `INTERRUPTED_REPLIES`, so they can continue a relevant thought or follow the
+user's new topic. There is no mandatory scripted apology.
+
+The activity keeps interrupted text in history but marks its delivery incomplete.
+It excludes that assistant entry from future goal observations and removes goal
+evidence that depended on it. This is conservative: playback reports do not identify
+the exact words heard. Saved replies and turn counters are not rolled back.
+
+Delivery observations can arrive during a shielded database commit. The harness
+reapplies pending observations to the proposed state before adopting it, preserving
+events that occurred after the state copy was made. Cancelled attempts and responder
+fallbacks retain their interruption context for a later successful response.
 
 ## Goal evidence and transitions
 
@@ -163,6 +180,8 @@ docker compose -f docker-compose.backend.yaml run --rm \
   chat_app.websocket.tests.test_activity_pipeline \
   chat_app.websocket.tests.test_chat_types \
   chat_app.websocket.tests.test_harness_hooks \
+  chat_app.websocket.tests.test_reply_state \
+  chat_app.websocket.tests.test_turn_taking \
   --verbosity 2
 ```
 
@@ -183,7 +202,7 @@ before test assertions ran. If a field exists in models but no migration adds it
 generate the missing migration instead of bypassing serialization or faking it.
 A later cursor error in that traceback can be secondary to the failed SQL query.
 
-For only the activity module, omit the other two test labels. Tests mock model
+For only the activity module, omit the other test labels. Tests mock model
 operations; `USE_LLM=false` does not verify real IU model outputs. See
 [Docker's run reference](https://docs.docker.com/reference/cli/docker/compose/run/)
 and [Django's migration documentation](https://docs.djangoproject.com/en/3.2/topics/migrations/).

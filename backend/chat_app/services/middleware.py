@@ -16,7 +16,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from channels.middleware             import BaseMiddleware
 from asgiref.sync                    import sync_to_async
 
-ALLOWED_SOURCES = {"webapp", "mobile", "qtrobot", "buddyrobot"}
+ALLOWED_SOURCES = {"webapp", "mobile", "qtrobot", "buddyrobot", "reachyrobot"}
 
 jwt_auth = JWTAuthentication() # re-use a single instance
 

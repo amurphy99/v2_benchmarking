@@ -105,7 +105,7 @@ class ChatSession(models.Model):
     SOURCE_CHOICES = [
         # Real chat data
         ("webapp",  "WebApp" ), ("mobile",     "Mobile"    ),  # Web app frontend UI
-        ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"),  # Access via physical robots
+        ("qtrobot", "QTRobot"), ("buddyrobot", "BuddyRobot"), ("reachyrobot", "Reachy Mini"),  # Access via physical robots
 
         # Seeded chat data
         ("demo",       "Demo"         ),  # Random demo data (hidden from admin views)

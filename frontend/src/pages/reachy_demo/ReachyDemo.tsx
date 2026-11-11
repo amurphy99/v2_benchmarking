@@ -42,7 +42,7 @@ export default function ReachyDemo() {
     useEffect(() => {
         behavior.setListening(
             chat.phase === "active" &&
-            chat.avatarState === "listening",
+            ["listening", "user-speaking"].includes(chat.avatarState),
         );
     }, [behavior, chat.phase, chat.avatarState]);
 
@@ -100,6 +100,32 @@ export default function ReachyDemo() {
                         {canStart ? preview.state : chat.avatarState}.
                     </p>
 
+                    <label htmlFor="reachy-reply-delay">
+                        Wait before replying
+                    </label>{" "}
+
+                    <select
+                        id="reachy-reply-delay"
+                        value={chat.replyDelay}
+                        onChange={(event) =>
+                            chat.changeReplyDelay(Number(event.target.value))
+                        }
+                    >
+                        {[0.5, 0.75, 1, 1.5, 2, 3, 3.5, 4].map((seconds) => (
+                            <option key={seconds} value={seconds}>
+                                {seconds} seconds
+                            </option>
+                        ))}
+                    </select>
+
+                    <p>
+                        {canStart
+                            ? "Applied when the next conversation starts."
+                            : chat.appliedReplyDelay === chat.replyDelay
+                                ? "Reply delay applied."
+                                : "Applying reply delay…"}
+                    </p>
+
                     {chat.error && <p role="alert">{chat.error}</p>}
 
                     <section
@@ -112,6 +138,7 @@ export default function ReachyDemo() {
                                     {turn.role === "user" ? "You" : "Reachy"}:
                                 </strong>{" "}
                                 {turn.text}
+                                {turn.interrupted && <em> (interrupted)</em>}
                             </p>
                         ))}
                     </section>

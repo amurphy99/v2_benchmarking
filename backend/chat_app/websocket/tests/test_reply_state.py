@@ -342,6 +342,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def test_accepted_command_returns_correlated_state(self) -> None:
         consumer = SimpleNamespace(
             response_mode            = "automatic",
+            reply_delay_seconds      = 0.0,  # Explicit timing keeps this test independent of server defaults.
             streaming_active         = True,
             save_audio               = False,
             stt_provider             = SimpleNamespace(start=Mock(), stop=Mock()),
@@ -357,7 +358,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ack["id"   ], "request-1")
         self.assertEqual(ack["name" ], "set_listening")
         self.assertTrue (ack["ok"   ])
-        self.assertEqual(ack["state"], {"listening": "paused", "response_mode": "automatic", "recording_enabled": False})
+        self.assertEqual(ack["state"], {"listening": "paused", "response_mode": "automatic", "recording_enabled": False, "reply_delay_seconds": 0.0})
 
     # Reject an out-of-vocabulary value without changing state, and say why
     async def test_rejected_command_explains_itself_and_changes_nothing(self) -> None:
@@ -475,7 +476,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     # The state probe is a real public command and must return a complete no-op acknowledgement
     async def test_get_control_state_is_a_no_op_with_complete_state(self) -> None:
-        consumer = SimpleNamespace(response_mode="manual", streaming_active=False, save_audio=True)
+        consumer = SimpleNamespace(response_mode="manual", streaming_active=False, save_audio=True, reply_delay_seconds=0.0)
 
         ack = await dispatch_command(consumer, {"id": "state", "name": "get_control_state"})
 
@@ -485,6 +486,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             "listening": "paused",
             "response_mode": "manual",
             "recording_enabled": True,
+            "reply_delay_seconds": 0.0,
         })
 
 

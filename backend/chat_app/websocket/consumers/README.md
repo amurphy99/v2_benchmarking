@@ -91,7 +91,7 @@ Related code outside this directory:
 2. Authenticate the user and identify the frontend source.
 3. Build the harness for the requested `chat_type`, `condition`, and `variant`, refusing an
    unknown name with `4005`.
-4. Select source-dependent STT, TTS, and automatic-response settings.
+4. Select source-dependent transcript-echo, TTS, and response-mode defaults.
 5. Close stale active sessions, then create the new active `ChatSession`, recording its chat
    type, condition, and variant.
 6. Build the bounded in-memory `context_buffer` used for LLM calls.
@@ -148,6 +148,11 @@ Primary frontend
     -> Google streaming STT
 ```
 
+Every source's valid microphone chunks reach backend STT while listening is active.
+The legacy `use_backend_STT` flag controls transcript echoing, not this
+audio path; QT streams audio for transcription even with that flag false. Reachy
+is accepted as `reachyrobot`, uses backend TTS, and starts in automatic mode.
+
 Google results have two paths:
 
 - Interim results are never staged as user text. Each one goes to
@@ -188,7 +193,8 @@ optionally report actual playback boundaries back with a `tts_playback` message 
 [`CLIENT_PROTOCOL.md`](./CLIENT_PROTOCOL.md) for its shape).
 
 Missing playback events are valid, which keeps text-only robot frontends compatible. Accepted
-events fill the assistant message's normal `start_ts` and `end_ts` audible interval. For
+events fill the assistant message's normal `start_ts` and `end_ts` audible interval.
+`interrupted` ends an interval without implying complete delivery. For
 messages with word timing, those same fields are derived from the earliest and latest
 associated `ChatWord` rows.
 
@@ -205,6 +211,7 @@ When automatic responses are enabled, ChatHandler starts a cancellable response 
 
 ```text
 Finalized utterance
+    -> cancellable automatic reply delay
     -> staged snapshot
     -> the chat type's harness (`harness.generate`)
     -> atomic message exchange commit
@@ -216,6 +223,21 @@ New meaningful speech cancels an outdated attempt. Its staged snapshot is not co
 so a later retry includes both the earlier text and the continuation. Once response
 generation succeeds, the commit is shielded from cancellation so database and in-memory
 state cannot be left half-updated.
+
+`services/turn_taking.py` owns per-connection reply timing and recent delivery
+records, shared across sources. `set_reply_delay` accepts a finite 0–5 seconds;
+its acknowledgement reports `reply_delay_seconds`. Advancing interim text and
+each staged final reset this inactivity timer. The delay therefore follows final
+recognition rather than measuring physical silence; finalized text remains required.
+Zero means no extra application wait. `reply_now` bypasses this automatic wait,
+and pause/resume commands are applied immediately.
+
+Server synthesis can finish while audio is still playing on the client. New speech
+therefore checks recent delivery records as well as cancelling a live response task.
+Targeted `cancel_audio` frames identify affected response IDs. The harness keeps
+their full generated text as interruption context separately from committed dialogue
+state. Optional client playback reports distinguish queued and started delivery;
+they cannot establish which exact words were heard.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Chat Types and Intent Detection                                                  -->
@@ -277,7 +299,7 @@ barrier resolves immediately.
 
 Why the flush exists: "STT stopped making progress" is not the same as "STT finalized".
 Once the user stops talking, interim results stop growing, but the last utterance stays
-interim until Google hears enough trailing silence (often 0.5-1.5 s). A client that replies
+interim until Google's endpointer finalizes it (the delay varies by audio and provider). A client that replies
 the moment the user stops (QT's Enter key) previously got a reply built without that
 utterance, which was then staged for the following turn.
 

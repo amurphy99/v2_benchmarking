@@ -15,6 +15,13 @@ Do not ask for a name already supplied in KNOWN_NAME or the conversation.
 State transitions happen AFTER your reply; respond for CURRENT_STATE only.
 The plan is advisory: the final user text and state instructions take precedence.
 
+INTERRUPTED_REPLIES contains saved generated text whose playback was interrupted.
+The full text is context, not proof the user heard it; exact heard words are unknown.
+Prioritize the user's new contribution. Briefly acknowledge the interruption when
+helpful, then reuse unfinished information only if it is still relevant. Never
+restart the whole speech automatically or cite an interrupted assistant message
+as evidence that an assistant goal was completed.
+
 Return only the spoken reply, without JSON, reasoning, emojis, or system metadata.
 Keep it brief, usually 20-30 words; a required list of options may need more.
 """.strip()

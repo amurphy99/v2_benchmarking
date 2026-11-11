@@ -121,6 +121,11 @@ class SilenceWatcher(Cue):
 
     # The clock runs only once the reply's audio has finished
     def on_playback(self, response_id: int, state: str) -> None:
+        if state == "interrupted":
+            self._playing = False
+            self._clear()  # User speech is active; do not start a silence cue.
+            return
+        
         self._playing = (state == "started")
         if self._playing: self._clear()
         else:             self._restart(time.time())

@@ -114,10 +114,20 @@ them once the exchange is saved, so a cancelled reply leaves no trace.
 `user_text`, `trigger` (`"automatic"`, `"reply_now"`, or `"harness"`), and
 `publish_mood`, which sends a `robot_action` emotion right away unless newer speech
 has already cancelled the reply.
+It also carries `interruptions`, a tuple of `InterruptedReply` delivery records.
+Each record contains the saved response ID, full generated text, and whether playback
+was reported started. It does not identify the exact words the user heard.
 
 `ResponseOutcome` carries `message`, `state` (entered in `on_reply_saved`),
 `pause_listening`, and `close_after` (send `chat_ended` and close once the reply has
-gone out).
+gone out), and `consume_interruptions` (false retains this attempt's context for retry).
+
+The harness owns its pending interruption queue independently of dialogue state and
+optional cues. `on_reply_started` snapshots the records an attempt handles;
+`on_reply_saved` consumes that snapshot only when permitted by the outcome.
+Cancelled attempts and service-error fallbacks can retain it, and later interruption
+events survive adoption of an older proposed state. Each chat type can use or ignore
+this context; activity forwards it to both agents.
 
 <br>
 
@@ -127,7 +137,9 @@ gone out).
 ## Turn events and cues
 
 The pipeline tells the harness about each stage of a turn, and the harness passes
-every event on to each of its cues:
+supported events on to each of its cues. The empty `Cue` methods are intentional
+optional hooks: a subclass overrides only what it uses. Harness-owned bookkeeping
+must stay in `ChatHarness`, rather than depend on a cue being enabled:
 
 | Event | When | From |
 |---|---|---|
@@ -136,16 +148,22 @@ every event on to each of its cues:
 | `on_reply_started(attempt)` | A reply attempt begins: the avatar is preparing to speak | `ChatHandler._execute_response_locked` |
 | `on_reply_cancelled(attempt, saved)` | Newer speech or a command cancelled it. `saved`: its text had already gone out, so its audio was cut short | `ChatHandler._execute_response_locked` |
 | `on_reply_saved(outcome)` | Its exchange was saved, and its text goes out now | `ChatHandler._commit_response` |
-| `on_playback(response_id, state)` | The client heard the reply's audio `"started"` or `"finished"` | `consumers/processing/playback.py` (`tts_playback`) |
+| `on_playback(response_id, state)` | Client reported `"started"`, `"finished"`, or `"interrupted"` delivery | `consumers/processing/playback.py` (`tts_playback`) |
 
 Interims and finals arrive in the order Google returned them. `InterimSpeech` has
 `text`, `new_speech` (recognition moved past the previous interim: what cancels an
 automatic reply), `stability`, and `ended_at` (when the recognized audio ends, on
 the word timestamps' clock). `FinalUtterance` has `text` and `words`.
 
-Only the web app sends `tts_playback`, and never `"finished"` for a reply whose
-audio was cancelled. The reply events cover replies the harness generates;
+The web app and Reachy demo send `tts_playback`; other clients can opt in.
+The demo reports `"interrupted"` rather than `"finished"` for stopped audio.
+The reply events cover replies the harness generates;
 replies an admin sends (`send_custom`, `repeat_last`) show up only through playback.
+
+`on_interrupted(reply)` and `bind_response_id(response_id)` are separate harness
+hooks for retaining delivery context and linking adopted history to a saved message.
+They are not currently forwarded to cues. Add a cue hook only when an optional
+behavior needs that event.
 
 **Cues** subclass `Cue` and override just the events they need. A cue reacts with
 side effects only (avatar frames, or a turn of its own), never by changing the

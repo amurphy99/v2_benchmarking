@@ -15,13 +15,14 @@
 // ================================================================================
 export default class AudioStreamer {
     // Initialize the chunk buffer, resampler state, and browser audio resources
-    constructor({ sampleRate, chunkMs, onChunk, onError }) {
+    constructor({ sampleRate, chunkMs, onChunk, onError, audioConstraints}) {
         // Output chunk configuration
         this.sampleRate = sampleRate ?? 16_000;
         this.chunkMs    = chunkMs    ?? 64;
         this.chunkSize  = Math.round((this.sampleRate * this.chunkMs) / 1_000);
         this.onChunk    = onChunk;
         this.onError    = onError ?? console.error;
+        this.audioConstraints = audioConstraints ?? true; // Optional capture processing; legacy callers retain browser defaults.
 
         // Fixed-size network chunk state
         this.buffer   = new Float32Array(this.chunkSize);
@@ -47,7 +48,7 @@ export default class AudioStreamer {
 
         try {
             // Request the microphone and preferred output sample rate
-            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.stream = await navigator.mediaDevices.getUserMedia({ audio: this.audioConstraints });
             this.ctx    = new AudioContext({ sampleRate: this.sampleRate });
 
             // Prepare fallback resampling when the browser chooses another rate

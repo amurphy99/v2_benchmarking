@@ -22,6 +22,7 @@ async def generate_turn(
     known_name,
     planner,
     responder,
+    interruptions=(),
 ):
     """Plan and draft one reply, updating only the supplied attempt-local state.
 
@@ -33,6 +34,8 @@ async def generate_turn(
         known_name (str): Account first name, or an empty string if unavailable.
         planner (PlannerAgent): Generates structured goal evidence and reply guidance.
         responder (ResponseAgent): Drafts text for the current state using that guidance.
+        interruptions (tuple[InterruptedReply, ...]): Saved reply text with incomplete
+            delivery, passed to both agents separately from eligible goal evidence.
 
     Returns:
         tuple[str, dict]: Cleaned reply and turn-log fields, including state before/
@@ -69,7 +72,7 @@ async def generate_turn(
 
     progress = rag_state.get("_goal_progress", {}).get(current, {})
     observations = [
-        item for item in history if item["state"] == current
+        item for item in history if (item["state"] == current and item.get("delivery") != "interrupted")
     ] + [user_message]
 
     payload = {
@@ -87,6 +90,7 @@ async def generate_turn(
         "observations": observations,
         "working_memory": rag_state.get("planner_memory", {}),
         "recent_context": history[-20:],
+        "INTERRUPTED_REPLIES": [asdict(item) for item in interruptions],
     }
 
     plan = {
@@ -172,6 +176,7 @@ async def generate_turn(
                 "goals": [asdict(goal) for goal in spec.goals],
                 "goal_progress": proposed_progress,
                 "RESPONSE_PLAN": response_plan,
+                "INTERRUPTED_REPLIES": [asdict(item) for item in interruptions],
             },
             history[-20:] + [user_message],
         )
@@ -255,6 +260,7 @@ async def generate_turn(
         "responder_error": response_error,
         "transition": asdict(transition),
         "goal_progress": proposed_progress,
+        "interruptions": [asdict(item) for item in interruptions],
     }
 
     for prefix, usage in (

@@ -1,7 +1,7 @@
 # Primary Chat Client Protocol
 
 This document is the **client-facing** contract for the primary chat WebSocket (`ws/chat/`).
-It describes exactly what a "frontend" (the web app, the Buddy robot, the QT robot, or any
+It describes exactly what a "frontend" (the web app, Buddy, QT, Reachy, or any
 future interface) must send and what it will receive back, in the JSON shapes the backend
 actually produces today.
 
@@ -19,6 +19,12 @@ the implementation is authoritative.
 > **Scope note for the QT robot:** QT is an *audio* client that starts in `manual` response
 > mode. It streams `audio_data` and asks for each reply with `reply_now`. Read section 4.1
 > first; it describes that loop and the rules the audio stream has to follow.
+>
+> **Scope note for Reachy:**  Reachy starts in `automatic` mode, streams microphone PCM to 
+> backend STT, and plays backend TTS.
+> TTS arrives as base64 PCM in `audio_chunk` JSON messages on the **same WebSocket**
+> used for microphone audio and commands. Read section 4.2 for the Reachy client loop.
+> The private `/reachy-conv-demo` browser page uses this same primary-client protocol.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Connecting                                                                       -->
@@ -75,13 +81,14 @@ on `ws/chat/` is required by the route regex in `websocket/routing.py`.
 `"unknown"` and the connection is rejected:
 
 ```text
-webapp | mobile | qtrobot | buddyrobot
+webapp | mobile | qtrobot | buddyrobot | reachyrobot
 ```
 
 ### Step 3: Behavior selected by `source`
 
-The `source` string is the single switch that decides how the backend treats your client
-(`consumers.py`, in `connect()`):
+The `source` string selects the initial media and turn-taking defaults
+(`consumers.py`, in `connect()`). Commands can change the session's response mode
+and reply delay:
 
 | `source` | `use_backend_STT` | `use_backend_TTS` | starting `response_mode` |
 |---|---|---|---|
@@ -89,16 +96,20 @@ The `source` string is the single switch that decides how the backend treats you
 | `mobile`     | false | false | `automatic` |
 | `qtrobot`    | false | false | `manual`    |
 | `buddyrobot` | false | false | `automatic` |
+| `reachyrobot` | true  | true  | `automatic` |
 
 What each setting means for you:
 
 - **`use_backend_STT`** -- when true the backend echoes finalized user speech back to you as
-  a `user_utt` message so the UI can display it. Buddy will **not** receive `user_utt`.
+  a `user_utt` message so the UI can display it.
+  This is a legacy name: it does **not** enable or disable backend transcription.
+  Valid `audio_data` goes to backend STT for every source while listening is active,
+  including QT with this flag false. Buddy normally supplies its own transcribed text.
 - **`use_backend_TTS`** -- when true the backend synthesizes speech and streams `audio_chunk`
   messages. Buddy will **not** receive `audio_chunk`; it must speak the text from
   `llm_response` with its own on-board TTS.
 - **`response_mode`** -- in `automatic`, every `transcription` you send triggers an assistant
-  response on its own. Buddy starts `automatic`, so Buddy does **not** need to send
+  response once eligible under the session's reply-delay setting. Buddy starts `automatic`, so Buddy does **not** need to send
   `reply_now`. (QT is the odd one out: it starts `manual` and must explicitly ask for a
   reply.) This is only the *starting* value -- either side can change it later with
   `set_response_mode`.
@@ -222,7 +233,7 @@ the same socket. See section 3.6.
 
 ### 2.3 Command vocabulary
 
-The full table is `COMMAND_HANDLERS` in `processing/commands.py`. All ten names are accepted
+The full table is `COMMAND_HANDLERS` in `processing/commands.py`. All eleven names are accepted
 from a primary client (the robot), not just from the admin page.
 
 | `name` | `data` body | Effect |
@@ -233,6 +244,7 @@ from a primary client (the robot), not just from the admin page.
 | `reply_now` | *(none)* | Forces a response from everything heard up to the request, including the last words before it. Later speech does not cancel it. Buddy does not need this (auto-reply is on). Clients in `manual` mode use it for every turn; see section 4.1. |
 | `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. |
 | `set_response_mode` | `{"mode": "automatic"\|"manual"}` | Turns automatic replies on or off. |
+| `set_reply_delay` | `{"seconds": 1.5}` | Sets the automatic reply delay after recognized-text progress: a finite number from 0 to 5 seconds. Available to every source. |
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
 | `resume_and_respond` | *(none)* | Shortcut: restores automatic mode **and** immediately replies. |
 | `set_recording` | `{"enabled": true}` | Sets whether the session audio recording is kept at the end of the chat. |
@@ -266,18 +278,19 @@ also works and runs the same teardown, but sending `end_chat` is cleaner.
 
 ### 2.5 `tts_playback` (optional)
 
-If your client speaks the response with its own TTS, you can report the real playback
-boundaries so the assistant message gets accurate `start_ts` / `end_ts` in the database.
+Whether you play backend audio or use onboard TTS, report playback boundaries to give
+the assistant message accurate `start_ts` / `end_ts` and track incomplete delivery.
 
 ```json
 {"type": "tts_playback", "data": {"responseId": 123, "state": "started"}}
 {"type": "tts_playback", "data": {"responseId": 123, "state": "finished"}}
+{"type": "tts_playback", "data": {"responseId": 123, "state": "interrupted"}}
 ```
 
 | Field | Type | Notes |
 |---|---|---|
 | `responseId` | integer | Must be the exact integer from the `llm_response` message. Booleans are explicitly rejected; strings are rejected. |
-| `state` | string | Only `"started"` or `"finished"`. |
+| `state` | string | `"started"`, `"finished"`, or `"interrupted"`. Report finished only for complete playback. |
 
 Do **not** send a timestamp -- all timing is stamped on the backend so everything shares one
 clock. Skipping these messages entirely is fine and fully supported; it just means the
@@ -287,6 +300,10 @@ silence after a reply can only start timing it from the user's own speech.
 This is worth wiring up on Buddy eventually, since it is the only way the backend learns how
 long the robot actually spent speaking.
 
+Reports are accepted only for assistant messages owned by this user and chat session.
+An interrupted end timestamp records a stop, not proof that all saved text was heard.
+The backend does not infer an exact heard-word boundary.
+
 ### 2.6 `audio_data` and `overlapped_speech` (not used by Buddy)
 
 `audio_data` carries one small base64 PCM chunk for backend STT. The format is strictly
@@ -294,7 +311,8 @@ validated in `processing/audio.py:68-106` and rejected outright on mismatch: 16,
 channel, 16 bits per sample, `"pcm_s16le"`, and at most 1,400,000 base64 characters per
 chunk.
 
-*When* these chunks are sent matters as much as their format. See section 4.1.
+*When* these chunks are sent matters as much as their format. See section 4.1 for
+QT's manual loop and section 4.2 for Reachy's automatic loop.
 
 ```json
 {
@@ -327,9 +345,9 @@ currently used for anything.
 | `stream_status`    | **Yes** | STT stream went `"active"` / `"paused"` |
 | `recording_status` | **Yes** | Recording toggle changed |
 | `chat_ended`       | **Yes** | Sent right before the backend closes the socket |
-| `user_utt`         | No (webapp only) | Backend STT transcript of the user |
-| `audio_chunk`      | No (webapp only) | Streamed TTS audio |
-| `cancel_audio`     | No (webapp only) | Discard buffered TTS audio |
+| `user_utt`         | No (webapp/Reachy) | Backend STT transcript of the user |
+| `audio_chunk`      | No (webapp/Reachy) | Streamed TTS audio |
+| `cancel_audio`     | No (webapp/Reachy) | Stop the identified audio and discard its buffered chunks |
 
 ### 3.1 `robot_action` -- emotions and animations
 
@@ -397,12 +415,13 @@ listener receives this identical frame.
 This is a **transcript feed**, useful if your client wants to display the conversation on a
 screen. It is entirely optional to handle -- the webapp ignores it completely.
 
-> **Important:** the assistant's response arrives **twice** -- once here as
-> `message`/`role: "assistant"` and once as `llm_response`. **Speak on `llm_response`** and
-> treat `message` as transcript/display only, or the robot will say everything twice. This
-> is the single easiest mistake to make when writing a new client.
+> **Important:** the assistant's response text arrives **twice** -- once here as
+> `message`/`role: "assistant"` and once as `llm_response`. Treat `message` as
+> transcript/display only. QT/Buddy clients synthesize `llm_response` with onboard TTS.
+> Reachy instead plays backend `audio_chunk` messages; it must not also synthesize
+> `llm_response`, or the reply will be spoken twice.
 
-### 3.3 `llm_response` -- speak this
+### 3.3 `llm_response` -- reply text and ID
 
 ```json
 {
@@ -415,12 +434,16 @@ screen. It is entirely optional to handle -- the webapp ignores it completely.
 
 | Field | Type | Notes |
 |---|---|---|
-| `data` | string | The text to speak. A **plain string**, same as outbound `transcription`. |
+| `data` | string | Assistant reply text. A **plain string**, same as outbound `transcription`. Onboard-TTS clients speak it; Reachy plays backend audio instead. |
 | `time` | number | Backend timestamp, epoch seconds |
 | `responseId` | integer | Database ID of the assistant `ChatMessage`. Quote this back in `tts_playback`. |
 
 This message is only sent after the exchange is durably written to the database, so a
 `responseId` you receive here is always valid.
+
+For Reachy (`use_backend_TTS=true`), this is text/metadata for display, behavior,
+and matching the reply's audio. Playback comes from `audio_chunk`, not a second
+local TTS call.
 
 ### 3.4 Ordering of a single turn
 
@@ -479,7 +502,8 @@ Every command you send produces exactly one of these, on the same socket
     "state"  : {
       "listening"        : "active",
       "response_mode"    : "automatic",
-      "recording_enabled": false
+      "recording_enabled": false,
+      "reply_delay_seconds": 1.0
     }
   }
 }
@@ -494,7 +518,7 @@ Every command you send produces exactly one of these, on the same socket
 | `state` | object | The **complete** control state after the command, always present -- even on failure |
 
 The `state` object is the authoritative source for control state, and it is the only place a
-primary client can read it -- `control_state` broadcasts go to admin listeners only. Its three
+primary client can read it -- `control_state` broadcasts go to admin listeners only. Its four
 fields:
 
 | Field | Values | Meaning |
@@ -502,6 +526,7 @@ fields:
 | `listening` | `"active"` \| `"paused"` | Whether backend STT is consuming audio. Always matches the most recent `stream_status`. |
 | `response_mode` | `"automatic"` \| `"manual"` | Whether a finalized utterance triggers a reply on its own |
 | `recording_enabled` | boolean | Whether the session recording will be kept at the end of the chat |
+| `reply_delay_seconds` | number, 0–5 | Additional wait after recognized-text progress before an automatic reply; does not delay explicit reply commands |
 
 Since there is no toggle-on-omit, this is what you read before sending a state-setting command
 if you want to flip something. Send `get_control_state` to resynchronize after a reconnect.
@@ -547,9 +572,11 @@ finishes. Map Task chats (`chat_type=map_task`) don't recognize them either, and
 A robot should let the goodbye finish speaking before tearing down its UI, and should not
 treat the subsequent close as an error.
 
-### 3.8 Web-app-only messages
+### 3.8 Backend speech messages (web app and Reachy)
 
-Buddy will never receive these, but for future interfaces:
+Web app and Reachy clients receive these messages on their primary chat WebSocket.
+They do not use a separate audio socket, download URL, or REST request for TTS.
+Buddy does not receive them with its current media defaults:
 
 ```json
 {"type": "user_utt", "data": "text the backend heard", "time": 1757433512.481}
@@ -570,12 +597,25 @@ Buddy will never receive these, but for future interfaces:
 }
 ```
 
+`audio_chunk.data.b64` decodes to **raw PCM bytes**, not a WAV or MP3 file.
+The current backend produces signed 16-bit little-endian PCM, normally 24 kHz mono;
+honor each chunk's `sampleRate`, `channels`, and `bitsPerSample` metadata.
+The microphone stream is separately required to be 16 kHz mono signed 16-bit PCM.
+
+Queue decoded output continuously using `responseId` and `sequence`. Do not
+play each chunk as an independent sound or wait for the whole response before
+starting playback. `last=true` marks the last chunk sent, not the moment its
+audio has actually finished playing.
+
 ```json
-{"type": "cancel_audio"}
+{"type": "cancel_audio", "data": {"responseIds": [4471], "reason": "user_speech"}}
 ```
 
-`cancel_audio` means a TTS stream was interrupted mid-flight; the client should drop any
-audio it has buffered but not yet played. Note that `audio_chunk` carries its PCM format on
+`cancel_audio` stops matching playback and discards buffered chunks for the listed
+response IDs. Ignore later chunks for those IDs, report `interrupted`, and leave newer,
+unrelated replies playing. `reason` is optional; a legacy frame with no IDs means
+clear all playback. A stop can arrive after server synthesis has finished because the
+client may still be playing buffered audio. Note that `audio_chunk` carries its PCM format on
 every chunk -- do not assume it matches the 16 kHz used for *inbound* microphone audio, since
 TTS is synthesized at a different rate.
 
@@ -583,6 +623,39 @@ The backend synthesizes a response one sentence at a time and sends each sentenc
 soon as they are ready, so chunks arrive in bursts, possibly with a pause between sentences.
 Play each chunk as it arrives, right after the audio already queued. `sequence` counts across
 the whole response, and only the response's final chunk has `"last": true`.
+
+### 3.9 Automatic reply timing and interruption context
+
+Send a setting on connection, or change it while listening:
+
+```json
+{"type": "command", "data": {"id": "delay-1", "name": "set_reply_delay", "data": {"seconds": 1.5}}}
+```
+
+Read the applied `reply_delay_seconds` from its acknowledgement. This setting
+belongs to the current connection; reconnecting restores the server's initial value.
+The example is a requested value, not a guarantee about the initial default.
+
+The automatic task requires finalized text and no recognized-text progress for
+the configured interval. Advancing interim text and every staged final restart
+the timer. A one-second setting therefore adds a wait after final recognition;
+it is not one second measured from physical speech end. Zero adds no application
+wait; Google finalization and model/network latency still exist.
+
+Advancing interim text and staged final text share the cancellation path. They cancel
+automatic generation and eligible backend-TTS delivery; accepted `reply_now` and
+explicit admin speech remain protected. Cancelling generation before saving keeps
+the user text staged. Interrupting saved audio preserves its generated text as
+incomplete-delivery context; it does not erase persisted conversation history.
+The activity planner and responder can use that context to continue or change topic.
+No fixed spoken interruption acknowledgement is injected.
+
+Pause/resume commands take effect without waiting for this setting.
+`set_listening` also pauses/resumes automatic eligibility;
+`pause_and_listen` disables automatic replies while still listening;
+`resume_and_respond` calls `reply_now` and bypasses the automatic wait.
+The closing flow sends `chat_ended` and closes after server delivery; it does not
+wait for a `tts_playback` completion report.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Minimal client                                                                   -->
@@ -714,6 +787,55 @@ A second `reply_now` sent before the first reply arrives replaces the first.
 - **You will not receive `user_utt`.** The user's words arrive as a `message` frame once
   the exchange is committed (section 3.2).
 
+### 4.2 Audio client in automatic mode (Reachy Mini)
+
+Reachy uses the existing authenticated primary chat socket. For the activity harness:
+
+```text
+wss://<host>/ws/chat/?token=<access token>&source=reachyrobot&chat_type=activity
+```
+
+The older `/ws/chat/activity/?token=<access token>&source=reachyrobot` route selects
+the same harness. No separate Reachy consumer, audio endpoint, or session-creation
+request is required.
+
+1. **Authenticate** using section 1 and open the socket with `source=reachyrobot`.
+   This selects backend STT, backend TTS, and automatic replies.
+2. **Optionally set the reply delay** using `set_reply_delay` and read the applied
+   value from `command_ack`. The setting is an extra wait after recognized-text
+   progress, including final recognition; it is not Google's endpointing timeout.
+3. **Stream microphone audio continuously** as `audio_data`: base64-encoded raw
+   16 kHz mono signed 16-bit little-endian PCM. Send small chunks as captured,
+   including silence; the demo uses 64 ms. Keep streaming during assistant playback
+   for interruptions. Honor explicit `stream_status: paused` and stop capture on
+   session end. Use the robot's appropriate capture/playback devices and echo
+   cancellation; recognition itself is not echo cancellation.
+4. **Receive reply text and audio on this same socket.** `llm_response` supplies
+   the saved reply text and `responseId`; `audio_chunk` supplies the already
+   synthesized speech. Base64-decode `data.b64`, honor its PCM format metadata,
+   convert to the playback API's required representation if necessary, and queue it
+   to Reachy's speaker. Do not run local TTS for the same reply.
+5. **Keep the WebSocket reader responsive while audio plays.** Handle `cancel_audio`
+   immediately: stop the listed replies, discard their queued audio, and ignore
+   their later chunks. Audio playback must not block processing socket messages.
+6. **Report actual playback boundaries** with `tts_playback`, using the same
+   `responseId`: `started` when playback begins, `finished` after its final
+   queued audio finishes, or `interrupted` when cut short. These reports are
+   optional at the protocol level, but Reachy should implement them so the backend
+   can distinguish completed delivery from an unfinished response.
+7. **Handle behavior and closing events.** Map `robot_action` to local motions.
+   After `chat_ended` and normal server close, let queued goodbye audio finish.
+   Sending `end_chat` is the client's explicit shutdown path.
+
+The wire-level audio fields are in sections 2.6 and 3.8; interruption and reply-delay
+behavior is in section 3.9. In automatic mode, no `reply_now` command is needed
+for normal turns.
+
+This document specifies the backend contract. A robot-side app still needs to map
+microphone capture, PCM conversion, speaker playback/cancellation, and motion
+commands to the installed Reachy SDK. The browser demo exercises the protocol but
+does not implement those hardware bindings.
+
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Gotchas                                                                          -->
 <!-- -------------------------------------------------------------------------------- -->
@@ -721,8 +843,9 @@ A second `reply_now` sent before the first reply arrives replaces the first.
 
 Things most likely to trip up a new client:
 
-1. **The assistant's text arrives twice** -- as `message` and as `llm_response`. Speak only
-   on `llm_response`, or the robot says everything twice. (Section 3.2)
+1. **The assistant's text arrives twice** -- as `message` and as `llm_response`.
+   QT/Buddy use onboard TTS only for `llm_response`. Reachy plays `audio_chunk`
+   instead and must not synthesize either text message again. (Sections 3.2, 4.2)
 2. **`transcription.data` is a string, `command.data` is an object.** Easy to mix up.
 3. **There is no toggle-on-omit.** Every state-setting command needs an explicit body; a
    missing or out-of-vocabulary value is rejected with `ok: false`. Read `state` from an ack
@@ -734,8 +857,9 @@ Things most likely to trip up a new client:
    `transcription` produces a backend log line and nothing else -- no error comes back over
    the socket. If the robot seems ignored, check the backend logs first. (Commands are the
    exception: those always ack.)
-6. **`source` must be exactly `buddyrobot`.** Any other spelling closes the socket with
-   `4002`.
+6. **Use the exact source value for your client:** `buddyrobot`, `qtrobot`, or
+   `reachyrobot` for these robots.
+   All allowed values are listed in section 1; unknown sources close with `4002`.
 7. **A user can have only one primary chat connection.** Once a new primary connection is
    fully initialized, the server closes any older one with code `4004`. The replaced client
    must stop recording/speaking and treat that close as a session takeover, not a network retry.
@@ -748,8 +872,9 @@ Things most likely to trip up a new client:
     type behind it, so a client written to this document works against all of them.
 11. **Audio must be streamed as it is captured, never sent in one burst.** Holding the
     user's speech back until a reply is wanted pushes the end of long turns into the next
-    reply and breaks word timestamps. Send `reply_now` on the same socket as the audio, the
-    moment the user asks; there is nothing to wait for first. (Section 4.1)
+    reply and breaks word timestamps. For manual turns, send `reply_now` on the same
+    socket as the audio the moment the user asks; automatic Reachy turns need no
+    `reply_now`. (Sections 4.1, 4.2)
 12. **`reply_now` can end in silence.** If nothing was heard, the ack is still `ok: true`
     and no `llm_response` follows. Do not wait for one forever. (Section 4.1)
 

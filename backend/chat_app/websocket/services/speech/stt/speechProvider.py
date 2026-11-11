@@ -301,7 +301,8 @@ class SpeechToTextProvider:
     # ================================================================================
     def _listen_responses(self, responses: Iterable[Any], staged: list[Future]) -> None:
         """
-        Hands every interim and final result to the chat's event loop, and stages
+        Forwards VAD start/end independently of words, including speech events with
+        no transcript. Hands interim/final results to the chat's event loop, and stages
         final results with their word-level timestamps. Only genuinely advancing
         interims count as new speech (which cancels a pending automatic response);
         text that was repeated due to glitches or same-length reinterpretations of the
@@ -326,13 +327,13 @@ class SpeechToTextProvider:
                     if consumer is None: continue
 
                     # Repeated/revised interims for the same audio are not new speech
-                    speech = InterimSpeech(
+                    interim_speech = InterimSpeech(
                         text       = transcript,
                         new_speech = self._interim_progress.has_new_speech(result, transcript),
                         stability  = result.stability,
                         ended_at   = self._stream_start_dt + result.result_end_time,
                     )
-                    self._loop.call_soon_threadsafe(handle_interim, consumer, speech)
+                    self._loop.call_soon_threadsafe(handle_interim, consumer, interim_speech)
 
                     # Never actually process interim results as a transcription
                     continue

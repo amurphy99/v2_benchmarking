@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services           import logging_utils as lu
 from ...services.bg_helpers import fire_and_log
+from ...services.turn_taking import DEFAULT_REPLY_DELAY_SECONDS, turn_taking, validate_reply_delay
 from  ..utils.groups        import format_send_actions_command, ROBOT_ACTION_KINDS
 from  .stream              import set_streaming_active
 
@@ -45,6 +46,7 @@ def get_control_state(consumer: ChatConsumer) -> dict[str, object]:
         "listening"         : "active" if getattr(consumer, "streaming_active", False) else "paused",
         "response_mode"     : getattr(consumer, "response_mode", "automatic"),
         "recording_enabled" : getattr(consumer, "save_audio",    False      ),
+        "reply_delay_seconds": getattr(consumer, "reply_delay_seconds", DEFAULT_REPLY_DELAY_SECONDS),  # Configured automatic silence interval, in seconds.
     }
 
 # Pull one required value out of a command body and check it against its vocabulary
@@ -109,6 +111,23 @@ async def _set_response_mode(consumer: ChatConsumer, payload: dict[str, object])
     consumer.response_mode = mode
     if mode == "manual": _cancel_response_tasks(consumer)
 
+async def _set_reply_delay(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    """Set payload.data.seconds (finite number, 0–5) for this connection only.
+
+    Wakes an existing automatic wait. Manual/forced reply requests and pause/resume
+    commands do not wait for this delay.
+    """
+    value = payload.get("data")
+
+    try:
+        delay = validate_reply_delay(value.get("seconds") if isinstance(value, dict) else None)
+
+    except ValueError as exc:
+        raise CommandRejected(str(exc)) from exc
+    
+    consumer.reply_delay_seconds = delay
+    turn_taking(consumer).set_delay(delay)
+
 # Enter manual response mode and cancel any response already in progress
 async def _pause_and_listen(consumer: ChatConsumer, payload: dict[str, object]) -> None:
     consumer.response_mode = "manual"
@@ -168,6 +187,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     # Misc. command types
     "robot_action"       : _robot_action,
     "set_recording"      : _set_recording,
+    "set_reply_delay"    : _set_reply_delay,
     "get_control_state"  : _get_control_state,
 }
 
