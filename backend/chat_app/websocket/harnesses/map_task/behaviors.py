@@ -47,24 +47,24 @@ MAP_TASK_TRACE_SPEED      = 0.40  # How fast the eyes trace a move, in map width
 # --------------------------------------------------------------------------------
 # Plan Timing
 # --------------------------------------------------------------------------------
-MAP_TASK_FOUND_MS       = 350    # Locking onto a landmark it found, or a last look at its own spot
-MAP_TASK_GLANCE_MS      = 700    # A glance at a landmark the user named, while listening
-MAP_TASK_DIRECTION_MS   = 600    # A look toward a direction the user said, while listening
-MAP_TASK_SEARCH_MS      = 900    # A quick search for a named landmark it doesn't have, while listening
-MAP_TASK_LAST_LOOK_MS   = 700    # The last sweep before saying a landmark isn't there
-MAP_TASK_TRACE_HOLD_MS  = 400    # Holding the end of a traced move
-MAP_TASK_LOWER_AFTER_MS = 200    # How far into the reply's audio the map comes down
-MAP_TASK_LOOK_BACK_MS   = 1_500  # Holding the user's gaze as the reply starts
+MAP_TASK_FOUND_MS       =   350    # Locking onto a landmark it found, or a last look at its own spot
+MAP_TASK_GLANCE_MS      =   700    # A glance at a landmark the user named, while listening
+MAP_TASK_DIRECTION_MS   =   600    # A look toward a direction the user said, while listening
+MAP_TASK_SEARCH_MS      =   900    # A quick search for a named landmark it doesn't have, while listening
+MAP_TASK_LAST_LOOK_MS   =   700    # The last sweep before saying a landmark isn't there
+MAP_TASK_TRACE_HOLD_MS  =   400    # Holding the end of a traced move
+MAP_TASK_LOWER_AFTER_MS =   200    # How far into the reply's audio the map comes down
+MAP_TASK_LOOK_BACK_MS   = 1_500    # Holding the user's gaze as the reply starts
 
 # How long each look lasts during the last sweep (shortest and longest, ms)
 MAP_TASK_LAST_LOOK_FIX_MS = [180, 260]
 
 # Faces and movements
 MAP_TASK_SEARCH_FACE  = {"name": "Furrowed Brow",            "strength": 0.5}
-MAP_TASK_FOUND_FACE   = {"name": "Wide-Eyed",                "strength": 0.6, "hold_ms": 500}
+MAP_TASK_FOUND_FACE   = {"name": "Wide-Eyed",                "strength": 0.6, "hold_ms":   500}
 MAP_TASK_PUZZLED_FACE = {"name": "Face with Raised Eyebrow", "strength": 0.5, "hold_ms": 1_200}
-MAP_TASK_NOT_THERE    = {"name": "Shake No", "strength": 0.6}
-MAP_TASK_GOT_IT       = {"name": "Nod",      "strength": 0.5}
+MAP_TASK_NOT_THERE    = {"name": "Shake No",                 "strength": 0.6}
+MAP_TASK_GOT_IT       = {"name": "Nod",                      "strength": 0.5}
 
 
 # ================================================================================
@@ -90,10 +90,10 @@ def thinking_plan(turn: int, reading: TurnReading) -> AvatarPlan:
 # ================================================================================
 # One reply's plan: what the reply did on the map, then the map down and the eyes on the user as its audio starts
 def reply_plan(
-    turn    : int,            # The harness's turn number (in the plan's id, and echoed in feedback)
-    reading : TurnReading,    # The turn the reply answers
-    reply   : FollowerReply,  # The reply
-    before  : Point,          # Where the avatar was
+    turn    : int,                # The harness's turn number (in the plan's id, and echoed in feedback)
+    reading : TurnReading,        # The turn the reply answers
+    reply   : FollowerReply,      # The reply
+    before  : Point,              # Where the avatar was
     path    : tuple[Point, ...],  # Every new waypoint, empty when it stays
 ) -> AvatarPlan:
     steps = [*_map_steps(reading, reply, before, path), _reply_audio_step(reply)]
@@ -101,9 +101,9 @@ def reply_plan(
 
 # What the reply did on the map, played as soon as the plan arrives (before its audio starts)
 def _map_steps(
-    reading : TurnReading,       # The turn being answered
-    reply   : FollowerReply,     # The chosen reply and act
-    before  : Point,             # The starting spot
+    reading : TurnReading,        # The turn being answered
+    reply   : FollowerReply,      # The chosen reply and act
+    before  : Point,              # The starting spot
     path    : tuple[Point, ...],  # Every new waypoint
 ) -> list[dict[str, object]]:
     # Trace every bend, including a loop that ends where it began

@@ -3,9 +3,9 @@ Read each user turn against the avatar's map: names, questions, and moves.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.map_task.understanding`
 
-Runs in code, before any LLM call, on every turn. It finds the landmark names the
-user said (including ones the avatar's map lacks), describes every landmark from
-the avatar's current spot, and picks the route that decides which pipeline
+Runs in code, before any LLM call, on every turn. It finds the landmark names
+the user said (including ones the avatar's map lacks), describes every landmark
+from the avatar's current spot, and picks the route that decides which pipeline
 replies (`pipelines.ROUTE_PIPELINES`).
 
 """
@@ -57,9 +57,9 @@ class TurnReading:
     text     : str                       # What the user said
     task_map : TaskMap                   # The avatar's map (and the giver's names)
     position : Point                     # Where the avatar is
-    path     : tuple[Point, ...]          # Committed trail, for continuing the last direction
-    mentions : tuple[Mention, ...]       # Landmarks named, in the order said, each once
-    missing  : tuple[str, ...]           # Names said that aren't on the avatar's map
+    path     : tuple[Point,        ...]  # Committed trail, for continuing the last direction
+    mentions : tuple[Mention,      ...]  # Landmarks named, in the order said, each once
+    missing  : tuple[str,          ...]  # Names said that aren't on the avatar's map
     facts    : tuple[LandmarkFact, ...]  # Every landmark: the named ones first, then nearest first
     question : bool                      # They asked something about the avatar's map
     movement : bool                      # They told the avatar to move
@@ -102,18 +102,18 @@ def read_turn(
 
 # Pick the route (a name the avatar lacks is a mismatch; one landmark asked about is simple)
 def _route(named_count: int, missing: tuple[str, ...], question: bool, movement: bool) -> Route:
-    if missing:                                                return "mismatch"
-    if question and (named_count == 1) and (not movement):     return "simple_question"
-    if movement or named_count:                                return "instruction"
+    if missing:                                            return "mismatch"
+    if question and (named_count == 1) and (not movement): return "simple_question"
+    if movement or   named_count:                          return "instruction"
     return "other"
 
 # Describe one landmark from the avatar's spot
 def _fact(landmark: Landmark, position: Point, scale: Scale, *, mentioned: bool) -> LandmarkFact:
     return LandmarkFact(
         landmark  = landmark,
-        direction = direction(position, landmark.at, scale),
-        distance  = distance_band(position, landmark, scale),
-        region    = region(landmark.at),
+        direction = direction    (position, landmark.at, scale),
+        distance  = distance_band(position, landmark,    scale),
+        region    = region       (          landmark.at       ),
         mentioned = mentioned,
     )
 
