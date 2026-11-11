@@ -23,6 +23,25 @@ async def generate_turn(
     planner,
     responder,
 ):
+    """Plan and draft one reply, updating only the supplied attempt-local state.
+
+    Args:
+        definition (list[dict]): Ordered database rows with state names and instructions.
+        rag_state (dict): Deep-copied dialogue ledger; histories, goals, counters,
+            planner memory, and closing flags are updated in place.
+        user_text (str): Finalized user utterance represented by this attempt.
+        known_name (str): Account first name, or an empty string if unavailable.
+        planner (PlannerAgent): Generates structured goal evidence and reply guidance.
+        responder (ResponseAgent): Drafts text for the current state using that guidance.
+
+    Returns:
+        tuple[str, dict]: Cleaned reply and turn-log fields, including state before/
+        after, prospective saved-reply count, timing, and agents_data diagnostics.
+
+    The harness adopts these changes only after the exchange is saved. Planner
+    failure uses fallback guidance; responder failure preserves prior goals,
+    state, and planner memory but still prepares a reply-count increment.
+    """
     started = time.monotonic()
 
     current = rag_state["current_scenario"]

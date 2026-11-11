@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChatState:
+    """Group message objects by scenario for conversation and closing summaries.
+
+    Attributes:
+        current_scenario (str): State used when a method omits its scenario.
+        history_by_state (Dict[str, List[Any]]): State-name to message-list mapping.
+        state_trace (List[str]): Departed states in visit order; revisits may repeat.
+    """
+
     current_scenario: str
 
     # state_name -> list of messages (HumanMessage/AIMessage/etc.)
@@ -22,20 +30,39 @@ class ChatState:
     state_trace: List[str] = field(default_factory=list)
 
     def _ensure_state(self, scenario: Optional[str] = None) -> str:
+        """Return the effective state name and create its history list if absent.
+
+        scenario (Optional[str]) selects a state; None or an empty string uses
+        current_scenario. Mutates history_by_state and returns the str key.
+        """
         scenario = scenario or self.current_scenario
         if scenario not in self.history_by_state:
             self.history_by_state[scenario] = []
         return scenario
 
     def get_state_history(self, scenario: Optional[str] = None) -> List[BaseMessage]:
+        """Return the backing List[BaseMessage] for a state, creating it if absent.
+
+        scenario (Optional[str]) defaults to current_scenario. The returned list
+        is not a copy, so changes to it affect this ChatState.
+        """
         scenario = self._ensure_state(scenario)
         return self.history_by_state[scenario]
 
     def add_message(self, msg: Any, scenario: Optional[str] = None) -> None:
+        """Append msg (Any message object) to the state's history; return None.
+
+        scenario (Optional[str]) defaults to current_scenario. The original
+        object is stored without copying, normally as a HumanMessage or AIMessage.
+        """
         scenario = self._ensure_state(scenario)
         self.history_by_state[scenario].append(msg)
 
     def transition_to(self, new_scenario: str) -> None:
+        """Record departure and select new_scenario (str), creating its history.
+
+        Updates state_trace and current_scenario in this ChatState; returns None.
+        """
         if not self.state_trace or self.state_trace[-1] != self.current_scenario:
             self.state_trace.append(self.current_scenario)
 
@@ -44,15 +71,26 @@ class ChatState:
 
 
 def get_user_utterances_for_state(state: ChatState, scenario: str) -> list[str]:
+    """Return list[str] content from HumanMessage entries in one state.
+
+    state (ChatState) supplies grouped history; scenario (str) selects the group.
+    Looking up an unseen scenario creates an empty history list.
+    """
     msgs = state.get_state_history(scenario)
     user_utts = [str(m.content) for m in msgs if isinstance(m, HumanMessage)]
     return user_utts
 
 def extract_ts_best_match(text: str, target_header: str, threshold: float = 0.7) -> str:
-    """
-    Scans the text for a header that matches the 'target_header'. This only needed if the regex extraction fails.
-    Uses difflib to find the best matching line to the target header.
-    Returns the content immediately following that header until the next empty line.
+    """Extract a section using a fuzzy header match when regex extraction fails.
+
+    Args:
+        text (str): Source text containing section headings and content.
+        target_header (str): Heading to match using difflib similarity.
+        threshold (float): Minimum matching ratio; defaults to 0.7.
+
+    Returns:
+        str: Content after the matched header's colon and subsequent lines up to
+        the next blank line, or an empty string if no header reaches the threshold.
     """
     lines = text.splitlines()
     best_score = 0.0
@@ -97,13 +135,22 @@ def extract_ts_best_match(text: str, target_header: str, threshold: float = 0.7)
 
 
 def cosine_similarity(v1, v2):
+    """Return float cosine similarity for two one-dimensional numeric sequences.
+
+    v1 and v2 may be lists or NumPy arrays. They must have matching lengths and
+    nonzero norms; this helper does not validate those requirements.
+    """
     v1 = np.array(v1)
     v2 = np.array(v2)
     return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
 
 def organize_message_history(msg_history: list) -> str:
-    """" Only for HumanMessage and AIMessage types """ 
+    """Format msg_history (list[BaseMessage]) as a tagged transcript string.
+
+    HumanMessage and AIMessage receive user/assistant tags. Other objects with
+    a content attribute use the user-tag fallback. Empty history returns "".
+    """
     parts: list[str] = []
 
     for m in msg_history:
@@ -118,10 +165,15 @@ def organize_message_history(msg_history: list) -> str:
     return "".join(parts)
 
 def organize_full_conversation(state: ChatState, exclude_states: Optional[List[str]] = None) -> str:
-    """
-    Fetch all state histories in the order they were visited.
-    state.state_trace contains completed/visited states.
-    exclude_states: list of state names to exclude from the conversation
+    """Return a tagged transcript, including each eligible state once.
+
+    Args:
+        state (ChatState): Grouped histories, visit trace, and current state.
+        exclude_states (Optional[List[str]]): State names to omit; None omits none.
+
+    Returns:
+        str: Histories in first-visit order, followed by the current state if it
+        was not already included. Missing history groups are created as empty.
     """
     if exclude_states is None:
         exclude_states = []
@@ -141,8 +193,10 @@ def organize_full_conversation(state: ChatState, exclude_states: Optional[List[s
 
 
 def clean_llm_response(text: str) -> str:
-    """
-    Cleans up the LLM response by removing any system metadata lines that may have been included.
+    """Return str reply text with the known model-metadata block removed.
+
+    text (str) is raw model output. Only the configured metadata pattern is
+    removed; surrounding whitespace is stripped from the resulting spoken reply.
     """
     # Adding this specifically for the hallucination issue we observed with the Gemma-4-31B-it model. But could help with other models too if they start including metadata lines like this in their responses.
     metadata_pattern = re.compile(
@@ -152,6 +206,11 @@ def clean_llm_response(text: str) -> str:
     return re.sub(metadata_pattern, "", text).strip()
 
 def parse_yes_no(text: str) -> Optional[bool]:
+    """Classify text (str) using simple affirmative/negative keyword matches.
+
+    Returns True for an affirmative match, False for a negative match, or None
+    for neither. Affirmative matches take precedence if both are present.
+    """
     t = (text or "").strip().lower()
 
     if re.search(r"\b(yes|yep|yeah|sure|okay)\b", t):

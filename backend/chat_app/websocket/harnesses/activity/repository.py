@@ -8,6 +8,20 @@ from .state_specs import START_SCENARIO, STATE_SPECS
 
 @database_sync_to_async
 def load_definition(activity_name: str) -> list[dict]:
+    """Load and validate ordered activity instructions from the main database.
+
+    Args:
+        activity_name (str): Activity.name identifying the instruction set.
+
+    Returns:
+        list[dict]: Rows containing name, description, and instructions, sorted
+        by instruction_order and name. Callers await the decorated function.
+
+    Raises:
+        Activity.DoesNotExist: No activity matches the supplied name.
+        ValueError: Rows are empty, start in the wrong state, or include a state
+            without a corresponding STATE_SPECS entry.
+    """
     activity = Activity.objects.get(name=activity_name)
 
     rows = list(

@@ -8,6 +8,14 @@ CLOSE_SESSION_STATE = "close_session"
 
 @dataclass(frozen=True)
 class GoalSpec:
+    """Define one required goal assessed against quoted conversation evidence.
+
+    Attributes:
+        id (str): Stable key used by planner claims and the progress ledger.
+        description (str): Natural-language criterion presented to both agents.
+        actor (Literal["user", "assistant"]): Speaker whose message must support it.
+    """
+
     id: str
     description: str
     actor: Literal["user", "assistant"]
@@ -15,6 +23,15 @@ class GoalSpec:
 
 @dataclass(frozen=True)
 class StateSpec:
+    """Define required goals and saved-assistant-reply limits for one state.
+
+    Attributes:
+        goals (tuple[GoalSpec, ...]): All goals required for normal progression.
+        min_turns (int): Minimum replies for a goal-based exit; defaults to 1.
+        max_turns (int): Reply count forcing an exit with unmet goals skipped;
+            defaults to 5. Generation attempts do not themselves count as saved.
+    """
+
     goals: tuple[GoalSpec, ...]
     min_turns: int = 1
     max_turns: int = 5

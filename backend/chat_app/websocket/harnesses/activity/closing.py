@@ -1,7 +1,7 @@
 """
-Post-session closing behavior for the Activity Chat.
+Closing behavior for the Activity Chat before socket shutdown.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.services.behavior.activity_chat_close`
+`chat_app.websocket.harnesses.activity.closing`
 
 Handles the farewell + optional summary flow that is triggered when the activity chat system transitions to the 'close_session' state.
 
@@ -42,6 +42,13 @@ _FINAL_UNCLEAR = "I'm sorry I couldn't quite catch your question, but I enjoyed 
 _CLARIFY_PROMPT     = "Sorry, I didn't quite catch that — would you like a summary of our conversation? Please say yes or no!"
 
 class _FinalTurnResult(BaseModel):
+    """Hold final-message classification and the proposed spoken answer.
+
+    Attributes:
+        intent (Literal["question", "yes_only", "other"]): Closing-flow branch.
+        reply (str): Brief answer or acknowledgement; ignored for yes_only.
+    """
+
     intent: Literal["question", "yes_only", "other"]
     reply: str
 
@@ -51,10 +58,16 @@ class _FinalTurnResult(BaseModel):
 # =============================================================================
 
 async def _generate_farewell_with_summary_offer(chat_state, *, trace_id: str) -> str:
-    """
-    Makes a small LLM call to produce a warm, lightly paraphrased farewell
-    that ends by asking if the user wants a summary.
-    Uses the tail of the conversation as context so it can feel personal.
+    """Draft a farewell ending with an offer to summarize the conversation.
+
+    Args:
+        chat_state (ChatState | None): Grouped history, if available; only its
+            last 600 formatted characters are sent as conversation context.
+        trace_id (str): Correlation label used in closing logs.
+
+    Returns:
+        str: Model-generated offer, or a fixed fallback if generation is unavailable,
+        fails, or yields empty text. Does not change dialogue flags.
     """
     from chat_app import config as cf  # local import to avoid circular deps at module load
 
@@ -106,9 +119,15 @@ async def _generate_farewell_with_summary_offer(chat_state, *, trace_id: str) ->
 
 
 async def _generate_personalized_summary(chat_state, *, trace_id: str) -> str:
-    """
-    Makes an LLM call over the full conversation history to produce a short,
-    warm, first-person personalized summary (3-4 sentences).
+    """Draft a short, first-person summary from the grouped conversation history.
+
+    Args:
+        chat_state (ChatState | None): History to summarize, if available.
+        trace_id (str): Correlation label used in closing logs.
+
+    Returns:
+        str: Personalized summary or fallback text for missing history/client or
+        failed generation. Does not change dialogue flags.
     """
 
     if cf.openai_client is None:
@@ -159,13 +178,25 @@ async def _generate_personalized_summary(chat_state, *, trace_id: str) -> str:
 
 
 def _check_yes(text: str) -> bool:
+    """Return bool indicating whether text (str) contains an affirmative phrase.
+
+    This is a broad keyword check for summary choices, not semantic classification.
+    """
     return bool(re.search(r"\b(yes|yeah|yep|yup|sure|okay|ok|please|go ahead|absolutely|definitely)\b", text, re.IGNORECASE))
 
 def _check_no(text: str) -> bool:
+    """Return bool indicating whether text (str) contains a negative phrase.
+
+    The caller checks affirmative phrases first when a message contains both.
+    """
     return bool(re.search(r"\b(no|nope|nah|not really|never mind|nevermind|skip|don'?t)\b", text, re.IGNORECASE))
 
 def _fallback_final_turn(user_text: str) -> _FinalTurnResult:
-    """Keep the closing flow bounded if the LLM is unavailable."""
+    """Keep the closing flow bounded without an LLM call.
+
+    user_text (str) is the latest utterance. Returns _FinalTurnResult with
+    yes_only for a standalone affirmative, otherwise other with a fixed reply.
+    """
     text = user_text.strip()
 
     if re.fullmatch(
@@ -188,7 +219,20 @@ async def _interpret_final_turn(
     *,
     trace_id: str,
 ) -> _FinalTurnResult:
-    """Classify the last message and draft one brief, relevant reply."""
+    """Classify the last message and draft one brief, relevant reply.
+
+    Args:
+        context_buffer (list[tuple[str, str, float]]): Role, text, and timestamp
+            entries; the last four supply recent closing exchanges.
+        user_text (str): Latest finalized user utterance to classify and answer.
+        rag_state (dict): Attempt-local state containing optional _chat_state
+            history; this helper does not update its closing flags.
+        trace_id (str): Correlation label used in closing logs.
+
+    Returns:
+        _FinalTurnResult: question with an answer, yes_only to invite the actual
+        question, or other with an acknowledgement. Errors use the local fallback.
+    """
 
     chat_state = rag_state.get("_chat_state")
     full_context = (
@@ -258,12 +302,23 @@ async def handle_closing_turn(
     *,
     trace_id: str = "N/A",
 ) -> tuple[str, bool]:
-    """
-    Called by _execute_response in chatHelpers.py when rag_state["_closing_flow_active"] is True.
+    """Prepare one reply after the activity enters its closing workflow.
 
-    Returns (response_text, close_after).
-    - close_after=True: ChatHelpers will send {"type": "chat_ended"} and call consumer.close()
-    - close_after=False: WebSocket stays open, waiting for the user's next message
+    Args:
+        context_buffer (list[tuple[str, str, float]]): Recent role/text/timestamp
+            entries, including closing exchanges outside grouped activity history.
+        user_text (str): Finalized summary choice, final question, or comment.
+        rag_state (dict): Attempt-local history and phase flags, including
+            awaiting_summary_choice, awaiting_final_response, and awaiting_question.
+        trace_id (str): Closing-log correlation label; defaults to "N/A".
+
+    Returns:
+        tuple[str, bool]: response_text and close_after. True requests chat_ended
+        and socket closure after reply delivery; False waits for another user turn.
+
+    Mutates phase flags in the supplied dict, not the socket. The harness adopts
+    these changes only after saving the reply; it calls this helper when
+    _closing_flow_active is True.
     """
     chat_state = rag_state.get("_chat_state")
 

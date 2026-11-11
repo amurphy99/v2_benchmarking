@@ -5,6 +5,7 @@ from .state_specs import CLOSE_SESSION_STATE, StateSpec
 
 
 def normalize(text: str) -> str:
+    """Return str text case-folded with whitespace collapsed; keep punctuation."""
     return " ".join(text.casefold().split())
 
 
@@ -14,6 +15,21 @@ def assess_goals(
     observations: list[dict],
     evidence: list[dict],
 ) -> dict:
+    """Return a copied goal ledger extended with textually grounded evidence.
+
+    Args:
+        spec (StateSpec): Required goal IDs and the actor responsible for each.
+        progress (dict): Existing goal-ID to status/evidence mapping for this state.
+        observations (list[dict]): Messages with id, role, and text, supplied by
+            the caller from saved history plus the current user message.
+        evidence (list[dict]): Planner claims with goal_id, message_id, and quote.
+
+    Returns:
+        dict: Prior progress plus accepted claims marked satisfied. Invalid IDs,
+        actor mismatches, and quotes absent after normalization are ignored.
+
+    Inputs are not mutated. Matching a quote does not verify semantic fulfillment.
+    """
     result = dict(progress)
     goals = {goal.id: goal for goal in spec.goals}
     messages = {item["id"]: item for item in observations}
@@ -40,6 +56,14 @@ def assess_goals(
 
 @dataclass(frozen=True)
 class Transition:
+    """Describe a validated proposal; constructing it does not commit state.
+
+    Attributes:
+        target (str): State to enter after saving, or the current state to stay.
+        reason (str): Runtime decision such as continue, goals_met, or turn_limit.
+        skipped_goals (tuple[str, ...]): Unmet goals left behind on an exit.
+    """
+
     target: str
     reason: str
     skipped_goals: tuple[str, ...] = ()
@@ -55,6 +79,24 @@ def choose_transition(
     plan: dict,
     user_text: str,
 ) -> Transition:
+    """Choose an exit or continued state using grounded evidence and reply limits.
+
+    Args:
+        current (str): State being answered.
+        next_state (str): Ordered successor from the database, or close_session.
+        spec (StateSpec): Required goals and minimum/maximum saved-reply counts.
+        progress (dict): Current state's validated goal-ID to status mapping.
+        turns (int): Replies in this state including the reply being proposed.
+        plan (dict): Planner's requested next_state, transition_reason, and exit_quote.
+        user_text (str): Current finalized utterance used to ground explicit exits.
+
+    Returns:
+        Transition: Grounded user exits take priority; otherwise advance on goals
+        plus minimum replies and an allowed proposal, force exit at the maximum,
+        or stay. Skipped goals remain distinct from satisfied goals.
+
+    This function neither mutates inputs nor commits the prospective reply count.
+    """
     missing = tuple(
         goal.id
         for goal in spec.goals
