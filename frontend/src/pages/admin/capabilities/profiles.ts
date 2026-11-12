@@ -82,9 +82,10 @@ const WEBAPP_PROFILES: Record<string, CapabilityProfile> = {
         name     : "Web Avatar (Buddy)",
         sections : [{title: "Emotions", options: asEmotions(LLM_MOODS)}, {title: "Animations", options: asAnimations(Object.keys(buddyAnimations))}],
     },
-    // Code-drawn face, plain and with its eyebrows always showing (same buttons for both)
+    // Code-drawn face, plain and with its eyebrows always showing, and the robot drawn from the same face (same buttons for all three)
     smiley         : smileyProfile("Web Avatar (Smiley)"),
     "smiley-brows" : smileyProfile("Web Avatar (Smiley + eyebrows)"),
+    robot          : smileyProfile("Web Avatar (Robot)"),
 };
 
 // Smiley buttons: its three categories of public actions (faces labeled with the emoji they borrow from), then the

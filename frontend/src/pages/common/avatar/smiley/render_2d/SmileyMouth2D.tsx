@@ -22,10 +22,9 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { FaceState                                                    } from "../state/faceState";
-import type { SmileyPaint                                                  } from "./faceDrawing2D";
-import      { SMILEY_MOUTH_OUTLINE_W, SMILEY_MOUTH_Y, SMILEY_RIBBON_EDGE_W } from "./faceDrawing2D";
-import      { mouthShape                                                   } from "./faceDrawing2D";
+import type { FaceState                        } from "../state/faceState";
+import type { FaceLayout, SmileyPaint          } from "./faceDrawing2D";
+import      { mouthShape, SMILEY_RIBBON_EDGE_W } from "./faceDrawing2D";
 
 // Openness below which the opening is not drawn (the closed-mouth line covers it)
 const SMILEY_MOUTH_MIN_OPEN = 0.02;
@@ -38,16 +37,17 @@ const SMILEY_TEETH_HEXES = ["#ffffff", "#f6f2ec", "#d8cebf"] as const;
 // Smiley Mouth (2D)
 // --------------------------------------------------------------------------------
 // The mouth, in the feature group's coordinates
-export default function SmileyMouth2D({face, paint}: {
-    face  : FaceState;     // Combined face for this frame
-    paint : SmileyPaint;   // Gradient fills from `SmileyFace2D`
+export default function SmileyMouth2D({face, paint, layout}: {
+    face   : FaceState;     // Combined face for this frame
+    paint  : SmileyPaint;   // Fills from the face renderer (`SmileyFace2D`, or the robot's `RobotFace2D`)
+    layout : FaceLayout;    // Sizes the mouth is drawn at
 }): ReactElement {
     // Clip and teeth-shading ids, unique per avatar on the page (React's ids may hold characters `url(#...)` rejects)
     const baseId        = useId().replace(/[^a-zA-Z0-9_-]/g, "");
     const clipId        = `smiley-mouth-${baseId}`;
     const topTeethId    = `smiley-top-teeth-${baseId}`;
     const bottomTeethId = `smiley-bottom-teeth-${baseId}`;
-    const mouth         = mouthShape(face);
+    const mouth         = mouthShape(face, layout);
 
     // Shade one row of teeth between two heights, in the mouth's coordinates
     const teethShade = (id: string, [fromY, toY]: [number, number]): ReactElement => (
@@ -57,7 +57,7 @@ export default function SmileyMouth2D({face, paint}: {
     );
 
     return (
-        <g transform={`translate(${face.mouthSide} ${SMILEY_MOUTH_Y + face.mouthShift})`}>
+        <g transform={`translate(${face.mouthSide * layout.unit} ${layout.mouthY + (face.mouthShift * layout.unit)})`}>
             {/* Tapered closed-mouth line, under any small opening until the opening covers it */}
             {(mouth.lineFade > 0) ? (
                 <path d={mouth.line} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={mouth.lineFade} />
@@ -79,12 +79,12 @@ export default function SmileyMouth2D({face, paint}: {
                         {(face.tongue > 0) ? <ellipse {...mouth.tongue} fill={paint.tongue} opacity={face.tongue} /> : null}
                         {(face.teethTop    > 0) ? <path d={mouth.topTeeth}    fill={`url(#${topTeethId})`}    /> : null}
                         {(face.teethBottom > 0) ? <path d={mouth.bottomTeeth} fill={`url(#${bottomTeethId})`} /> : null}
-                        {(face.teethGaps   > 0) ? <path d={mouth.toothGaps}   fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} opacity={face.teethGaps} /> : null}
+                        {(face.teethGaps   > 0) ? <path d={mouth.toothGaps}   fill="none" stroke={paint.feature} strokeWidth={layout.mouthOutlineW} opacity={face.teethGaps} /> : null}
                         {((face.teethTop > 0) && (face.teethBottom > 0)) ? (
-                            <path d={mouth.rowLine} fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} strokeLinecap="round" opacity={Math.min(face.teethTop, face.teethBottom)} />
+                            <path d={mouth.rowLine} fill="none" stroke={paint.feature} strokeWidth={layout.mouthOutlineW} strokeLinecap="round" opacity={Math.min(face.teethTop, face.teethBottom)} />
                         ) : null}
                     </g>
-                    <path d={mouth.opening} fill="none" stroke={paint.feature} strokeWidth={SMILEY_MOUTH_OUTLINE_W} strokeLinejoin="round" />
+                    <path d={mouth.opening} fill="none" stroke={paint.feature} strokeWidth={layout.mouthOutlineW} strokeLinejoin="round" />
                 </g>
             ) : null}
 

@@ -24,6 +24,8 @@ Each animation frame combines several layers into one `FaceState`:
      Ponder
   5) blinks at random gaps, or when a plan asks for one
   6) the mouth following the voice level the page reports
+  7) how far the antenna tips trail the head (`antenna.ts`), for avatars drawn
+     with antennas
 
 Actions arrive two ways. A `robot_action` comes through `performAction` and is
 played by its name's category (`smileyActions.ts`): an expression, a movement,
@@ -53,6 +55,7 @@ import      { expressionFace, SMILEY_DEFAULT_RESTING_EXPRESSION, SMILEY_SLEEPING
 import type { FaceMotion, MotionOffsets                                               } from "./actions/faceMotions";
 import      { addOffsets, clampRange, easeStep, randomBetween, smoothstep             } from "./actions/faceMotions";
 import      { resolveSmileyAction                                                     } from "./actions/smileyActions";
+import      { createAntennaSway                                                       } from "./behavior/antenna";
 import      { createBreathing, SMILEY_SPEECH_BREATH_PEAK, SMILEY_SPEECH_EXHALE_MS     } from "./behavior/breathing";
 import      { createGaze                                                              } from "./behavior/gaze";
 import      { createMapTask                                                           } from "./behavior/mapTask";
@@ -150,6 +153,9 @@ export function useFaceController(
     const breathing = useMemo(createBreathing, []);
     const mapTask   = useMemo(createMapTask,   []);
     const gaze      = useMemo(() => createGaze(performance.now()), []);
+
+    // How far the antenna tips trail the head (for avatars drawn with antennas)
+    const antennaSway = useMemo(createAntennaSway, []);
 
     // Inputs from the page
     const conversationRef = useRef<ConversationState>("idle");
@@ -416,16 +422,24 @@ export function useFaceController(
             listening += (listeningTarget         - listening) * easeStep( SMILEY_STATE_EASE_PER_SEC, dtSec);
             speech    += (speechTargetRef.current - speech   ) * easeStep(SMILEY_SPEECH_EASE_PER_SEC, dtSec);
 
-            // 7) Combine the layers into the face the renderer draws (its own hands fade out while it holds the map)
+            // 7) Where the head is this frame, and how far the antenna tips trail it
+            const pose = {
+                turnX   : expression.turnX   + (offsets.turnX   ?? 0) + look.turnX,
+                turnY   : expression.turnY   + (offsets.turnY   ?? 0) + look.turnY,
+                tilt    : expression.tilt    + (offsets.tilt    ?? 0) + look.tilt,
+                offsetX : expression.offsetX + (offsets.offsetX ?? 0),
+                offsetY : expression.offsetY + (offsets.offsetY ?? 0),
+            };
+            const sway = antennaSway(pose, dtSec);
+
+            // 8) Combine the layers into the face the renderer draws (its own hands fade out while it holds the map)
             setFace({
                 ...expression,
+                ...pose,
                 gazeX         : clampRange(expression.gazeX + look.eyes.x + (offsets.gazeX ?? 0), -1, 1),
                 gazeY         : clampRange(expression.gazeY + look.eyes.y + (offsets.gazeY ?? 0), -1, 1),
-                turnX         : expression.turnX   + (offsets.turnX   ?? 0) + look.turnX,
-                turnY         : expression.turnY   + (offsets.turnY   ?? 0) + look.turnY,
-                tilt          : expression.tilt    + (offsets.tilt    ?? 0) + look.tilt,
-                offsetX       : expression.offsetX + (offsets.offsetX ?? 0),
-                offsetY       : expression.offsetY + (offsets.offsetY ?? 0),
+                antennaSwayX  : sway.x,
+                antennaSwayY  : sway.y,
                 objects       : fadeHands(applyObjectOffsets(expression.objects, offsets.objects ?? {}), 1 - map.held),
                 eyeOpen       : expression.eyeOpen * blink,
                 eyeScale      : expression.eyeScale + (listening * SMILEY_LISTENING_EYE_BOOST),
@@ -444,7 +458,7 @@ export function useFaceController(
         // Run until the avatar unmounts
         frameId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frameId);
-    }, [browsAlways, breathing, gaze, mapTask]);
+    }, [browsAlways, breathing, gaze, mapTask, antennaSway]);
 
     return {face, handle};
 }

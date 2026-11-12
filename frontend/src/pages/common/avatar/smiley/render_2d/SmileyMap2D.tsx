@@ -16,7 +16,8 @@ whole avatar (`offsetX`, `offsetY`), but not with the head's tilt, turn, or
 breathing, and it is lit from the top of the screen. `mapRaise` moves it
 between lowered (top edge at the chin, the mouth showing) and raised (top edge
 just under the eyes, which stay above it even at their lowest look at the map).
-`map` slides it up into view from below the frame as it is picked up.
+`map` slides it up into view from below the frame as it is picked up. An avatar
+whose eyes sit elsewhere (the robot) passes its own raised height.
 
 */
 import type { ReactElement } from "react";
@@ -93,9 +94,10 @@ const SMILEY_CARD_RULE_INSET   = 8;     // Ruled lines stop short of the sides
 // Smiley Map (2D)
 // ================================================================================
 // The held map or card and its fists, in the face's outer coordinates (outside the head's tilt and turn)
-export default function SmileyMap2D({face, paint}: {
-    face  : FaceState;     // Combined face for this frame (`mapKind`, `map`, `mapRaise`, and the whole-avatar offsets)
-    paint : SmileyPaint;   // Fills and hand shading colors from `SmileyFace2D`
+export default function SmileyMap2D({face, paint, raisedTop = SMILEY_MAP_RAISED_TOP}: {
+    face       : FaceState;            // Combined face for this frame (`mapKind`, `map`, `mapRaise`, and the whole-avatar offsets)
+    paint      : SmileyPaint;          // Fills and hand shading colors from the face renderer
+    raisedTop? : number | undefined;   // Height of its top edge when raised (the smiley's, unless another avatar passes its own)
 }): ReactElement {
     // Paint ids, unique per map on the page (React's ids may hold characters `url(#...)` rejects)
     const baseId  = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -103,7 +105,7 @@ export default function SmileyMap2D({face, paint}: {
     const clipId  = `smiley-map-clip-${baseId}`;
 
     // Its top edge between lowered and raised, dropped below the frame until it is fully held
-    const top   = SMILEY_MAP_LOWERED_TOP + ((SMILEY_MAP_RAISED_TOP - SMILEY_MAP_LOWERED_TOP) * face.mapRaise) + ((1 - face.map) * SMILEY_MAP_AWAY_DROP);
+    const top   = SMILEY_MAP_LOWERED_TOP + ((raisedTop - SMILEY_MAP_LOWERED_TOP) * face.mapRaise) + ((1 - face.map) * SMILEY_MAP_AWAY_DROP);
     const halfW = SMILEY_MAP_W / 2;
 
     // Which paper it is

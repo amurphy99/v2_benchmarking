@@ -30,16 +30,19 @@ import type { ReactElement } from "react";
 import      { useId        } from "react";
 
 // From this project
-import type { FaceObject, HandObject, HeartObject } from "../objects/faceObjects";
-import type { FaceState, RGB                      } from "../state/faceState";
-import        SmileyExtras2D                        from "./SmileyExtras2D";
-import        SmileyEye2D                           from "./SmileyEye2D";
-import        SmileyHand2D                          from "./SmileyHand2D";
-import        SmileyHeart2D                         from "./SmileyHeart2D";
-import        SmileyMap2D                           from "./SmileyMap2D";
-import        SmileyMouth2D                         from "./SmileyMouth2D";
-import type { SmileyPaint                         } from "./faceDrawing2D";
-import      { SMILEY_BLUSH_X, SMILEY_BLUSH_Y, SMILEY_FACE_R, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
+import type { FaceObject, HandObject, HeartObject  } from "../objects/faceObjects";
+import type { FaceState, RGB                       } from "../state/faceState";
+import        SmileyExtras2D                         from "./SmileyExtras2D";
+import        SmileyEye2D                            from "./SmileyEye2D";
+import        SmileyHand2D                           from "./SmileyHand2D";
+import        SmileyHeart2D                          from "./SmileyHeart2D";
+import        SmileyMap2D                            from "./SmileyMap2D";
+import        SmileyMouth2D                          from "./SmileyMouth2D";
+import type { SmileyPaint                          } from "./faceDrawing2D";
+import      { SMILEY_FACE_LAYOUT, SMILEY_FACE_R    } from "./faceDrawing2D";
+import      { mixRgb, rgbString                    } from "./gradients2D";
+import      { topOverlayGradient, verticalGradient } from "./gradients2D";
+import      { SMILEY_BLUSH_X, SMILEY_BLUSH_Y, SMILEY_ICICLE_PATHS, SMILEY_TURN_SHIFT_X, SMILEY_TURN_SHIFT_Y } from "./faceDrawing2D";
 
 // Room around the face in the viewport
 const SMILEY_VIEW_TOP    = 55;   // Above the face, for bounces and the Zs
@@ -247,9 +250,9 @@ export default function SmileyFace2D({face}: {
                     <ellipse cx={ SMILEY_BLUSH_X} cy={SMILEY_BLUSH_Y} rx={SMILEY_BLUSH_RX} ry={SMILEY_BLUSH_RY} fill={paint.blush} opacity={face.blush} />
 
                     {/* Eyes, mouth, and animated extras */}
-                    <SmileyEye2D    side={-1} face={face} paint={paint} />
-                    <SmileyEye2D    side={ 1} face={face} paint={paint} />
-                    <SmileyMouth2D            face={face} paint={paint} />
+                    <SmileyEye2D    side={-1} face={face} paint={paint} layout={SMILEY_FACE_LAYOUT} />
+                    <SmileyEye2D    side={ 1} face={face} paint={paint} layout={SMILEY_FACE_LAYOUT} />
+                    <SmileyMouth2D            face={face} paint={paint} layout={SMILEY_FACE_LAYOUT} />
                     <SmileyExtras2D           face={face} paint={paint} />
 
                     {/* Objects: hearts, then the hands in front of everything (a hand's key holds its shape while two crossfade) */}
@@ -279,40 +282,3 @@ export default function SmileyFace2D({face}: {
 function isHeart(object: FaceObject): object is HeartObject { return object.kind === "heart"; }
 function isHand (object: FaceObject): object is HandObject  { return object.kind === "hand";  }
 
-
-// --------------------------------------------------------------------------------
-// Gradient Helpers
-// --------------------------------------------------------------------------------
-// Top-to-bottom gradient across whatever shape uses it, through evenly spaced colors
-function verticalGradient(id: string, hexes: readonly string[]): ReactElement {
-    return (
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            {hexes.map((hex: string, i: number) => <stop key={hex} offset={`${(100 * i) / (hexes.length - 1)}%`} stopColor={hex} />)}
-        </linearGradient>
-    );
-}
-
-// Overlay color strong over the top of a shape, holding most of its strength to 30%, then gone by `end`
-function topOverlayGradient(id: string, hex: string, end: string): ReactElement {
-    return (
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"  stopColor={hex} stopOpacity={1}   />
-            <stop offset="30%" stopColor={hex} stopOpacity={0.8} />
-            <stop offset={end} stopColor={hex} stopOpacity={0}   />
-        </linearGradient>
-    );
-}
-
-
-// --------------------------------------------------------------------------------
-// Color Helpers
-// --------------------------------------------------------------------------------
-// Move `amount` of the way from one color to another
-function mixRgb([r, g, b]: RGB, [toR, toG, toB]: RGB, amount: number): RGB {
-    return [r + ((toR - r) * amount), g + ((toG - g) * amount), b + ((toB - b) * amount)];
-}
-
-// CSS color for an RGB triple
-function rgbString([r, g, b]: RGB): string {
-    return `rgb(${Math.round(r)} ${Math.round(g)} ${Math.round(b)})`;
-}

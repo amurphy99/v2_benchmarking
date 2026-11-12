@@ -13,7 +13,7 @@ import      { useId        } from "react";
 
 // From this project
 import type { FaceState                                                                       } from "../state/faceState";
-import type { SmileyPaint                                                                     } from "./faceDrawing2D";
+import type { FaceLayout, SmileyPaint                                                         } from "./faceDrawing2D";
 import      { SMILEY_HEART_EYE_EDGE_W, SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W           } from "./faceDrawing2D";
 import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale, spiralPath, spiralRotationDeg } from "./faceDrawing2D";
 import      { SMILEY_HEART_PATH                                                               } from "./objectDrawing2D";
@@ -28,10 +28,11 @@ const SMILEY_HEART_EYE_GLOSS_OPACITY = 0.6;
 // Smiley Eye (2D)
 // --------------------------------------------------------------------------------
 // One eye and its brow, in the feature group's coordinates
-export default function SmileyEye2D({side, face, paint}: {
-    side  : number;        // -1 for the left eye, 1 for the right
-    face  : FaceState;     // Combined face for this frame
-    paint : SmileyPaint;   // Gradient fills from `SmileyFace2D`
+export default function SmileyEye2D({side, face, paint, layout}: {
+    side   : number;        // -1 for the left eye, 1 for the right
+    face   : FaceState;     // Combined face for this frame
+    paint  : SmileyPaint;   // Gradient fills from `SmileyFace2D`
+    layout : FaceLayout;    // Sizes the eye and brow are drawn at
 }): ReactElement {
     // Eyelid clip ids, unique per eye on the page (React's ids may hold characters `url(#...)` rejects)
     const baseId         = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -39,14 +40,14 @@ export default function SmileyEye2D({side, face, paint}: {
     const lowerLidClipId = `smiley-lower-lid-${baseId}`;
 
     // The open eye fades out as any other eye style fades in
-    const eye         = eyeGeometry(side, face);
+    const eye         = eyeGeometry(side, face, layout);
     const openOpacity = (1 - face.eyeArc) * (1 - face.spiral) * (1 - face.heartEyes);
 
     return (
         <g>
             {/* Tapered eyebrow */}
             {(face.brows > 0) ? (
-                <path d={browPath(side, face)} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={face.brows} />
+                <path d={browPath(side, face, layout)} fill={paint.feature} stroke={paint.feature} strokeWidth={SMILEY_RIBBON_EDGE_W} strokeLinejoin="round" opacity={face.brows} />
             ) : null}
 
             <g transform={`translate(${eye.cx} ${eye.cy})`}>

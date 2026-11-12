@@ -28,7 +28,7 @@ The READMEs below cover each part, in a sensible reading order.
 | 5 | [`map_task/README.md`](../backend/chat_app/websocket/harnesses/map_task/README.md) | The Map Task: map file format, conditions and cues, what the clients get, the HCRC maps |
 | 6 | [`active_listening/README.md`](../backend/chat_app/websocket/harnesses/active_listening/README.md) | The active-listening chat type, the reference harness design |
 | 7 | [`avatar/README.md`](../frontend/src/pages/common/avatar/README.md) | How the frontend runs plans, the avatar demo page, a file map, and gotchas |
-| 8 | [`avatar/smiley/README.md`](../frontend/src/pages/common/avatar/smiley/README.md) | The Smiley avatar's face, movements, and props |
+| 8 | [`avatar/smiley/README.md`](../frontend/src/pages/common/avatar/smiley/README.md) | The Smiley avatar's face, movements, and props, and the Robot avatar drawn from the same face |
 | 9 | [`consumers/README.md`](../backend/chat_app/websocket/consumers/README.md) | The shared chat pipeline the harnesses plug into |
 | 10 | [`chat-listener/README.md`](../frontend/src/hooks/chat-listener/README.md) | The admin listener socket and its frames, including `task_monitor` |
 | 11 | [`FRONTEND_CAPABILITIES.md`](../frontend/src/pages/admin/FRONTEND_CAPABILITIES.md) | The admin action buttons and what each client can do with them |

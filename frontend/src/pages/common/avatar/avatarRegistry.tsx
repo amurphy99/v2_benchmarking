@@ -47,6 +47,7 @@ import type { ReactElement, Ref } from "react";
 // From this project
 import type { AvatarSetup, PlanCatalog, StepActions } from "@/hooks/live-chat/avatarPlanFrames";
 import        GltfRobotAvatar                         from "./GltfRobotAvatar";
+import        RobotAvatar                             from "./robot/RobotAvatar";
 import        SmileyAvatar                            from "./smiley/SmileyAvatar";
 import      { SMILEY_EXPRESSION_LIST                } from "./smiley/actions/faceExpressions";
 import      { SMILEY_PLAN_CATALOG                   } from "./smiley/actions/smileyActions";
@@ -141,8 +142,18 @@ const SMILEY_BROWS_AVATAR: AvatarEntry = {
     render         : (props: AvatarProps): ReactElement => <SmileyAvatar browsAlways {...props} />,
 };
 
+// The smiley's face controller drawn as a silver robot with a screen for a face (the same actions, resting faces, and plans)
+const ROBOT_AVATAR: AvatarEntry = {
+    id             : "robot",
+    label          : "Robot (2D)",
+    features       : ["gaze", "conversationState", "speechLevel", "speechGaze", "sleep"],
+    restingOptions : SMILEY_RESTING_OPTIONS,
+    plans          : SMILEY_PLAN_CATALOG,
+    render         : (props: AvatarProps): ReactElement => <RobotAvatar {...props} />,
+};
+
 // Every avatar, in picker order
-export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, SMILEY_BROWS_AVATAR, QT_AVATAR, BUDDY_AVATAR];
+export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, SMILEY_BROWS_AVATAR, ROBOT_AVATAR, QT_AVATAR, BUDDY_AVATAR];
 
 // Find an avatar by id (a model choice with no entry shows Smiley, the backend's default model)
 export function getAvatarEntry(id: string): AvatarEntry {

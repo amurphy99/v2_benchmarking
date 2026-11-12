@@ -34,6 +34,7 @@ the Smiley.
 |---|---|---|---|---|
 | `smiley` | A code-drawn 2D emoji face, redrawn every animation frame | yes | yes | gaze, conversation state, speech level, speech gaze, sleep |
 | `smiley-brows` | The same face, with its eyebrows always showing | yes | yes | the same |
+| `robot` | The same face drawn as a silver robot: a wide head with antennas, and the face in light on a dark screen | yes | yes | the same |
 | `qt`, `buddy` | Clip-based 3D models of the two robots, shown in the web app | yes (their own clip names) | no | none |
 
 * `AvatarEntry.plans` is the avatar's **plan catalog**: the names a plan may
@@ -41,6 +42,14 @@ the Smiley.
   rejected.
 * `AvatarEntry.features` lists the optional handle methods it implements. An
   avatar without one simply doesn't have it, so pages call them freely.
+* The Robot is the Smiley's face controller with its own renderer (`robot/`),
+  so everything below about the Smiley's actions, plans, and setups holds for
+  it too. `smiley/README.md` covers what the two share and where the Robot is
+  tuned.
+* `robot` and `smiley-brows` are not `UserSettings.modelChoice` values, so they
+  show on the avatar demo page only. A participant can be given the Robot once
+  the backend's `MODEL_CHOICES` (and `AVATAR_MODEL_CHOICES` in `api/models.ts`)
+  list it.
 * The physical QT and Buddy robots are separate clients with their own code.
   They only get `robot_action`.
 
@@ -556,7 +565,10 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   │   ├── useFaceController.ts      # The frame loop, the handle, the plan levers, and setups
      │   │   ├── plans/smileyStepRunner.ts # One plan step, through the levers
      │   │   ├── actions/smileyActions.ts  # Name lookup, the moods, and the plan catalog
-     │   │   └── behavior/                 # Gaze and poses, the map, breathing, listening motions
+     │   │   └── behavior/                 # Gaze and poses, the map, breathing, listening motions, antenna sway
+     │   ├── robot/                        # The Robot: the Smiley's face controller, drawn as a silver robot
+     │   │   ├── RobotAvatar.tsx           # Entry component: the controller as the avatar handle, drawn by its renderer
+     │   │   └── render_2d/                # Its renderer: head, screen, eyes, colors (the mouth and shape math are the Smiley's)
      │   └── GltfRobotAvatar.tsx           # The 3D QT and Buddy avatars (with GltfRobotScene, QTModel, BuddyModel)
      │
      ├── chat/

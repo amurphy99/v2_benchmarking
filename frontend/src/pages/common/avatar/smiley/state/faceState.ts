@@ -10,7 +10,13 @@ spirals, hearts), teeth, and the extras are crossfade amounts for the same
 reason. The one exception is `objects`, the hands and hearts the face shows:
 each is placed by its face and blends by its own rules (`objects/faceObjects`).
 The held prop's fields (`mapKind`, `map`, `mapRaise`) never blend either: no named
-face sets them, and the controller's prop layer fills them in every frame.
+face sets them, and the controller's prop layer fills them in every frame. The
+antenna sway (`antennaSwayX`, `antennaSwayY`) is filled in the same way.
+
+Some fields are for avatars drawn with their own lights and antennas (the Robot,
+`robot/`): `glow`, `antennaPerk`, the antenna sway, and `faceTint`, which tells
+such an avatar how much of `faceRgb` is an emotion's color to tint its lights
+with. The Smiley's renderer ignores them.
 
 Every named face starts from `SMILEY_BASE_FACE` and lists only what it changes
 (`FaceChanges`, turned into a full face by `fullFace`): the expressions
@@ -98,9 +104,18 @@ export type FaceState = {
     icicles   : number;   // Icicles hanging from the bottom of the face, 0 to 1
     zzz       : number;   // Floating sleep Zs, 0 to 1
 
+    // Lights and antennas (for avatars drawn with them)
+    glow        : number;   // Brightness of the avatar's own lights, 0 (off) to 1
+    antennaPerk : number;   // Antennas, -1 (drooping) to 1 (perked up)
+
+    // How far the antenna tips trail the head, in face units (set by the antenna layer, never by a face)
+    antennaSwayX : number;
+    antennaSwayY : number;
+
     // Color and size
     blush    : number;   // Cheek blush, 0 to 1
     faceRgb  : RGB;      // Face fill color
+    faceTint : number;   // How much of `faceRgb` is an emotion's color, 0 to 1 (a face that sets `faceRgb` sets this to 1)
     warmEdge : number;   // Face edge shading, 1 (warm orange, like iOS yellow faces) to 0 (just darker)
     scale    : number;   // Whole-face size multiplier
     offsetX  : number;   // Sideways shift in face radii (positive is right)
@@ -113,17 +128,18 @@ export type FaceState = {
 };
 
 // What a named face writes: changes to the base face, with its objects placed by spot (`objects/faceObjects`)
-export type FaceChanges = Partial<Omit<FaceState, "objects" | "mapKind" | "map" | "mapRaise">> & {objects?: ObjectPlacement[]};
+export type FaceChanges = Partial<Omit<FaceState, "objects" | "mapKind" | "map" | "mapRaise" | "antennaSwayX" | "antennaSwayY">> & {objects?: ObjectPlacement[]};
 
-// Number fields that blend (everything but the color, the objects, the held prop, and the clocks)
-type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "objects" | "mapKind" | "map" | "mapRaise" | "timeSec" | "expressionSec">;
+// Number fields that blend (everything but the color, the objects, the held prop, the antenna sway, and the clocks)
+type FaceNumberKey = Exclude<keyof FaceState, "faceRgb" | "objects" | "mapKind" | "map" | "mapRaise" | "antennaSwayX" | "antennaSwayY" | "timeSec" | "expressionSec">;
 const FACE_NUMBER_KEYS: FaceNumberKey[] = [
     "gazeX", "gazeY", "turnX", "turnY", "tilt", "wander",
     "eyeOpen", "eyeScale", "eyeInset", "eyeOval", "lidAngle", "squint", "eyeArc", "eyeArcBend", "spiral", "heartEyes",
     "brows", "browRaise", "browAngle", "browAsym", "browPinch",
     "mouthCurve", "mouthOpen", "mouthWidth", "mouthWave", "mouthSquare", "mouthRound", "mouthFlatTop", "mouthTopBow", "mouthShift", "mouthSide", "mouthSlant", "mouthCircle", "mouthEyeFill", "teethTop", "teethBottom", "teethGaps", "tongue",
     "tear", "fearShade", "frost", "icicles", "zzz",
-    "blush", "warmEdge", "scale", "offsetX", "offsetY",
+    "glow", "antennaPerk",
+    "blush", "faceTint", "warmEdge", "scale", "offsetX", "offsetY",
 ];
 
 // Parts a face shows fully at any strength (shown halfway, a brow or a tear looks like a ghost)
@@ -182,8 +198,13 @@ export const SMILEY_BASE_FACE: FaceState = {
     frost         : 0,
     icicles       : 0,
     zzz           : 0,
+    glow          : 1,
+    antennaPerk   : 0,
+    antennaSwayX  : 0,
+    antennaSwayY  : 0,
     blush         : 0,
     faceRgb       : [...SMILEY_YELLOW_RGB],
+    faceTint      : 0,
     warmEdge      : 1,
     scale         : 1,
     offsetX       : 0,

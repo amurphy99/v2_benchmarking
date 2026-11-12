@@ -91,7 +91,7 @@ and read at `pages/chat/Chat.tsx`). The models share no animation names at all:
 |---|---|
 | `buddy` | `DANCE`, `SHAKE NO`, `EMBARRASSED`, `HEAD TILT`, `NOD YES` (5 clips) |
 | `qt` | `Celebration`, `Dancing`, `Nodding Yes`, `Thinking`, … (17 clips) |
-| `smiley`, `smiley-brows` | Movements: `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions). Animations: `Ponder`, `Yawn`, `Glance Up Right`, `Glance Up Left` |
+| `smiley`, `smiley-brows`, `robot` | Movements: `Nod`, `Shake No`, `Look Left`, `Look Right`, `Look Around`, `Sway`, `Bounce`, `Head Tilt` (8 code-drawn motions). Animations: `Ponder`, `Yawn`, `Glance Up Right`, `Glance Up Left` |
 
 The web avatars and the shared `performAction()` contract they follow live in
 `pages/common/avatar/` (`avatarRegistry.tsx`). The public `/avatar-demo` page shows each web
