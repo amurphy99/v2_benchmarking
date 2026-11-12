@@ -22,7 +22,7 @@ python manage.py seed_demo
 
 Three values in `backend/.env` control which optional fixture datasets are ensured:
 ```text
-SEED_UI_SAMPLE_DATA       = true   # creates missing random UI chats/reminders/RAG fixtures
+SEED_UI_SAMPLE_DATA       = true   # creates missing random UI chats/reminders
 SEED_ANALYZED_CHAT_DATA   = true   # creates the fixed analyzed chats when absent
 SEED_TRANSCRIPT_CHAT_DATA = true   # creates each missing transcript/audio fixture
 ```
@@ -40,7 +40,7 @@ These are create-if-missing settings, not replacement switches. They are safe to
 | Primary and secondary admins | Missing Django users, configured names/permissions/passwords, and workshop caregiver access | Accounts, profiles they own or can access, chats, settings, and recordings |
 | Workshop demo login | Missing user/account/profile and individually missing transcript fixtures | Existing webapp chats, transcript chats, and recording objects |
 | Buddy robot login | Missing user/account/profile and configured credentials | Every chat, setting, and recording linked to Buddy |
-| Random UI fixture owners | Missing user/account/profile, complete random-chat set when absent, and individually missing reminders/RAG rows | Existing sessions and later edits to reminders/RAG instructions |
+| Random UI fixture owners | Missing user/account/profile, complete random-chat set when absent, and individually missing reminders | Existing sessions and later edits to reminders |
 | Analyzed fixture owner | Missing user/account/profile and complete analyzed-chat set when absent | Real `source="webapp"` chats and existing `source="analyzed"` fixtures |
 
 The only automatic startup state transition outside this table is `close_stale_sessions`: it marks `is_active=True` sessions from the previous backend process inactive because their WebSockets no longer exist. It does not delete those sessions or their messages/audio.
@@ -66,7 +66,7 @@ backend/chat_app/management/
      │
 +    ├── transcript.py               # Loads a real chat (CSV transcript + WAV + biomarker CSVs)
 +    ├── analyzed.py                 # Loads fixed text transcripts and runs post-chat analysis
-+    ├── sample.py                   # Random demo data (chats, reminders, images, RAG, activities)
++    ├── sample.py                   # Random demo data (chats, reminders, images, activities)
      │
      └── transcript_data/
          ├── data.py                 # Constants (USERNAMES, BIOMARKERS, DEMO_MESSAGES, DEMO_IMAGES, etc.)
@@ -85,8 +85,8 @@ backend/chat_app/management/
 | `commands/seed_demo.py` | Non-destructive Django management command. Ensures persistent environment accounts, fixture owners, and any enabled create-if-missing datasets. |
 | `seed_data/transcript.py` | Reads a folder under `test_transcripts/`, creates one `ChatSession` with messages/words/biomarkers, and persists its WAV through the configured local or GCS recording store. |
 | `seed_data/analyzed.py` | Reads `examples.json`, creates one `ChatSession` per entry with messages, dummy biomarker scores, and runs `post_chat_analysis()` to fill summary / sentiment / risk fields. |
-| `seed_data/sample.py` | Exports `seed_chats`, `seed_images`, `seed_reminders`, `seed_activities`, `seed_rag_instructions`. Random demo data populated from constants in `data.py`. |
-| `seed_data/transcript_data/data.py` | Shared constants. `BIOMARKERS`, `USERNAMES`, `DEMO_MESSAGES`, `DEMO_IMAGES`, `DEMO_RAG_*`. |
+| `seed_data/sample.py` | Exports `seed_chats`, `seed_images`, `seed_reminders`, `seed_activities`. Random demo data populated from constants in `data.py`. |
+| `seed_data/transcript_data/data.py` | Shared constants. `BIOMARKERS`, `USERNAMES`, `DEMO_MESSAGES`, `DEMO_IMAGES`. |
 | `seed_data/transcript_data/examples.json` | Source data for the `analyzed.py` path. Array of `{date_offset_days, messages: [{role, content}, ...]}`. |
 
 </details>
@@ -297,7 +297,7 @@ When the backend container starts, the management commands execute the following
 
 4. **`setup_study_accounts()`** — when both study passwords are set, ensures `study_caregiver` and `study_participant_1` to `_3`, gives each participant a profile, and links all three to the caregiver. Existing links and settings are kept.
 
-5. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity, and creates missing RAG instructions without overwriting later edits.
+5. **`setup_ui_sample_data()`** — ensures `demo_patient` + `demo_caregiver` and their profile. If `SEED_UI_SAMPLE_DATA`, it creates random `source="demo"` chats only when none exist, adds individually missing named reminders, ensures the shared activity.
 
 6. **`setup_analyzed_data()`** — ensures `sample_user` + `sample_care` and their profile. If `SEED_ANALYZED_CHAT_DATA`, it creates the complete `source="analyzed"` fixture set only when that set is absent. Real `source="webapp"` sessions are never selected or deleted.
 

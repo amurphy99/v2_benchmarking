@@ -16,12 +16,11 @@ from datetime     import time, timedelta
 from random       import random
 
 # From this project
-from chat_app.models                       import Activity, AlbumImage, ChatBiomarkerScore, ChatMessage, ChatSession, Profile, RAGInstructions, Reminder
+from chat_app.models                       import Activity, AlbumImage, ChatBiomarkerScore, ChatMessage, ChatSession, Profile, Reminder
 from chat_app.services.logging_utils       import RESET, SEED_DATA, SD_H, SD_R
-from rag_vectorstore.services.vdb_services import index_single_instruction
 
 # Demo data
-from .transcript_data.data import BIOMARKERS, DEMO_IMAGES, DEMO_MESSAGES, DEMO_MESSAGES_ALERT, DEMO_RAG_DESCRIPTIONS, DEMO_RAG_INSTRUCTIONS, DEMO_RAG_NAMES
+from .transcript_data.data import BIOMARKERS, DEMO_IMAGES, DEMO_MESSAGES, DEMO_MESSAGES_ALERT
 
 
 # ================================================================================
@@ -181,36 +180,8 @@ def seed_reminders(profile: Profile, num_reminders: int = 5) -> int:
 
 
 # ================================================================================
-# Activities and RAG Instructions
+# Activities
 # ================================================================================
 def seed_activities() -> Activity:
     activity, _ = Activity.objects.get_or_create(name="memory_activity")
     return activity
-
-
-# Ensure the checked-in instructions exist without overwriting later edits
-def seed_rag_instructions() -> int:
-    memory_activity = seed_activities()
-    created_count   = 0
-
-    for index, name in enumerate(DEMO_RAG_NAMES):
-        instruction, created = RAGInstructions.objects.get_or_create(
-            name     = name,
-            activity = memory_activity,
-            defaults = {
-                "description"       : DEMO_RAG_DESCRIPTIONS[index],
-                "instructions"      : DEMO_RAG_INSTRUCTIONS[index],
-                "instruction_order" : 1,
-            },
-        )
-        created_count += int(created)
-
-        # Re-index existing rows too in case the vector database was rebuilt separately
-        try: index_single_instruction(instruction)
-        except Exception:
-            logger.exception(
-                f"{SEED_DATA} Failed to index seeded RAG instruction "
-                f"{SD_H}{instruction.id}{SD_R}.{RESET}"
-            )
-
-    return created_count

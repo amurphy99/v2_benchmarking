@@ -19,7 +19,7 @@ from datetime                      import date, timedelta
 # From this project
 from chat_app.models           import Access, Account, Goal, Profile, UserSettings
 from  ..seed_data.analyzed     import seed_analyzed_chats
-from  ..seed_data.sample       import seed_activities, seed_chats, seed_images, seed_rag_instructions, seed_reminders
+from  ..seed_data.sample       import seed_activities, seed_chats, seed_images, seed_reminders
 from  ..seed_data.transcript   import seed_transcript_chat
 from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 
@@ -28,7 +28,7 @@ from ...services.logging_utils import RESET, SEED_DATA, SD_H, SD_R
 # Configuration
 # --------------------------------------------------------------------------------
 # These are all pulled from the environment (`/backend/.env `if local)
-SEED_UI_SAMPLE_DATA       = django_settings.SEED_UI_SAMPLE_DATA        # Ensure random UI chats, reminders, activities, and RAG fixtures exist
+SEED_UI_SAMPLE_DATA       = django_settings.SEED_UI_SAMPLE_DATA        # Ensure random UI chats, reminders, activities
 SEED_ANALYZED_CHAT_DATA   = django_settings.SEED_ANALYZED_CHAT_DATA    # Ensure fixed text-only analyzed chat fixtures exist
 SEED_TRANSCRIPT_CHAT_DATA = django_settings.SEED_TRANSCRIPT_CHAT_DATA  # Ensure imported transcript, audio, and biomarker fixtures exist
 
@@ -266,7 +266,6 @@ class Command(BaseCommand):
         seed_chats           (profile, days_back     = 10)
         seed_reminders       (profile, num_reminders =  5)
         seed_activities      ()
-        seed_rag_instructions()
 
     # ================================================================================
     # Fixed Analyzed Chat Fixtures

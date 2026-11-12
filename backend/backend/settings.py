@@ -270,6 +270,6 @@ STUDY_PARTICIPANT_PASSWORD = config("STUDY_PARTICIPANT_PASSWORD", default="")  #
 # --------------------------------------------------------------------------------
 # Optional seed datasets (safe create-if-missing behavior)
 # --------------------------------------------------------------------------------
-SEED_UI_SAMPLE_DATA       = config("SEED_UI_SAMPLE_DATA",       default=False, cast=bool)  # Random DB objects to demo the UI -- chats, reminders, activities, and RAG fixtures
+SEED_UI_SAMPLE_DATA       = config("SEED_UI_SAMPLE_DATA",       default=False, cast=bool)  # Random DB objects to demo the UI -- chats, reminders, activities
 SEED_ANALYZED_CHAT_DATA   = config("SEED_ANALYZED_CHAT_DATA",   default=False, cast=bool)  # Fixed text-only analyzed chat fixtures (used for testing `post_chat_analysis`)
 SEED_TRANSCRIPT_CHAT_DATA = config("SEED_TRANSCRIPT_CHAT_DATA", default=False, cast=bool)  # Imported transcript, audio, and biomarker fixtures (from real recorded conversations)
