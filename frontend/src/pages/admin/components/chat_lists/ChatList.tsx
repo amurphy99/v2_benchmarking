@@ -8,9 +8,13 @@ completed chats.
 For the inactive ChatSessionCard list, chats are split into groups based on the
 day/week of the chat. More recent days get separate groups while older chats are
 grouped by week.
+
+With `pageSize`, only the newest `pageSize` sessions render at first (the list
+arrives newest-first from the API), and a footer offers to load more or all.
+
 */
-import { memo, useMemo } from "react";
-import { useNavigate   } from "react-router-dom";
+import { memo, useMemo, useState } from "react";
+import { useNavigate             } from "react-router-dom";
 
 // From this project
 import { ChatSession     } from "@/api";
@@ -29,6 +33,7 @@ export const ChatList = memo(function ChatList({
     navigate_to,
     variant = "completed",
     grouped = false,
+    pageSize,
 }: {
     title       : string;
     subtitle  ? : string | null;
@@ -36,13 +41,19 @@ export const ChatList = memo(function ChatList({
     navigate_to : string;
     variant   ? : "active" | "completed";
     grouped   ? : boolean;
+    pageSize  ? : number;  // Sessions shown per "Load more" step (omit to show every session)
 }) {
     const navigate = useNavigate();
+
+    // Newest sessions up to the current page limit
+    const [shownCount, setShownCount] = useState<number>(pageSize ?? Infinity);
+    const visible   = useMemo((): ChatSession[] => sessions.slice(0, shownCount), [sessions, shownCount]);
+    const remaining = sessions.length - visible.length;
 
     // Cards arranged either as a single grid (active) or grouped by recency
     // (completed). `auto-rows-fr` keeps every card in the same row at equal
     // height so the headers line up regardless of body content length.
-    const groups = useMemo(() => grouped ? groupByRecency(sessions) : null, [grouped, sessions]);
+    const groups = useMemo(() => grouped ? groupByRecency(visible) : null, [grouped, visible]);
 
     const cardGridClass = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-fr";
 
@@ -93,7 +104,7 @@ export const ChatList = memo(function ChatList({
                     </div>
                 ) : (
                     <div className={cardGridClass}>
-                        {sessions.map(session => (
+                        {visible.map(session => (
                             <ChatSessionCard
                                 key     ={session.id}
                                 session ={session}
@@ -102,6 +113,31 @@ export const ChatList = memo(function ChatList({
                         ))}
                     </div>
                 )}
+
+                {/* Page count and load-more controls */}
+                {(pageSize !== undefined) && (sessions.length > pageSize) ? (
+                    <div className="mt-4 pt-4 border-t border-admin-border flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm text-admin-subtext">
+                            Showing {visible.length} of {sessions.length} chats
+                        </div>
+                        {remaining > 0 ? (
+                            <div className="flex gap-2">
+                                <button
+                                    className = "px-3 py-1.5 rounded-lg border border-admin-border text-sm font-medium text-admin-text hover:bg-admin-muted2 transition-colors"
+                                    onClick   = {() => setShownCount(visible.length + pageSize)}
+                                >
+                                    Load {Math.min(pageSize, remaining)} more
+                                </button>
+                                <button
+                                    className = "px-3 py-1.5 rounded-lg bg-admin-text text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                                    onClick   = {() => setShownCount(Infinity)}
+                                >
+                                    Show all
+                                </button>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </section>
     );

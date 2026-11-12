@@ -38,6 +38,10 @@ import      { AdminCard                                      } from "./component
 import      { AdminPage                                      } from "./components/ui/AdminPage";
 import      { SectionHeader                                  } from "./components/ui/SectionHeader";
 
+// Completed chats shown at first, and added by each "Load more"
+const COMPLETED_CHATS_PAGE_SIZE = 12;
+
+
 // ================================================================================
 // Admin list view of all ChatSessions (split into active and inactive chats)
 // ================================================================================
@@ -100,12 +104,14 @@ export function Admin() {
 
                 {/* All Sessions */}
                 <ChatList
+                    key         = {JSON.stringify(runFilter)}
                     title       = "Completed Chat Sessions"
                     subtitle    = "Review task details, transcripts, and available analysis."
                     sessions    = {filteredInactive}
                     navigate_to = {"/admin/chat/inactive/"}
                     variant     = "completed"
                     grouped     = {true}
+                    pageSize    = {COMPLETED_CHATS_PAGE_SIZE}
                 />
 
             </div>
