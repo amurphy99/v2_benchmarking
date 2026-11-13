@@ -7,7 +7,8 @@ checked where it arrives (`avatarPlanChecks`); this hook then checks the names
 it uses against the shown avatar's catalog (`AvatarEntry.plans`) and runs it:
 a plan through the scheduler (`planScheduler`), ticked every animation frame
 with what the page knows about the replies, and a setup straight onto the
-avatar (again whenever a newly picked avatar mounts). Every rejection is sent
+avatar (again whenever a newly picked avatar mounts). A step's `sound` is
+played here, not by the avatar (`planSounds`), from the session's setup. Every rejection is sent
 back, and the other feedback each plan asks for.
 
 The page tells it about the replies (the audio player's marks, plus each
@@ -21,12 +22,13 @@ import type { RefObject                                         } from "react";
 import      { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // From this project
-import      { checkPlanNames, checkSetupNames                             } from "@/hooks/live-chat/avatarPlanChecks";
+import      { checkPlanNames, checkPlanSounds, checkSetupNames            } from "@/hooks/live-chat/avatarPlanChecks";
 import type { AvatarFeedback, AvatarPlan, AvatarSetup, StepActions        } from "@/hooks/live-chat/avatarPlanFrames";
 import type { AvatarHandle                                                } from "../avatarRegistry";
 import      { getAvatarEntry                                              } from "../avatarRegistry";
 import type { ReplyAudio, ReplyMarks                                      } from "./planScheduler";
 import      { createPlanScheduler                                         } from "./planScheduler";
+import      { createPlanSounds                                            } from "./planSounds";
 
 // Replies whose text arrival times are kept (the scheduler only ever looks at the latest few)
 const PLAN_REPLY_HISTORY = 8;
@@ -78,14 +80,20 @@ export function useAvatarPlans(
     // The session's latest setup
     const [setup, setSetup] = useState<AvatarSetup | null>(null);
 
+    // The session's sounds (kept outside React state, so a plan arriving right behind its setup can already name them)
+    const sounds = useMemo(() => createPlanSounds(), []);
+
     // --------------------------------------------------------------------------------
     // Scheduler and Clock
     // --------------------------------------------------------------------------------
-    // Steps go to whichever avatar is mounted when they run (none, between avatars, does nothing)
+    // Steps go to whichever avatar is mounted when they run (none, between avatars, does nothing); a step's sound plays here
     const scheduler = useMemo(() => createPlanScheduler(
-        (actions:  StepActions   ): number => avatarRef.current?.runPlanStep?.(actions) ?? 0,
-        (feedback: AvatarFeedback): void   => feedbackRef.current(feedback),
-    ), [avatarRef]);
+        (actions: StepActions): number => {
+            const soundMs = (actions.sound === undefined) ? 0 : sounds.play(actions.sound.name, actions.sound.volume);
+            return Math.max(soundMs, avatarRef.current?.runPlanStep?.(actions) ?? 0);
+        },
+        (feedback: AvatarFeedback): void => feedbackRef.current(feedback),
+    ), [avatarRef, sounds]);
 
     // Every frame: run the steps that are due, and hold the next reply's audio for any step that asked
     useEffect(() => {
@@ -105,7 +113,7 @@ export function useAvatarPlans(
     // --------------------------------------------------------------------------------
     // Check a plan's names, then start it (steps already due run right away, not a frame later)
     const runPlan = useCallback((plan: AvatarPlan): void => {
-        const problem = (catalog === null) ? "this avatar can't run plans" : checkPlanNames(plan, catalog);
+        const problem = (catalog === null) ? "this avatar can't run plans" : (checkPlanNames(plan, catalog) ?? checkPlanSounds(plan, sounds.has));
         if (problem !== null) {
             feedbackRef.current((plan.turn === null) ? {id: plan.id, event: "rejected", reason: problem} : {id: plan.id, turn: plan.turn, event: "rejected", reason: problem});
             return;
@@ -114,7 +122,7 @@ export function useAvatarPlans(
         const marks = replyMarks(repliesRef.current.read(), textAtRef.current);
         scheduler.receive(plan, nowMs, marks);
         scheduler.tick(nowMs, marks);
-    }, [catalog, scheduler]);
+    }, [catalog, scheduler, sounds]);
 
     // Check a setup's names, apply it now (before any plan after it), and keep it as the session's
     const applySetup = useCallback((next: AvatarSetup): void => {
@@ -124,14 +132,16 @@ export function useAvatarPlans(
             return;
         }
         avatarRef.current?.applySetup?.(next);
+        sounds.load(next.sounds);
         setSetup(next);
-    }, [avatarRef, catalog]);
+    }, [avatarRef, catalog, sounds]);
 
     // Forget the session's setup (the avatar's own behaviors and the page's state count again)
     const clearSetup = useCallback((): void => {
         avatarRef.current?.applySetup?.(null);
+        sounds.load({});
         setSetup(null);
-    }, [avatarRef]);
+    }, [avatarRef, sounds]);
 
     // A newly picked avatar takes the session's setup as it mounts
     useEffect(() => {

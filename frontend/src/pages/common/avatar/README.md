@@ -175,6 +175,7 @@ Each step has a moment, a length, and its actions.
 | `prop` | Picks up or puts away the map or the card (`hold`), and raises it from 0 to 1 (`raise`) |
 | `breath` | One deliberate breath: in, held (a null hold lasts until "speaking" starts, at most 2.5 s), and out |
 | `blink` | One blink now |
+| `sound` | Plays one of the setup's short sounds ("mm-hm") beside any reply's audio. The plans hook plays it (`plans/planSounds.ts`), not the face |
 | `state` | Sets the conversation state: `idle`, `listening`, or `thinking` (the client owns `speaking`) |
 | `reset` | Face back to rest, the movement stopped, the look and pose released, and breathing back to its rhythm (the map and the state stay) |
 

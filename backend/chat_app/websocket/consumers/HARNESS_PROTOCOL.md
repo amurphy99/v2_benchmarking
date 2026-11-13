@@ -57,7 +57,8 @@ arrive.
 ```json
 {"type": "avatar_setup", "data": {
   "rest": "Slightly Smiling Face",
-  "auto": {"idle_glances": true, "thinking_look": false, "speech_gaze": false, "listening_motions": false}
+  "auto": {"idle_glances": true, "thinking_look": false, "speech_gaze": false, "listening_motions": false},
+  "sounds": {"mm_hm": {"audio": "<base64 PCM>", "sample_rate": 24000}}
 }}
 ```
 
@@ -73,6 +74,15 @@ guessing `listening` and `thinking` itself and waits for `state` actions (§3.3)
 | `auto.thinking_look` | boolean | `true` | Eyes drift up and to the side while `thinking` (off: it looks at the user) |
 | `auto.speech_gaze` | boolean | `false` | Looks away at pauses in its own reply, aside over the last few words, back at the end |
 | `auto.listening_motions` | boolean | `true` | A slight sway, and now and then a head cock, while `listening` |
+| `sounds` | object | `{}` | Short clips a plan's `sound` action can play, by name (at most 16) |
+| `sounds.<name>.audio` | string | required | The clip: raw 16-bit mono PCM, base64 (at most 400,000 characters) |
+| `sounds.<name>.sample_rate` | integer, 8000-48000 | required | Its sample rate |
+
+`sounds` are for the short noises a listener makes ("mm-hm", "yeah"), in the avatar's own
+voice. The backend synthesizes them with the reply voice and sends them once here, so a step
+can play one with no synthesis delay. A sound is not a reply: it plays on its own channel
+beside any reply's audio, has no `responseId`, is never reported with `tts_playback`, doesn't
+move the mouth or change the conversation state, and `cancel_audio` doesn't stop it.
 
 Blinks, breathing, lip sync, and easing always run.
 
@@ -146,8 +156,9 @@ same parts of the face).
 | `prop` | `{"hold"?, "raise"?, "move_ms"?}` | Picks up, raises, lowers, or puts away the held prop |
 | `breath` | `{"in_ms", "depth"?, "hold_ms"?, "out_ms"?}` | One deliberate breath |
 | `blink` | `true` or `{"ms"}` | One blink now |
+| `sound` | `{"name", "volume"?}` | Plays one of the setup's `sounds` (§2) once, beside any reply's audio |
 | `state` | `"idle"` \| `"listening"` \| `"thinking"` | The conversation state (the client owns `"speaking"`) |
-| `reset` | `true` | Face back to rest, the movement stops, pose and gaze released, breathing back to its rhythm (the prop and state stay) |
+| `reset` | `true` | Face back to rest, the movement stops, pose and gaze released, breathing back to its rhythm (the prop and state stay, and a sound already playing finishes) |
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
@@ -169,6 +180,8 @@ same parts of the face).
 | `breath.hold_ms` | integer or `null` | `null` | Held at the top (`null`: until the reply's audio starts, at most 2.5 s) |
 | `breath.out_ms` | integer, 100-8000 | `2500` | Time to breathe out |
 | `blink.ms` | integer, 80-1000 | `160` | One close-and-open |
+| `sound.name` | string | required | A name from the latest setup's `sounds` |
+| `sound.volume` | number, 0-1 | `1` | How loud it plays (a reply's audio plays at 1) |
 
 #### 3.3.1 Gaze
 
@@ -299,6 +312,7 @@ of it, and rejects it (always sending `rejected` with the reason) for:
 * an unknown key, or a missing required one
 * a wrong type, or a value outside its range
 * a name not in the avatar's catalog (§9)
+* a `sound` whose name the latest setup's `sounds` doesn't carry
 * a negative `wait_ms` on `previous` or `reply_text`
 * `hold_audio_ms` anywhere but on `reply_audio` with a negative wait
 * `response_id` on a step with no reply moment

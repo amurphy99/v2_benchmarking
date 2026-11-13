@@ -7,12 +7,14 @@ A plan runs completely or not at all (`backend/chat_app/websocket/consumers/HARN
 and limits, and return either the frame as the client runs it
 (`avatarPlanFrames`) or the rejection to send back. `checkPlanNames` and
 `checkSetupNames` then check the names it uses against the avatar's catalog,
-before anything runs.
+and `checkPlanSounds` its sounds against the session's setup, before anything
+runs.
 
 */
 import type { AnimationAction, AutoBehaviors, AvatarFeedback, AvatarPlan, AvatarSetup, BlinkAction, BreathAction } from "./avatarPlanFrames";
 import type { FaceAction, GazeAction, GazeFrame, GazeLook, MoveAction, PlanCatalog, PlanMoment                   } from "./avatarPlanFrames";
 import type { PlanPoint, PlanState, PlanStep, PoseAction, PropAction, StepActions                                } from "./avatarPlanFrames";
+import type { SetupSound, SoundAction                                                                           } from "./avatarPlanFrames";
 import      { AUTO_BEHAVIORS, GAZE_FRAMES, PLAN_FEEDBACK_MODES, PLAN_MOMENT_NAMES, PLAN_STATES, PROP_NAMES       } from "./avatarPlanFrames";
 import      { isPropFrame                                                                                        } from "./avatarPlanFrames";
 
@@ -25,6 +27,11 @@ const PLAN_MAX_MS            = 60_000;   // Any duration or wait
 const PLAN_MAX_TRANSITION_MS = 5_000;    // Moving in or out (a face, a pose, the prop), and a breath's hold
 const PLAN_MAX_AUDIO_HOLD_MS = 1_000;
 const PLAN_MAX_SENTENCE      = 999;
+
+// Limits on a setup's sounds (§2): a few short clips, each a few seconds of 16-bit mono PCM in base64
+const SETUP_MAX_SOUNDS       = 16;
+const SETUP_MAX_SOUND_CHARS  = 400_000;
+const SETUP_SOUND_RATE_RANGE = [8_000, 48_000] as const;
 
 // Ranges of single fields
 const PLAN_MOVE_SPEED_RANGE   = [0.25, 4    ] as const;   // `move.speed`
@@ -45,8 +52,8 @@ const PLAN_DEFAULT_EXPIRE_MS = 15_000;
 // Fields each object may hold
 const PLAN_KEYS   = ["id", "turn", "feedback", "expire_ms", "steps"] as const;
 const TIMING_KEYS = ["start_on", "wait_ms", "hold_audio_ms", "response_id", "ms"] as const;
-const ACTION_KEYS = ["reset", "face", "move", "animation", "pose", "gaze", "prop", "breath", "blink", "state"] as const;
-const SETUP_KEYS  = ["rest", "auto"] as const;
+const ACTION_KEYS = ["reset", "face", "move", "animation", "pose", "gaze", "prop", "breath", "blink", "sound", "state"] as const;
+const SETUP_KEYS  = ["rest", "auto", "sounds"] as const;
 
 // Each automatic behavior when a setup leaves it out (today's chat page)
 const SETUP_DEFAULT_AUTO: AutoBehaviors = {idle_glances: true, thinking_look: true, speech_gaze: false, listening_motions: true};
@@ -109,6 +116,15 @@ export function checkPlanNames(plan: AvatarPlan, catalog: PlanCatalog): string |
 // The setup's resting face, when the avatar has no expression by that name
 export function checkSetupNames(setup: AvatarSetup, catalog: PlanCatalog): string | null {
     if ((setup.rest !== null) && !hasName(catalog.expressions, setup.rest)) return `rest: unknown expression "${setup.rest}"`;
+    return null;
+}
+
+// The first sound a plan names that the session's setup doesn't carry (null when it carries all of them)
+export function checkPlanSounds(plan: AvatarPlan, hasSound: (name: string) => boolean): string | null {
+    for (const [i, step] of plan.steps.entries()) {
+        const sound = step.actions.sound;
+        if ((sound !== undefined) && !hasSound(sound.name)) return `steps[${i}].sound.name: the setup has no sound "${sound.name}"`;
+    }
     return null;
 }
 
@@ -186,6 +202,7 @@ function readActions(step: Record<string, unknown>, path: string): StepActions {
     if (step.prop      !== undefined) actions.prop      = readProp     (step.prop,      `${path}.prop`     );
     if (step.breath    !== undefined) actions.breath    = readBreath   (step.breath,    `${path}.breath`   );
     if (step.blink     !== undefined) actions.blink     = readBlink    (step.blink,     `${path}.blink`    );
+    if (step.sound     !== undefined) actions.sound     = readSound    (step.sound,     `${path}.sound`    );
     if (step.state     !== undefined) actions.state     = readStateName(step.state,     `${path}.state`    );
     if ((actions.animation !== undefined) && ((actions.face !== undefined) || (actions.move !== undefined))) reject(`${path}.animation`, "can't share a step with face or move");
     return actions;
@@ -205,6 +222,15 @@ function readFace(value: unknown, path: string): FaceAction {
         hold_ms  : readNullableWhole(face, "hold_ms", path, 0, PLAN_MAX_MS) ?? null,
         in_ms    : readWhole(face, "in_ms",  path, 0, PLAN_MAX_TRANSITION_MS) ?? null,
         out_ms   : readWhole(face, "out_ms", path, 0, PLAN_MAX_TRANSITION_MS) ?? null,
+    };
+}
+
+// One of the setup's sounds to play once (its name is checked against the setup before the plan runs)
+function readSound(value: unknown, path: string): SoundAction {
+    const sound = readObject(value, path, ["name", "volume"]);
+    return {
+        name   : readName(sound, "name", path, PLAN_MAX_NAME_CHARS),
+        volume : readNumber(sound, "volume", path, 0, 1) ?? 1,
     };
 }
 
@@ -329,14 +355,33 @@ function readSetup(data: unknown): AvatarSetup {
     const setup = readObject(data, "setup", SETUP_KEYS);
     const auto: Record<string, unknown> = (setup.auto === undefined) ? {} : readObject(setup.auto, "auto", AUTO_BEHAVIORS);
     return {
-        rest : (setup.rest === undefined) ? null : readName(setup, "rest", "", PLAN_MAX_NAME_CHARS),
-        auto : {
+        rest   : (setup.rest === undefined) ? null : readName(setup, "rest", "", PLAN_MAX_NAME_CHARS),
+        sounds : (setup.sounds === undefined) ? {} : readSounds(setup.sounds, "sounds"),
+        auto   : {
             idle_glances      : readBoolean(auto, "idle_glances",      "auto") ?? SETUP_DEFAULT_AUTO.idle_glances,
             thinking_look     : readBoolean(auto, "thinking_look",     "auto") ?? SETUP_DEFAULT_AUTO.thinking_look,
             speech_gaze       : readBoolean(auto, "speech_gaze",       "auto") ?? SETUP_DEFAULT_AUTO.speech_gaze,
             listening_motions : readBoolean(auto, "listening_motions", "auto") ?? SETUP_DEFAULT_AUTO.listening_motions,
         },
     };
+}
+
+// The short sounds a setup carries, by the name a plan's `sound` uses
+function readSounds(value: unknown, path: string): Record<string, SetupSound> {
+    if (!isRecord(value)) reject(path, "must be an object");
+    const names = Object.keys(value);
+    if (names.length > SETUP_MAX_SOUNDS) reject(path, `must have at most ${SETUP_MAX_SOUNDS} sounds`);
+
+    const sounds: Record<string, SetupSound> = {};
+    for (const name of names) {
+        if ((name.length === 0) || (name.length > PLAN_MAX_NAME_CHARS)) reject(path, `each name must be 1 to ${PLAN_MAX_NAME_CHARS} characters`);
+        const sound = readObject(value[name], fieldPath(path, name), ["audio", "sample_rate"]);
+        sounds[name] = {
+            audio       : readName(sound, "audio", fieldPath(path, name), SETUP_MAX_SOUND_CHARS),
+            sample_rate : readRequiredNumber(sound, "sample_rate", fieldPath(path, name), SETUP_SOUND_RATE_RANGE[0], SETUP_SOUND_RATE_RANGE[1], true),
+        };
+    }
+    return sounds;
 }
 
 

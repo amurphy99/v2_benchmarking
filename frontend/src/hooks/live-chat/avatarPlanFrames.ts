@@ -51,6 +51,7 @@ export type PoseAction      = "rest" | {turn: PlanPoint; tilt: number; move_ms: 
 export type PropAction      = {hold?: PropName | null; raise: number | null; move_ms: number | null};      // `hold` left out keeps the prop in hand; null `raise` keeps its height
 export type BreathAction    = {in_ms: number; depth: number | null; hold_ms: number | null; out_ms: number | null};
 export type BlinkAction     = {ms: number | null};
+export type SoundAction     = {name: string; volume: number};                                              // One of the setup's sounds, played once beside any reply's audio
 
 // Where a gaze goes in its frame: one point (`at`, or a user `offset`), a scan around a point, or a trace along a path
 export type GazeLook =
@@ -70,6 +71,7 @@ export type StepActions = {
     prop?      : PropAction;
     breath?    : BreathAction;
     blink?     : BlinkAction;
+    sound?     : SoundAction;
     state?     : PlanState;
 };
 
@@ -99,8 +101,11 @@ export type AvatarPlan = {
 // The automatic behaviors a setup switches on or off
 export type AutoBehaviors = Record<typeof AUTO_BEHAVIORS[number], boolean>;
 
-// Session settings (a null `rest` keeps the avatar's own default resting face)
-export type AvatarSetup = {rest: string | null; auto: AutoBehaviors};
+// One short sound a setup carries: raw 16-bit mono PCM in base64, and its sample rate
+export type SetupSound = {audio: string; sample_rate: number};
+
+// Session settings (a null `rest` keeps the avatar's own default resting face; `sounds` are what a plan's `sound` can name)
+export type AvatarSetup = {rest: string | null; auto: AutoBehaviors; sounds: Record<string, SetupSound>};
 
 // One event sent back about a plan (or a rejected setup, with a null `id`)
 export type PlanFeedbackEvent =

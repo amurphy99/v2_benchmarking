@@ -13,8 +13,9 @@ client when they feel done. When they say so out loud, the avatar thanks them,
 asks nothing, and stops speaking up after silences.
 
 With the `cues` condition the client's automatic looks run, every reply carries
-an avatar plan for the behavior it picked (`behaviors.py`), and the avatar nods
-along while the user talks (`cues.py`). With `no_cues` the reply still picks a
+an avatar plan for the behavior it picked (`behaviors.py`), and the avatar gives
+signs of listening when the user pauses, most of them with a short sound in its
+own voice (`cues.py`; the clips are synthesized once and sent in the setup). With `no_cues` the reply still picks a
 behavior (it's logged), but no plan is sent and the avatar only idles.
 
 A reply call that fails every attempt gets a scripted line that asks the user
@@ -31,11 +32,11 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services.llm.chat_utilities import prepare_LLM_messages
 from ....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN
-from   ..avatar                      import send_avatar_plan, send_avatar_setup
+from   ..avatar                      import send_avatar_plan, send_avatar_setup, synthesize_sounds
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
-from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan
-from    .cues                        import ListeningNods, QuietPrompt
+from    .behaviors                   import ELICITATION_SOUNDS, reply_plan, setup_for, start_plan, thinking_plan
+from    .cues                        import ListeningSigns, QuietPrompt
 from    .elicitation_api             import ElicitationAPIError, get_elicitation_api
 from    .prompts                     import directive_for
 from    .topics                      import ELICITATION_TOPICS, ELICITATION_VARIANTS
@@ -81,11 +82,12 @@ class SpeechElicitationHarness(ChatHarness):
         self.topic     = ELICITATION_TOPICS[variant]
         self.with_cues = (condition == "cues")
         self.cues      = [QuietPrompt(self)]
-        if self.with_cues: self.cues += [BackToListening(self), ListeningNods(self)]
+        if self.with_cues: self.cues += [BackToListening(self), ListeningSigns(self)]
 
-    # The connection is ready: set the avatar up, and open the chat
+    # The connection is ready: set the avatar up (with its listening sounds, with cues), and open the chat
     async def start(self) -> None:
-        await send_avatar_setup(self.consumer, setup_for(self.with_cues))
+        sounds = (await synthesize_sounds(ELICITATION_SOUNDS)) if self.with_cues else None
+        await send_avatar_setup(self.consumer, setup_for(sounds))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())
         self.request_turn()
 

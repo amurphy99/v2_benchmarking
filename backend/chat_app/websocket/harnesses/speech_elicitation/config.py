@@ -20,4 +20,7 @@ ELICITATION_SHORT_ANSWER_WORDS = 3      # An answer this short or shorter is tre
 # --------------------------------------------------------------------------------
 ELICITATION_QUIET_AFTER_SEC   = 10.0    # Silence on the user's turn before the avatar speaks up again
 ELICITATION_MAX_QUIET_PROMPTS = 2       # Times in a row it speaks up before waiting for the user
-ELICITATION_NOD_EVERY_WORDS   = 12      # Words the user says between the avatar's listening nods
+ELICITATION_PAUSE_SEC         = 0.7     # A pause this long inside the user's utterance gets a sign of listening
+ELICITATION_SIGN_MIN_WORDS    = 6       # Words the utterance needs first (a short answer gets a reply, not a sign)
+ELICITATION_SIGN_MIN_GAP_SEC  = 4.0     # Shortest time between two signs of listening
+ELICITATION_SOUND_VOLUME      = 0.6     # How loud a listening sound plays, beside the reply voice at 1

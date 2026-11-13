@@ -61,7 +61,7 @@ which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_pl
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
 | `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
 | `cooperative_planning` | The user and the avatar work out a plan together, each with a brief (who they are) and private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party`, `day_trip`, `birthday_party`, `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`, `apartment_hunt`, `camping_trip`, `flight_rebooking` |
-| `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said and ends with another question. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
+| `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said and ends with another question, and with cues it gives audible signs of listening ("mm-hm") when the user pauses. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
 
 `map_task`, `cooperative_planning`, and `speech_elicitation` use cues and drive the
 avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
@@ -73,7 +73,7 @@ live chat page a view of its state (Monitoring, below).
  ├── base.py                      # ChatHarness, Cue, the turn events, TurnAttempt, ResponseOutcome
  ├── cues.py                      # Shared cues: KeywordCue and SilenceWatcher to build on, and BackToListening as is
  ├── registry.py                  # chat_type names -> harnesses, the default, and the condition/variant checks
- ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, and the shared listening plan
+ ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, a setup's sounds, and the shared listening plan
  │
 +├── unguided/
  │   ├── harness.py               # Scripted end-chat and pause replies, otherwise the LLM
@@ -124,8 +124,8 @@ live chat page a view of its state (Monitoring, below).
      ├── response_models.py       # The reply: its move, its behavior, and words that must end with a question
      ├── prompts.py               # How to keep the user talking, the task, and the directives for a flagging chat
      ├── elicitation_api.py       # ElicitationAPI: the one reply call, on the shared StructuredAPI
-     ├── behaviors.py             # The avatar's setup, the plan for each named behavior, and the listening signs
-     ├── cues.py                  # ListeningNods (with cues), QuietPrompt (both conditions)
+     ├── behaviors.py             # The avatar's setup and listening sounds, the plan for each named behavior, and the signs of listening
+     ├── cues.py                  # ListeningSigns (with cues), QuietPrompt (both conditions)
      └── config.py                # Request limits, the reply call's settings, and the cue timings
 ```
 

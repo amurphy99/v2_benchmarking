@@ -18,10 +18,12 @@ import asyncio, unittest
 from pydantic import ValidationError
 
 # From this project
+from chat_app.websocket.harnesses.avatar                             import synthesize_sounds
 from chat_app.websocket.harnesses.base                               import FinalUtterance, InterimSpeech, TurnAttempt
 from chat_app.websocket.harnesses.registry                           import build_harness
-from chat_app.websocket.harnesses.speech_elicitation.config          import ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_NOD_EVERY_WORDS, ELICITATION_QUIET_AFTER_SEC
-from chat_app.websocket.harnesses.speech_elicitation.cues            import ListeningNods, QuietPrompt
+from chat_app.websocket.harnesses.speech_elicitation.behaviors       import ELICITATION_BACKCHANNELS, ELICITATION_SOUNDS
+from chat_app.websocket.harnesses.speech_elicitation.config          import ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_PAUSE_SEC, ELICITATION_QUIET_AFTER_SEC, ELICITATION_SIGN_MIN_WORDS
+from chat_app.websocket.harnesses.speech_elicitation.cues            import ListeningSigns, QuietPrompt
 from chat_app.websocket.harnesses.speech_elicitation.elicitation_api import ElicitationAPIError
 from chat_app.websocket.harnesses.speech_elicitation.harness         import MSG_SAY_MORE
 from chat_app.websocket.harnesses.speech_elicitation.prompts         import build_messages, directive_for
@@ -33,6 +35,9 @@ TOPIC = ELICITATION_TOPICS["pet_person"]
 
 # Where the harness module looks its client up (patched there)
 HARNESS = "chat_app.websocket.harnesses.speech_elicitation.harness"
+
+# The setup's sounds as the stand-in synthesis returns them
+SOUNDS = {name: {"audio": "AAA=", "sample_rate": 24_000} for name in ELICITATION_SOUNDS}
 
 
 # --------------------------------------------------------------------------------
@@ -94,21 +99,29 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     def make(self, condition: str = "cues", reply: object = None) -> tuple[object, SimpleNamespace, SimpleNamespace]:
         consumer = make_consumer()
         api      = SimpleNamespace(reply=AsyncMock(side_effect=reply if isinstance(reply, Exception) else None, return_value=reply))
-        started  = patch(f"{HARNESS}.get_elicitation_api", Mock(return_value=api))
-        started.start()
-        self.addCleanup(started.stop)
+        for target, value in ((f"{HARNESS}.get_elicitation_api", Mock(return_value=api)), (f"{HARNESS}.synthesize_sounds", AsyncMock(return_value=SOUNDS))):
+            started = patch(target, value)
+            started.start()
+            self.addCleanup(started.stop)
         harness = build_harness(consumer, "speech_elicitation", condition, None)
         self.addCleanup(harness.stop)
         return harness, consumer, api
 
-    # With cues the avatar is set up and starts listening; either way it asks for its own opening turn
+    # With cues the setup carries the listening sounds and the avatar starts listening; either way it asks for its own opening turn
     async def test_start_sets_the_avatar_up_and_opens_the_chat(self) -> None:
-        for condition, frames in (("cues", ["avatar_setup", "avatar_plan"]), ("no_cues", ["avatar_setup"])):
+        for condition, frames, sounds in (("cues", ["avatar_setup", "avatar_plan"], SOUNDS), ("no_cues", ["avatar_setup"], None)):
             with self.subTest(condition):
                 harness, consumer, _ = self.make(condition)
                 await harness.start()
                 self.assertEqual([call.args[0]["type"] for call in consumer.send_json.await_args_list], frames)
+                self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"].get("sounds"), sounds)
                 consumer.request_harness_turn.assert_called_once()
+
+    # Every sound a sign of listening plays is one the setup carries
+    def test_every_listening_sound_is_in_the_setup(self) -> None:
+        played = {step["sound"]["name"] for step in ELICITATION_BACKCHANNELS if "sound" in step}
+        self.assertTrue(played)
+        self.assertLessEqual(played, set(ELICITATION_SOUNDS))
 
     # The avatar's first turn asks the topic's question, with no LLM call
     async def test_the_opening_turn_asks_the_topics_question(self) -> None:
@@ -159,23 +172,33 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self.harness.stop()
 
-    # The avatar gives a sign of listening each time the utterance grows enough, but not while a reply owns it
-    async def test_the_avatar_nods_along_as_the_utterance_grows(self) -> None:
-        nods  = next(cue for cue in self.harness.cues if isinstance(cue, ListeningNods))
-        words = " ".join(["word"] * ELICITATION_NOD_EVERY_WORDS)
+    # A pause inside a long enough utterance gets a sign of listening, the first one audible, and never two close together
+    async def test_a_pause_inside_an_utterance_gets_a_sign_of_listening(self) -> None:
+        signs = next(cue for cue in self.harness.cues if isinstance(cue, ListeningSigns))
+        words = " ".join(["word"] * ELICITATION_SIGN_MIN_WORDS)
 
-        nods.on_interim(interim("just a few words"))
-        nods.on_interim(interim(words))
-        nods.on_interim(interim(f"{words} and one more"))
-        nods.on_interim(interim(f"{words} {words}"))
+        signs.on_interim(interim("well I"))
+        signs.on_silence(ELICITATION_PAUSE_SEC)
         await asyncio.sleep(0)
-        self.assertEqual([call.args[0]["data"]["id"] for call in self.consumer.send_json.await_args_list], ["listen-1", "listen-2"])
+        self.consumer.send_json.assert_not_awaited()
 
-        nods.on_final(FinalUtterance(text=f"{words} {words}", words=()))
-        nods.on_reply_started(make_attempt(words))
-        nods.on_interim(interim(words))
+        signs.on_interim(interim(words))
+        signs.on_silence(ELICITATION_PAUSE_SEC)
+        signs.on_silence(ELICITATION_PAUSE_SEC)
         await asyncio.sleep(0)
-        self.assertEqual(self.consumer.send_json.await_count, 2)
+        plans = [call.args[0]["data"] for call in self.consumer.send_json.await_args_list]
+        self.assertEqual([plan["id"] for plan in plans], ["listen-1"])
+        self.assertEqual(plans[0]["steps"][0]["sound"]["name"], "mm_hm")
+
+    # Once the utterance is finished the reply is the answer, so the pause that ended it gets no sign
+    async def test_a_finished_utterance_gets_no_sign(self) -> None:
+        signs = next(cue for cue in self.harness.cues if isinstance(cue, ListeningSigns))
+        text  = " ".join(["word"] * ELICITATION_SIGN_MIN_WORDS)
+        signs.on_interim(interim(text))
+        signs.on_final(FinalUtterance(text=text, words=()))
+        signs.on_silence(ELICITATION_PAUSE_SEC)
+        await asyncio.sleep(0)
+        self.consumer.send_json.assert_not_awaited()
 
     # A long silence asks for a turn a few times in a row, and never once the user has said they want to stop
     async def test_silence_prompts_a_few_times_then_waits(self) -> None:
@@ -189,8 +212,33 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
         prompt.on_silence(ELICITATION_QUIET_AFTER_SEC)
         self.assertEqual(self.consumer.request_harness_turn.call_count, ELICITATION_MAX_QUIET_PROMPTS)
 
-    # Without cues the avatar never nods, but it still speaks up after a silence
+    # Without cues the avatar gives no sign of listening, but it still speaks up after a silence
     async def test_without_cues_only_the_quiet_prompt_runs(self) -> None:
         plain = build_harness(make_consumer(), "speech_elicitation", "no_cues", None)
         self.addCleanup(plain.stop)
         self.assertEqual([type(cue) for cue in plain.cues], [QuietPrompt])
+
+
+# ================================================================================
+# Setup Sounds
+# ================================================================================
+class SetupSoundTests(unittest.IsolatedAsyncioTestCase):
+    # Where `synthesize_sounds` looks the text-to-speech provider up, and its clips so far
+    PROVIDER = "chat_app.websocket.services.speech.tts.tts_google.TextToSpeechProvider"
+    CLIPS    = "chat_app.websocket.harnesses.avatar._sound_clips"
+
+    # Each sound is synthesized once in the reply voice, and sent as base64 PCM with its sample rate
+    async def test_each_sound_is_synthesized_once(self) -> None:
+        provider = Mock(synthesize_speech=Mock(return_value=(b"\x01\x02", 24_000, 1, 16)))
+        with patch(self.PROVIDER, Mock(return_value=provider)), patch.dict(self.CLIPS, clear=True):
+            sounds = await synthesize_sounds({"yeah": "Yeah.", "right": "Right."})
+            again  = await synthesize_sounds({"yeah": "Yeah."})
+        self.assertEqual(sounds, {"yeah": {"audio": "AQI=", "sample_rate": 24_000}, "right": {"audio": "AQI=", "sample_rate": 24_000}})
+        self.assertEqual(again, {"yeah": sounds["yeah"]})
+        self.assertEqual(provider.synthesize_speech.call_count, 2)
+
+    # A sound that comes back empty stops the chat from starting as a cue session without it
+    async def test_an_empty_clip_is_refused(self) -> None:
+        provider = Mock(synthesize_speech=Mock(return_value=(b"", 24_000, 1, 16)))
+        with patch(self.PROVIDER, Mock(return_value=provider)), patch.dict(self.CLIPS, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "No audio was synthesized"): await synthesize_sounds({"yeah": "Yeah."})

@@ -149,7 +149,8 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   every reply reacts to what they said and ends with another question, and it speaks up again
   after a long silence. `variant` picks the question: `pet_person` (the default),
   `mountains_or_beaches`, or `retirement_spot`. `condition` is `cues` (the default: the avatar
-  is driven by plans, and nods along while the user talks) or `no_cues` (it only idles). It
+  is driven by plans, and gives signs of listening, some of them audible, when the user
+  pauses) or `no_cues` (it only idles). It
   sends no `task_card` and no `robot_action`. There is nothing to finish and no spoken
   end-chat; the client ends the chat when the participant is done.
 
