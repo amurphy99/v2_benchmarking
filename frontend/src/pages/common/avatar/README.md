@@ -575,7 +575,7 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
      │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`, `variant`)
      │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
-     │   └── components/                   # The reply caption, the controls, the planning card, and the Map Task map
+     │   └── components/                   # The configure-chat modal, the reply caption, the controls, the planning card, the Map Task map
      │
      ├── avatar_demo/
      │   ├── AvatarDemo.tsx                # The demo page

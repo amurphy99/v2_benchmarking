@@ -21,11 +21,11 @@ export default function ReplyCaption({heard, reply, awaitingReply, idleText}: {
     idleText      : string;          // Shown before the first reply
 }): ReactElement {
     return (
-        <div className="min-h-[8rem] border-t border-chat-border px-6 py-5" aria-live="polite">
+        <div className="min-h-[8rem] border-t border-chat-border px-6 py-5!" aria-live="polite">
             {(heard !== null) ? <div className="text-base text-chat-subtext">You said: &ldquo;{heard}&rdquo;</div> : null}
 
             {awaitingReply ? (
-                <div className="mt-3 flex gap-2" aria-label="The avatar is thinking">
+                <div className="mt-3! flex gap-2" aria-label="The avatar is thinking">
                     <span className="h-3 w-3 animate-bounce rounded-full bg-chat-accent [animation-delay:-0.3s]" />
                     <span className="h-3 w-3 animate-bounce rounded-full bg-chat-accent [animation-delay:-0.15s]" />
                     <span className="h-3 w-3 animate-bounce rounded-full bg-chat-accent" />

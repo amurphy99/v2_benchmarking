@@ -43,7 +43,7 @@ The READMEs below cover each part, in a sensible reading order.
 - **Cooperative Planning** has no README of its own; it is described only in the
   chat types table in `harnesses/README.md` and in its code
   (`backend/chat_app/websocket/harnesses/cooperative_planning/`).
-- **The chat page and the admin pages** have no README. That covers the task and
-  variant dropdowns (`frontend/src/pages/chat/chatModes.ts`), the map panel, the
+- **The chat page and the admin pages** have no README. That covers the configure-chat
+  modal (`frontend/src/pages/chat/chatModes.ts`), the map panel, the
   live page's Task tab (`frontend/src/pages/admin/components/LiveSidePanel.tsx`),
   the session filters, the Map Task Maps page, and the admin header.

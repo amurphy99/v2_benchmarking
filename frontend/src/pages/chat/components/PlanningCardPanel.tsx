@@ -24,16 +24,16 @@ export default function PlanningCardPanel({card}: {
     card : PlanningCard;  // The latest card from the backend
 }): ReactElement {
     return (
-        <div className="rounded-2xl border border-chat-border bg-chat-panel shadow-sm p-6">
+        <div className="rounded-2xl border border-chat-border! bg-chat-panel shadow-sm p-6">
             {/* Heading */}
             <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Your card</div>
             <h2 className="mt-1 text-2xl font-semibold text-chat-text">{card.title}</h2>
 
             {/* The participant's own constraints */}
-            <div className="mt-5 text-sm font-semibold text-chat-subtext">Only you know these:</div>
+            <div className="mt-5! text-sm font-semibold text-chat-subtext">Only you know these:</div>
             <ul className="mt-2 space-y-2">
                 {card.constraints.map((constraint: string) => (
-                    <li key={constraint} className="flex gap-3 text-lg leading-snug text-chat-text">
+                    <li key={constraint} className="flex gap-3! text-lg leading-snug text-chat-text">
                         <span aria-hidden="true" className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-chat-accent" />
                         {constraint}
                     </li>
@@ -41,7 +41,7 @@ export default function PlanningCardPanel({card}: {
             </ul>
 
             {/* A line per item: the agreed choice written in, a choice waiting for a yes, or blank */}
-            <div className="mt-6 space-y-4 border-t border-dashed border-chat-border pt-5">
+            <div className="mt-6 space-y-4 border-t border-dashed border-chat-border pt-5!">
                 {card.items.map((item: PlanningCardItem) => (
                     <div key={item.id}>
                         <div className="text-sm font-semibold uppercase tracking-wide text-chat-subtext">{item.label}</div>
@@ -56,7 +56,7 @@ export default function PlanningCardPanel({card}: {
 
             {/* The approved plan */}
             {card.complete ? (
-                <div className="mt-6 flex items-center gap-2 rounded-xl bg-chat-accentSoft px-4 py-3 text-lg font-semibold text-chat-accent">
+                <div className="mt-6 flex items-center gap-2 rounded-xl bg-chat-accentSoft px-4! py-3! text-lg font-semibold text-chat-accent">
                     <BsCheckCircleFill aria-hidden="true" /> Plan complete
                 </div>
             ) : null}

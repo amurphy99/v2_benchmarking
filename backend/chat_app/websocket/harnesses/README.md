@@ -39,9 +39,10 @@ without one). The Django admin lists and filters them, the admin listener gets
 them in `session_info`, and the Monitor page shows them on each chat and filters
 its lists by them.
 
-The participant chat page picks the chat type and condition from its dropdown,
-and the variant from a second one (`frontend/src/pages/chat/chatModes.ts`, which
-copies each chat type's `VARIANTS`).
+The participant chat page picks the chat type, the variant, and cues on or off
+(`cues` / `no_cues`) in its configure-chat modal (`frontend/src/pages/chat/chatModes.ts`,
+which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_planning`,
+and `map_task`.
 
 `ws/chat/activity/` is an older route that always runs the `activity` chat type
 (the chat page still uses it).

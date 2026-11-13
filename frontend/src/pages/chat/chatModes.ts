@@ -6,30 +6,33 @@ Each mode picks a chat type with the socket's query parameters
 (`backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md` §1, Step 4). The
 values copy the backend's chat type names and conditions
 (`backend/chat_app/websocket/harnesses/registry.py`, and each harness's
-`CONDITIONS`); a mode that leaves one out gets the chat type's default. A mode
-with task content lists its variants, copied from the harness with the name the
-picker shows (the page picks the first unless the participant picks another).
-The memory activity keeps its older route, `ws/chat/activity/`.
+`CONDITIONS`). A mode with cues sends `condition=cues` or `condition=no_cues`
+from the configure-chat toggle; a mode with task content lists its variants,
+copied from the harness with the name the picker shows (the default first).
 
 */
-// What shows beside the avatar: nothing, the participant's task card, the Map Task's instructions, or the activity's debug log
-export type ChatPanel = "none" | "card" | "map" | "activity_debug";
+import type { IconType                           } from "react-icons";
+import      { BsCardChecklist, BsChatHeart, BsMap } from "react-icons/bs";
+
+// What shows beside the avatar: nothing, the participant's task card, or the Map Task's map
+export type ChatPanel = "none" | "card" | "map";
 
 // One version of a chat type's task content: the `variant` sent, and what the picker shows
 export type ChatVariant = {value: string; label: string};
 
 // One way the page can open a chat
 export type ChatMode = {
-    label    : string;                   // What the picker shows
-    wsPath   : string;                   // The socket route
-    query    : Record<string, string>;   // `chat_type` and `condition` (empty for the backend's defaults)
-    variants : ChatVariant[];            // The chat type's task content to pick from, the default first (empty for none)
-    panel    : ChatPanel;                // What shows beside the avatar
+    label       : string;          // What the picker and the page title show
+    description : string;          // What the chat is, shown in the configure-chat modal
+    icon        : IconType;        // Shown beside the description
+    chatType    : string;          // `chat_type` sent on the socket
+    hasCues     : boolean;         // The chat type has `cues` and `no_cues` conditions
+    variants    : ChatVariant[];   // The chat type's task content to pick from, the default first (empty for none)
+    panel       : ChatPanel;       // What shows beside the avatar
 };
 
-// The socket routes
-const CHAT_PATH          = "/ws/chat/";
-const CHAT_ACTIVITY_PATH = "/ws/chat/activity/";
+// The chat page's socket route
+export const CHAT_PATH = "/ws/chat/";
 
 // Each task's variants, copied from its harness (`MAP_TASK_VARIANTS` in `harnesses/map_task/harness.py`,
 // `PLANNING_VARIANTS` in `harnesses/cooperative_planning/harness.py`)
@@ -46,11 +49,39 @@ const PLANNING_VARIANTS: ChatVariant[] = [
 
 // Every mode the picker offers, the default first
 export const CHAT_MODES: ChatMode[] = [
-    {label: "Open conversation",       wsPath: CHAT_PATH,          query: {},                                                         variants: [],                panel: "none"          },
-    {label: "Active listening",        wsPath: CHAT_PATH,          query: {chat_type: "active_listening"},                            variants: [],                panel: "none"          },
-    {label: "Memory activity",         wsPath: CHAT_ACTIVITY_PATH, query: {},                                                         variants: [],                panel: "activity_debug"},
-    {label: "Map Task",                wsPath: CHAT_PATH,          query: {chat_type: "map_task",             condition: "cues"},     variants: MAP_TASK_VARIANTS, panel: "map"           },
-    {label: "Map Task (no cues)",      wsPath: CHAT_PATH,          query: {chat_type: "map_task",             condition: "no_cues"},  variants: MAP_TASK_VARIANTS, panel: "map"           },
-    {label: "Plan together",           wsPath: CHAT_PATH,          query: {chat_type: "cooperative_planning", condition: "cues"},     variants: PLANNING_VARIANTS, panel: "card"          },
-    {label: "Plan together (no cues)", wsPath: CHAT_PATH,          query: {chat_type: "cooperative_planning", condition: "no_cues"},  variants: PLANNING_VARIANTS, panel: "card"          },
+    {
+        label       : "Open conversation",
+        description : "A free-flowing chat about anything you like, with no task to work on.",
+        icon        : BsChatHeart,
+        chatType    : "unguided",
+        hasCues     : false,
+        variants    : [],
+        panel       : "none",
+    },
+    {
+        label       : "Cooperative planning",
+        description : "You and the avatar plan an event together. Each of you knows things the other doesn't, and your card fills in as you agree on each item.",
+        icon        : BsCardChecklist,
+        chatType    : "cooperative_planning",
+        hasCues     : true,
+        variants    : PLANNING_VARIANTS,
+        panel       : "card",
+    },
+    {
+        label       : "Map Task",
+        description : "You have a map with a route drawn on it. Describe the route so the avatar can follow it on its own map.",
+        icon        : BsMap,
+        chatType    : "map_task",
+        hasCues     : true,
+        variants    : MAP_TASK_VARIANTS,
+        panel       : "map",
+    },
 ];
+
+// The socket query for a mode, its variant (null for none), and whether its cues are on
+export function chatModeQuery(mode: ChatMode, variant: string | null, cues: boolean): string {
+    const query: Record<string, string> = {chat_type: mode.chatType};
+    if (mode.hasCues)     query.condition = cues ? "cues" : "no_cues";
+    if (variant !== null) query.variant   = variant;
+    return new URLSearchParams(query).toString();
+}

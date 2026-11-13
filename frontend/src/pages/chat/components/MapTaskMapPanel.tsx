@@ -27,7 +27,7 @@ export default function MapTaskMapPanel({map}: {
     map : MapTaskCard;  // The participant's map from the backend
 }): ReactElement {
     return (
-        <div className="rounded-2xl border border-chat-border bg-chat-panel p-5 shadow-sm">
+        <div className="rounded-2xl border border-chat-border! bg-chat-panel p-5! shadow-sm">
             {/* Heading and how to play */}
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-chat-subtext">
                 <BsMap aria-hidden="true" /> Your map
@@ -38,7 +38,7 @@ export default function MapTaskMapPanel({map}: {
             </p>
 
             {/* The map (its paper draws its own edge) */}
-            <div className="mt-4">
+            <div className="mt-4!">
                 <MapTaskMap shape={map.shape} landmarks={map.landmarks} route={map.route} maxHeight={MAP_PANEL_MAX_HEIGHT} label="Your map, with the route from the start to the finish" />
                 <p className="mt-2 text-sm text-chat-subtext">Shaded areas show how much space each landmark covers.</p>
             </div>
