@@ -45,13 +45,15 @@ const ROBOT_SCREEN_SLIDE        = 0.5;   // Share of that slide the screen makes
 export const ROBOT_CHEEK_X = 67;   // Distance from the center line
 export const ROBOT_CHEEK_Y = 16;   // Height
 
-// Sizes the robot's features are drawn at: wide-set eyes, and a small mouth close under them
+// Sizes the robot's features are drawn at: wide-set eyes, and a small mouth close under them.
+// Its mouth line is one width from end to end (`RobotMouth2D` strokes it)
 export const ROBOT_FACE_LAYOUT: FaceLayout = {
     unit          : 0.4,
     eyeX          : 46,
     eyeY          : -3,
     eyeR          : 15,
     gazeShift     : 9,
+    heartEyeR     : 17,
     browGap       : 7,
     browHalfW     : 12,
     browArch      : 3,
@@ -66,9 +68,9 @@ export const ROBOT_FACE_LAYOUT: FaceLayout = {
     mouthOpenUp   : 8,
     mouthOpenDown : 17,
     mouthWave     : 3,
-    mouthLineW    : 6,
-    mouthLineEndW : 3.6,
-    mouthOutlineW : 3.6,
+    mouthLineW    : 5.5,
+    mouthLineEndW : 5.5,
+    mouthOutlineW : 4,
 };
 
 // Attachments (ear pads, antennas) turn about the head's center, a little further than the features slide

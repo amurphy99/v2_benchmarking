@@ -31,7 +31,9 @@ Actions arrive two ways. A `robot_action` comes through `performAction` and is
 played by its name's category (`smileyActions.ts`): an expression, a movement,
 or an animation. A backend plan's steps come through `runPlanStep`, which pulls
 each action's lever (`plans/smileyStepRunner.ts`), and a setup through
-`applySetup` sets the resting face and which automatic behaviors run. Once a
+`applySetup` sets the resting face and which automatic behaviors run. Either
+way an expression's name becomes the avatar's own version of that face
+(`variants`: the Robot reshapes some, the Smiley none). Once a
 setup or plan has set a conversation state, the backend's state is the one
 shown, except that the page's "speaking" always wins (only the page hears the
 reply). The handle methods only write refs (or steer the layers' own state), so
@@ -51,7 +53,9 @@ import type { AutoBehaviors, AvatarSetup, BreathAction, GazeAction              
 import type { PlanState, PoseAction, PropAction, StepActions                          } from "@/hooks/live-chat/avatarPlanFrames";
 import type { AvatarHandle, ConversationState, RobotAction, SpeechPhase               } from "../avatarRegistry";
 import type { FaceAnimation                                                           } from "./actions/faceAnimations";
-import      { expressionFace, SMILEY_DEFAULT_RESTING_EXPRESSION, SMILEY_SLEEPING_FACE } from "./actions/faceExpressions";
+import type { FaceVariants                                                            } from "./actions/faceExpressions";
+import      { defaultRestingFace, expressionFace, sleepingFace                        } from "./actions/faceExpressions";
+import      { SMILEY_DEFAULT_RESTING_EXPRESSION                                       } from "./actions/faceExpressions";
 import type { FaceMotion, MotionOffsets                                               } from "./actions/faceMotions";
 import      { addOffsets, clampRange, easeStep, randomBetween, smoothstep             } from "./actions/faceMotions";
 import      { resolveSmileyAction                                                     } from "./actions/smileyActions";
@@ -64,7 +68,7 @@ import      { applyObjectOffsets, fadeHands                                     
 import type { SmileyLevers                                                            } from "./plans/smileyStepRunner";
 import      { runSmileyStep                                                           } from "./plans/smileyStepRunner";
 import type { FaceState                                                               } from "./state/faceState";
-import      { blendFace, faceAtStrength, fullFace, SMILEY_BASE_FACE                   } from "./state/faceState";
+import      { blendFace, faceAtStrength, fullFace                                     } from "./state/faceState";
 
 // Expression changes (fixed-length eases, so a timed emotion is fully shown for its whole duration)
 const SMILEY_EXPRESSION_IN_MS  = 180;   // Moving into a new expression
@@ -114,26 +118,30 @@ type AnimationFace = {face: FaceState; amount: (t: number) => number; startMs: n
 // ================================================================================
 // Run the face's frame loop and return the latest face plus the avatar handle that steers it
 export function useFaceController(
-    browsAlways : boolean,   // Keep the eyebrows showing on every expression (the "Smiley + eyebrows" avatar)
+    browsAlways : boolean,        // Keep the eyebrows showing on every expression (the "Smiley + eyebrows" avatar)
+    variants    : FaceVariants,   // What this avatar changes about the named expressions (one constant for its whole life)
 ): {face: FaceState; handle: AvatarHandle} {
+    // Face every layer starts on: the default resting expression, as this avatar draws it
+    const startFace = useMemo((): FaceState => defaultRestingFace(variants), [variants]);
+
     // Latest combined face (set once per animation frame)
-    const [face, setFace] = useState<FaceState>(SMILEY_BASE_FACE);
+    const [face, setFace] = useState<FaceState>(startFace);
 
     // --------------------------------------------------------------------------------
     // Layer State
     // --------------------------------------------------------------------------------
     // Expression: the change playing now, the face it has reached, and when (and how quickly) it returns to Neutral
-    const transitionRef   = useRef<ExpressionTransition>({from: SMILEY_BASE_FACE, to: SMILEY_BASE_FACE, startMs: 0, lengthMs: SMILEY_EXPRESSION_IN_MS});
-    const expressionRef   = useRef<FaceState>(SMILEY_BASE_FACE);
+    const transitionRef   = useRef<ExpressionTransition>({from: startFace, to: startFace, startMs: 0, lengthMs: SMILEY_EXPRESSION_IN_MS});
+    const expressionRef   = useRef<FaceState>(startFace);
     const releaseAtRef    = useRef<number | null>(null);
     const releaseOutMsRef = useRef<number>(SMILEY_EXPRESSION_OUT_MS);
 
     // Neutral: the face to rest on now (the sleeping face while asleep), and whether it is showing
-    const restingRef = useRef<FaceState>(SMILEY_BASE_FACE);
+    const restingRef = useRef<FaceState>(startFace);
     const atRestRef  = useRef<boolean>(true);
 
-    // The page's resting face (the base face until it picks another), and whether the face is asleep
-    const chosenRestRef = useRef<FaceState>(SMILEY_BASE_FACE);
+    // The page's resting face (the default one until it picks another), and whether the face is asleep
+    const chosenRestRef = useRef<FaceState>(startFace);
     const asleepRef     = useRef<boolean>(false);
 
     // When the latest emotion arrived (its own clock times the tear, so one drip fits its hold)
@@ -213,7 +221,7 @@ export function useFaceController(
 
             const nowMs      = performance.now();
             const durationMs = action.duration_ms ?? null;
-            const resolved   = resolveSmileyAction(action.value);
+            const resolved   = resolveSmileyAction(action.value, variants);
             if      (resolved === null                  ) showFace(restingRef.current, null, nowMs);
             else if (resolved.category === "Expressions") showFace(faceAtStrength(restingRef.current, resolved.face, strength), durationMs, nowMs);
             else if (resolved.category === "Movements"  ) motionRef.current = {motion: resolved.motion, startMs: nowMs};
@@ -234,7 +242,7 @@ export function useFaceController(
 
         // Pick the face Neutral means while awake (an unknown name keeps the current one), moving to it if resting
         const setRestingExpression = (value: string): void => {
-            chosenRestRef.current = expressionFace(value) ?? chosenRestRef.current;
+            chosenRestRef.current = expressionFace(value, variants) ?? chosenRestRef.current;
             if (asleepRef.current) return;
 
             const wasResting   = atRestRef.current;
@@ -290,7 +298,7 @@ export function useFaceController(
             // Doze off: Neutral means the sleeping face until `wake` (the face settles there after any emotion), breathing slow and deep
             sleep: (): void => {
                 asleepRef       .current = true;
-                restingRef      .current = SMILEY_SLEEPING_FACE;
+                restingRef      .current = sleepingFace(variants);
                 releaseAtRef    .current = null;
                 motionRef       .current = null;
                 animationFaceRef.current = null;
@@ -319,7 +327,7 @@ export function useFaceController(
 
             // A backend plan's step, and the session's settings (null: no setup, so every automatic behavior runs and the
             // page's conversation state counts again)
-            runPlanStep : (actions: StepActions): number => runSmileyStep(actions, levers),
+            runPlanStep : (actions: StepActions): number => runSmileyStep(actions, levers, variants),
             applySetup  : (setup: AvatarSetup | null): void => {
                 autoRef        .current = (setup === null) ? SMILEY_AUTO_DEFAULT : setup.auto;
                 backendStateRef.current = (setup === null) ? null : (backendStateRef.current ?? "idle");
@@ -332,7 +340,7 @@ export function useFaceController(
             setSpeechLevel : (level: number       ): void => { speechTargetRef.current = level; },
             setSpeechPhase : (phase: SpeechPhase  ): void => { speechPhaseRef .current = phase; },
         };
-    }, [breathing, gaze, mapTask]);
+    }, [breathing, gaze, mapTask, variants]);
 
     // --------------------------------------------------------------------------------
     // Frame Loop

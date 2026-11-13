@@ -1,14 +1,16 @@
-/* Draw the looks that cover the robot's head: fear shading, frost, icicles.
+/* Draw the looks that cover the robot's shell: fear shading, frost, icicles.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/common/avatar/robot/render_2d/RobotOverlays2D`
 
-These are the smiley's own looks, fitted to the robot's head: blue shading
-(fearful), or frost with a thin dark-blue rim along the top edge, and icicles
-hanging under the head (cold). Each shows by its amount in the face state.
+These are the smiley's own looks, fitted to the robot's head: a faint blue
+shade over the top of the shell (fearful), or frost with a thin dark-blue rim
+along the top edge, and icicles hanging under the head (cold). Each shows by
+its amount in the face state.
 
-`RobotFace2D` draws them over the shell and the screen's glass, but under the
-face on the screen. Each one fades out down the head, and stopping it at the
-screen's edge would cut that fade off in a hard line.
+`RobotFace2D` draws them over the shell and under the screen, so the screen's
+frame cuts them off cleanly. The glass is a different material and shows the
+same looks its own way (`RobotGlass2D`): a blue shade down the glass, and frost
+creeping in from its edges.
 
 */
 import type { ReactElement } from "react";
@@ -22,7 +24,7 @@ import      { headBox, ROBOT_ICICLE_PATHS } from "./robotDrawing2D";
 // Shading and frost over the top of the head (each is strong at the very top and gone by `*_END`)
 const ROBOT_FEAR_HEX     = "#6f86ff";   // Fearful blue
 const ROBOT_FEAR_END     = "50%";
-const ROBOT_FEAR_OPACITY = 0.6;         // At a full `fearShade`
+const ROBOT_FEAR_OPACITY = 0.3;         // At a full `fearShade` (faint: the glass carries most of the look)
 const ROBOT_FROST_HEX    = "#f4fbff";   // Cold-face frost
 const ROBOT_FROST_END    = "38%";
 
@@ -35,7 +37,7 @@ const ROBOT_COLD_RIM_END = "60%";
 // --------------------------------------------------------------------------------
 // Robot Overlays (2D)
 // --------------------------------------------------------------------------------
-// Fear shading, frost, and icicles, in the head group's coordinates
+// Fear shading, frost, and icicles on the shell, in the head group's coordinates
 export default function RobotOverlays2D({face, ice}: {
     face : FaceState;   // Combined face for this frame
     ice  : string;      // Icicle fill

@@ -3,8 +3,9 @@
 `@frontend/src/pages/common/avatar/smiley/plans/smileyStepRunner`
 
 A step's actions (`HARNESS_PROTOCOL.md` §3.3) all start at once, `reset` first.
-Faces, movements, and animations are found here by name, and a movement is
-scaled to its strength and speed; the other actions go straight to their layer.
+Faces, movements, and animations are found here by name (a face as the avatar's
+own version of it), and a movement is scaled to its strength and speed; the
+other actions go straight to their layer.
 A plan's names are checked against `SMILEY_PLAN_CATALOG` before it runs, so a
 name not found here is a bug, and fails loudly. Each lever starts its action and
 says how long it takes; the step's natural length is the longest of them.
@@ -14,6 +15,7 @@ import type { BreathAction, GazeAction, MoveAction, PlanState } from "@/hooks/li
 import type { PoseAction, PropAction, StepActions             } from "@/hooks/live-chat/avatarPlanFrames";
 import type { FaceAnimation                                   } from "../actions/faceAnimations";
 import      { animationFor                                    } from "../actions/faceAnimations";
+import type { FaceVariants                                    } from "../actions/faceExpressions";
 import      { expressionFace                                  } from "../actions/faceExpressions";
 import type { FaceMotion, MotionOffsets                       } from "../actions/faceMotions";
 import      { motionFor, scaleOffsets                         } from "../actions/faceMotions";
@@ -43,13 +45,13 @@ export type SmileyLevers = {
 // Step Runner
 // ================================================================================
 // Start every action in a step (reset first), returning the step's natural length: its longest action
-export function runSmileyStep(actions: StepActions, levers: SmileyLevers): number {
+export function runSmileyStep(actions: StepActions, levers: SmileyLevers, variants: FaceVariants): number {
     if (actions.reset === true) levers.reset();
 
     // One length per action, from its lever
     const {face, move, animation, pose, gaze, prop, breath, blink, state} = actions;
     const lengths: number[] = [0];
-    if (face      !== undefined) lengths.push((face === "rest") ? levers.restFace() : levers.face(namedFace(face.name), face.strength, face.hold_ms, face.in_ms, face.out_ms));
+    if (face      !== undefined) lengths.push((face === "rest") ? levers.restFace() : levers.face(namedFace(face.name, variants), face.strength, face.hold_ms, face.in_ms, face.out_ms));
     if (move      !== undefined) lengths.push(levers.motion(scaledMotion(namedMotion(move.name), move)));
     if (animation !== undefined) lengths.push(levers.animation(namedAnimation(animation.name), animation.strength, animation.hold_ms));
     if (pose      !== undefined) lengths.push(levers.pose(pose));
@@ -70,9 +72,9 @@ function scaledMotion(motion: FaceMotion, move: MoveAction): FaceMotion {
 // --------------------------------------------------------------------------------
 // Names
 // --------------------------------------------------------------------------------
-// The face a checked expression name means
-function namedFace(name: string): FaceState {
-    const face = expressionFace(name);
+// The face a checked expression name means on this avatar
+function namedFace(name: string, variants: FaceVariants): FaceState {
+    const face = expressionFace(name, variants);
     if (face === null) throw new Error(`Expression "${name}" passed the plan's name check but has no face`);
     return face;
 }

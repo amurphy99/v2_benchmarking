@@ -21,7 +21,7 @@ import type { SmileyPaint                                                       
 import      { browPath, eyeArcPath, eyeGeometry, heartEyeScale                      } from "@/pages/common/avatar/smiley/render_2d/faceDrawing2D";
 import      { SMILEY_RIBBON_EDGE_W, SMILEY_SPIRAL_STROKE_W                          } from "@/pages/common/avatar/smiley/render_2d/faceDrawing2D";
 import      { spiralPath, spiralRotationDeg                                         } from "@/pages/common/avatar/smiley/render_2d/faceDrawing2D";
-import      { SMILEY_EXTRA_SHINE_HEX, SMILEY_EXTRA_SHINE_OPACITY, SMILEY_HEART_PATH } from "@/pages/common/avatar/smiley/render_2d/objectDrawing2D";
+import      { SMILEY_HEART_PATH                                                     } from "@/pages/common/avatar/smiley/render_2d/objectDrawing2D";
 import type { FaceState                                                             } from "@/pages/common/avatar/smiley/state/faceState";
 import      { ROBOT_FACE_LAYOUT                                                     } from "./robotDrawing2D";
 
@@ -31,6 +31,11 @@ const ROBOT_EYE_SHINE_Y   = -0.46;
 const ROBOT_EYE_SHINE_R   = 0.38;
 const ROBOT_EYE_SHINE_HEX = "#ffffff";
 
+// Shine on a heart eye (in the heart's own unit size): brighter than on the floating hearts, to match the open eyes'
+const ROBOT_HEART_SHINE         = {cx: -0.45, cy: -0.55, rx: 0.2, ry: 0.13};
+const ROBOT_HEART_SHINE_DEG     = -35;
+const ROBOT_HEART_SHINE_OPACITY = 0.85;
+
 
 // --------------------------------------------------------------------------------
 // Robot Eye (2D)
@@ -39,7 +44,7 @@ const ROBOT_EYE_SHINE_HEX = "#ffffff";
 export default function RobotEye2D({side, face, paint, fill}: {
     side  : number;        // -1 for the left eye, 1 for the right
     face  : FaceState;     // Combined face for this frame
-    paint : SmileyPaint;   // Fills from `RobotFace2D` (`feature` is the screen's light)
+    paint : SmileyPaint;   // Fills from `RobotFace2D` (`feature` is the screen's light, `heartEye` the heart eyes' pink)
     fill  : string;        // Open eye's fill (the light, shaded deeper at the top)
 }): ReactElement {
     // Eyelid clip ids, unique per eye on the page (React's ids may hold characters `url(#...)` rejects)
@@ -93,11 +98,11 @@ export default function RobotEye2D({side, face, paint, fill}: {
                     />
                 ) : null}
 
-                {/* Heart with a small shine (sizes are in the heart's own unit size) */}
+                {/* Heart with a small shine */}
                 {(face.heartEyes > 0) ? (
-                    <g transform={`scale(${heartEyeScale(face)})`} opacity={face.heartEyes}>
+                    <g transform={`scale(${heartEyeScale(face, ROBOT_FACE_LAYOUT)})`} opacity={face.heartEyes}>
                         <path d={SMILEY_HEART_PATH} fill={paint.heartEye} />
-                        <ellipse cx={-0.42} cy={-0.5} rx={0.2} ry={0.12} transform="rotate(-35 -0.42 -0.5)" fill={SMILEY_EXTRA_SHINE_HEX} opacity={SMILEY_EXTRA_SHINE_OPACITY} />
+                        <ellipse {...ROBOT_HEART_SHINE} transform={`rotate(${ROBOT_HEART_SHINE_DEG} ${ROBOT_HEART_SHINE.cx} ${ROBOT_HEART_SHINE.cy})`} fill={ROBOT_EYE_SHINE_HEX} opacity={ROBOT_HEART_SHINE_OPACITY} />
                     </g>
                 ) : null}
             </g>

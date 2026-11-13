@@ -47,6 +47,7 @@ export const SMILEY_FACE_LAYOUT: FaceLayout = {
     eyeY          : SMILEY_EYE_Y,
     eyeR          : 16.1,
     gazeShift     : 16,
+    heartEyeR     : 25,
     browGap       : 9,
     browHalfW     : 15,
     browArch      : 6,
@@ -81,7 +82,6 @@ const SMILEY_EYE_ARC_END_W           = 2.8;   // ...and at its ends
 const SMILEY_SPIRAL_R                = 17;    // Spiral eye radius
 const SMILEY_SPIRAL_TURNS            = 2.5;   // Turns in each spiral
 const SMILEY_SPIRAL_SPIN_DEG_PER_SEC = 90;    // Spiral spin speed (the eyes spin opposite ways)
-const SMILEY_HEART_EYE_SIZE          = 25;    // Heart eye half-width (big enough to cover an open eye)
 
 // Eyebrows (their size is in each renderer's layout)
 const SMILEY_BROW_FOLLOW = 0.75;  // Share of the eyes' gaze shift the brows follow (1 keeps them right over the eyes)
@@ -165,6 +165,7 @@ export type FaceLayout = {
     eyeY      : number;   // Eye height
     eyeR      : number;   // Radius of a round open eye (an oval eye keeps the same area)
     gazeShift : number;   // Farthest the eyes move for gaze
+    heartEyeR : number;   // Heart eye half-width (the smiley's is big enough to cover an open eye)
 
     // Eyebrows
     browGap   : number;   // Gap between the top of the eye and the brow
@@ -203,6 +204,7 @@ export type EyeGeometry = {
 export type MouthShape = {
     opening      : string;             // Outline of the opening: upper lip left to right, then lower lip back
     line         : string;             // Tapered closed-mouth line (the smile curve)
+    lineCenter   : string;             // Middle of that line, as an open path (for a renderer that strokes it at one width)
     openFade     : number;             // How far the opening (fill, teeth, and outline) has faded in, 0 to 1
     lineFade     : number;             // How visible the closed-mouth line under it still is, 0 to 1
     topTeeth     : string;             // Band of teeth under the upper lip
@@ -274,8 +276,8 @@ export function spiralRotationDeg(side: number, face: FaceState): number {
 export const SMILEY_HEART_EYE_EDGE_W = 0.6;
 
 // Heart eye scale (it swells slightly as it fades in)
-export function heartEyeScale(face: FaceState): number {
-    return SMILEY_HEART_EYE_SIZE * face.eyeScale * (0.6 + (0.4 * face.heartEyes));
+export function heartEyeScale(face: FaceState, layout: FaceLayout): number {
+    return layout.heartEyeR * face.eyeScale * (0.6 + (0.4 * face.heartEyes));
 }
 
 // One tapered eyebrow above its eye, following most of the eye's gaze shift and never touching the eye
@@ -377,6 +379,7 @@ export function mouthShape(face: FaceState, layout: FaceLayout): MouthShape {
     return {
         opening      : closedPath([...upper, ...[...lower].reverse()]),
         line         : ribbonPath(closed, lineWidth),
+        lineCenter   : openPath(closed),
         openFade     : Math.min(1, face.mouthOpen / SMILEY_MOUTH_OUTLINE_OPEN),
         lineFade     : 1 - (lineHide * lineHide * (3 - (2 * lineHide))),
         topTeeth     : closedPath([...upper, ...[...topEdge].reverse()]),
@@ -384,7 +387,7 @@ export function mouthShape(face: FaceState, layout: FaceLayout): MouthShape {
         topTeethY    : [Math.min(...upper.map(([, y]: Point) => y)), topInnerY(0)],
         bottomTeethY : [bottomInnerY(0), Math.max(...lower.map(([, y]: Point) => y))],
         toothGaps    : toothGaps,
-        rowLine      : `M ${rowPoints.map(([x, y]: Point) => `${x} ${y}`).join(" L ")}`,
+        rowLine      : openPath(rowPoints),
         drool        : drool,
         tongue       : {
             cx : 0,
@@ -481,10 +484,9 @@ export function iciclePath(left: Point, right: Point, length: number): string {
     return `M ${left[0]} ${left[1]} Q ${left[0] + bend} ${half} ${midX} ${tipY} Q ${right[0] - bend} ${half} ${right[0]} ${right[1]} Z`;
 }
 
-// Closed SVG path through a list of points
-function closedPath(points: Point[]): string {
-    return `M ${points.map(([x, y]: Point) => `${x} ${y}`).join(" L ")} Z`;
-}
+// Open SVG path through a list of points, and the same path closed back to its start
+function openPath  (points: Point[]): string { return `M ${points.map(([x, y]: Point) => `${x} ${y}`).join(" L ")}`; }
+function closedPath(points: Point[]): string { return `${openPath(points)} Z`; }
 
 // Move `t` of the way from one number to another
 function mix(from: number, to: number, t: number): number {

@@ -11,6 +11,7 @@ import      { useImperativeHandle } from "react";
 
 // From this project
 import type { AvatarHandle, AvatarZoom } from "../avatarRegistry";
+import      { SMILEY_NO_VARIANTS       } from "./actions/faceExpressions";
 import        SmileyFace2D               from "./render_2d/SmileyFace2D";
 import      { useFaceController        } from "./useFaceController";
 
@@ -24,7 +25,7 @@ export default function SmileyAvatar({ref, browsAlways = false}: {
     zoom         : AvatarZoom;          // Not used (the face always fills its box)
     browsAlways? : boolean;             // Keep the eyebrows showing on every expression
 }): ReactElement {
-    const {face, handle} = useFaceController(browsAlways);
+    const {face, handle} = useFaceController(browsAlways, SMILEY_NO_VARIANTS);
     useImperativeHandle(ref, (): AvatarHandle => handle, [handle]);
 
     return (

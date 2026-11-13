@@ -170,6 +170,7 @@ Everything lives in `capabilities/profiles.ts`.
 | `webapp` + `qt` | Web Avatar (QT) | 10 moods + 17 real clip names |
 | `webapp` + `buddy` | Web Avatar (Buddy) | 10 moods + 5 real clip names |
 | `webapp` + `smiley` | Web Avatar (Smiley) | Sections for its Expressions (`Grinning Face`, `Fearful Face`, …), Movements (8 motion names), and Animations (`Ponder`, `Yawn`, `Glance Up Right`, `Glance Up Left`), then the 10 moods + `Angry`. A `UserSettings.modelChoice` option, so participants can be given it |
+| `webapp` + `robot` | Web Avatar (Robot) | Same buttons as `smiley` (it plays the same names, some reshaped for its screen). A `UserSettings.modelChoice` option, so participants can be given it |
 | `webapp` + `smiley-brows` | Web Avatar (Smiley + eyebrows) | Same buttons as `smiley`; the face always shows its eyebrows. Not a `modelChoice` option, so it only appears on `/avatar-demo` |
 | `webapp` + `talkinghead`, `temp1`–`temp3` | *(default)* | Reserved `modelChoice` options with no avatar built yet. Avatar pickers hide them until `avatarRegistry.tsx` has an entry with that id; until then the chat page shows Smiley |
 | `buddyrobot` | Buddy Robot | 10 moods + `Angry`; animations TBD |

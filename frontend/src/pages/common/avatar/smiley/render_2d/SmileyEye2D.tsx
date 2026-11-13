@@ -84,8 +84,8 @@ export default function SmileyEye2D({side, face, paint, layout}: {
                 {/* Heart with a thin darker outline and a small gloss (sizes are in the heart's own unit size,
                     so the outline width undoes its scale) */}
                 {(face.heartEyes > 0) ? (
-                    <g transform={`scale(${heartEyeScale(face)})`} opacity={face.heartEyes}>
-                        <path d={SMILEY_HEART_PATH} fill={paint.heartEye} stroke={SMILEY_HEART_EYE_EDGE_HEX} strokeWidth={SMILEY_HEART_EYE_EDGE_W / heartEyeScale(face)} strokeLinejoin="round" />
+                    <g transform={`scale(${heartEyeScale(face, layout)})`} opacity={face.heartEyes}>
+                        <path d={SMILEY_HEART_PATH} fill={paint.heartEye} stroke={SMILEY_HEART_EYE_EDGE_HEX} strokeWidth={SMILEY_HEART_EYE_EDGE_W / heartEyeScale(face, layout)} strokeLinejoin="round" />
                         <ellipse cx={-0.42} cy={-0.5} rx={0.2} ry={0.12} transform="rotate(-35 -0.42 -0.5)" fill={SMILEY_HEART_EYE_GLOSS_HEX} opacity={SMILEY_HEART_EYE_GLOSS_OPACITY} />
                     </g>
                 ) : null}

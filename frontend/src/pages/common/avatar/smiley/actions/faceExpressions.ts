@@ -22,6 +22,11 @@ the Robot, which is drawn with both: perked up for happy and startled faces,
 drooping and dimmer for sad and sleepy ones. A face with its own color sets
 `faceTint` beside it, so the Robot tints its lights with that color.
 
+An avatar drawn its own way can also reshape any expression for itself. It
+passes its `FaceVariants` (changes by expression name, laid over the
+expression's own) wherever a name is turned into a face. The Robot's are in
+`robot/robotExpressions.ts`; the Smiley has none (`SMILEY_NO_VARIANTS`).
+
 */
 import type { FaceChanges, FaceState } from "../state/faceState";
 import      { fullFace               } from "../state/faceState";
@@ -40,11 +45,18 @@ const SMILEY_EYE_TALL_OVAL   = 0.85;
 // Grin shared by the open-mouthed smiling faces: a large half circle with a gently bowed top, set high
 const SMILEY_GRIN: FaceChanges = {mouthCurve: 0.35, mouthOpen: 1.1, mouthWidth: 1.12, mouthFlatTop: 1, mouthTopBow: 4, mouthShift: -14};
 
-// Expression the face rests on until the page picks another
+// Expression the face rests on until the page picks another, and the one it dozes with
 export const SMILEY_DEFAULT_RESTING_EXPRESSION = "Slightly Smiling Face";
+const SMILEY_SLEEPING_EXPRESSION               = "Sleeping Face";
 
 // One named expression: the emoji it borrows from, and how it differs from the base face
 type Expression = {emoji: string; face: FaceChanges};
+
+// What an avatar drawn its own way changes about the expressions: by name, changes laid over the expression's own
+export type FaceVariants = Record<string, FaceChanges>;
+
+// The smiley's variants: none (it draws every expression as written here)
+export const SMILEY_NO_VARIANTS: FaceVariants = {};
 
 
 // ================================================================================
@@ -111,14 +123,20 @@ const SMILEY_EXPRESSIONS: Record<string, Expression> = {
     "Red Angry Face" : {emoji: "😡", face: {brows: 1, browAngle: -1, browRaise: -0.7, eyeScale: 0.82, eyeInset: 7, mouthCurve: -0.8, mouthWidth: 0.7, faceRgb: [...SMILEY_POUT_RGB], faceTint: 1, antennaPerk: 0.5}},
 };
 
-// Face the smiley dozes with (what Neutral means while it is asleep)
-export const SMILEY_SLEEPING_FACE = fullFace(SMILEY_EXPRESSIONS["Sleeping Face"].face);
-
 // Every named expression with its emoji, in catalog order (for building buttons and pickers)
 export const SMILEY_EXPRESSION_LIST = Object.entries(SMILEY_EXPRESSIONS).map(([name, expression]: [string, Expression]) => ({name, emoji: expression.emoji}));
 
-// Full face of an expression by name, ignoring case (null for any other name)
-export function expressionFace(name: string): FaceState | null {
+// Full face of an expression by name as one avatar draws it, ignoring case (null for any other name)
+export function expressionFace(name: string, variants: FaceVariants): FaceState | null {
     const key = Object.keys(SMILEY_EXPRESSIONS).find((expression: string) => expression.toLowerCase() === name.toLowerCase());
-    return (key === undefined) ? null : fullFace(SMILEY_EXPRESSIONS[key].face);
+    return (key === undefined) ? null : variantFace(key, variants);
+}
+
+// The face an avatar rests on until the page picks another, and the one it dozes with (what Neutral means while asleep)
+export function defaultRestingFace(variants: FaceVariants): FaceState { return variantFace(SMILEY_DEFAULT_RESTING_EXPRESSION, variants); }
+export function sleepingFace      (variants: FaceVariants): FaceState { return variantFace(SMILEY_SLEEPING_EXPRESSION,        variants); }
+
+// One expression's full face by its exact name, with an avatar's changes laid over it
+function variantFace(key: string, variants: FaceVariants): FaceState {
+    return fullFace({...SMILEY_EXPRESSIONS[key].face, ...variants[key]});
 }

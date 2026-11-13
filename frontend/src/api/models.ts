@@ -21,7 +21,7 @@ export interface UserSettings {
 
 // Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
 // Pickers list only the ones with an entry in `avatarRegistry.tsx` (`talkinghead` and `temp1`-`temp3` are reserved)
-export const AVATAR_MODEL_CHOICES = ["smiley", "qt", "buddy", "talkinghead", "temp1", "temp2", "temp3"] as const;
+export const AVATAR_MODEL_CHOICES = ["smiley", "robot", "qt", "buddy", "talkinghead", "temp1", "temp2", "temp3"] as const;
 export type  AvatarModelChoice    = (typeof AVATAR_MODEL_CHOICES)[number];
 
 // Chat languages as BCP-47 tags (`Profile.LANGUAGE_CHOICES` in `backend/chat_app/models.py`)

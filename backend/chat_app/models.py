@@ -426,7 +426,7 @@ class UserSettings(models.Model):
     TASK_CHOICES = [("chat", "Chat"), ("chattopic", "ChatTopic"), ("chatimage", "ChatImage")]
     # Web avatars (`AVATAR_MODEL_CHOICES` in `frontend/src/api/models.ts` copies these)
     MODEL_CHOICES = [
-        ("buddy", "Buddy"), ("qt", "QT"), ("smiley", "Smiley"), ("talkinghead", "TalkingHead"),
+        ("buddy", "Buddy"), ("qt", "QT"), ("robot", "Robot"), ("smiley", "Smiley"), ("talkinghead", "TalkingHead"),
         ("temp1", "Temp 1"), ("temp2", "Temp 2"), ("temp3", "Temp 3"),  # Reserved for avatars still being built
     ]
 

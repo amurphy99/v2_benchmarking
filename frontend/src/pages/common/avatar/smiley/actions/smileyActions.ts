@@ -25,6 +25,7 @@ import      { GAZE_FRAMES, PROP_NAMES                } from "@/hooks/live-chat/a
 import type { FaceState                              } from "../state/faceState";
 import type { FaceAnimation                          } from "./faceAnimations";
 import      { animationFor, SMILEY_ANIMATION_LIST    } from "./faceAnimations";
+import type { FaceVariants                           } from "./faceExpressions";
 import      { expressionFace, SMILEY_EXPRESSION_LIST } from "./faceExpressions";
 import type { FaceMotion                             } from "./faceMotions";
 import      { motionFor, SMILEY_MOVEMENT_NAMES       } from "./faceMotions";
@@ -84,13 +85,14 @@ export const SMILEY_PLAN_CATALOG: PlanCatalog = {
     gazeFrames  : [...GAZE_FRAMES],
 };
 
-// A public name, or a mood (a random one of its names), ignoring case and kind (null for anything else)
-export function resolveSmileyAction(label: string): SmileyAction | null {
+// A public name, or a mood (a random one of its names), ignoring case and kind (null for anything else).
+// An expression comes back as the avatar's own version of it (`variants`)
+export function resolveSmileyAction(label: string, variants: FaceVariants): SmileyAction | null {
     const mood = Object.keys(SMILEY_MOODS).find((key: string) => key.toLowerCase() === label.toLowerCase());
     const name = (mood === undefined) ? label : SMILEY_MOODS[mood][Math.floor(Math.random() * SMILEY_MOODS[mood].length)];
 
     // Each category in turn (names are unique across them)
-    const face = expressionFace(name);
+    const face = expressionFace(name, variants);
     if (face !== null) return {category: "Expressions", face};
     const motion = motionFor(name);
     if (motion !== undefined) return {category: "Movements", motion};

@@ -295,27 +295,43 @@ objects: [{kind: "heart", at: "center", dx: -96, dy: -50, scale: 1, bob: 4, puls
 The Robot (`../robot/`, avatar id `robot`) is a second renderer for the same
 `FaceState`: a wide silver head with ear pads and two antennas, and the face
 drawn in lilac light on a dark screen. It uses this folder's controller,
-actions, behaviors, plans, and objects unchanged, so every name and plan in
-this README works on it.
+actions, behaviors, plans, and objects, so every name and plan in this README
+works on it. It reshapes some expressions for its screen (see **Its own
+expressions** below).
 
 ```diff
  robot/
  ├── RobotAvatar.tsx           # Entry component: this folder's controller as the avatar handle, drawn by its renderer
+ ├── robotExpressions.ts       # The expressions it reshapes: its changes to each, by name
  └── render_2d/
      ├── RobotFace2D.tsx       # The whole avatar: shadow, head, screen, the face on it, objects, held prop
      ├── RobotShell2D.tsx      # The head: silver shell, ear pads, antennas
      ├── RobotAntenna2D.tsx    # One antenna: stalk and lit ball
-     ├── RobotGlass2D.tsx      # The screen without the face: bezel, glass, reflections
-     ├── RobotOverlays2D.tsx   # Looks that cover the head: fearful shading, frost, icicles
+     ├── RobotGlass2D.tsx      # The screen without the face: bezel, glass, reflections, and the fear shade and frost on the glass
+     ├── RobotOverlays2D.tsx   # Looks that cover the shell: fearful shading, frost, icicles
      ├── RobotEye2D.tsx        # One eye (a pill with a shine) and its brow
+     ├── RobotMouth2D.tsx      # The mouth in light: an even line, or an outlined opening with a tongue or a grille of teeth
      ├── robotColors.ts        # The shell and light colors, and how an emotion tints them
      └── robotDrawing2D.ts     # Head and screen sizes, the feature layout, ear pad and antenna geometry
 ```
 
 * **Shared drawing:** the eyes, brows, and mouth use `render_2d/faceDrawing2D.ts`
-  at the Robot's own sizes (`ROBOT_FACE_LAYOUT`), and the mouth, hands, hearts,
-  and held prop are this folder's components with the Robot's colors. A face
-  field therefore means the same on both avatars.
+  at the Robot's own sizes (`ROBOT_FACE_LAYOUT`), and the hands, hearts, and
+  held prop are this folder's components with the Robot's colors. A face field
+  therefore means the same on both avatars. The Robot draws those shapes its
+  own way: the mouth line is one width with round ends, an open mouth is a
+  see-through outline, teeth are flat pale light, and the cold face's lip
+  icicles are left out.
+* **Its own expressions:** `robot/robotExpressions.ts` lists the expressions
+  the Robot reshapes (`ROBOT_FACE_VARIANTS`). Each entry holds only the fields
+  it changes, laid over that expression in `actions/faceExpressions.ts`, and an
+  expression with no entry is drawn as the Smiley's. `RobotAvatar` passes the
+  table to `useFaceController`, which uses it wherever a name becomes a face
+  (an action, a plan step, the resting face, the sleeping face). The
+  animations' faces (Ponder, Yawn) have no variants.
+* **Fear and cold:** the shell takes a faint blue shade or frost, and the glass
+  shows its own version (a blue shade down from its top, frost creeping in
+  from its edges).
 * **Turning:** the features slide as on the Smiley, and the screen slides half
   as far, so they move across the glass. The ear pads and antennas are placed
   on the head in 3D, turned with it, and drawn flat: the ear pad swinging
@@ -330,9 +346,11 @@ this README works on it.
 | To tune… | Look in |
 |---|---|
 | Shell and light colors, and how strongly an emotion tints the shell | `robot/render_2d/robotColors.ts` |
-| Eye, brow, and mouth sizes and positions | `ROBOT_FACE_LAYOUT` in `robot/render_2d/robotDrawing2D.ts` |
+| Eye, brow, mouth, and heart-eye sizes and positions | `ROBOT_FACE_LAYOUT` in `robot/render_2d/robotDrawing2D.ts` |
+| One expression's shapes on the Robot only | `ROBOT_FACE_VARIANTS` in `robot/robotExpressions.ts` |
 | Head, screen, ear pad, and antenna sizes | `robot/render_2d/robotDrawing2D.ts` |
-| Glow, cheeks, eye shading, tongue, hearts, the ground shadow | `robot/render_2d/RobotFace2D.tsx` |
+| Glow, cheeks, eye shading, tongue, teeth, hearts and heart eyes, the ground shadow | `robot/render_2d/RobotFace2D.tsx` |
+| The fear shade and frost | `robot/render_2d/RobotGlass2D.tsx` (glass), `robot/render_2d/RobotOverlays2D.tsx` (shell) |
 | How springy the antennas are | `behavior/antenna.ts` |
 | Each expression's antenna pose and glow | `actions/faceExpressions.ts` |
 
@@ -378,7 +396,11 @@ this README works on it.
   it the Robot's lights shift toward an off color instead of the emotion's.
 * **Both avatars draw every face.** A change to an expression, or to the shape
   math in `render_2d/faceDrawing2D.ts`, shows on the Smiley and the Robot, so
-  check both on the demo page.
+  check both on the demo page. A field the Robot's variant also sets keeps the
+  Robot's value, so a change to that field in `actions/faceExpressions.ts`
+  shows on the Smiley only.
+* **A variant's key is the expression's exact name.** A misspelled key in
+  `ROBOT_FACE_VARIANTS` matches nothing and is ignored without an error.
 * **Other avatars:** the QT and Buddy avatars are clip-based 3D models outside
   this folder. Every avatar ignores the optional handle methods it doesn't
   list in `features` (`avatarRegistry.tsx`), so pages can call them freely.

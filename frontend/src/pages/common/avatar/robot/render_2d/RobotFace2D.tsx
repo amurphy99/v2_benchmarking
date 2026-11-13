@@ -4,12 +4,12 @@
 
 A pure renderer for the same `FaceState` the smiley draws, so every expression,
 movement, animation, and plan works on the robot unchanged. It holds no timers
-or behavior. From back to front it draws the head (`RobotShell2D`), the screen
-set into it (`RobotGlass2D`), the looks that cover both (`RobotOverlays2D`:
-fearful shading, frost, icicles), and then the face on the glass, in light.
-The eyes are `RobotEye2D`, and the mouth is the smiley's own `SmileyMouth2D` at
-the robot's sizes and colors. Everything on the glass shares one soft glow, and
-dims with the face's `glow`.
+or behavior. From back to front it draws the head (`RobotShell2D`), the looks
+that cover its shell (`RobotOverlays2D`: fearful shading, frost, icicles), the
+screen set into it (`RobotGlass2D`, which shows those looks its own way), and
+then the face on the glass, in light: the eyes (`RobotEye2D`) and the mouth
+(`RobotMouth2D`). Everything on the glass shares one soft glow, and dims with
+the face's `glow`.
 
 The robot's colors for the frame come from `robotColors`, which also tints them
 with an emotion's color.
@@ -28,7 +28,6 @@ import type { FaceObject, HandObject, HeartObject                } from "@/pages
 import        SmileyHand2D                                         from "@/pages/common/avatar/smiley/render_2d/SmileyHand2D";
 import        SmileyHeart2D                                        from "@/pages/common/avatar/smiley/render_2d/SmileyHeart2D";
 import        SmileyMap2D                                          from "@/pages/common/avatar/smiley/render_2d/SmileyMap2D";
-import        SmileyMouth2D                                        from "@/pages/common/avatar/smiley/render_2d/SmileyMouth2D";
 import type { SmileyPaint, Sprite                                } from "@/pages/common/avatar/smiley/render_2d/faceDrawing2D";
 import      { SMILEY_FACE_R, tearSprite, zzzSprites              } from "@/pages/common/avatar/smiley/render_2d/faceDrawing2D";
 import      { mixRgb, rgbString, verticalGradient                } from "@/pages/common/avatar/smiley/render_2d/gradients2D";
@@ -37,10 +36,11 @@ import      { SMILEY_TEAR_PATH                                   } from "@/pages
 import type { FaceState                                          } from "@/pages/common/avatar/smiley/state/faceState";
 import        RobotEye2D                                           from "./RobotEye2D";
 import        RobotGlass2D                                         from "./RobotGlass2D";
+import        RobotMouth2D                                         from "./RobotMouth2D";
 import        RobotOverlays2D                                      from "./RobotOverlays2D";
 import        RobotShell2D                                         from "./RobotShell2D";
 import      { robotColors                                        } from "./robotColors";
-import      { ROBOT_CHEEK_X, ROBOT_CHEEK_Y, ROBOT_FACE_LAYOUT    } from "./robotDrawing2D";
+import      { ROBOT_CHEEK_X, ROBOT_CHEEK_Y                       } from "./robotDrawing2D";
 import      { ROBOT_TURN_SHIFT_X, ROBOT_TURN_SHIFT_Y             } from "./robotDrawing2D";
 import      { screenBox, screenCenter                            } from "./robotDrawing2D";
 
@@ -58,8 +58,9 @@ const ROBOT_EYE_TOP_RGB    = [16, 56, 110] as const;
 const ROBOT_EYE_TOP_MIX    = 0.38;
 const ROBOT_EYE_BOTTOM_MIX = 0.3;    // Toward white
 
-// Inside an open mouth: the light's color, mostly see-through
+// Inside an open mouth: the light's color, mostly see-through. Teeth are the light mixed most of the way to white
 const ROBOT_MOUTH_FILL_OPACITY = 0.2;
+const ROBOT_TEETH_PALE_MIX     = 0.8;
 
 // Cheek lights (always on a little, brighter with `blush`)
 const ROBOT_CHEEK_RX    = 9;
@@ -70,10 +71,13 @@ const ROBOT_CHEEK_BLUSH = 0.65;    // Opacity a full blush adds
 
 // Extra colors, light at the top to deep at the bottom
 const ROBOT_TONGUE_HEXES = ["#ff9db4", "#f2607f"] as const;
-const ROBOT_HEART_HEXES  = ["#ff9db0", "#ee2f4d"] as const;   // Floating hearts and heart eyes
+const ROBOT_HEART_HEXES  = ["#ffb3c4", "#ff6f91"] as const;   // Floating hearts
 const ROBOT_TEAR_HEXES   = ["#d8f2ff", "#3b97e6"] as const;
 const ROBOT_ICE_HEXES    = ["#ffffff", "#9fd7f6"] as const;   // Icicles, base to tip
 const ROBOT_ZZZ_PALE_MIX = 0.45;                              // How far the top of each Z mixes from the light toward white
+
+// Heart eyes: one flat pink, like the cheek lights (they are drawn in light, so they take no shading)
+const ROBOT_HEART_EYE_HEX = "#ff6f91";
 
 // The tear starts this far lower than on the smiley, under the robot's lower eye
 const ROBOT_TEAR_DROP = 18;
@@ -110,7 +114,7 @@ export default function RobotFace2D({face}: {
     const colors = robotColors(face);
     const light  = rgbString(colors.light);
 
-    // Fills handed to the smiley's parts (the mouth, hands, hearts, and held prop)
+    // Fills handed to the robot's features and the smiley's parts (hands, hearts, and held prop)
     const paint: SmileyPaint = {
         feature  : light,
         mouth    : url("mouth"),
@@ -118,7 +122,7 @@ export default function RobotFace2D({face}: {
         hand     : [rgbString(colors.shell.top), rgbString(colors.shell.base), rgbString(colors.shell.edge)],
         skinEdge : rgbString(colors.shell.deep),
         heart    : url("heart"),
-        heartEye : url("heart"),
+        heartEye : ROBOT_HEART_EYE_HEX,
         ice      : url("ice"),
         tear     : url("tear"),
         zzz      : url("zzz"),
@@ -204,11 +208,11 @@ export default function RobotFace2D({face}: {
 
             <g transform={`translate(${face.offsetX * SMILEY_FACE_R} ${face.offsetY * SMILEY_FACE_R}) rotate(${face.tilt}) scale(${face.scale})`}>
                 {/* -------------------------------------------------------------------------------- */}
-                {/* Head, Screen, and the Looks That Cover Them */}
+                {/* Head, the Looks That Cover It, and the Screen */}
                 {/* -------------------------------------------------------------------------------- */}
                 <RobotShell2D    face={face} shades={colors.shell} lightRgb={colors.light} />
-                <RobotGlass2D    face={face} light={light} bezel={paint.skinEdge} lip={rgbString(colors.shell.edge)} />
                 <RobotOverlays2D face={face} ice={paint.ice} />
+                <RobotGlass2D    face={face} light={light} bezel={paint.skinEdge} lip={rgbString(colors.shell.edge)} />
 
                 {/* -------------------------------------------------------------------------------- */}
                 {/* Features (drawn in light on the glass; they slide with the head turn) */}
@@ -221,9 +225,9 @@ export default function RobotFace2D({face}: {
                             <ellipse cx={ ROBOT_CHEEK_X} cy={ROBOT_CHEEK_Y} rx={ROBOT_CHEEK_RX} ry={ROBOT_CHEEK_RY} fill={paint.blush} opacity={cheek} />
 
                             {/* Eyes and mouth */}
-                            <RobotEye2D    side={-1} face={face} paint={paint} fill={url("eye")}          />
-                            <RobotEye2D    side={ 1} face={face} paint={paint} fill={url("eye")}          />
-                            <SmileyMouth2D           face={face} paint={paint} layout={ROBOT_FACE_LAYOUT} />
+                            <RobotEye2D   side={-1} face={face} paint={paint} fill={url("eye")} />
+                            <RobotEye2D   side={ 1} face={face} paint={paint} fill={url("eye")} />
+                            <RobotMouth2D           face={face} paint={paint} teeth={rgbString(mixRgb(colors.light, [255, 255, 255], ROBOT_TEETH_PALE_MIX))} />
 
                             {/* Tear running down the glass under the right eye */}
                             {(face.tear > 0) ? (

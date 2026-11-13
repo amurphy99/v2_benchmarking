@@ -46,10 +46,9 @@ the Smiley.
   so everything below about the Smiley's actions, plans, and setups holds for
   it too. `smiley/README.md` covers what the two share and where the Robot is
   tuned.
-* `robot` and `smiley-brows` are not `UserSettings.modelChoice` values, so they
-  show on the avatar demo page only. A participant can be given the Robot once
-  the backend's `MODEL_CHOICES` (and `AVATAR_MODEL_CHOICES` in `api/models.ts`)
-  list it.
+* `smiley` and `robot` are `UserSettings.modelChoice` values, so a participant
+  can be given either. `smiley-brows` is not, so it shows on the avatar demo
+  page only.
 * The physical QT and Buddy robots are separate clients with their own code.
   They only get `robot_action`.
 
@@ -568,7 +567,8 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   │   └── behavior/                 # Gaze and poses, the map, breathing, listening motions, antenna sway
      │   ├── robot/                        # The Robot: the Smiley's face controller, drawn as a silver robot
      │   │   ├── RobotAvatar.tsx           # Entry component: the controller as the avatar handle, drawn by its renderer
-     │   │   └── render_2d/                # Its renderer: head, screen, eyes, colors (the mouth and shape math are the Smiley's)
+     │   │   ├── robotExpressions.ts       # The expressions it reshapes for its screen
+     │   │   └── render_2d/                # Its renderer: head, screen, eyes, mouth, colors (the shape math is the Smiley's)
      │   └── GltfRobotAvatar.tsx           # The 3D QT and Buddy avatars (with GltfRobotScene, QTModel, BuddyModel)
      │
      ├── chat/
