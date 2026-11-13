@@ -1,0 +1,29 @@
+{
+    "description"    : "A role-play scenario: two friends planning a small house party around a budget, the guests, and an early night.",
+    "title"          : "Plan a house party",
+    "event"          : "a house party",
+    "opening_line"   : "Hi! I'm so glad we're planning this house party together. We need to pick three snacks or drinks, the music, and an activity. Do you have any ideas?",
+    "settle_example" : "So, charades for the activity?",
+    "closing_line"   : "That's the whole party planned, then. Thanks for planning this with me, it's going to be a great night!",
+    "items": [
+        {"id": "snacks",   "label": "Snacks and drinks", "also_called": ["snacks", "drinks", "food"]},
+        {"id": "music",    "label": "Music",             "also_called": ["playlist", "songs"]},
+        {"id": "activity", "label": "Activity",          "also_called": ["game", "games", "something to do"]}
+    ],
+    "participant": {
+        "brief": "You and your friend are throwing a house party at your apartment. Plan it together, with three snacks or drinks between you.",
+        "constraints": [
+            {"id": "budget",      "text": "You need to keep the whole party under $100."},
+            {"id": "nut_allergy", "text": "One of your friends has a nut allergy."},
+            {"id": "small_space", "text": "Your apartment is small and has no outdoor space."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning a house party together with the user, a friend of yours. It will be at the user's apartment. For the snacks and drinks, agree on three between you, as one choice.",
+        "constraints": [
+            {"id": "non_drinkers",  "text": "Some of your friends don't drink alcohol."},
+            {"id": "early_work",    "text": "You have work early the next morning, so the party has to be over by 10 p.m."},
+            {"id": "no_loud_music", "text": "You don't like loud music."}
+        ]
+    }
+}

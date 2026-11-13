@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up scenario: planning a movie night, where the day has to fit both sides' week.",
+    "title"          : "Plan a movie night",
+    "event"          : "a movie night",
+    "opening_line"   : "Hi! I'm so glad we're planning this movie night together. We need to pick a movie, a snack, and a day. Do you have any ideas?",
+    "settle_example" : "So, Thursday for the day?",
+    "closing_line"   : "That's our whole movie night planned, then. Thanks for planning this with me, it's going to be so much fun!",
+    "items": [
+        {"id": "movie", "label": "Movie", "also_called": ["film"]},
+        {"id": "snack", "label": "Snack", "also_called": ["snacks", "something to eat"]},
+        {"id": "day",   "label": "Day",   "also_called": ["evening"]}
+    ],
+    "participant": {
+        "brief": "You and your friend want to have a movie night. Plan it together.",
+        "constraints": [
+            {"id": "no_scary",     "text": "Scary movies give you nightmares."},
+            {"id": "nut_allergy",  "text": "You're allergic to nuts."},
+            {"id": "busy_weekend", "text": "You're busy on Friday and Saturday evenings."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning a movie night together with the user, a friend of yours.",
+        "constraints": [
+            {"id": "short_movie",     "text": "You fall asleep during movies longer than two hours."},
+            {"id": "sore_tooth",      "text": "You have a sore tooth, so nothing hard or crunchy."},
+            {"id": "busy_early_week", "text": "You're busy on Monday and Tuesday evenings."}
+        ]
+    }
+}

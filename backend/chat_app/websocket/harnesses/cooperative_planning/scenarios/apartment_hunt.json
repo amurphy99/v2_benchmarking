@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up scenario built for conflict: three named apartments, where each side's favorite is ruled out by something only the other knows.",
+    "title"          : "Choose an apartment to share",
+    "event"          : "an apartment to share, and the move into it",
+    "opening_line"   : "Hi! I'm so excited we're going to be roommates. We need to pick an apartment, a move-in date, and how we'll move our things. Which apartment do you like?",
+    "settle_example" : "So, Oak Avenue for the apartment?",
+    "closing_line"   : "That's everything decided, then. Thanks for sorting this out with me, I can't wait to move in!",
+    "items": [
+        {"id": "apartment",   "label": "Apartment",    "also_called": ["flat"]},
+        {"id": "move_in",     "label": "Move-in date", "also_called": ["move-in day", "moving day", "moving date"]},
+        {"id": "moving_help", "label": "Moving help",  "also_called": ["help moving", "movers"]}
+    ],
+    "participant": {
+        "brief": "You and your friend are about to become roommates, and you have narrowed it down to three apartments: Maple Street (the cheapest), Oak Avenue (the biggest), and River Road (the newest). You like Maple Street best. Decide together.",
+        "constraints": [
+            {"id": "oak_stairs", "text": "Oak Avenue is a fourth-floor walk-up, and your bad knee can't manage the stairs."},
+            {"id": "lease_ends", "text": "Your lease ends on the 10th, so you have to be moved out by then."},
+            {"id": "no_lifting", "text": "Because of your knee, you can't carry heavy boxes."}
+        ]
+    },
+    "avatar": {
+        "brief": "You and the user, a friend of yours, are about to become roommates, and you are choosing between three apartments: Maple Street (the cheapest), Oak Avenue (the biggest), and River Road (the newest). You like Oak Avenue best: suggest it early, and give it up only when the user gives you a reason.",
+        "constraints": [
+            {"id": "cat",      "text": "You have a cat, and Maple Street doesn't allow pets."},
+            {"id": "away",     "text": "You're away for work until the 6th."},
+            {"id": "van_once", "text": "Your brother will lend you his van for the move, but only on Sunday the 9th."}
+        ]
+    }
+}

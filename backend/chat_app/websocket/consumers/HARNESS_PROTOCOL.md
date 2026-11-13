@@ -543,13 +543,14 @@ goes. A chat type sends one when the chat starts and again whenever it changes; 
 replaces the last one completely. `kind` says which chat type's card it is, and the rest of
 `data` depends on it. A client that can't show a kind ignores it.
 
-**`cooperative_planning`:** the participant's private constraints, then one line per item to
-agree on.
+**`cooperative_planning`:** the participant's brief and private constraints, then one line per
+item to agree on.
 
 ```json
 {"type": "task_card", "data": {
   "kind": "cooperative_planning",
   "title": "Plan a dinner party",
+  "brief": "You and your friend are hosting a dinner party. Plan the menu together.",
   "constraints": ["You can't cook fish.", "One of the guests is vegetarian.", "Your budget is limited."],
   "items": [
     {"id": "starter", "label": "Starter",     "value": "breadsticks", "pending": null},
@@ -563,6 +564,7 @@ agree on.
 | Field | Type | Meaning |
 |---|---|---|
 | `title` | string | The card's heading |
+| `brief` | string | Who the participant is and the situation, worded to them (the avatar never sees this) |
 | `constraints` | array of strings | The participant's own constraints, in order (the avatar never sees these) |
 | `items[].id`, `items[].label` | string | The item, and how to show it |
 | `items[].value` | string or `null` | The agreed choice, written on the line (`null` while open) |

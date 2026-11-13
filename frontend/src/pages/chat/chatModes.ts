@@ -44,7 +44,17 @@ const MAP_TASK_VARIANTS: ChatVariant[] = [
     {value: "hcrc_4", label: "HCRC map 4"},
 ];
 const PLANNING_VARIANTS: ChatVariant[] = [
-    {value: "dinner_party", label: "Dinner party"},
+    {value: "dinner_party",     label: "Dinner party"       },
+    {value: "day_trip",         label: "Day trip"           },
+    {value: "birthday_party",   label: "Birthday party"     },
+    {value: "movie_night",      label: "Movie night"        },
+    {value: "hotel_room",       label: "Hotel room problems"},
+    {value: "weekend_activity", label: "Weekend activity"   },
+    {value: "club_event",       label: "Campus club event"  },
+    {value: "house_party",      label: "House party"        },
+    {value: "apartment_hunt",   label: "Apartment hunt"     },
+    {value: "camping_trip",     label: "Camping trip"       },
+    {value: "flight_rebooking", label: "Cancelled flight"   },
 ];
 
 // Every mode the picker offers, the default first
@@ -60,7 +70,7 @@ export const CHAT_MODES: ChatMode[] = [
     },
     {
         label       : "Cooperative planning",
-        description : "You and the avatar plan an event together. Each of you knows things the other doesn't, and your card fills in as you agree on each item.",
+        description : "You and the avatar work out a plan together. Each of you knows things the other doesn't, and your card fills in as you agree on each item.",
         icon        : BsCardChecklist,
         chatType    : "cooperative_planning",
         hasCues     : true,

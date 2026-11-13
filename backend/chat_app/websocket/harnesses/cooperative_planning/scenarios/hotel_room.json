@@ -1,0 +1,29 @@
+{
+    "description"    : "A role-play scenario: a hotel guest with a list of complaints, and a receptionist with one free room and no discounts to give.",
+    "title"          : "Sort out your hotel room",
+    "event"          : "a fix for a hotel guest's room complaints",
+    "opening_line"   : "Hello, and welcome to the front desk. How can I help you today?",
+    "settle_example" : "So, five o'clock for the move time?",
+    "closing_line"   : "That's everything arranged, then. Thank you for your patience, and enjoy the rest of your stay!",
+    "items": [
+        {"id": "new_room",     "label": "New room",     "also_called": ["another room", "different room", "other room"]},
+        {"id": "move_time",    "label": "Move time",    "also_called": ["time to move", "when to move"]},
+        {"id": "compensation", "label": "Compensation", "also_called": ["something in return"]}
+    ],
+    "participant": {
+        "brief": "You are staying at a luxury hotel, but your room has problems: the sheets and towels are dirty, the bathroom is too small, the street is noisy, the air conditioning is stuck on cold, and the Wi-Fi keeps cutting out. Talk to the receptionist and get it sorted out.",
+        "constraints": [
+            {"id": "after_meeting", "text": "You can't move before 3 p.m. because of a meeting."},
+            {"id": "no_extra_cost", "text": "You won't pay extra for a better room."},
+            {"id": "early_flight",  "text": "You leave for the airport at 6 tomorrow morning."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are the receptionist at a luxury hotel. The user is a guest who has come to the front desk about their room. This guest complains about everything, even when there isn't a real problem, so stay polite and patient without giving in to every demand, and work out a solution with them. Instead of a discount you can offer an extra, such as a free breakfast, a free drink, or a late checkout.",
+        "constraints": [
+            {"id": "fixed_price",   "text": "You can move the guest, but you can't change the price: no discounts and no refunds."},
+            {"id": "one_room",      "text": "Only one other room is free, and it is next to the elevator."},
+            {"id": "ready_at_four", "text": "Housekeeping needs until 4 p.m. to get that room ready."}
+        ]
+    }
+}

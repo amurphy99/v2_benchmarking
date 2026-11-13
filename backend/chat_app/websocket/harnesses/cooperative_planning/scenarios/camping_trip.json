@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up scenario built for conflict: each side's favorite campsite is ruled out by the other, and the one left changes what dinner can be.",
+    "title"          : "Plan a camping trip",
+    "event"          : "a one-night camping trip",
+    "opening_line"   : "Hi! I'm so glad we're going camping together. We need to pick a campsite, where we'll sleep, and what to do about dinner. Which campsite do you like?",
+    "settle_example" : "So, Hilltop for the campsite?",
+    "closing_line"   : "That's our whole trip planned, then. Thanks for planning this with me, it's going to be a great night out!",
+    "items": [
+        {"id": "campsite", "label": "Campsite", "also_called": ["camp site", "where to camp"]},
+        {"id": "sleeping", "label": "Sleeping", "also_called": ["where to sleep", "sleeping arrangements"]},
+        {"id": "dinner",   "label": "Dinner",   "also_called": ["cooking", "supper"]}
+    ],
+    "participant": {
+        "brief": "You and your friend are going camping for one night, and there are three campsites to choose from: Lakeside (by the water), Hilltop (with the best view), and Pine Ridge (in the woods, with cabins to rent). You'd love to camp at Lakeside so you can swim, and to cook dinner over a campfire. Plan the trip together.",
+        "constraints": [
+            {"id": "steep_road", "text": "You're driving, and your car can't make it up the steep dirt road to Hilltop."},
+            {"id": "small_tent", "text": "Your tent only sleeps one person."},
+            {"id": "no_stove",   "text": "You don't own a camp stove."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning a one-night camping trip together with the user, a friend of yours. There are three campsites to choose from: Lakeside (by the water), Hilltop (with the best view), and Pine Ridge (in the woods, with cabins to rent). You have your heart set on Hilltop: suggest it early, and give it up only when the user gives you a reason.",
+        "constraints": [
+            {"id": "lakeside_closed", "text": "Lakeside is closed this month because of flooding."},
+            {"id": "no_campfires",    "text": "Pine Ridge doesn't allow campfires."},
+            {"id": "stove_no_tent",   "text": "You don't own a tent, but you do have a camp stove."}
+        ]
+    }
+}

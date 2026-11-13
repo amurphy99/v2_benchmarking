@@ -22,10 +22,10 @@ const PLAN_HEADING = "m-0 font-semibold [font-family:inherit]";
 export default function PlanningHistoryPanel({view}: {
     view : PlanningTaskHistory;  // Saved scenario and decisions, or current materials only
 }): ReactElement {
-    // Both sides' private constraints, shown side by side
+    // Both sides' private brief and constraints, shown side by side
     const constraintGroups = [
-        {label: "Participant constraints", items: view.participant_constraints},
-        {label: "Avatar constraints",      items: view.avatar_constraints     },
+        {label: "Participant", brief: view.participant_brief, items: view.participant_constraints},
+        {label: "Avatar",      brief: view.avatar_brief,      items: view.avatar_constraints     },
     ];
 
     // --------------------------------------------------------------------------------
@@ -46,9 +46,10 @@ export default function PlanningHistoryPanel({view}: {
             {/* Constraints */}
             {/* -------------------------------------------------------------------------------- */}
             <div className="grid gap-4 md:grid-cols-2">
-                {constraintGroups.map(({label, items}) => (
+                {constraintGroups.map(({label, brief, items}) => (
                     <section key={label} className="rounded-xl border border-admin-border bg-admin-muted p-4!">
                         <h3 className={`${PLAN_HEADING} mb-2 text-sm!`}>{label}</h3>
+                        {(brief !== undefined) ? <p className="mb-3 text-sm">{brief}</p> : null}
                         <ul className="mb-0 list-disc space-y-2 pl-5 text-sm">
                             {items.map((text: string, index: number) => <li key={index}>{text}</li>)}
                         </ul>

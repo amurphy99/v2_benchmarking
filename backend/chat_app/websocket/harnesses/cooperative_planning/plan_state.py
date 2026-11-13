@@ -18,8 +18,8 @@ and `apply_changes` makes only the ones these rules allow:
 A change the rules don't allow is kept with the reason it was refused, for the
 turn's log and the notebook view. Choices match ignoring case and extra spaces.
 
-The participant's card shows their own constraints, the agreed choices, and a
-choice waiting for a yes. It goes out as a `task_card` frame
+The participant's card shows their own brief and constraints, the agreed
+choices, and a choice waiting for a yes. It goes out as a `task_card` frame
 (`HARNESS_PROTOCOL.md` §13) whenever a saved reply changes it.
 
 """
@@ -219,11 +219,12 @@ def _without_refusal(refused: tuple[Refusal, ...], choice: str) -> tuple[Refusal
 # ================================================================================
 # The Participant's Card
 # ================================================================================
-# The card as the `task_card` frame carries it: the participant's constraints, then each item's line
+# The card as the `task_card` frame carries it: the participant's brief and constraints, then each item's line
 def card_frame(scenario: Scenario, state: PlanningState) -> dict[str, object]:
     return {"type": "task_card", "data": {
         "kind"        : "cooperative_planning",
         "title"       : scenario.title,
+        "brief"       : scenario.participant.brief,
         "constraints" : [constraint.text for constraint in scenario.participant.constraints],
         "items"       : [_card_line(item.id, item.label, state.items[item.id]) for item in scenario.items],
         "complete"    : state.stage == "approved",
@@ -247,6 +248,8 @@ def planning_history(scenario: Scenario, state: PlanningState | None) -> dict[st
         "kind"                    : "cooperative_planning",
         "title"                   : scenario.title,
         "event"                   : scenario.event,
+        "participant_brief"       : scenario.participant.brief,
+        "avatar_brief"            : scenario.avatar.brief,
         "participant_constraints" : [constraint.text for constraint in scenario.participant.constraints],
         "avatar_constraints"      : [constraint.text for constraint in scenario.avatar.constraints],
         "stage"                   : None if (state is None) else state.stage,

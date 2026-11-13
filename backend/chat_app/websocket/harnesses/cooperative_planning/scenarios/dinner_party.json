@@ -1,15 +1,17 @@
 {
-    "description"  : "A made-up test scenario: planning a dinner party menu with three courses.",
-    "title"        : "Plan a dinner party",
-    "event"        : "a dinner party",
-    "opening_line" : "Hi! I'm so glad we're planning this dinner party together. We need to pick a starter, a main course, and a dessert. Do you have any ideas?",
-    "closing_line" : "That's our whole menu, then. Thanks for planning this with me, it's going to be a lovely party!",
+    "description"    : "A made-up test scenario: planning a dinner party menu with three courses.",
+    "title"          : "Plan a dinner party",
+    "event"          : "a dinner party",
+    "opening_line"   : "Hi! I'm so glad we're planning this dinner party together. We need to pick a starter, a main course, and a dessert. Do you have any ideas?",
+    "settle_example" : "So, breadsticks for the starter?",
+    "closing_line"   : "That's our whole menu, then. Thanks for planning this with me, it's going to be a lovely party!",
     "items": [
         {"id": "starter", "label": "Starter",     "also_called": ["appetizer", "first course"]},
         {"id": "main",    "label": "Main course", "also_called": ["main", "entree", "main dish"]},
         {"id": "dessert", "label": "Dessert",     "also_called": ["pudding", "sweet"]}
     ],
     "participant": {
+        "brief": "You and your friend are hosting a dinner party. Plan the menu together.",
         "constraints": [
             {"id": "no_fish",    "text": "You can't cook fish."},
             {"id": "vegetarian", "text": "One of the guests is vegetarian."},
@@ -17,6 +19,7 @@
         ]
     },
     "avatar": {
+        "brief": "You are planning a dinner party together with the user, a friend of yours. The two of you are hosting it.",
         "constraints": [
             {"id": "broken_oven", "text": "Your oven is broken."},
             {"id": "no_spicy",    "text": "One of the guests doesn't like spicy food."},

@@ -60,7 +60,7 @@ and `map_task`.
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
 | `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
-| `cooperative_planning` | The user and the avatar plan an event together, each with private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party` |
+| `cooperative_planning` | The user and the avatar work out a plan together, each with a brief (who they are) and private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party`, `day_trip`, `birthday_party`, `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`, `apartment_hunt`, `camping_trip`, `flight_rebooking` |
 
 `map_task` and `cooperative_planning` use cues, drive the avatar with plans
 (`consumers/HARNESS_PROTOCOL.md`), and show the participant their task materials
@@ -93,11 +93,21 @@ live chat page a view of its state (Monitoring, below).
  │   ├── cues.py                  # LandmarkGlance, DirectionGlance
  │   └── ...
  │
-+└── cooperative_planning/        # Planning an event together, each side with private constraints
++└── cooperative_planning/        # Working out a plan together, each side with a brief and private constraints
      ├── harness.py               # Opens the chat, answers each turn through the chosen pipeline, and keeps the card current
      ├── scenarios.py             # Loads and checks the scenario files (the format is in its docstring)
 +    ├── scenarios/
-     │   └── dinner_party.json    # A made-up test scenario: a starter, a main course, and a dessert
+     │   ├── dinner_party.json    # A made-up test scenario: a starter, a main course, and a dessert
+     │   ├── day_trip.json        # A destination, transportation, and lunch, when neither side can drive
+     │   ├── birthday_party.json  # A place, an activity, and a gift for a friend both sides know
+     │   ├── movie_night.json     # A movie, a snack, and a day that fits both sides' week
+     │   ├── hotel_room.json      # A guest and the receptionist: a new room, when to move, and compensation
+     │   ├── weekend_activity.json # An activity, and when and where to meet
+     │   ├── club_event.json      # Two college students: a theme, volunteer roles, and an invitation
+     │   ├── house_party.json     # Snacks and drinks, music, and an activity
+     │   ├── apartment_hunt.json  # Three apartments: each side's favorite is ruled out by what the other knows
+     │   ├── camping_trip.json    # Three campsites, and the one left changes what dinner can be
+     │   └── flight_rebooking.json # A traveler and an airline agent who holds the three flights
      ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
      ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
      ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives

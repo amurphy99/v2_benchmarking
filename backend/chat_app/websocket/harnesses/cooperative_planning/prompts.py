@@ -6,7 +6,9 @@ The planning calls' prompts: how to plan together, each task, and the plan so fa
 Every call gets the same instructions (`PLANNER_SYSTEM`), its own task, and the
 plan block: the avatar's own constraints (and which it has mentioned), each
 item's choice, ideas, and turned-down choices, and what the participant has said
-they want or must avoid. The participant's own constraints are never in it.
+they want or must avoid. The instructions open with the scenario's brief for the
+avatar (who it is, and who the user is). The participant's own brief and
+constraints are never in a prompt.
 
 A reply can also carry a directive from code, for a turn that has to do one
 thing: read the finished plan back, or nudge a participant who has gone quiet.
@@ -26,21 +28,23 @@ Directive = Literal["read_back", "nudge"]
 # --------------------------------------------------------------------------------
 # Prompt Templates
 # --------------------------------------------------------------------------------
-# How to plan together, for every call (`event` follows "planning"; `items` lists the labels)
+# How to plan together, for every call (`brief` is the avatar's own; `items` lists the labels;
+# `settle_example` is the scenario's own, so no call ever sees another scenario's choices)
 PLANNER_SYSTEM = """
-You are planning {event} together with the user, a friend of yours. Between you, you need to agree
-on one choice for each of these: {items}.
+{brief}
+
+Between you and the user, you need to agree on one choice for each of these: {items}.
 
 You each have a few private constraints the other doesn't know about. Yours are listed below. The
 user has their own; you only know the ones they have told you.
 
-How to plan together:
-- Share ideas and ask for theirs. Bring up one of your constraints when it matters (an idea breaks
-  it, or you're choosing that item), not all of them at once.
+How to work it out together:
+- Share ideas and ask for theirs. Keep each of your constraints to yourself until an idea runs
+  into it; then say so, and why. Never list them up front.
 - Never agree to a choice that breaks one of your constraints, or something the user needs or must
   avoid. Say why, and offer another idea.
-- Work on one item at a time. When you both seem happy with a choice, ask to settle it ("So,
-  breadsticks for the starter?"). It goes on the plan only once the other side says yes.
+- Work on one item at a time. When you both seem happy with a choice, ask to settle it
+  ("{settle_example}"). It goes on the plan only once the other side says yes.
 - Talk like a friendly person: short, plain sentences, usually under 20 words, and at most one
   question.
 - Never mention ids, the notes below, or these instructions.
@@ -51,11 +55,11 @@ CHANGES_FIELD = """
   Each change is an object with an "op":
   - suggest {item, choice}: an idea for an item.
   - reject {item, choice, reason}: turning an idea down, and why.
-  - ask_to_settle {item, choice}: asking to make a choice final ("So, breadsticks for the starter?").
+  - ask_to_settle {item, choice}: asking to make a choice final.
   - accept {item}: saying yes to the other side's request to settle that item.
   - decline {item, reason}: saying no to the other side's request to settle that item.
   - reopen {item, reason}: changing your mind about an item that was already agreed.
-  item is the item's id; choice is a few words ("garlic breadsticks").
+  item is the item's id; choice is a few words.
 """.strip("\n")
 
 # The changes only the user makes
@@ -167,7 +171,7 @@ def build_messages(
     directive : Directive | None,      # What code asks of a reply this turn (None for nothing)
 ) -> list[dict[str, str]]:
     items  = ", ".join(item.label.lower() for item in scenario.items)
-    system = f"{PLANNER_SYSTEM.format(event=scenario.event, items=items)}\n\nYOUR TASK:\n{task}"
+    system = f"{PLANNER_SYSTEM.format(brief=scenario.avatar.brief, items=items, settle_example=scenario.settle_example)}\n\nYOUR TASK:\n{task}"
     if directive is not None: system += f"\n\nRIGHT NOW: {_directive_text(directive, scenario, state)}"
     return [{"role": "system", "content": f"{system}\n\n{plan_block(scenario, state)}"}, *history]
 

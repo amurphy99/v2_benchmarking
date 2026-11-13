@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up role-play built for conflict: an airline agent holds the three flights, and the traveler holds the reasons two of them won't do.",
+    "title"          : "Get on a new flight",
+    "event"          : "a new flight for a traveler whose flight was cancelled",
+    "opening_line"   : "Hello, I'm so sorry your flight was cancelled. Let's get you on a new one.",
+    "settle_example" : "So, the noon flight for the new flight?",
+    "closing_line"   : "You're all set, then. Thank you for your patience, and have a good flight!",
+    "items": [
+        {"id": "flight",  "label": "New flight",     "also_called": ["flight"]},
+        {"id": "seat",    "label": "Seat",           "also_called": ["seats"]},
+        {"id": "tonight", "label": "Tonight's stay", "also_called": ["tonight", "place to stay", "hotel"]}
+    ],
+    "participant": {
+        "brief": "Your flight was cancelled, and you are at the airline's desk. You are flying to your sister's wedding, and you'd like to leave tonight if you can. Talk to the agent and get rebooked.",
+        "constraints": [
+            {"id": "wedding",  "text": "The wedding starts at 2 p.m. tomorrow, an hour's drive from where you land."},
+            {"id": "real_bed", "text": "You can't sleep sitting up, so an overnight flight is out."},
+            {"id": "aisle",    "text": "You're tall, so you'd much rather have an aisle seat."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are an airline desk agent. The user is a traveler whose flight was cancelled. Three flights have room: tonight at 10 p.m., with an overnight stop, landing at 8 a.m.; tomorrow at 7 a.m., direct, landing at 10 a.m.; and tomorrow at noon, direct, landing at 3 p.m. The airline wants the noon flight filled first, so offer that one first, and offer another only when the traveler gives you a reason.",
+        "constraints": [
+            {"id": "exit_row",  "text": "On the 7 a.m. flight, the only aisle seat left is in the exit row, where a passenger has to be willing to help in an emergency."},
+            {"id": "voucher",   "text": "You can give a free hotel room for tonight, but only to a passenger who flies tomorrow."},
+            {"id": "far_hotel", "text": "The airport hotel is full, so the free room is twenty minutes away, with a shuttle back at 5 a.m."}
+        ]
+    }
+}

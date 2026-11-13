@@ -1,22 +1,35 @@
 """
-Planning scenario files: the event, the items to agree on, and each side's constraints.
+Planning scenario files: the items to agree on, and each side's brief and constraints.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.cooperative_planning.scenarios`
 
 Each variant is one file, `scenarios/<variant>.json`:
 
-    description   Where the scenario comes from
-    title         The heading on the participant's card ("Plan a dinner party")
-    event         What the two of them are planning, worded to follow "planning" ("a dinner party")
-    opening_line  The avatar's first words
-    closing_line  Its last words, once the participant approves the whole plan
-    items         The things to agree on, in order: {id, label, also_called?}
-    participant   {constraints: [{id, text}, ...]}: printed on the participant's card
-    avatar        {constraints: [{id, text}, ...]}: the avatar's own, in its prompts
+    description     Where the scenario comes from
+    title           The heading on the participant's card ("Plan a dinner party")
+    event           What the two of them are working out, in a few words ("a dinner party"), for the history
+    opening_line    The avatar's first words
+    settle_example  How the avatar might ask to settle one of the items ("So, breadsticks for the starter?")
+    closing_line    Its last words, once the participant approves the whole plan
+    items           The things to agree on, in order: {id, label, also_called?}
+    participant     {brief, constraints: [{id, text}, ...]}: printed on the participant's card
+    avatar          {brief, constraints: [{id, text}, ...]}: the avatar's own, in its prompts
 
-The participant's constraints are never put in a prompt: the avatar learns them
-only when the participant says them. `also_called` lists other names the
+Each side's `brief` says who that side is, who the other is, and the situation,
+worded to that side. The two need not be friends planning something: in
+`hotel_room` the participant is a guest and the avatar the receptionist. The
+avatar's brief opens every prompt, so it calls the participant "the user".
+
+A brief can also give its side a favorite ("You like Maple Street best"). A
+favorite that one of the other side's constraints rules out makes the two sides
+run into each other, where constraints alone often never meet.
+
+The participant's brief and constraints are never put in a prompt: the avatar
+learns them only when the participant says them. `also_called` lists other names the
 participant might use for an item ("entree" for "Main course"), for the cues.
+`settle_example` is the prompts' one worked example, so it belongs to the
+scenario: an example from another scenario would put its choices in the
+avatar's mouth.
 Every id is lowercase letters, digits, and underscores, and differs from the
 others of its kind.
 
@@ -60,20 +73,22 @@ class Constraint(_ScenarioPart):
     id   : ScenarioId
     text : ScenarioText
 
-# One side's private constraints
+# One side's materials: who it is and the situation, and its private constraints
 class PlanSide(_ScenarioPart):
+    brief       : ScenarioText
     constraints : tuple[Constraint, ...] = Field(min_length=1)
 
 # One whole scenario file
 class Scenario(_ScenarioPart):
-    description  : ScenarioText
-    title        : ScenarioText
-    event        : ScenarioText
-    opening_line : ScenarioText
-    closing_line : ScenarioText
-    items        : tuple[PlanItem, ...] = Field(min_length=1)
-    participant  : PlanSide
-    avatar       : PlanSide
+    description    : ScenarioText
+    title          : ScenarioText
+    event          : ScenarioText
+    opening_line   : ScenarioText
+    settle_example : ScenarioText
+    closing_line   : ScenarioText
+    items          : tuple[PlanItem, ...] = Field(min_length=1)
+    participant    : PlanSide
+    avatar         : PlanSide
 
     # Item ids differ from each other, and constraint ids differ across both sides
     @model_validator(mode="after")

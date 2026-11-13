@@ -21,10 +21,11 @@ export type PlanningCardItem = {
     pending : string | null;   // A choice one side asked to settle on, waiting for the other side's yes
 };
 
-// A cooperative planning card: the participant's constraints, then a line per item
+// A cooperative planning card: the participant's brief and constraints, then a line per item
 export type PlanningCard = {
     kind        : "cooperative_planning";
     title       : string;               // The card's heading
+    brief       : string;               // Who the participant is and the situation (the avatar never sees this)
     constraints : string[];             // The participant's own constraints (the avatar never sees these)
     items       : PlanningCardItem[];   // One line per item, in order
     complete    : boolean;              // The whole plan was approved
@@ -56,13 +57,13 @@ function parseMapCard(data: Record<string, unknown>): MapTaskCard | null {
 
 // A cooperative planning card (null when malformed)
 function parsePlanningCard(data: Record<string, unknown>): PlanningCard | null {
-    const {title, constraints, items, complete} = data;
-    if ((typeof title !== "string") || !isStringList(constraints) || !Array.isArray(items) || (typeof complete !== "boolean")) return null;
+    const {title, brief, constraints, items, complete} = data;
+    if ((typeof title !== "string") || (typeof brief !== "string") || !isStringList(constraints) || !Array.isArray(items) || (typeof complete !== "boolean")) return null;
 
     // Every line must be well formed
     const lines = items.map(readItem);
     if (!lines.every((line: PlanningCardItem | null): line is PlanningCardItem => line !== null)) return null;
-    return {kind: "cooperative_planning", title, constraints, items: lines, complete};
+    return {kind: "cooperative_planning", title, brief, constraints, items: lines, complete};
 }
 
 // One item's line (null when malformed)

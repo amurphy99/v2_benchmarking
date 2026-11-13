@@ -1,10 +1,10 @@
-/* The participant's planning card: their constraints, and a line for each item.
+/* The participant's planning card: their brief, constraints, and a line per item.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/chat/components/PlanningCardPanel`
 
 Shown beside the avatar in the cooperative planning task, from the backend's
-`task_card` frames. The participant's constraints are at the top (only they know
-them). Below, each item's line is written in, in handwriting, the moment both
+`task_card` frames. The participant's brief (who they are and the situation) and
+their constraints are at the top (only they know them). Below, each item's line is written in, in handwriting, the moment both
 sides agree on a choice; a choice one side asked to settle on shows faintly with
 a question mark until the other side says yes.
 
@@ -28,6 +28,7 @@ export default function PlanningCardPanel({card}: {
             {/* Heading */}
             <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Your card</div>
             <h2 className="mt-1 text-2xl font-semibold text-chat-text">{card.title}</h2>
+            <p className="mt-3! mb-0 text-lg leading-snug text-chat-text">{card.brief}</p>
 
             {/* The participant's own constraints */}
             <div className="mt-5! text-sm font-semibold text-chat-subtext">Only you know these:</div>

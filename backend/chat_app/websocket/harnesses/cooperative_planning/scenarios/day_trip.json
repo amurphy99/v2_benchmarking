@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up scenario: planning a day trip when neither side can drive.",
+    "title"          : "Plan a day trip",
+    "event"          : "a day trip",
+    "opening_line"   : "Hi! I'm so glad we're planning this day trip together. We need to pick a destination, how we'll get there, and what to have for lunch. Do you have any ideas?",
+    "settle_example" : "So, the art museum for the destination?",
+    "closing_line"   : "That's our whole day planned, then. Thanks for planning this with me, it's going to be a lovely trip!",
+    "items": [
+        {"id": "destination", "label": "Destination",    "also_called": ["where to go", "place to go"]},
+        {"id": "transport",   "label": "Transportation", "also_called": ["transport", "how to get there", "getting there"]},
+        {"id": "lunch",       "label": "Lunch"}
+    ],
+    "participant": {
+        "brief": "You and your friend want to take a day trip together. Plan the day.",
+        "constraints": [
+            {"id": "short_walks", "text": "You can't walk for more than a few minutes at a time."},
+            {"id": "no_car",      "text": "You don't have a car."},
+            {"id": "home_early",  "text": "You need to be home by 4 o'clock."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning a day trip together with the user, a friend of yours.",
+        "constraints": [
+            {"id": "car_in_shop",     "text": "Your car is in the shop this week."},
+            {"id": "seafood_allergy", "text": "You're allergic to seafood."},
+            {"id": "stay_shaded",     "text": "You sunburn easily, so you'd like to stay indoors or in the shade."}
+        ]
+    }
+}

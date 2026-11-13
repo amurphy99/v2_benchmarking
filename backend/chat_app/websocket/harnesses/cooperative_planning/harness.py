@@ -1,17 +1,20 @@
 """
-The cooperative planning chat type: the user and the avatar plan an event together.
+The cooperative planning chat type: the user and the avatar work out a plan together.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.cooperative_planning.harness`
 
 The two sides agree on one choice for each item of a scenario (a starter, a main
 course, and a dessert for a dinner party), and each has private constraints the
-other learns only by being told. The avatar opens with the scenario's line, and
+other learns only by being told. A scenario also gives each side its brief: who
+it is and the situation (two friends planning, or a hotel guest and the
+receptionist). The avatar opens with the scenario's line, and
 each turn is answered by the pipeline `config.PLANNING_PIPELINE` names
 (`pipelines.py`). The changes it proposes are applied in code (`plan_state.py`),
 and the new plan takes effect only once the reply is saved, so a reply cut off
 by newer speech never writes on the card. Once every item is agreed, the avatar
 reads the plan back, and the user's yes ends the chat with the scenario's
-closing line.
+closing line. When the avatar's own yes settles the last item, it takes a turn
+to read the plan back as soon as that reply has been heard.
 
 With the `cues` condition the avatar holds its own card, reads it over while it
 works out each reply, every reply carries an avatar plan for the behavior it
@@ -55,7 +58,7 @@ if TYPE_CHECKING:
     from   .response_models     import Behavior
 
 # Scenarios a client can pick with `variant` (each one is `scenarios/<variant>.json`)
-PLANNING_VARIANTS = ("dinner_party",)
+PLANNING_VARIANTS = ("dinner_party", "day_trip", "birthday_party", "movie_night", "hotel_room", "weekend_activity", "club_event", "house_party", "apartment_hunt", "camping_trip", "flight_rebooking")
 
 # Every scenario, loaded and checked when the backend starts
 PLANNING_SCENARIOS = {variant: load_scenario(variant) for variant in PLANNING_VARIANTS}
@@ -100,6 +103,7 @@ class CooperativePlanningHarness(ChatHarness):
         self.state       = initial_state(self.scenario)
         self.with_cues   = (condition == "cues")
         self._tracking   : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
+        self._read_back  : PlanningState | None      = None       # The finished plan a read-back turn was last asked for
         if self.with_cues: self.cues = [BackToListening(self), ItemGlance(self), QuietNudge(self)]
 
     # The connection is ready: set the avatar up, show the participant's card, and open the chat
@@ -177,6 +181,17 @@ class CooperativePlanningHarness(ChatHarness):
         super().on_reply_saved(outcome)
         if self.state != before: fire_and_log(send_task_card(self.consumer, self.scenario, self.state), name="cooperative_planning::card")
         if isinstance(outcome, PlanningOutcome) and (outcome.follow_up is not None): self._tracking = fire_and_log(outcome.follow_up(), name="cooperative_planning::tracking")
+
+    # The reply whose yes settled the last item has been heard: take a turn to read the whole plan back
+    def on_playback(self, response_id: int, state: str) -> None:
+        """
+        A read-back otherwise waits for the user's next words, and only the `cues`
+        condition has a nudge to fall back on. Each finished plan is asked for once,
+        so a read-back that failed (the plan stays as it was) is not asked for again.
+        """
+        super().on_playback(response_id, state)
+        waiting = (self.state.stage == "planning") and self.state.all_agreed and (self.state is not self._read_back)
+        if (state == "finished") and waiting and self.request_turn(): self._read_back = self.state
 
     # Work out the saved exchange's changes (reply_then_track), apply them, and close the chat once approved
     async def _track_after_reply(self, follow_up: Callable[[], Awaitable[ProposedChanges]]) -> None:

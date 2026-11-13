@@ -1,0 +1,29 @@
+{
+    "description"    : "A role-play scenario for college students: two club members planning an event with no money, a short room booking, and few helpers.",
+    "title"          : "Plan a campus club event",
+    "event"          : "an event for a campus club",
+    "opening_line"   : "Hi! I'm so glad we're planning the club event together. We need to pick a theme, who does which job, and a way to invite people. Do you have any ideas?",
+    "settle_example" : "So, a trivia night for the theme?",
+    "closing_line"   : "That's the whole event planned, then. Thanks for planning this with me, the club is going to love it!",
+    "items": [
+        {"id": "theme",      "label": "Theme",           "also_called": ["event theme", "kind of event"]},
+        {"id": "roles",      "label": "Volunteer roles", "also_called": ["roles", "jobs", "who does what"]},
+        {"id": "invitation", "label": "Invitation",      "also_called": ["invitations", "way to invite people", "get the word out"]}
+    ],
+    "participant": {
+        "brief": "You are a college student, and you and your friend are putting on an event for your campus club. Plan it together.",
+        "constraints": [
+            {"id": "no_money",         "text": "The club has no money, so the event has to be free to attend and free to put on."},
+            {"id": "two_hours",        "text": "The room is booked for only two hours."},
+            {"id": "three_volunteers", "text": "The club has just three volunteers, counting the two of you."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are a college student planning an event for your campus club together with the user, a friend of yours and a fellow club member. For the volunteer roles, agree on who does which job and when.",
+        "constraints": [
+            {"id": "first_hour",   "text": "You can only help during the first hour."},
+            {"id": "no_speaking",  "text": "You're uncomfortable speaking in front of a large group."},
+            {"id": "no_equipment", "text": "You'd prefer an activity that doesn't need special equipment."}
+        ]
+    }
+}

@@ -136,11 +136,14 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   driven by plans) or `no_cues` (it only idles). It sends the participant's map as a
   `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`, and sends no
   `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
-- `cooperative_planning` -- the user and the avatar plan an event together, agreeing on one
-  choice for each item while each side has private constraints. The avatar speaks first, and
+- `cooperative_planning` -- the user and the avatar work out a plan together (two friends
+  planning an event, or a hotel guest and the receptionist), agreeing on one choice for each
+  item while each side has private constraints. The avatar speaks first, and
   once the user approves the finished plan it says goodbye and the backend sends `chat_ended`.
-  `variant` picks the scenario: `dinner_party` (the default). `condition` is `cues` (the
-  default: the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
+  `variant` picks the scenario: `dinner_party` (the default), `day_trip`, `birthday_party`,
+  `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`,
+  `apartment_hunt`, `camping_trip`, or `flight_rebooking`. `condition` is `cues` (the default:
+  the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
   It drives the avatar with the frames in `HARNESS_PROTOCOL.md` and sends no `robot_action`.
 
 Only `map_task` and `cooperative_planning` take a `variant` or a `condition` so far. Sending a `condition` or `variant` the chat type doesn't

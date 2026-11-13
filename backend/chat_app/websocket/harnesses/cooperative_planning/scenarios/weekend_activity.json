@@ -1,0 +1,29 @@
+{
+    "description"    : "A role-play scenario: two friends fitting one activity into a weekend, around money, weather, and their other plans.",
+    "title"          : "Plan a weekend activity",
+    "event"          : "something to do together this weekend",
+    "opening_line"   : "Hi! I'm so glad we get to spend some time together this weekend. We need to pick an activity, and when and where to meet. Do you have any ideas?",
+    "settle_example" : "So, the library steps for the meeting place?",
+    "closing_line"   : "That's our weekend sorted, then. Thanks for planning this with me, I can't wait!",
+    "items": [
+        {"id": "activity",      "label": "Activity",      "also_called": ["something to do", "thing to do"]},
+        {"id": "meeting_time",  "label": "Meeting time",  "also_called": ["time to meet", "when to meet"]},
+        {"id": "meeting_place", "label": "Meeting place", "also_called": ["place to meet", "where to meet"]}
+    ],
+    "participant": {
+        "brief": "You and your friend want to spend some of the weekend together. Plan something to do.",
+        "constraints": [
+            {"id": "budget",       "text": "You can't spend more than $30."},
+            {"id": "family_lunch", "text": "You have a family lunch on Sunday at 1 p.m."},
+            {"id": "by_bus",       "text": "You'll be coming by bus, so the meeting place has to be near a stop."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning something to do this weekend together with the user, a friend of yours.",
+        "constraints": [
+            {"id": "rain_saturday",  "text": "Rain is forecast for all of Saturday, and you don't like being outdoors in the rain."},
+            {"id": "stay_in_city",   "text": "You can't travel far from the city."},
+            {"id": "saturday_shift", "text": "You work on Saturday until noon."}
+        ]
+    }
+}

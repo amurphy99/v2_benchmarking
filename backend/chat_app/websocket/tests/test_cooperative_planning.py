@@ -3,8 +3,8 @@ Cooperative planning scenarios, plan rules, prompts, pipelines, cues, and the ha
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_cooperative_planning`
 
-Every test plans the dinner party scenario (`scenarios/dinner_party.json`). The
-LLM client is replaced with a stand-in that returns fixed structured responses,
+Every test plans the dinner party scenario (`scenarios/dinner_party.json`),
+except the ones that check every scenario file. The LLM client is replaced with a stand-in that returns fixed structured responses,
 so these tests check what code decides: which changes the rules allow, what the
 prompts show the model, which frames go to the client, and when the chat ends.
 
@@ -22,7 +22,7 @@ from chat_app.websocket.harnesses.base                                 import Fi
 from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, QuietNudge
 from chat_app.websocket.harnesses.cooperative_planning.harness         import MSG_SAY_AGAIN, PLANNING_SCENARIOS, PlanningOutcome
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
-from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, apply_changes, initial_state
+from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, apply_changes, card_frame, initial_state
 from chat_app.websocket.harnesses.cooperative_planning.planning_api    import PlanningAPIError
 from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, plan_block
 from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
@@ -119,6 +119,13 @@ class ScenarioFileTests(unittest.TestCase):
         self.assertEqual(len(SCENARIO.participant.constraints), 3)
         self.assertEqual(SCENARIO.avatar_constraint_ids, ("broken_oven", "no_spicy", "make_ahead"))
 
+    # Every scenario has the same shape, so a session's variant never changes how much there is to plan
+    def test_every_scenario_has_three_items_and_three_constraints_a_side(self) -> None:
+        for variant, scenario in PLANNING_SCENARIOS.items():
+            with self.subTest(variant):
+                self.assertEqual(len(scenario.items), 3)
+                self.assertEqual((len(scenario.participant.constraints), len(scenario.avatar.constraints)), (3, 3))
+
     # A broken scenario file is refused, naming the file and what is wrong
     def test_broken_scenario_files_are_refused_by_field(self) -> None:
         breakages = {
@@ -214,6 +221,30 @@ class PromptTests(unittest.TestCase):
                 system = build_messages(task, SCENARIO, starter_settled(), [], directive)[0]["content"]
                 for constraint in SCENARIO.participant.constraints:
                     with self.subTest(task=task[:20], directive=directive, constraint=constraint.id): self.assertNotIn(constraint.text, system)
+
+    # Every scenario's prompt opens with the avatar's own brief, and never carries the participant's
+    def test_each_prompt_opens_with_the_avatars_brief_and_never_shows_the_participants(self) -> None:
+        for variant, scenario in PLANNING_SCENARIOS.items():
+            with self.subTest(variant):
+                system = build_messages(REPLY_TASK, scenario, initial_state(scenario), [], None)[0]["content"]
+                self.assertTrue(system.startswith(scenario.avatar.brief))
+                self.assertNotIn(scenario.participant.brief, system)
+
+    # The participant's card carries their own brief and constraints, and nothing of the avatar's
+    def test_the_card_carries_the_participants_brief_and_none_of_the_avatars_materials(self) -> None:
+        for variant, scenario in PLANNING_SCENARIOS.items():
+            with self.subTest(variant):
+                card = card_frame(scenario, initial_state(scenario))["data"]
+                self.assertEqual(card["brief"], scenario.participant.brief)
+                self.assertNotIn(scenario.avatar.brief, json.dumps(card))
+                for constraint in scenario.avatar.constraints: self.assertNotIn(constraint.text, json.dumps(card))
+
+    # The one worked example is the scenario's own, so no scenario's prompt names another's choices
+    def test_each_scenarios_prompts_carry_only_its_own_example(self) -> None:
+        for variant, scenario in PLANNING_SCENARIOS.items():
+            system = build_messages(COMBINED_TASK, scenario, initial_state(scenario), [], None)[0]["content"]
+            for other in PLANNING_SCENARIOS.values():
+                with self.subTest(variant=variant, example=other.settle_example): self.assertEqual(other.settle_example in system, other is scenario)
 
     # The plan block shows the avatar's own constraints, what is agreed, what waits for a yes, the ideas, and the refusals
     def test_the_plan_block_shows_each_items_state(self) -> None:
@@ -374,6 +405,21 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         api.responses["track"] = plan_update({"op": "approve_plan"})
         goodbye = await harness.generate(make_attempt("Yes, perfect!"))
         self.assertEqual((goodbye.message, goodbye.close_after, goodbye.state.stage), (SCENARIO.closing_line, True, "approved"))
+
+    # The avatar's own yes settles the last item: once that reply is heard, it takes one turn to read the plan back
+    async def test_the_avatars_yes_to_the_last_item_asks_for_a_read_back_turn_once(self) -> None:
+        for condition in ("cues", "no_cues"):
+            with self.subTest(condition):
+                harness, consumer, _ = self.make(condition)
+                harness.on_playback(1, "finished")
+                consumer.request_harness_turn.assert_not_called()
+
+                harness.state = every_item_settled()
+                harness.on_playback(2, "started")
+                harness.on_playback(2, "finished")
+                harness.on_playback(3, "finished")
+                consumer.request_harness_turn.assert_called_once()
+                harness.stop()
 
     # A call that fails every attempt gets the scripted line, and the plan stays as it was
     async def test_a_failed_call_says_it_again_and_keeps_the_plan(self) -> None:

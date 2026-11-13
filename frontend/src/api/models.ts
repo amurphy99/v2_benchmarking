@@ -342,6 +342,8 @@ export type PlanningTaskHistory = {
     kind                    : "cooperative_planning";
     title                   : string;
     event                   : string;
+    participant_brief?      : string;    // Absent from snapshots saved before scenarios had briefs
+    avatar_brief?           : string;
     participant_constraints : string[];
     avatar_constraints      : string[];
     stage                   : "planning" | "final_check" | "approved" | null;

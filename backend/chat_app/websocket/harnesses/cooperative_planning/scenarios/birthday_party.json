@@ -1,0 +1,29 @@
+{
+    "description"    : "A made-up scenario: planning a surprise party for a friend both sides know different things about.",
+    "title"          : "Plan Sam's birthday party",
+    "event"          : "a surprise birthday party for Sam, a friend of you both",
+    "opening_line"   : "Hi! I'm so glad we're planning Sam's surprise party together. We need to pick a place, an activity, and a gift. Do you have any ideas?",
+    "settle_example" : "So, a scarf for the gift?",
+    "closing_line"   : "That's the whole party planned, then. Thanks for planning this with me, Sam is going to love it!",
+    "items": [
+        {"id": "place",    "label": "Place",    "also_called": ["venue", "location"]},
+        {"id": "activity", "label": "Activity", "also_called": ["entertainment", "something to do"]},
+        {"id": "gift",     "label": "Gift",     "also_called": ["present"]}
+    ],
+    "participant": {
+        "brief": "You and your friend are throwing a surprise birthday party for Sam, a friend of you both. Plan it together.",
+        "constraints": [
+            {"id": "small_home",  "text": "Your home is too small for a party."},
+            {"id": "quiet_place", "text": "Sam doesn't like loud, crowded places."},
+            {"id": "gift_budget", "text": "You can't spend much on the gift."}
+        ]
+    },
+    "avatar": {
+        "brief": "You are planning a surprise birthday party for Sam together with the user. The user is a friend of yours, and Sam is a friend of you both.",
+        "constraints": [
+            {"id": "home_painted", "text": "Your home is being painted this week."},
+            {"id": "sore_knee",    "text": "Sam has a sore knee, so nothing too active."},
+            {"id": "no_books",     "text": "Sam already has more books than shelf space."}
+        ]
+    }
+}
