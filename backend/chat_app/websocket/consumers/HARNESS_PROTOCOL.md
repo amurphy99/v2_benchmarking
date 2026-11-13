@@ -9,7 +9,8 @@ plan frames were designed from what the web app's Smiley avatar can do and what 
 can observe.
 
 > **Status:** the `map_task` and `cooperative_planning` chat types send setups, plans, and
-> task cards (their harnesses are in `websocket/harnesses/`), every `audio_chunk` carries
+> task cards, and `speech_elicitation` sends setups and plans (their harnesses are in
+> `websocket/harnesses/`), every `audio_chunk` carries
 > `sentence`, and `avatar_feedback` is logged. The web app's chat page runs them, and the
 > avatar demo page (`/avatar-demo`) plays the backend's part with example plans. The existing
 > pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and every client and chat

@@ -17,6 +17,7 @@ from .activity.harness             import ActivityHarness
 from .base                         import ChatHarness
 from .cooperative_planning.harness import CooperativePlanningHarness
 from .map_task.harness             import MapTaskHarness
+from .speech_elicitation.harness   import SpeechElicitationHarness
 from .unguided.harness             import UnguidedHarness
 
 if TYPE_CHECKING: from ..consumers.consumers import ChatConsumer
@@ -28,6 +29,7 @@ CHAT_TYPES: dict[str, type[ChatHarness]] = {
     ActivityHarness           .NAME : ActivityHarness,
     MapTaskHarness            .NAME : MapTaskHarness,
     CooperativePlanningHarness.NAME : CooperativePlanningHarness,
+    SpeechElicitationHarness  .NAME : SpeechElicitationHarness,
 }
 
 # Chat type a client gets when it sends no `chat_type`

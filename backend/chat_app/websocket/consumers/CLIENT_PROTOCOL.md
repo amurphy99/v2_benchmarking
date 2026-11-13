@@ -145,8 +145,15 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   `apartment_hunt`, `camping_trip`, or `flight_rebooking`. `condition` is `cues` (the default:
   the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
   It drives the avatar with the frames in `HARNESS_PROTOCOL.md` and sends no `robot_action`.
+- `speech_elicitation` -- the avatar opens with one light question and keeps the user talking:
+  every reply reacts to what they said and ends with another question, and it speaks up again
+  after a long silence. `variant` picks the question: `pet_person` (the default),
+  `mountains_or_beaches`, or `retirement_spot`. `condition` is `cues` (the default: the avatar
+  is driven by plans, and nods along while the user talks) or `no_cues` (it only idles). It
+  sends no `task_card` and no `robot_action`. There is nothing to finish and no spoken
+  end-chat; the client ends the chat when the participant is done.
 
-Only `map_task` and `cooperative_planning` take a `variant` or a `condition` so far. Sending a `condition` or `variant` the chat type doesn't
+Only `map_task`, `cooperative_planning`, and `speech_elicitation` take a `variant` or a `condition` so far. Sending a `condition` or `variant` the chat type doesn't
 have is refused. Values are exact (they are not lowercased the way `source` is). The chat
 type, condition, and variant are saved with the session. The list lives in
 `websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.

@@ -11,8 +11,8 @@ from the configure-chat toggle; a mode with task content lists its variants,
 copied from the harness with the name the picker shows (the default first).
 
 */
-import type { IconType                           } from "react-icons";
-import      { BsCardChecklist, BsChatHeart, BsMap } from "react-icons/bs";
+import type { IconType                                        } from "react-icons";
+import      { BsCardChecklist, BsChatHeart, BsChatQuote, BsMap } from "react-icons/bs";
 
 // What shows beside the avatar: nothing, the participant's task card, or the Map Task's map
 export type ChatPanel = "none" | "card" | "map";
@@ -35,7 +35,8 @@ export type ChatMode = {
 export const CHAT_PATH = "/ws/chat/";
 
 // Each task's variants, copied from its harness (`MAP_TASK_VARIANTS` in `harnesses/map_task/harness.py`,
-// `PLANNING_VARIANTS` in `harnesses/cooperative_planning/harness.py`)
+// `PLANNING_VARIANTS` in `harnesses/cooperative_planning/harness.py`, `ELICITATION_TOPICS` in
+// `harnesses/speech_elicitation/topics.py`)
 const MAP_TASK_VARIANTS: ChatVariant[] = [
     {value: "demo",   label: "Demo map"  },
     {value: "hcrc_1", label: "HCRC map 1"},
@@ -55,6 +56,11 @@ const PLANNING_VARIANTS: ChatVariant[] = [
     {value: "apartment_hunt",   label: "Apartment hunt"     },
     {value: "camping_trip",     label: "Camping trip"       },
     {value: "flight_rebooking", label: "Cancelled flight"   },
+];
+const ELICITATION_VARIANTS: ChatVariant[] = [
+    {value: "pet_person",           label: "Cat, dog, or plant person"},
+    {value: "mountains_or_beaches", label: "Mountains or beaches"     },
+    {value: "retirement_spot",      label: "Where to retire"          },
 ];
 
 // Every mode the picker offers, the default first
@@ -85,6 +91,15 @@ export const CHAT_MODES: ChatMode[] = [
         hasCues     : true,
         variants    : MAP_TASK_VARIANTS,
         panel       : "map",
+    },
+    {
+        label       : "Speech elicitation",
+        description : "The avatar starts with a light question, and the two of you just talk. There is nothing to finish: stop whenever you feel done.",
+        icon        : BsChatQuote,
+        chatType    : "speech_elicitation",
+        hasCues     : true,
+        variants    : ELICITATION_VARIANTS,
+        panel       : "none",
     },
 ];
 

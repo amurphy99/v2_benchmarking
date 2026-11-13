@@ -4,7 +4,7 @@
 
 */
 import type { IconType } from "react-icons";
-import      { LuClipboardList, LuEar, LuMap, LuMessagesSquare, LuNotebookPen } from "react-icons/lu";
+import      { LuClipboardList, LuEar, LuMap, LuMessagesSquare, LuNotebookPen, LuSpeech } from "react-icons/lu";
 
 // One chat type's readable name, icon, and badge colors
 export type ChatTypePresentation = {label: string; icon: IconType; className: string};
@@ -13,6 +13,7 @@ export type ChatTypePresentation = {label: string; icon: IconType; className: st
 const CHAT_TYPE_PRESENTATION: Record<string, ChatTypePresentation> = {
     map_task             : {label: "Map Task",             icon: LuMap,            className: "bg-sky-50 text-sky-800 border-sky-200"},
     cooperative_planning : {label: "Cooperative Planning", icon: LuClipboardList,  className: "bg-amber-50 text-amber-800 border-amber-200"},
+    speech_elicitation   : {label: "Speech Elicitation",   icon: LuSpeech,         className: "bg-rose-50 text-rose-800 border-rose-200"},
     active_listening     : {label: "Active Listening",     icon: LuEar,            className: "bg-violet-50 text-violet-800 border-violet-200"},
     activity             : {label: "Memory Activity",      icon: LuNotebookPen,    className: "bg-emerald-50 text-emerald-800 border-emerald-200"},
     unguided             : {label: "Open Conversation",    icon: LuMessagesSquare, className: "bg-slate-100 text-slate-700 border-slate-200"},

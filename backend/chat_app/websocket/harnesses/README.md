@@ -42,7 +42,7 @@ its lists by them.
 The participant chat page picks the chat type, the variant, and cues on or off
 (`cues` / `no_cues`) in its configure-chat modal (`frontend/src/pages/chat/chatModes.ts`,
 which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_planning`,
-and `map_task`.
+`map_task`, and `speech_elicitation`.
 
 `ws/chat/activity/` is an older route that always runs the `activity` chat type
 (the chat page still uses it).
@@ -61,10 +61,11 @@ and `map_task`.
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
 | `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
 | `cooperative_planning` | The user and the avatar work out a plan together, each with a brief (who they are) and private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party`, `day_trip`, `birthday_party`, `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`, `apartment_hunt`, `camping_trip`, `flight_rebooking` |
+| `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said and ends with another question. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
 
-`map_task` and `cooperative_planning` use cues, drive the avatar with plans
-(`consumers/HARNESS_PROTOCOL.md`), and show the participant their task materials
-(`task_card`); the others send `robot_action` moods. `map_task` also gives the admin
+`map_task`, `cooperative_planning`, and `speech_elicitation` use cues and drive the
+avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
+participant their task materials (`task_card`). The others send `robot_action` moods. `map_task` also gives the admin
 live chat page a view of its state (Monitoring, below).
 
 ```diff
@@ -93,29 +94,39 @@ live chat page a view of its state (Monitoring, below).
  │   ├── cues.py                  # LandmarkGlance, DirectionGlance
  │   └── ...
  │
-+└── cooperative_planning/        # Working out a plan together, each side with a brief and private constraints
-     ├── harness.py               # Opens the chat, answers each turn through the chosen pipeline, and keeps the card current
-     ├── scenarios.py             # Loads and checks the scenario files (the format is in its docstring)
-+    ├── scenarios/
-     │   ├── dinner_party.json    # A made-up test scenario: a starter, a main course, and a dessert
-     │   ├── day_trip.json        # A destination, transportation, and lunch, when neither side can drive
-     │   ├── birthday_party.json  # A place, an activity, and a gift for a friend both sides know
-     │   ├── movie_night.json     # A movie, a snack, and a day that fits both sides' week
-     │   ├── hotel_room.json      # A guest and the receptionist: a new room, when to move, and compensation
-     │   ├── weekend_activity.json # An activity, and when and where to meet
-     │   ├── club_event.json      # Two college students: a theme, volunteer roles, and an invitation
-     │   ├── house_party.json     # Snacks and drinks, music, and an activity
-     │   ├── apartment_hunt.json  # Three apartments: each side's favorite is ruled out by what the other knows
-     │   ├── camping_trip.json    # Three campsites, and the one left changes what dinner can be
-     │   └── flight_rebooking.json # A traveler and an airline agent who holds the three flights
-     ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
-     ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
-     ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives
-     ├── pipelines.py             # track_then_reply, single_call, reply_then_track
-     ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
-     ├── behaviors.py             # The avatar's setup, its card, and the plan for each named behavior
-     ├── cues.py                  # ItemGlance, QuietNudge (with the shared BackToListening)
-     └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
++├── cooperative_planning/        # Working out a plan together, each side with a brief and private constraints
+ │   ├── harness.py               # Opens the chat, answers each turn through the chosen pipeline, and keeps the card current
+ │   ├── scenarios.py             # Loads and checks the scenario files (the format is in its docstring)
++│   ├── scenarios/
+ │   │   ├── dinner_party.json    # A made-up test scenario: a starter, a main course, and a dessert
+ │   │   ├── day_trip.json        # A destination, transportation, and lunch, when neither side can drive
+ │   │   ├── birthday_party.json  # A place, an activity, and a gift for a friend both sides know
+ │   │   ├── movie_night.json     # A movie, a snack, and a day that fits both sides' week
+ │   │   ├── hotel_room.json      # A guest and the receptionist: a new room, when to move, and compensation
+ │   │   ├── weekend_activity.json # An activity, and when and where to meet
+ │   │   ├── club_event.json      # Two college students: a theme, volunteer roles, and an invitation
+ │   │   ├── house_party.json     # Snacks and drinks, music, and an activity
+ │   │   ├── apartment_hunt.json  # Three apartments: each side's favorite is ruled out by what the other knows
+ │   │   ├── camping_trip.json    # Three campsites, and the one left changes what dinner can be
+ │   │   └── flight_rebooking.json # A traveler and an airline agent who holds the three flights
+ │   ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
+ │   ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
+ │   ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives
+ │   ├── pipelines.py             # track_then_reply, single_call, reply_then_track
+ │   ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
+ │   ├── behaviors.py             # The avatar's setup, its card, and the plan for each named behavior
+ │   ├── cues.py                  # ItemGlance, QuietNudge (with the shared BackToListening)
+ │   └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
+ │
++└── speech_elicitation/          # One light question, then keep the user talking
+     ├── harness.py               # Opens with the topic's question, and answers each turn with one call
+     ├── topics.py                # One topic per variant: the opening question and fresh angles for it
+     ├── response_models.py       # The reply: its move, its behavior, and words that must end with a question
+     ├── prompts.py               # How to keep the user talking, the task, and the directives for a flagging chat
+     ├── elicitation_api.py       # ElicitationAPI: the one reply call, on the shared StructuredAPI
+     ├── behaviors.py             # The avatar's setup, the plan for each named behavior, and the listening signs
+     ├── cues.py                  # ListeningNods (with cues), QuietPrompt (both conditions)
+     └── config.py                # Request limits, the reply call's settings, and the cue timings
 ```
 
 <br>
