@@ -13,9 +13,10 @@ this directory's README for the map files and the turn flow.
 The participant's map goes out as a `task_card` frame when the chat starts. With
 the `cues` condition the avatar holds its own map, reads it while it works out
 each reply, every reply carries an avatar plan showing what it did on the map
-(`behaviors.py`), and the cues run (`cues.py`, and the shared `BackToListening`).
-With `no_cues` no plan is sent and the avatar only idles. Admin listeners get
-both maps and the avatar's path (`monitor_view`).
+(`behaviors.py`), and the cues run (`cues.py`, and the shared `BackToListening`),
+including signs of listening at the user's pauses. With `no_cues` no plan is
+sent and the avatar only idles. Admin listeners get both maps and the avatar's
+path (`monitor_view`).
 
 """
 from __future__  import annotations
@@ -32,7 +33,7 @@ from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
 from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan
-from    .cues                        import DirectionGlance, LandmarkGlance
+from    .cues                        import DirectionGlance, LandmarkGlance, MapTaskBackchannels
 from    .geometry                    import approach, beside, step
 from    .map_task_api                import MapTaskAPIError, get_map_task_api
 from    .maps                        import Point, follower_view, giver_view, load_map
@@ -82,14 +83,16 @@ class MapTaskHarness(ChatHarness):
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
-        self.task_map  = MAP_TASK_MAPS[variant]
-        self.state     = MapTaskState(position=self.task_map.start, path=(self.task_map.start,))
-        self.with_cues = (condition == "cues")
-        if self.with_cues: self.cues = [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]
+        self.task_map     = MAP_TASK_MAPS[variant]
+        self.state        = MapTaskState(position=self.task_map.start, path=(self.task_map.start,))
+        self.with_cues    = (condition == "cues")
+        self.backchannels = MapTaskBackchannels(self)
+        self.cues         = [self.backchannels]
+        if self.with_cues: self.cues += [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]
 
-    # The connection is ready: set the avatar up, and show the participant their map
+    # The connection is ready: set the avatar up (with the signs' sound when they are on), and show the participant their map
     async def start(self) -> None:
-        await send_avatar_setup(self.consumer, setup_for(self.with_cues))
+        await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())
         await self.consumer.send_json({"type": "task_card", "data": {"kind": "map_task", **giver_view(self.task_map)}})
 

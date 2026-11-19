@@ -132,8 +132,9 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
 - `map_task` -- the Map Task. The user gives directions from their map, and the avatar follows
   them on its own map, which differs in places. `variant` picks the map: `demo` (the default) is
   a made-up test map, and `hcrc_1` to `hcrc_4` are maps 1 to 4 of the HCRC Map Task Corpus.
-  `condition` is `cues` (the default: the avatar holds its own map and is
-  driven by plans) or `no_cues` (it only idles). It sends the participant's map as a
+  `condition` is `cues` (the default: the avatar holds its own map, is
+  driven by plans, and gives signs of listening, some audible, when the user pauses) or
+  `no_cues` (it only idles). It sends the participant's map as a
   `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`, and sends no
   `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
 - `cooperative_planning` -- the user and the avatar work out a plan together (two friends
@@ -143,14 +144,16 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   `variant` picks the scenario: `dinner_party` (the default), `day_trip`, `birthday_party`,
   `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`,
   `apartment_hunt`, `camping_trip`, or `flight_rebooking`. `condition` is `cues` (the default:
-  the avatar holds its own card and is driven by plans) or `no_cues` (it only idles).
+  the avatar holds its own card, is driven by plans, and gives signs of listening, some
+  audible, when the user pauses) or `no_cues` (it only idles).
   It drives the avatar with the frames in `HARNESS_PROTOCOL.md` and sends no `robot_action`.
 - `speech_elicitation` -- the avatar opens with one light question and keeps the user talking:
   every reply reacts to what they said and ends with another question, and it speaks up again
   after a long silence. `variant` picks the question: `pet_person` (the default),
   `mountains_or_beaches`, or `retirement_spot`. `condition` is `cues` (the default: the avatar
-  is driven by plans, and gives signs of listening, some of them audible, when the user
-  pauses) or `no_cues` (it only idles). It
+  is driven by plans, gives signs of listening, some of them audible, when the user pauses,
+  holds its reply while the user seems mid-thought, and may ask about a word it likely
+  misheard instead of replying) or `no_cues` (it only idles). It
   sends no `task_card` and no `robot_action`. There is nothing to finish and no spoken
   end-chat; the client ends the chat when the participant is done.
 

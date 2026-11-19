@@ -19,7 +19,7 @@ import asyncio, json, tempfile, unittest
 
 # From this project
 from chat_app.websocket.harnesses.base                                 import FinalUtterance, InterimSpeech, TurnAttempt
-from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, QuietNudge
+from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, PlanningBackchannels, QuietNudge
 from chat_app.websocket.harnesses.cooperative_planning.harness         import MSG_SAY_AGAIN, PLANNING_SCENARIOS, PlanningOutcome
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
 from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, apply_changes, card_frame, initial_state
@@ -35,6 +35,10 @@ MODELS   = models_for_scenario(SCENARIO.item_ids, SCENARIO.avatar_constraint_ids
 
 # Where the harness module looks its collaborators up (patched there)
 HARNESS = "chat_app.websocket.harnesses.cooperative_planning.harness"
+
+# Where the signs of listening synthesize their sound, and the clip the stand-in returns
+SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.synthesize_sounds"
+SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
 
 
 # --------------------------------------------------------------------------------
@@ -336,26 +340,29 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     def make(self, condition: str = "cues", pipeline: str = "track_then_reply", **responses: object) -> tuple[object, SimpleNamespace, StubPlanningAPI]:
         consumer = make_consumer()
         api      = StubPlanningAPI(**responses)
-        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline)):
+        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline), (SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS))):
             started = patch(target, value)
             started.start()
             self.addCleanup(started.stop)
         return build_harness(consumer, "cooperative_planning", condition, None), consumer, api
 
-    # With cues: settings, picking up the card, the participant's card, then the avatar's own opening turn
+    # With cues: settings (with the listening sound), picking up the card, the participant's card, then the avatar's own opening turn
     async def test_start_sets_the_avatar_up_shows_the_card_and_opens_the_chat(self) -> None:
         harness, consumer, _ = self.make()
         await harness.start()
         self.assertEqual(sent_types(consumer), ["avatar_setup", "avatar_plan", "task_card"])
+        self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
         self.assertEqual(consumer.send_json.await_args_list[1].args[0]["data"]["steps"][0]["prop"], {"hold": "card"})
         consumer.request_harness_turn.assert_called_once()
 
-    # Without cues: the avatar only idles, so no plan goes out, but the participant still gets their card
+    # Without cues: the avatar only idles, so no plan or sound goes out, but the participant still gets their card
     async def test_without_cues_only_the_setup_and_the_card_go_out(self) -> None:
         harness, consumer, _ = self.make(condition="no_cues")
         await harness.start()
         self.assertEqual(sent_types(consumer), ["avatar_setup", "task_card"])
-        self.assertEqual(harness.cues, [])
+        self.assertNotIn("sounds", consumer.send_json.await_args_list[0].args[0]["data"])
+        self.assertEqual([type(cue) for cue in harness.cues], [PlanningBackchannels])
+        self.assertFalse(harness.backchannels.on)
 
     # The avatar's first turn says the scenario's opening line, with no LLM call
     async def test_the_opening_turn_says_the_scenarios_line(self) -> None:

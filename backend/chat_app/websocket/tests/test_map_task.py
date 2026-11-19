@@ -22,7 +22,7 @@ from pydantic import ValidationError
 # From this project
 from chat_app.websocket.consumers.consumers                import ChatConsumer
 from chat_app.websocket.harnesses.base                     import FinalUtterance, InterimSpeech, TurnAttempt
-from chat_app.websocket.harnesses.map_task.cues            import DirectionGlance, LandmarkGlance
+from chat_app.websocket.harnesses.map_task.cues            import DirectionGlance, LandmarkGlance, MapTaskBackchannels
 from chat_app.websocket.harnesses.map_task.geometry        import approach, beside, direction, distance_band, region, step
 from chat_app.websocket.harnesses.map_task.harness         import MAP_TASK_MAPS, MSG_SAY_AGAIN, MapTaskHarness, MapTaskState
 from chat_app.websocket.harnesses.map_task.map_task_api    import MapTaskAPIError
@@ -47,10 +47,14 @@ LEFT_OF_BUS = ToLandmark(kind="to_landmark", landmark="bus", side="left_of")
 # Where the map files are looked up (tests point it at a folder of their own)
 MAPS_DIR_SETTING = "chat_app.websocket.harnesses.map_task.maps.MAP_TASK_MAPS_DIR"
 
+# Where the signs of listening synthesize their sound, and the clip the stand-in returns
+SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.synthesize_sounds"
+SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
+
 
 # A connection that records what the harness sends it
 def make_consumer() -> SimpleNamespace:
-    return SimpleNamespace(send_json=AsyncMock(), broadcast_task_monitor=AsyncMock())
+    return SimpleNamespace(send_json=AsyncMock(), broadcast_task_monitor=AsyncMock(), streaming_active=True)
 
 # What the user has said so far, as an interim STT result
 def make_interim(text: str) -> InterimSpeech:
@@ -304,9 +308,9 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
     # A Map Task harness on the default map and condition, with the LLM client replaced
     def setUp(self) -> None:
         self.api = SimpleNamespace(follow=AsyncMock(), check_draft=AsyncMock(), assess=AsyncMock(), reply=AsyncMock())
-        client   = patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api)
-        client.start()
-        self.addCleanup(client.stop)
+        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS))):
+            replaced.start()
+            self.addCleanup(replaced.stop)
         self.consumer = make_consumer()
         self.harness  = build_harness(self.consumer, "map_task", None, None)
 
@@ -320,11 +324,12 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((self.harness.variant, self.harness.condition), ("demo", "cues"))
         self.assertEqual(self.harness.state.path, (DEMO_START,))
 
-    # The chat starts with the avatar's setup, the avatar picking up its map, and the participant's map on screen
+    # The chat starts with the avatar's setup (with its listening sound), the avatar picking up its map, and the participant's map on screen
     async def test_the_start_sends_the_setup_the_map_and_the_participants_map(self) -> None:
         await self.harness.start()
         frames = [call.args[0] for call in self.consumer.send_json.await_args_list]
         self.assertEqual([frame["type"] for frame in frames], ["avatar_setup", "avatar_plan", "task_card"])
+        self.assertEqual(frames[0]["data"]["sounds"], SOUNDS)
         self.assertEqual(frames[1]["data"]["steps"][0]["prop"], {"hold": "map"})
         self.assertEqual(frames[2]["data"], {"kind": "map_task", **giver_view(DEMO_MAP)})
 
@@ -415,12 +420,14 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((outcome.message, outcome.state), (MSG_SAY_AGAIN, None))
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
 
-    # Without cues the participant still gets their map, but the avatar holds none and is sent no plans
+    # Without cues the participant still gets their map, but the avatar holds none, has no sounds, and is sent no plans
     async def test_no_cues_sends_only_the_participants_map(self) -> None:
         harness = build_harness(self.consumer, "map_task", "no_cues", None)
         await harness.start()
         self.assertEqual([call.args[0]["type"] for call in self.consumer.send_json.await_args_list], ["avatar_setup", "task_card"])
-        self.assertEqual(harness.cues, [])
+        self.assertNotIn("sounds", self.consumer.send_json.await_args_list[0].args[0]["data"])
+        self.assertEqual([type(cue) for cue in harness.cues], [MapTaskBackchannels])
+        self.assertFalse(harness.backchannels.on)
 
         self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
         attempt = self.attempt("Go to the left of the bus")
@@ -437,6 +444,7 @@ class MapTaskCueTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.consumer = make_consumer()
         self.harness  = build_harness(self.consumer, "map_task", "cues", None)
+        self.addCleanup(self.harness.stop)
 
     # The cue of one type
     def cue(self, cue_type: type) -> object:

@@ -5,13 +5,17 @@ The Map Task's cues: the avatar's eyes follow the directions as they are heard.
 
 Switched on by the `cues` condition, with the shared `BackToListening`
 (`harnesses/cues.py`), which lowers the map when newer speech cancels a reply.
-Both cues here react to the user's words the moment they are recognized, and only
+Both glances react to the user's words the moment they are recognized, and only
 while the avatar is listening (their plans would cut a reply's plan short):
 
 * `LandmarkGlance` glances at a landmark on the avatar's map as the user names
   it, or searches the map with a slight frown for one the avatar doesn't have.
 * `DirectionGlance` looks from the avatar's spot toward a direction as the user
   says it ("go up", "to the right").
+
+`MapTaskBackchannels` gives signs of listening when the user pauses mid-direction:
+the shared feature (`features/backchannels.py`) with this chat's neutral signs
+(`behaviors.py`), on in the conditions its switch lists (with cues).
 
 """
 from __future__ import annotations
@@ -20,11 +24,12 @@ from typing     import TYPE_CHECKING
 import re
 
 # From this project
-from ...services.bg_helpers import fire_and_log
-from  ..avatar              import send_avatar_plan
-from  ..cues                import KeywordCue
-from   .behaviors           import direction_plan, landmark_glance_plan, search_plan
-from   .understanding       import lexicon_pattern, names_on_map
+from ...services.bg_helpers   import fire_and_log
+from  ..avatar                import send_avatar_plan
+from  ..cues                  import KeywordCue
+from  ..features.backchannels import Backchannels
+from   .behaviors             import MAP_TASK_SIGNS, MAP_TASK_SOUNDS, direction_plan, landmark_glance_plan, search_plan
+from   .understanding         import lexicon_pattern, names_on_map
 
 if TYPE_CHECKING:
     from ..avatar  import AvatarPlan
@@ -85,3 +90,9 @@ class DirectionGlance(KeywordCue):
     def on_match(self, name: str, match: re.Match[str]) -> None:
         self._looks += 1
         _send_plan(self.harness, direction_plan(self.harness.state.position, name, self._looks, self.harness.task_map.scale), "direction_glance")
+
+
+# Signs of listening at pauses, with this chat's neutral sound and signs
+class MapTaskBackchannels(Backchannels):
+    SOUNDS = MAP_TASK_SOUNDS
+    SIGNS  = MAP_TASK_SIGNS

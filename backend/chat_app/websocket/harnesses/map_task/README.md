@@ -216,7 +216,8 @@ left.
 **With cues** the avatar holds its own map (`behaviors.py`):
 
 - **As the chat starts,** it gets the Map Task's `avatar_setup` (its own idle glances on, the
-  thinking look, speech gaze, and listening sway off) and picks up its map.
+  thinking look, speech gaze, and listening sway off, and its one listening sound, "mm-hm")
+  and picks up its map.
 - **While a reply is worked out,** it raises the map and reads it: all over with a slight frown
   for a landmark it was asked about or doesn't have, or around its own spot for a direction.
   This plan goes out through `publish_plan`, before any LLM call.
@@ -231,6 +232,10 @@ left.
   "down", "left", or "to the right" as it is said ("right" on its own is too often "okay" to
   count). Neither fires while a reply owns the avatar. `BackToListening` lowers the map when
   newer speech cancels a reply.
+- **Signs of listening** (`MapTaskBackchannels`, the shared feature in
+  `harnesses/features/`): a nod, a tilt of the head, or "mm-hm" when the user pauses partway
+  through a direction. They stay neutral: "yeah" would sound like the avatar had found the
+  landmark just named, and "right" like a direction.
 
 **With `no_cues`** the avatar holds no map, no plans are sent, and it only idles. Everything
 else is the same: the same pipelines, the same moves, and the participant's map.
@@ -267,8 +272,8 @@ else is the same: the same pipelines, the same moves, and the participant's map.
 +├── maps/
  │   ├── demo.json            # A made-up test map (landscape)
  │   └── hcrc_<n>.json        # HCRC Map Task Corpus maps 1-4 (portrait, CC BY 4.0)
- ├── behaviors.py             # The avatar's setup, its map, the plan while thinking, and each reply's plan
- ├── cues.py                  # LandmarkGlance, DirectionGlance
+ ├── behaviors.py             # The avatar's setup, its map, the plan while thinking, each reply's plan, and its signs of listening
+ ├── cues.py                  # LandmarkGlance, DirectionGlance, MapTaskBackchannels
  ├── geometry.py              # Directions, distance bands, parts of the map, and where a move stops
  ├── understanding.py         # Reads a turn in code: names heard, question or move, the facts, and the route
  ├── pipelines.py             # draft_and_check, single_call, assess_then_reply, and ROUTE_PIPELINES

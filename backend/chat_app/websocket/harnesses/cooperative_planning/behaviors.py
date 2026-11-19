@@ -16,12 +16,19 @@ avatar holds its own card: its constraints at the top, then a line for each item
 Card points are 0-1 across and down the card as the avatar reads it, from its
 top-left corner (`HARNESS_PROTOCOL.md` §8.2).
 
+The signs of listening at the user's pauses (`features/backchannels.py`) stay
+neutral here: nods, a tilt, and "mm-hm". "Yeah" in the middle of a proposal
+would sound like the avatar had agreed to it.
+
 """
 from __future__ import annotations
 from typing     import Sequence, TYPE_CHECKING
 
+# From this project
+from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+
 if TYPE_CHECKING:
-    from ..avatar          import AvatarPlan, AvatarSetup
+    from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
     from  .response_models import Behavior
     from  .scenarios       import Scenario
 
@@ -68,13 +75,24 @@ PLANNING_BEHAVIOR_ACTIONS: dict[str, dict[str, object]] = {
 # The nod while "writing" a settled choice in
 PLANNING_WRITE_NOD = {"name": "Nod", "strength": 0.3}
 
+# The sound the avatar makes while listening: the name a sign plays, and the words its voice says
+PLANNING_SOUNDS = {"mm_hm": "Mm-hm."}
+
+# The signs of listening at pauses, in turn
+PLANNING_SIGNS: tuple[dict[str, object], ...] = (
+    {"move": BACKCHANNEL_NOD,  "sound": listening_sound("mm_hm")},
+    {"move": BACKCHANNEL_TILT},
+    {"move": BACKCHANNEL_NOD},
+)
+
 
 # ================================================================================
 # Setup and Standing Plans
 # ================================================================================
-# Session settings for the chat's condition (each one replaces the last)
-def setup_for(with_cues: bool) -> AvatarSetup:
-    return PLANNING_SETUP_CUES if with_cues else PLANNING_SETUP_NO_CUES
+# Session settings for the chat's condition, with the signs' sound when they are on (each setup replaces the last)
+def setup_for(with_cues: bool, sounds: AvatarSounds | None) -> AvatarSetup:
+    setup = PLANNING_SETUP_CUES if with_cues else PLANNING_SETUP_NO_CUES
+    return setup if (sounds is None) else {**setup, "sounds": sounds}
 
 # Pick the card up as the chat starts, and listen
 def start_plan() -> AvatarPlan:

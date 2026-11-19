@@ -1,5 +1,5 @@
 """
-The speech elicitation avatar's plans: its setup, its sounds, and each reply's behavior.
+The speech elicitation avatar: its setup, its sounds, and each reply's behavior.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.speech_elicitation.behaviors`
 
@@ -7,20 +7,21 @@ Sent only with the `cues` condition. The avatar holds nothing in this chat, so
 the client's own automatic looks run too (`HARNESS_PROTOCOL.md` §2): glances
 while idle, the eyes drifting while it thinks and while it speaks, and a sway
 while it listens. On top of those, each reply's plan plays the behavior the
-reply picked as its audio starts, and the listening cue gives a sign of
-listening when the user pauses: a nod or a tilt of the head, most of them with
-a short sound ("mm-hm", "yeah"). The sounds are clips in the avatar's own voice,
-sent once in the setup and played by name (§2, §3.3), on a channel of their
-own: they aren't replies, so nothing cancels them, saves them, or puts them in
-the conversation the model sees. The faces and movements are the Smiley's names
-(§9).
+reply picked as its audio starts. The faces and movements are the Smiley's
+names (§9).
+
+The signs of listening (`features/backchannels.py`) use this chat's sounds,
+clips in the avatar's own voice sent once in the setup (§2, §3.3). At pauses,
+"mm-hm", "yeah", and "right" take turns with silent signs. While the reply check
+holds a reply, it can also pick a sound that fits what the user is saying ("oh,
+wow", "oh no", "really?").
 
 """
 from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from .config import ELICITATION_SOUND_VOLUME
+from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_SMILE, BACKCHANNEL_TILT, listening_sound
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
@@ -45,30 +46,34 @@ ELICITATION_BEHAVIOR_ACTIONS: dict[str, dict[str, object]] = {
     "sympathetic" : {"face": {"name": "Pensive Face",                    "strength": 0.5, "hold_ms": 2_000}, "move": {"name": "Head Tilt", "strength": 0.3}},
 }
 
-# The sounds the avatar makes while listening: the name a plan uses, and the words its voice says
-ELICITATION_SOUNDS = {"mm_hm": "Mm-hm.", "yeah": "Yeah.", "right": "Right."}
+# The sounds the avatar makes while listening: the name a sign plays, and the words its voice says
+# (the last three fit only some of what a user says, so only the reply check picks them)
+ELICITATION_SOUNDS = {
+    "mm_hm"  : "Mm-hm.",
+    "yeah"   : "Yeah.",
+    "right"  : "Right.",
+    "oh_wow" : "Oh, wow.",
+    "oh_no"  : "Oh no.",
+    "really" : "Really?",
+}
 
-# The small movements a sign of listening is made of
-ELICITATION_LISTEN_NOD   = {"name": "Nod",          "strength": 0.3 }
-ELICITATION_LISTEN_TILT  = {"name": "Head Tilt",    "strength": 0.25}
-ELICITATION_LISTEN_SMILE = {"name": "Smiling Face", "strength": 0.4, "hold_ms": 900}
-
-# The signs of listening, in turn (some silent, so the sounds don't come like a metronome)
-ELICITATION_BACKCHANNELS: tuple[dict[str, object], ...] = (
-    {"move": ELICITATION_LISTEN_NOD,  "sound": {"name": "mm_hm", "volume": ELICITATION_SOUND_VOLUME}},
-    {"move": ELICITATION_LISTEN_NOD,  "face": ELICITATION_LISTEN_SMILE},
-    {"move": ELICITATION_LISTEN_NOD,  "sound": {"name": "yeah",  "volume": ELICITATION_SOUND_VOLUME}},
-    {"move": ELICITATION_LISTEN_TILT},
-    {"move": ELICITATION_LISTEN_NOD,  "sound": {"name": "right", "volume": ELICITATION_SOUND_VOLUME}, "face": ELICITATION_LISTEN_SMILE},
+# The signs of listening at pauses, in turn (some silent, so the sounds don't come like a metronome)
+ELICITATION_SIGNS: tuple[dict[str, object], ...] = (
+    {"move": BACKCHANNEL_NOD,  "sound": listening_sound("mm_hm")},
+    {"move": BACKCHANNEL_NOD,  "face": BACKCHANNEL_SMILE},
+    {"move": BACKCHANNEL_NOD,  "sound": listening_sound("yeah")},
+    {"move": BACKCHANNEL_TILT},
+    {"move": BACKCHANNEL_NOD,  "sound": listening_sound("right"), "face": BACKCHANNEL_SMILE},
 )
 
 
 # --------------------------------------------------------------------------------
 # Plans
 # --------------------------------------------------------------------------------
-# Session settings for the chat's condition: with cues, the automatic looks and the listening sounds (None: no cues)
-def setup_for(sounds: AvatarSounds | None) -> AvatarSetup:
-    return ELICITATION_SETUP_NO_CUES if (sounds is None) else {**ELICITATION_SETUP_CUES, "sounds": sounds}
+# Session settings for the chat's condition, with the signs' sounds when they are on (None: no sounds)
+def setup_for(with_cues: bool, sounds: AvatarSounds | None) -> AvatarSetup:
+    setup = ELICITATION_SETUP_CUES if with_cues else ELICITATION_SETUP_NO_CUES
+    return setup if (sounds is None) else {**setup, "sounds": sounds}
 
 # Listen as the chat starts
 def start_plan() -> AvatarPlan:
@@ -82,7 +87,3 @@ def thinking_plan(turn: int) -> AvatarPlan:
 def reply_plan(turn: int, behavior: Behavior) -> AvatarPlan:
     step = {"start_on": "reply_audio", "state": "listening", "gaze": {"on": "user", "hold_ms": ELICITATION_LOOK_BACK_MS}, **ELICITATION_BEHAVIOR_ACTIONS[behavior]}
     return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": [step]}
-
-# One small sign of listening at a pause in the user's speech (they take turns, so two in a row never match)
-def backchannel_plan(count: int) -> AvatarPlan:
-    return {"id": f"listen-{count}", "steps": [ELICITATION_BACKCHANNELS[(count - 1) % len(ELICITATION_BACKCHANNELS)]]}

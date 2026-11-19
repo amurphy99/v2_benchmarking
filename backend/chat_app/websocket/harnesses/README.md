@@ -61,11 +61,13 @@ which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_pl
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
 | `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
 | `cooperative_planning` | The user and the avatar work out a plan together, each with a brief (who they are) and private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party`, `day_trip`, `birthday_party`, `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`, `apartment_hunt`, `camping_trip`, `flight_rebooking` |
-| `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said and ends with another question, and with cues it gives audible signs of listening ("mm-hm") when the user pauses. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
+| `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said, digs into their answer before moving on, and ends with another question. With cues it gives audible signs of listening ("mm-hm") when the user pauses, holds a reply while they seem mid-thought, and asks about a likely misheard word. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
 
 `map_task`, `cooperative_planning`, and `speech_elicitation` use cues and drive the
 avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
-participant their task materials (`task_card`). The others send `robot_action` moods. `map_task` also gives the admin
+participant their task materials (`task_card`). All three give signs of listening
+at the user's pauses, and `speech_elicitation` also checks each reply before it
+goes out (Shared features, below). The others send `robot_action` moods. `map_task` also gives the admin
 live chat page a view of its state (Monitoring, below).
 
 ```diff
@@ -74,6 +76,15 @@ live chat page a view of its state (Monitoring, below).
  ├── cues.py                      # Shared cues: KeywordCue and SilenceWatcher to build on, and BackToListening as is
  ├── registry.py                  # chat_type names -> harnesses, the default, and the condition/variant checks
  ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, a setup's sounds, and the shared listening plan
+ │
++├── features/                    # Behaviors several chat types share, each opted into by a chat type (Shared features, below)
+ │   ├── config.py                # The conditions each feature runs in, the signs' defaults, and the reply check's settings
+ │   ├── backchannels.py          # Backchannels: signs of listening at the user's pauses, styled by each chat type
++│   └── reply_gate/              # The check before each reply to finished speech: let it out, hold it, or ask about a word
+ │       ├── gate.py              # ReplyGate, and the checks a chat type picks (TurnEndCheck, MisheardCheck)
+ │       ├── prompts.py           # What each check looks for, and every field its response fills in
+ │       ├── response_models.py   # The verdict (reply, wait, or clarify), built per chat type from the checks switched on
+ │       └── reply_check_api.py   # ReplyCheckAPI: the one check call, on the shared StructuredAPI
  │
 +├── unguided/
  │   ├── harness.py               # Scripted end-chat and pause replies, otherwise the LLM
@@ -90,8 +101,8 @@ live chat page a view of its state (Monitoring, below).
 +├── map_task/                    # The avatar as instruction follower (see its README)
  │   ├── harness.py               # Sends both maps out, reads each turn, replies through its route's pipeline, and moves the avatar
  │   ├── maps/                    # One map file per variant (both maps, drawn from data)
- │   ├── behaviors.py             # The avatar's setup, its map, and each reply's plan
- │   ├── cues.py                  # LandmarkGlance, DirectionGlance
+ │   ├── behaviors.py             # The avatar's setup, its map, each reply's plan, and its signs of listening
+ │   ├── cues.py                  # LandmarkGlance, DirectionGlance, MapTaskBackchannels
  │   └── ...
  │
 +├── cooperative_planning/        # Working out a plan together, each side with a brief and private constraints
@@ -114,19 +125,19 @@ live chat page a view of its state (Monitoring, below).
  │   ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives
  │   ├── pipelines.py             # track_then_reply, single_call, reply_then_track
  │   ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
- │   ├── behaviors.py             # The avatar's setup, its card, and the plan for each named behavior
- │   ├── cues.py                  # ItemGlance, QuietNudge (with the shared BackToListening)
+ │   ├── behaviors.py             # The avatar's setup, its card, the plan for each named behavior, and its signs of listening
+ │   ├── cues.py                  # ItemGlance, QuietNudge, PlanningBackchannels (with the shared BackToListening)
  │   └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
  │
 +└── speech_elicitation/          # One light question, then keep the user talking
-     ├── harness.py               # Opens with the topic's question, and answers each turn with one call
+     ├── harness.py               # Opens with the topic's question, and answers each turn with one call through the reply gate
      ├── topics.py                # One topic per variant: the opening question and fresh angles for it
      ├── response_models.py       # The reply: its move, its behavior, and words that must end with a question
-     ├── prompts.py               # How to keep the user talking, the task, and the directives for a flagging chat
+     ├── prompts.py               # How to keep the user talking, the task, the directives, and its notes for the reply check
      ├── elicitation_api.py       # ElicitationAPI: the one reply call, on the shared StructuredAPI
      ├── behaviors.py             # The avatar's setup and listening sounds, the plan for each named behavior, and the signs of listening
-     ├── cues.py                  # ListeningSigns (with cues), QuietPrompt (both conditions)
-     └── config.py                # Request limits, the reply call's settings, and the cue timings
+     ├── cues.py                  # ElicitationBackchannels (with cues), QuietPrompt (both conditions)
+     └── config.py                # Request limits, the reply call's settings and hold, how deep a thread goes, and the cue timings
 ```
 
 <br>
@@ -249,7 +260,66 @@ class DirectionGlance(KeywordCue):
 ```
 
 The harness switches its cues on for one condition only, in its `__init__`:
-`if self.with_cues: self.cues = [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]`.
+`if self.with_cues: self.cues += [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]`.
+
+<br>
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Shared Features                                                                  -->
+<!-- -------------------------------------------------------------------------------- -->
+## Shared features
+
+A **feature** is a behavior several chat types share. It lives in `features/`,
+and each chat type that wants it opts in with its own sounds, prompt notes, or
+timings. A feature runs only in the conditions its switch in `features/config.py`
+lists (`cues` for now), so one switch turns it off (or on) for every chat type at
+once. Each connection copies its switch into the feature's `on`, which something
+can flip partway through a chat.
+
+| Feature | Switch | Used by |
+|---|---|---|
+| Signs of listening at pauses (`backchannels.py`) | `FEATURE_BACKCHANNELS_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
+| Holding a reply while the user seems mid-thought (`reply_gate/`, `TurnEndCheck`) | `FEATURE_TURN_END_CONDITIONS` | `speech_elicitation` |
+| Asking about a likely misheard word instead of replying (`reply_gate/`, `MisheardCheck`) | `FEATURE_MISHEARD_CONDITIONS` | `speech_elicitation` |
+
+**Signs of listening.** `Backchannels` is a `SilenceWatcher` that gives a sign (a
+nod or a tilt of the head, often with a short sound in the avatar's own voice)
+when the user pauses partway through an utterance of a few words, at most one
+every few seconds. A chat type subclasses it with its `SOUNDS`, which its setup
+carries (`sounds()`), and its `SIGNS`, which take turns. `map_task` and
+`cooperative_planning` keep theirs neutral (nods, a tilt, and "mm-hm"), since
+"yeah" or "right" there would sound like an answer.
+
+**The reply gate.** A chat type's `generate` hands its reply to `ReplyGate.run`.
+For a reply to finished speech (an automatic one), one short LLM call, the reply
+check, starts at the same moment as the reply, and its verdict decides what
+happens:
+
+| Verdict | What happens |
+|---|---|
+| `reply` | The reply goes out as usual. When the check read through an obvious slip ("watching the dishes"), it logs the words the user most likely said (`likely_said`) |
+| `wait` | The user seems mid-thought. The avatar gives the sign the check picked (one of the chat type's sounds, and a gesture), and the reply is held for the chat type's hold. Newer speech cancels the attempt, as it cancels any automatic reply, and the staged words are answered with the rest of the turn. If the user stays quiet, the reply (worked on meanwhile) goes out when the hold ends |
+| `clarify` | A likely misheard word hides what the user meant. The reply is dropped, and the avatar asks the check's question instead ("Sorry, did you say 'tad person'?") |
+
+The reply's own plans (its thinking look) wait for the verdict, so the avatar
+keeps listening while the check runs. The verdict is a union told apart by
+`next_step`, built per chat type with only the steps of the checks switched on.
+`reply_now` replies and harness turns skip the check. A check that fails lets
+the reply go out as usual (a specified fallback; the failure is logged once).
+A chat type can add its own notes to a check's prompt, as `TurnEndCheck(self, notes)`.
+Verdicts and holds are only logged for now; the research event log will record
+them once it exists.
+
+A chat type opts in much as it builds its cues:
+
+```python
+self.backchannels = ElicitationBackchannels(self)
+self.cues         = [QuietPrompt(self), self.backchannels]
+self.reply_gate   = ReplyGate(self, checks=(TurnEndCheck(self, ELICITATION_TURN_END_NOTES), MisheardCheck(self)), backchannels=self.backchannels, hold_sec=ELICITATION_HOLD_SEC)
+
+# In generate, after any scripted turns (`_reply` is the chat type's own reply, `_clarify` its outcome for a question)
+return await self.reply_gate.run(attempt, self._reply, self._clarify)
+```
 
 <br>
 

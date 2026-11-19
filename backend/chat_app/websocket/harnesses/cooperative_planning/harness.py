@@ -19,8 +19,9 @@ to read the plan back as soon as that reply has been heard.
 With the `cues` condition the avatar holds its own card, reads it over while it
 works out each reply, every reply carries an avatar plan for the behavior it
 picked (`behaviors.py`), and the cues run (`cues.py`, and the shared
-`BackToListening`). With `no_cues` the reply calls still pick a behavior (it's
-logged), but no plan is sent and the avatar only idles.
+`BackToListening`), including signs of listening at the user's pauses. With
+`no_cues` the reply calls still pick a behavior (it's logged), but no plan is
+sent and the avatar only idles.
 
 The participant's card goes out as a `task_card` frame when the chat starts and
 whenever the plan on it changes.
@@ -45,7 +46,7 @@ from   ..base                        import ChatHarness, ResponseOutcome, TurnAt
 from   ..cues                        import BackToListening
 from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan, writing_plan
 from    .config                      import PLANNING_PIPELINE
-from    .cues                        import ItemGlance, QuietNudge
+from    .cues                        import ItemGlance, PlanningBackchannels, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
 from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
@@ -98,17 +99,19 @@ class CooperativePlanningHarness(ChatHarness):
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
-        self.scenario    = PLANNING_SCENARIOS[variant]
-        self.models      = models_for_scenario(self.scenario.item_ids, self.scenario.avatar_constraint_ids)
-        self.state       = initial_state(self.scenario)
-        self.with_cues   = (condition == "cues")
-        self._tracking   : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
-        self._read_back  : PlanningState | None      = None       # The finished plan a read-back turn was last asked for
-        if self.with_cues: self.cues = [BackToListening(self), ItemGlance(self), QuietNudge(self)]
+        self.scenario     = PLANNING_SCENARIOS[variant]
+        self.models       = models_for_scenario(self.scenario.item_ids, self.scenario.avatar_constraint_ids)
+        self.state        = initial_state(self.scenario)
+        self.with_cues    = (condition == "cues")
+        self.backchannels = PlanningBackchannels(self)
+        self._tracking    : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
+        self._read_back   : PlanningState | None      = None       # The finished plan a read-back turn was last asked for
+        self.cues         = [self.backchannels]
+        if self.with_cues: self.cues += [BackToListening(self), ItemGlance(self), QuietNudge(self)]
 
-    # The connection is ready: set the avatar up, show the participant's card, and open the chat
+    # The connection is ready: set the avatar up (with the signs' sound when they are on), show the participant's card, and open the chat
     async def start(self) -> None:
-        await send_avatar_setup(self.consumer, setup_for(self.with_cues))
+        await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())
         await send_task_card(self.consumer, self.scenario, self.state)
         self.request_turn()

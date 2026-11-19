@@ -46,11 +46,17 @@ class ElicitationAPI(StructuredAPI):
         )
 
     # Reply to the user's latest message (or to their silence), ending with a question
-    async def reply(self, topic: Topic, history: list[dict[str, str]], directive: Directive | None) -> ElicitationTurn:
+    async def reply(
+        self,
+        topic     : Topic,                 # The chat's topic: its opening question and fresh angles
+        history   : list[dict[str, str]],  # The conversation so far, ending with the user's turn
+        directive : Directive | None,      # What code asks of this reply (None for nothing)
+        angles    : bool,                  # Whether the reply is offered the topic's fresh angles
+    ) -> ElicitationTurn:
         return await self._request(
             label          = "reply",
             response_model = ElicitationTurn,
-            messages       = build_messages(topic, history, directive),
+            messages       = build_messages(topic, history, directive, angles),
             temperature    = ELICITATION_REPLY_TEMP,
             thinking       = ELICITATION_REPLY_THINKING,
         )

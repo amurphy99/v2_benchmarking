@@ -11,6 +11,10 @@ tracing the move from the old spot to the new one, locking onto a landmark it
 found, or one last sweep and a head shake for one it doesn't have. The map comes
 down as the reply's audio starts.
 
+The signs of listening at the user's pauses (`features/backchannels.py`) stay
+neutral here: nods, a tilt, and "mm-hm". "Yeah" would sound like the avatar had
+found the landmark just named, and "right" like a direction.
+
 Points are the avatar's own map coordinates, the frame the map files use: 0-1
 across and down its map as it reads it (`HARNESS_PROTOCOL.md` §8.2). The faces
 and movements are the Smiley's names (§9).
@@ -20,10 +24,11 @@ from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from .geometry import step
+from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+from  .geometry              import step
 
 if TYPE_CHECKING:
-    from ..avatar          import AvatarPlan, AvatarSetup
+    from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
     from  .geometry        import Direction
     from  .maps            import Landmark, Point, Scale
     from  .response_models import FollowerReply
@@ -66,13 +71,24 @@ MAP_TASK_PUZZLED_FACE = {"name": "Face with Raised Eyebrow", "strength": 0.5, "h
 MAP_TASK_NOT_THERE    = {"name": "Shake No",                 "strength": 0.6}
 MAP_TASK_GOT_IT       = {"name": "Nod",                      "strength": 0.5}
 
+# The sound the avatar makes while listening: the name a sign plays, and the words its voice says
+MAP_TASK_SOUNDS = {"mm_hm": "Mm-hm."}
+
+# The signs of listening at pauses, in turn
+MAP_TASK_SIGNS: tuple[dict[str, object], ...] = (
+    {"move": BACKCHANNEL_NOD,  "sound": listening_sound("mm_hm")},
+    {"move": BACKCHANNEL_NOD},
+    {"move": BACKCHANNEL_TILT},
+)
+
 
 # ================================================================================
 # Setup and Standing Plans
 # ================================================================================
-# Session settings for the chat's condition (each one replaces the last)
-def setup_for(with_cues: bool) -> AvatarSetup:
-    return MAP_TASK_SETUP_CUES if with_cues else MAP_TASK_SETUP_NO_CUES
+# Session settings for the chat's condition, with the signs' sound when they are on (each setup replaces the last)
+def setup_for(with_cues: bool, sounds: AvatarSounds | None) -> AvatarSetup:
+    setup = MAP_TASK_SETUP_CUES if with_cues else MAP_TASK_SETUP_NO_CUES
+    return setup if (sounds is None) else {**setup, "sounds": sounds}
 
 # Pick the map up as the chat starts, and listen
 def start_plan() -> AvatarPlan:

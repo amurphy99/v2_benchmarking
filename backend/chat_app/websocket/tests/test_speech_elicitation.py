@@ -1,12 +1,14 @@
 """
-Speech elicitation replies, prompts, cues, and the harness.
+Speech elicitation replies, prompts, threads, cues, and the harness.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_speech_elicitation`
 
-The LLM client is replaced with a stand-in that returns fixed structured
+The LLM clients are replaced with stand-ins that return fixed structured
 responses, so these tests check what code decides: that every reply hands the
-turn back with a question, what the prompt tells the model when the chat is
-flagging, which frames go to the client, and when the avatar speaks up.
+turn back with a question, how deep a thread goes before the reply may move on,
+what the prompt tells the model when the chat is flagging, which frames go to
+the client, and when the avatar speaks up. The reply gate and the signs of
+listening themselves are tested in `test_harness_features.py`.
 
 """
 from datetime      import datetime, timezone
@@ -18,23 +20,28 @@ import asyncio, unittest
 from pydantic import ValidationError
 
 # From this project
-from chat_app.websocket.harnesses.avatar                             import synthesize_sounds
-from chat_app.websocket.harnesses.base                               import FinalUtterance, InterimSpeech, TurnAttempt
-from chat_app.websocket.harnesses.registry                           import build_harness
-from chat_app.websocket.harnesses.speech_elicitation.behaviors       import ELICITATION_BACKCHANNELS, ELICITATION_SOUNDS
-from chat_app.websocket.harnesses.speech_elicitation.config          import ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_PAUSE_SEC, ELICITATION_QUIET_AFTER_SEC, ELICITATION_SIGN_MIN_WORDS
-from chat_app.websocket.harnesses.speech_elicitation.cues            import ListeningSigns, QuietPrompt
-from chat_app.websocket.harnesses.speech_elicitation.elicitation_api import ElicitationAPIError
-from chat_app.websocket.harnesses.speech_elicitation.harness         import MSG_SAY_MORE
-from chat_app.websocket.harnesses.speech_elicitation.prompts         import build_messages, directive_for
-from chat_app.websocket.harnesses.speech_elicitation.response_models import ElicitationTurn
-from chat_app.websocket.harnesses.speech_elicitation.topics          import ELICITATION_TOPICS
+from chat_app.websocket.harnesses.avatar                              import synthesize_sounds
+from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, TurnAttempt
+from chat_app.websocket.harnesses.cues                                import BackToListening
+from chat_app.websocket.harnesses.features.config                     import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
+from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
+from chat_app.websocket.harnesses.registry                            import build_harness
+from chat_app.websocket.harnesses.speech_elicitation.behaviors        import ELICITATION_SIGNS, ELICITATION_SOUNDS
+from chat_app.websocket.harnesses.speech_elicitation.config           import ELICITATION_DRY_AFTER_SHORT, ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_MIN_FOLLOW_UPS, ELICITATION_QUIET_AFTER_SEC
+from chat_app.websocket.harnesses.speech_elicitation.cues             import ElicitationBackchannels, QuietPrompt
+from chat_app.websocket.harnesses.speech_elicitation.elicitation_api  import ElicitationAPIError
+from chat_app.websocket.harnesses.speech_elicitation.harness          import MSG_SAY_MORE, ElicitationState
+from chat_app.websocket.harnesses.speech_elicitation.prompts          import ELICITATION_NO_ANGLES_YET, build_messages, directive_for, offer_angles
+from chat_app.websocket.harnesses.speech_elicitation.response_models  import ElicitationTurn
+from chat_app.websocket.harnesses.speech_elicitation.topics           import ELICITATION_TOPICS
 
 # The topic every test talks about (the default variant)
 TOPIC = ELICITATION_TOPICS["pet_person"]
 
-# Where the harness module looks its client up (patched there)
-HARNESS = "chat_app.websocket.harnesses.speech_elicitation.harness"
+# Where the harness, the reply gate, and the signs of listening look up what these tests replace
+HARNESS      = "chat_app.websocket.harnesses.speech_elicitation.harness"
+GATE         = "chat_app.websocket.harnesses.features.reply_gate.gate"
+BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels"
 
 # The setup's sounds as the stand-in synthesis returns them
 SOUNDS = {name: {"audio": "AAA=", "sample_rate": 24_000} for name in ELICITATION_SOUNDS}
@@ -60,6 +67,16 @@ def make_consumer() -> SimpleNamespace:
 def interim(text: str) -> InterimSpeech:
     return InterimSpeech(text=text, new_speech=True, stability=0.9, ended_at=datetime.now(timezone.utc))
 
+# A reply check that always finds the user done, so the reply goes out as usual
+def done_check() -> SimpleNamespace:
+    return SimpleNamespace(check=AsyncMock(return_value=CheckResult(basis="done", verdict=Reply(next_step="reply"))))
+
+# Replace a name for the rest of one test
+def replace_for_test(test: unittest.TestCase, target: str, value: object) -> None:
+    started = patch(target, value)
+    started.start()
+    test.addCleanup(started.stop)
+
 
 # ================================================================================
 # Replies and Prompts
@@ -76,33 +93,46 @@ class ReplyTests(unittest.TestCase):
         for variant, topic in ELICITATION_TOPICS.items():
             with self.subTest(variant): self.assertTrue(topic.opening.endswith("?"))
 
-    # Code tells the reply when the chat is flagging: a silence, or an answer of a few words
+    # Code tells the reply when the chat is flagging: a silence, a short answer, or short answers in a row
     def test_the_directive_follows_how_much_the_user_said(self) -> None:
-        self.assertEqual(directive_for(""), "quiet")
-        self.assertEqual(directive_for("Dogs, I guess."), "short_answer")
-        self.assertIsNone(directive_for("Definitely dogs, we always had one growing up."))
+        self.assertEqual(directive_for("", 0), "quiet")
+        self.assertEqual(directive_for("Dogs, I guess.", 0), "short_answer")
+        self.assertEqual(directive_for("Dogs, I guess.", ELICITATION_DRY_AFTER_SHORT - 1), "thread_dry")
+        self.assertIsNone(directive_for("Definitely dogs, we always had one growing up.", ELICITATION_DRY_AFTER_SHORT))
 
-    # The prompt carries the opening question and the topic's angles, and the directive only when there is one
-    def test_the_prompt_carries_the_topic_and_the_directive(self) -> None:
-        plain = build_messages(TOPIC, [], None)[0]["content"]
+    # A thread is offered fresh angles once it has had its follow-ups, or when the chat is flagging (one short answer isn't)
+    def test_fresh_angles_wait_until_a_thread_is_explored_or_runs_dry(self) -> None:
+        self.assertFalse(offer_angles(ELICITATION_MIN_FOLLOW_UPS - 1, None))
+        self.assertFalse(offer_angles(0, "short_answer"))
+        self.assertTrue(offer_angles(ELICITATION_MIN_FOLLOW_UPS, None))
+        self.assertTrue(offer_angles(0, "thread_dry"))
+        self.assertTrue(offer_angles(0, "quiet"))
+
+    # The prompt carries the opening question, the angles only when offered, and the directive only when there is one
+    def test_the_prompt_carries_the_topic_the_angles_and_the_directive(self) -> None:
+        plain = build_messages(TOPIC, [], None, False)[0]["content"]
         self.assertIn(TOPIC.opening, plain)
-        for angle in TOPIC.angles: self.assertIn(f"- {angle}", plain)
+        self.assertIn(ELICITATION_NO_ANGLES_YET, plain)
+        for angle in TOPIC.angles: self.assertNotIn(f"- {angle}", plain)
         self.assertNotIn("RIGHT NOW", plain)
-        self.assertIn("RIGHT NOW: The user has gone quiet.", build_messages(TOPIC, [], "quiet")[0]["content"])
+
+        offered = build_messages(TOPIC, [], "quiet", True)[0]["content"]
+        for angle in TOPIC.angles: self.assertIn(f"- {angle}", offered)
+        self.assertNotIn(ELICITATION_NO_ANGLES_YET, offered)
+        self.assertIn("RIGHT NOW: The user has gone quiet.", offered)
 
 
 # ================================================================================
 # Harness
 # ================================================================================
 class HarnessTests(unittest.IsolatedAsyncioTestCase):
-    # A harness with the cues on (or off), and the stand-in client its reply call reaches
-    def make(self, condition: str = "cues", reply: object = None) -> tuple[object, SimpleNamespace, SimpleNamespace]:
+    # A harness with the cues on (or off), and the stand-in clients its calls reach (the check finds the user done, unless given another)
+    def make(self, condition: str = "cues", reply: object = None, check: SimpleNamespace | None = None) -> tuple[object, SimpleNamespace, SimpleNamespace]:
         consumer = make_consumer()
         api      = SimpleNamespace(reply=AsyncMock(side_effect=reply if isinstance(reply, Exception) else None, return_value=reply))
-        for target, value in ((f"{HARNESS}.get_elicitation_api", Mock(return_value=api)), (f"{HARNESS}.synthesize_sounds", AsyncMock(return_value=SOUNDS))):
-            started = patch(target, value)
-            started.start()
-            self.addCleanup(started.stop)
+        replace_for_test(self, f"{HARNESS}.get_elicitation_api",    Mock(return_value=api))
+        replace_for_test(self, f"{GATE}.get_reply_check_api",       Mock(return_value=check or done_check()))
+        replace_for_test(self, f"{BACKCHANNELS}.synthesize_sounds", AsyncMock(return_value=SOUNDS))
         harness = build_harness(consumer, "speech_elicitation", condition, None)
         self.addCleanup(harness.stop)
         return harness, consumer, api
@@ -117,17 +147,17 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"].get("sounds"), sounds)
                 consumer.request_harness_turn.assert_called_once()
 
-    # Every sound a sign of listening plays is one the setup carries
+    # Every sound a sign of listening plays at a pause is one the setup carries
     def test_every_listening_sound_is_in_the_setup(self) -> None:
-        played = {step["sound"]["name"] for step in ELICITATION_BACKCHANNELS if "sound" in step}
+        played = {step["sound"]["name"] for step in ELICITATION_SIGNS if "sound" in step}
         self.assertTrue(played)
         self.assertLessEqual(played, set(ELICITATION_SOUNDS))
 
-    # The avatar's first turn asks the topic's question, with no LLM call
+    # The avatar's first turn asks the topic's question, with no LLM call, and starts the first thread
     async def test_the_opening_turn_asks_the_topics_question(self) -> None:
         harness, _, api = self.make()
         outcome = await harness.generate(TurnAttempt(context=[], user_text="", trigger="harness", publish_mood=AsyncMock(), publish_plan=AsyncMock()))
-        self.assertEqual(outcome.message, TOPIC.opening)
+        self.assertEqual((outcome.message, outcome.state), (TOPIC.opening, ElicitationState()))
         api.reply.assert_not_awaited()
 
     # Each reply carries the plan for the behavior it picked, but only with cues
@@ -143,13 +173,52 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(attempt.publish_plan.await_count, int(sends_plan))
                 if sends_plan: self.assertEqual((outcome.avatar_plan["id"], outcome.avatar_plan["steps"][0]["move"]["name"]), ("t1-reply", "Bounce"))
 
-    # A very short answer and a silence each reach the reply call as a directive
+    # A short answer and a silence each reach the reply call as a directive
     async def test_a_flagging_chat_reaches_the_reply_as_a_directive(self) -> None:
         harness, _, api = self.make(reply=turn("Fair enough! What about plants?", move="new_angle"))
         for text, directive in (("Dogs.", "short_answer"), ("", "quiet"), ("Oh, dogs, without any doubt at all.", None)):
             with self.subTest(text):
                 await harness.generate(make_attempt(text))
                 self.assertEqual(api.reply.await_args.args[2], directive)
+
+    # Each reply on a thread counts toward it, short answers add up until a longer one, and a new angle starts over
+    async def test_the_state_follows_the_thread(self) -> None:
+        harness, _, api = self.make()
+        api.reply.return_value = turn("Ha! Which dog?")
+        outcome = await harness.generate(make_attempt("Dogs."))
+        self.assertEqual(outcome.state, ElicitationState(follow_ups=1, short_answers=1))
+
+        harness.state = outcome.state
+        outcome       = await harness.generate(make_attempt("Our old beagle, Rusty, who used to howl at the mailman."))
+        self.assertEqual(outcome.state, ElicitationState(follow_ups=2, short_answers=0))
+
+        api.reply.return_value = turn("Fair enough! What about plants?", move="new_angle")
+        self.assertEqual((await harness.generate(make_attempt("Dogs."))).state, ElicitationState())
+
+    # The reply is offered the fresh angles only once its thread has had its follow-ups, or has run dry
+    async def test_a_new_thread_is_kept_from_the_fresh_angles(self) -> None:
+        harness, _, api = self.make(reply=turn("Ha! Which dog?"))
+        cases = (
+            (ElicitationState(),                                              "Our old beagle used to howl at the mailman.", False),
+            (ElicitationState(follow_ups=ELICITATION_MIN_FOLLOW_UPS),         "Our old beagle used to howl at the mailman.", True ),
+            (ElicitationState(short_answers=ELICITATION_DRY_AFTER_SHORT - 1), "Dogs.",                                       True ),
+        )
+        for state, text, angles in cases:
+            with self.subTest(state=state):
+                harness.state = state
+                await harness.generate(make_attempt(text))
+                self.assertEqual(api.reply.await_args.args[3], angles)
+
+    # A likely misheard word gets the reply check's question instead, asked with a curious look, and the thread stays where it was
+    async def test_a_misheard_word_gets_a_question_instead(self) -> None:
+        question = "Sorry, did you say 'tad person'?"
+        verdict  = check_model(tuple(ELICITATION_SOUNDS), turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": {"next_step": "clarify", "misheard": "tad person", "message": question}})
+        harness, _, _ = self.make(reply=turn("A tad person! What's that?"), check=SimpleNamespace(check=AsyncMock(return_value=verdict)))
+        harness.state = ElicitationState(follow_ups=2)
+
+        with self.assertLogs(GATE, level="INFO"): outcome = await harness.generate(make_attempt("I'm a tad person."))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state), (question, "curious", ElicitationState(follow_ups=2)))
+        self.assertEqual(outcome.avatar_plan["steps"][0]["move"]["name"], "Head Tilt")
 
     # A call that fails every attempt still hands the turn back with a question
     async def test_a_failed_call_asks_the_user_to_say_more(self) -> None:
@@ -165,6 +234,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
 class CueTests(unittest.IsolatedAsyncioTestCase):
     # A harness with its cues, and a connection that records what they send
     async def asyncSetUp(self) -> None:
+        replace_for_test(self, f"{GATE}.get_reply_check_api", Mock(return_value=done_check()))
         self.consumer = make_consumer()
         self.harness  = build_harness(self.consumer, "speech_elicitation", "cues", None)
 
@@ -172,33 +242,15 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self.harness.stop()
 
-    # A pause inside a long enough utterance gets a sign of listening, the first one audible, and never two close together
+    # A pause inside a long enough utterance gets this chat's first sign of listening, which is audible
     async def test_a_pause_inside_an_utterance_gets_a_sign_of_listening(self) -> None:
-        signs = next(cue for cue in self.harness.cues if isinstance(cue, ListeningSigns))
-        words = " ".join(["word"] * ELICITATION_SIGN_MIN_WORDS)
-
-        signs.on_interim(interim("well I"))
-        signs.on_silence(ELICITATION_PAUSE_SEC)
-        await asyncio.sleep(0)
-        self.consumer.send_json.assert_not_awaited()
-
-        signs.on_interim(interim(words))
-        signs.on_silence(ELICITATION_PAUSE_SEC)
-        signs.on_silence(ELICITATION_PAUSE_SEC)
+        signs = next(cue for cue in self.harness.cues if isinstance(cue, ElicitationBackchannels))
+        signs.on_interim(interim(" ".join(["word"] * BACKCHANNEL_MIN_WORDS)))
+        signs.on_silence(BACKCHANNEL_PAUSE_SEC)
         await asyncio.sleep(0)
         plans = [call.args[0]["data"] for call in self.consumer.send_json.await_args_list]
         self.assertEqual([plan["id"] for plan in plans], ["listen-1"])
         self.assertEqual(plans[0]["steps"][0]["sound"]["name"], "mm_hm")
-
-    # Once the utterance is finished the reply is the answer, so the pause that ended it gets no sign
-    async def test_a_finished_utterance_gets_no_sign(self) -> None:
-        signs = next(cue for cue in self.harness.cues if isinstance(cue, ListeningSigns))
-        text  = " ".join(["word"] * ELICITATION_SIGN_MIN_WORDS)
-        signs.on_interim(interim(text))
-        signs.on_final(FinalUtterance(text=text, words=()))
-        signs.on_silence(ELICITATION_PAUSE_SEC)
-        await asyncio.sleep(0)
-        self.consumer.send_json.assert_not_awaited()
 
     # A long silence asks for a turn a few times in a row, and never once the user has said they want to stop
     async def test_silence_prompts_a_few_times_then_waits(self) -> None:
@@ -212,11 +264,13 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
         prompt.on_silence(ELICITATION_QUIET_AFTER_SEC)
         self.assertEqual(self.consumer.request_harness_turn.call_count, ELICITATION_MAX_QUIET_PROMPTS)
 
-    # Without cues the avatar gives no sign of listening, but it still speaks up after a silence
-    async def test_without_cues_only_the_quiet_prompt_runs(self) -> None:
+    # Without cues the avatar gives no sign of listening and doesn't go back to listening on its own, but it still speaks up after a silence
+    async def test_without_cues_only_the_quiet_prompt_acts(self) -> None:
         plain = build_harness(make_consumer(), "speech_elicitation", "no_cues", None)
         self.addCleanup(plain.stop)
-        self.assertEqual([type(cue) for cue in plain.cues], [QuietPrompt])
+        self.assertFalse(plain.backchannels.on)
+        self.assertEqual([type(cue) for cue in plain.cues], [QuietPrompt, ElicitationBackchannels])
+        self.assertNotIn(BackToListening, [type(cue) for cue in plain.cues])
 
 
 # ================================================================================

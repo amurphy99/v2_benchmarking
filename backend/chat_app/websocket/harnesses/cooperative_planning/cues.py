@@ -18,6 +18,10 @@ the reply's own plan. Each cue here reacts to the turn events with an avatar pla
 A new plan drops every older plan's waiting steps, so the glance only fires
 while no reply is being prepared or played (it would cut that reply's plan short).
 
+`PlanningBackchannels` gives signs of listening when the user pauses mid-thought:
+the shared feature (`features/backchannels.py`) with this chat's neutral signs
+(`behaviors.py`), on in the conditions its switch lists (with cues).
+
 """
 from __future__ import annotations
 from typing     import TYPE_CHECKING
@@ -25,11 +29,12 @@ from typing     import TYPE_CHECKING
 import re
 
 # From this project
-from ...services.bg_helpers import fire_and_log
-from  ..avatar              import send_avatar_plan
-from  ..cues                import KeywordCue, SilenceWatcher
-from   .behaviors           import glance_plan
-from   .config              import PLANNING_MAX_NUDGES, PLANNING_NUDGE_AFTER_SEC
+from ...services.bg_helpers   import fire_and_log
+from  ..avatar                import send_avatar_plan
+from  ..cues                  import KeywordCue, SilenceWatcher
+from  ..features.backchannels import Backchannels
+from   .behaviors             import PLANNING_SIGNS, PLANNING_SOUNDS, glance_plan
+from   .config                import PLANNING_MAX_NUDGES, PLANNING_NUDGE_AFTER_SEC
 
 if TYPE_CHECKING:
     from ..base    import FinalUtterance
@@ -82,3 +87,9 @@ class QuietNudge(SilenceWatcher):
     def on_silence(self, seconds: float) -> None:
         if (self._nudges >= PLANNING_MAX_NUDGES) or (self.harness.state.stage == "approved"): return
         if self.harness.request_turn(): self._nudges += 1
+
+
+# Signs of listening at pauses, with this chat's neutral sound and signs
+class PlanningBackchannels(Backchannels):
+    SOUNDS = PLANNING_SOUNDS
+    SIGNS  = PLANNING_SIGNS
