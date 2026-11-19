@@ -13,6 +13,7 @@ PLANNING_RETRY_DELAY_SEC = 0.50     # Delay between planning request attempts
 PLANNING_TRACK_TEMP      = 0.10     # Temperature for working out how a turn changes the plan
 PLANNING_REPLY_TEMP      = 0.60     # Temperature for the spoken reply
 PLANNING_COMBINED_TEMP   = 0.40     # Temperature for the single call that does both
+PLANNING_HOLD_SEC        = 2.00     # How long a reply waits while the user seems mid-thought (`features/reply_gate/`)
 
 # Which planning calls let the model think first (slower)
 PLANNING_TRACK_THINKING    = False  # Working out how a turn changes the plan

@@ -40,10 +40,10 @@ from    .reply_check_api              import ReplyCheckAPIError, get_reply_check
 from    .response_models              import Reply, ReplyHeard, Wait, check_model
 
 if TYPE_CHECKING:
-    from ...avatar          import AvatarPlan
-    from ...base            import ChatHarness, PlanPublisher, ResponseOutcome, TurnAttempt
-    from  ..backchannels    import Backchannels
-    from   .response_models import CheckResult, Clarify
+    from ...avatar           import AvatarPlan
+    from ...base             import ChatHarness, PlanPublisher, ResponseOutcome, TurnAttempt
+    from  ..backchannels.cue import Backchannels
+    from   .response_models  import CheckResult, Clarify
 
 
 # --------------------------------------------------------------------------------
@@ -122,9 +122,10 @@ class ReplyGate:
 
     # The verdict on this turn from the checks switched on (a check that fails lets the reply out)
     async def _check(self, attempt: TurnAttempt, checks: tuple[GateCheck, ...]) -> Reply | Wait | Clarify:
+        signs    = self.backchannels
         names    = {check.NAME for check in checks}
-        model    = check_model(tuple(self.backchannels.SOUNDS), turn_end=(TurnEndCheck.NAME in names), misheard=(MisheardCheck.NAME in names))
-        messages = build_check_messages(checks, self.backchannels.SOUNDS, prepare_LLM_messages(attempt.context), attempt.user_text)
+        model    = check_model(tuple(signs.SOUNDS), signs.GESTURES, turn_end=(TurnEndCheck.NAME in names), misheard=(MisheardCheck.NAME in names))
+        messages = build_check_messages(checks, signs.SOUNDS, signs.GESTURES, prepare_LLM_messages(attempt.context), attempt.user_text)
 
         started = time.monotonic()
         try: result = await get_reply_check_api().check(messages, model)

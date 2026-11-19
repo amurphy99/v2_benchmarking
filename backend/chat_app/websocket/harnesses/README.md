@@ -65,9 +65,9 @@ which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_pl
 
 `map_task`, `cooperative_planning`, and `speech_elicitation` use cues and drive the
 avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
-participant their task materials (`task_card`). All three give signs of listening
-at the user's pauses, and `speech_elicitation` also checks each reply before it
-goes out (Shared features, below). The others send `robot_action` moods. `map_task` also gives the admin
+participant their task materials (`task_card`). With cues, all three give signs of
+listening at the user's pauses and check each reply before it goes out (Shared
+features, below). The others send `robot_action` moods. `map_task` also gives the admin
 live chat page a view of its state (Monitoring, below).
 
 ```diff
@@ -78,13 +78,16 @@ live chat page a view of its state (Monitoring, below).
  ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, a setup's sounds, and the shared listening plan
  │
 +├── features/                    # Behaviors several chat types share, each opted into by a chat type (Shared features, below)
- │   ├── config.py                # The conditions each feature runs in, the signs' defaults, and the reply check's settings
- │   ├── backchannels.py          # Backchannels: signs of listening at the user's pauses, styled by each chat type
+ │   ├── config.py                # Each feature's switch: the conditions it runs in
++│   ├── backchannels/            # Signs of listening at the user's pauses, styled by each chat type
+ │   │   ├── cue.py               # Backchannels, and the movements and sounds its signs are made of
+ │   │   └── config.py            # The pause, word count, gap, and volume a chat type can override
 +│   └── reply_gate/              # The check before each reply to finished speech: let it out, hold it, or ask about a word
  │       ├── gate.py              # ReplyGate, and the checks a chat type picks (TurnEndCheck, MisheardCheck)
  │       ├── prompts.py           # What each check looks for, and every field its response fills in
  │       ├── response_models.py   # The verdict (reply, wait, or clarify), built per chat type from the checks switched on
- │       └── reply_check_api.py   # ReplyCheckAPI: the one check call, on the shared StructuredAPI
+ │       ├── reply_check_api.py   # ReplyCheckAPI: the one check call, on the shared StructuredAPI
+ │       └── config.py            # The check call's settings, and how much of the conversation it reads
  │
 +├── unguided/
  │   ├── harness.py               # Scripted end-chat and pause replies, otherwise the LLM
@@ -122,12 +125,12 @@ live chat page a view of its state (Monitoring, below).
  │   │   └── flight_rebooking.json # A traveler and an airline agent who holds the three flights
  │   ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
  │   ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
- │   ├── prompts.py               # How to plan together, each call's task, the plan block, and the directives
+ │   ├── prompts.py               # How to plan together, each call's task, the plan block, the directives, and its notes for the reply check
  │   ├── pipelines.py             # track_then_reply, single_call, reply_then_track
  │   ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
  │   ├── behaviors.py             # The avatar's setup, its card, the plan for each named behavior, and its signs of listening
  │   ├── cues.py                  # ItemGlance, QuietNudge, PlanningBackchannels (with the shared BackToListening)
- │   └── config.py                # Request limits, each call's settings, the pipeline, and the cue timings
+ │   └── config.py                # Request limits, each call's settings and the reply check's hold, the pipeline, and the cue timings
  │
 +└── speech_elicitation/          # One light question, then keep the user talking
      ├── harness.py               # Opens with the topic's question, and answers each turn with one call through the reply gate
@@ -269,26 +272,28 @@ The harness switches its cues on for one condition only, in its `__init__`:
 <!-- -------------------------------------------------------------------------------- -->
 ## Shared features
 
-A **feature** is a behavior several chat types share. It lives in `features/`,
-and each chat type that wants it opts in with its own sounds, prompt notes, or
-timings. A feature runs only in the conditions its switch in `features/config.py`
-lists (`cues` for now), so one switch turns it off (or on) for every chat type at
-once. Each connection copies its switch into the feature's `on`, which something
-can flip partway through a chat.
+A **feature** is a behavior several chat types share. Each one has a folder of its
+own in `features/`, with its settings in that folder's `config.py`, and each chat
+type that wants it opts in with its own sounds, prompt notes, or timings. A
+feature runs only in the conditions its switch in `features/config.py` lists
+(`cues` for now), so one switch turns it off (or on) for every chat type at once.
+Each connection copies its switch into the feature's `on`, which something can
+flip partway through a chat.
 
 | Feature | Switch | Used by |
 |---|---|---|
-| Signs of listening at pauses (`backchannels.py`) | `FEATURE_BACKCHANNELS_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
-| Holding a reply while the user seems mid-thought (`reply_gate/`, `TurnEndCheck`) | `FEATURE_TURN_END_CONDITIONS` | `speech_elicitation` |
-| Asking about a likely misheard word instead of replying (`reply_gate/`, `MisheardCheck`) | `FEATURE_MISHEARD_CONDITIONS` | `speech_elicitation` |
+| Signs of listening at pauses (`backchannels/`) | `FEATURE_BACKCHANNELS_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
+| Holding a reply while the user seems mid-thought (`reply_gate/`, `TurnEndCheck`) | `FEATURE_TURN_END_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
+| Asking about a likely misheard word instead of replying (`reply_gate/`, `MisheardCheck`) | `FEATURE_MISHEARD_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
 
 **Signs of listening.** `Backchannels` is a `SilenceWatcher` that gives a sign (a
 nod or a tilt of the head, often with a short sound in the avatar's own voice)
 when the user pauses partway through an utterance of a few words, at most one
 every few seconds. A chat type subclasses it with its `SOUNDS`, which its setup
-carries (`sounds()`), and its `SIGNS`, which take turns. `map_task` and
-`cooperative_planning` keep theirs neutral (nods, a tilt, and "mm-hm"), since
-"yeah" or "right" there would sound like an answer.
+carries (`sounds()`), its `SIGNS`, which take turns, and the `GESTURES` the reply
+check may pair with a sound. `map_task` and `cooperative_planning` keep theirs
+neutral (nods, a tilt, and "mm-hm", with no smile), since "yeah", "right", or a
+smile there could sound like an answer.
 
 **The reply gate.** A chat type's `generate` hands its reply to `ReplyGate.run`.
 For a reply to finished speech (an automatic one), one short LLM call, the reply
@@ -306,7 +311,16 @@ keeps listening while the check runs. The verdict is a union told apart by
 `next_step`, built per chat type with only the steps of the checks switched on.
 `reply_now` replies and harness turns skip the check. A check that fails lets
 the reply go out as usual (a specified fallback; the failure is logged once).
-A chat type can add its own notes to a check's prompt, as `TurnEndCheck(self, notes)`.
+
+Each chat type adds its own notes to a check's prompt (`TurnEndCheck(self, notes)`,
+in its `prompts.py`) and sets its own hold (in its `config.py`):
+
+| Chat type | Hold | What its notes add |
+|---|---|---|
+| `speech_elicitation` | 2.5 s | A pause partway through a story or an explanation is not its end |
+| `map_task` | 2.0 s | A direction that breaks off before where it stops isn't finished. The misheard check gets every landmark name on either map, asks about a near-miss name even when it is easy to guess (the turn is read in code, which only knows exact names), and never treats a name the avatar's map lacks as misheard |
+| `cooperative_planning` | 2.0 s | A list of options or a proposal that breaks off isn't finished. The misheard check gets what is being planned and its items |
+
 Verdicts and holds are only logged for now; the research event log will record
 them once it exists.
 

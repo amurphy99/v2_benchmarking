@@ -10,6 +10,11 @@ is applied in code (`geometry.py`). The new position takes effect only once the
 reply is saved, so a reply cut off by newer speech never moves the avatar. See
 this directory's README for the map files and the turn flow.
 
+Every reply to finished speech goes through the reply gate
+(`features/reply_gate/`), which holds it while the user seems mid-direction, or
+asks about a likely misheard landmark name instead, in the conditions those
+checks run in.
+
 The participant's map goes out as a `task_card` frame when the chat starts. With
 the `cues` condition the avatar holds its own map, reads it while it works out
 each reply, every reply carries an avatar plan showing what it did on the map
@@ -21,6 +26,7 @@ path (`monitor_view`).
 """
 from __future__  import annotations
 from dataclasses import dataclass
+from functools   import partial
 from typing      import TYPE_CHECKING
 
 import logging, time
@@ -32,12 +38,15 @@ from ....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN
 from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
+from   ..features.reply_gate.gate    import MisheardCheck, ReplyGate, TurnEndCheck
 from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan
+from    .config                      import MAP_TASK_HOLD_SEC
 from    .cues                        import DirectionGlance, LandmarkGlance, MapTaskBackchannels
 from    .geometry                    import approach, beside, step
 from    .map_task_api                import MapTaskAPIError, get_map_task_api
 from    .maps                        import Point, follower_view, giver_view, load_map
 from    .pipelines                   import ROUTE_PIPELINES
+from    .prompts                     import MAP_TASK_TURN_END_NOTES, misheard_notes
 from    .response_models             import NO_MOVE, FollowerReply
 from    .understanding               import TurnReading, read_turn
 
@@ -79,7 +88,7 @@ class MapTaskHarness(ChatHarness):
     state : MapTaskState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's map, put the avatar at its start, and build its cues
+    # Load this connection's map, put the avatar at its start, and build its cues and its reply gate
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
@@ -90,6 +99,14 @@ class MapTaskHarness(ChatHarness):
         self.cues         = [self.backchannels]
         if self.with_cues: self.cues += [BackToListening(self), LandmarkGlance(self), DirectionGlance(self)]
 
+        # Every reply to finished speech is checked first (each check runs in the conditions its switch lists)
+        self.reply_gate = ReplyGate(
+            self,
+            checks       = (TurnEndCheck(self, MAP_TASK_TURN_END_NOTES), MisheardCheck(self, misheard_notes(self.task_map))),
+            backchannels = self.backchannels,
+            hold_sec     = MAP_TASK_HOLD_SEC,
+        )
+
     # The connection is ready: set the avatar up (with the signs' sound when they are on), and show the participant their map
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
@@ -97,11 +114,17 @@ class MapTaskHarness(ChatHarness):
         await self.consumer.send_json({"type": "task_card", "data": {"kind": "map_task", **giver_view(self.task_map)}})
 
     # --------------------------------------------------------------------------------
-    # Read the turn against the map, reply through its route's pipeline, and propose the move
+    # Read the turn against the map, then reply through the reply gate
     # --------------------------------------------------------------------------------
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome:
+        reading = read_turn(attempt.user_text, self.task_map, self.state.position, path=self.state.path)
+
+        # The reply waits while the user seems mid-direction, or gives way to a question about a misheard name
+        return await self.reply_gate.run(attempt, partial(self._reply, reading=reading), partial(self._clarify, reading))
+
+    # Reply through the pipeline the turn's route picks, and propose the move
+    async def _reply(self, attempt: TurnAttempt, reading: TurnReading) -> ResponseOutcome:
         started  = time.monotonic()
-        reading  = read_turn(attempt.user_text, self.task_map, self.state.position, path=self.state.path)
         pipeline = ROUTE_PIPELINES[reading.route]
 
         # With cues, the avatar raises its map and reads it while it works out the reply
@@ -119,6 +142,10 @@ class MapTaskHarness(ChatHarness):
         position = path[-1] if path else self.state.position
         _log_turn(reading, pipeline.__name__, reply, position, time.monotonic() - started)
         return self._outcome(reading, reply, path)
+
+    # Ask about a landmark name the reply check thinks was misheard (the avatar stays where it is)
+    def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
+        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), ())
 
     # Propose the full path, including loops that return to their starting point
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...]) -> ResponseOutcome:

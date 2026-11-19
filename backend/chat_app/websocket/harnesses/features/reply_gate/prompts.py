@@ -16,7 +16,7 @@ from typing     import Sequence, TYPE_CHECKING
 import re
 
 # From this project
-from ..config import REPLY_CHECK_CONTEXT_MESSAGES
+from .config import REPLY_CHECK_CONTEXT_MESSAGES
 
 if TYPE_CHECKING: from .gate import GateCheck
 
@@ -68,7 +68,7 @@ CHECK_WAIT_FIRST = "If they are still mid-thought, choose wait over clarify: the
 FIELDS_INTRO       = "Fill in:\n- basis: a few words on why.\n- verdict: next_step, and that step's fields:"
 FIELDS_REPLY       = "  - reply: nothing else."
 FIELDS_REPLY_HEARD = "  - reply: likely_said, the words they most likely said when a slip was easy to read through, otherwise null."
-FIELDS_WAIT        = "  - wait: a sign of listening while the avatar waits. sound: one that fits what they are saying ({sounds}), or none. gesture: nod, tilt, smile, or none."
+FIELDS_WAIT        = "  - wait: a sign of listening while the avatar waits. sound: one that fits what they are saying ({sounds}), or none. gesture: one of {gestures}."
 FIELDS_CLARIFY     = "  - clarify: misheard, the words that seem wrong, and message, one short, friendly question that checks them, such as \"Sorry, did you say 'tad person'?\" or \"Sorry, did you mean 'cat person'?\". Never blame them or the recognizer."
 
 # How the user's last sentence is quoted, when their turn has more than one
@@ -82,6 +82,7 @@ LAST_SENTENCE = 'THEIR LAST SENTENCE: "{sentence}"'
 def build_check_messages(
     checks    : Sequence[GateCheck],   # The checks switched on, in the order the chat type lists them
     sounds    : dict[str, str],        # The chat type's sounds: name -> the words the avatar says
+    gestures  : tuple[str, ...],       # The gestures the chat type allows, "none" among them
     history   : list[dict[str, str]],  # The conversation, ending with the user's turn
     user_text : str,                   # The user's turn (every utterance staged since the last reply)
 ) -> list[dict[str, str]]:
@@ -93,7 +94,7 @@ def build_check_messages(
 
     # 2) Every field the response fills in
     fields = [FIELDS_INTRO, FIELDS_REPLY_HEARD if ("misheard" in names) else FIELDS_REPLY]
-    if "turn_end" in names: fields.append(FIELDS_WAIT.format(sounds=", ".join(f'{name} for "{words}"' for name, words in sounds.items())))
+    if "turn_end" in names: fields.append(FIELDS_WAIT.format(sounds=", ".join(f'{name} for "{words}"' for name, words in sounds.items()), gestures=", ".join(gestures)))
     if "misheard" in names: fields.append(FIELDS_CLARIFY)
 
     # 3) The turn's last sentence on its own, when it has more than one

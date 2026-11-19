@@ -11,7 +11,7 @@ tracing the move from the old spot to the new one, locking onto a landmark it
 found, or one last sweep and a head shake for one it doesn't have. The map comes
 down as the reply's audio starts.
 
-The signs of listening at the user's pauses (`features/backchannels.py`) stay
+The signs of listening at the user's pauses (`features/backchannels/`) stay
 neutral here: nods, a tilt, and "mm-hm". "Yeah" would sound like the avatar had
 found the landmark just named, and "right" like a direction.
 
@@ -24,8 +24,8 @@ from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
-from  .geometry              import step
+from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+from  .geometry                  import step
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds

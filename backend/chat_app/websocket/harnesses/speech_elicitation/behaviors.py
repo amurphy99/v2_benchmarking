@@ -10,7 +10,7 @@ while it listens. On top of those, each reply's plan plays the behavior the
 reply picked as its audio starts. The faces and movements are the Smiley's
 names (§9).
 
-The signs of listening (`features/backchannels.py`) use this chat's sounds,
+The signs of listening (`features/backchannels/`) use this chat's sounds,
 clips in the avatar's own voice sent once in the setup (§2, §3.3). At pauses,
 "mm-hm", "yeah", and "right" take turns with silent signs. While the reply check
 holds a reply, it can also pick a sound that fits what the user is saying ("oh,
@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_SMILE, BACKCHANNEL_TILT, listening_sound
+from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_SMILE, BACKCHANNEL_TILT, listening_sound
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds

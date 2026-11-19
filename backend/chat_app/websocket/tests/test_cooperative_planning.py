@@ -19,6 +19,7 @@ import asyncio, json, tempfile, unittest
 
 # From this project
 from chat_app.websocket.harnesses.base                                 import FinalUtterance, InterimSpeech, TurnAttempt
+from chat_app.websocket.harnesses.cooperative_planning.behaviors       import PLANNING_SOUNDS
 from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, PlanningBackchannels, QuietNudge
 from chat_app.websocket.harnesses.cooperative_planning.harness         import MSG_SAY_AGAIN, PLANNING_SCENARIOS, PlanningOutcome
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
@@ -27,6 +28,7 @@ from chat_app.websocket.harnesses.cooperative_planning.planning_api    import Pl
 from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, plan_block
 from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
 from chat_app.websocket.harnesses.cooperative_planning.scenarios       import PLANNING_SCENARIOS_DIR, load_scenario
+from chat_app.websocket.harnesses.features.reply_gate.response_models  import CheckResult, Reply, check_model
 from chat_app.websocket.harnesses.registry                             import build_harness
 
 # The scenario every test plans, and its responses
@@ -37,8 +39,15 @@ MODELS   = models_for_scenario(SCENARIO.item_ids, SCENARIO.avatar_constraint_ids
 HARNESS = "chat_app.websocket.harnesses.cooperative_planning.harness"
 
 # Where the signs of listening synthesize their sound, and the clip the stand-in returns
-SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.synthesize_sounds"
+SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.cue.synthesize_sounds"
 SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
+
+# Where the reply gate looks its check client up, and the logger it writes each verdict to
+GET_REPLY_CHECK = "chat_app.websocket.harnesses.features.reply_gate.gate.get_reply_check_api"
+GATE_LOGGER     = "chat_app.websocket.harnesses.features.reply_gate.gate"
+
+# A check that finds the user done, so every reply goes out as usual
+CHECK_DONE = CheckResult(basis="done", verdict=Reply(next_step="reply"))
 
 
 # --------------------------------------------------------------------------------
@@ -340,7 +349,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     def make(self, condition: str = "cues", pipeline: str = "track_then_reply", **responses: object) -> tuple[object, SimpleNamespace, StubPlanningAPI]:
         consumer = make_consumer()
         api      = StubPlanningAPI(**responses)
-        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline), (SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS))):
+        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline), (SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), (GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE))))):
             started = patch(target, value)
             started.start()
             self.addCleanup(started.stop)
@@ -354,6 +363,24 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
         self.assertEqual(consumer.send_json.await_args_list[1].args[0]["data"]["steps"][0]["prop"], {"hold": "card"})
         consumer.request_harness_turn.assert_called_once()
+
+    # A likely misheard word gets the reply check's question instead, with a pondering look, and the plan stays as it was
+    async def test_a_misheard_word_gets_a_question_instead(self) -> None:
+        harness, _, _ = self.make()
+        question = "Sorry, did you say tiramisu?"
+        verdict  = {"next_step": "clarify", "misheard": "tear a misu", "message": question}
+        result   = check_model(tuple(PLANNING_SOUNDS), PlanningBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
+        with patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=result)))):
+            with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await harness.generate(make_attempt("Let's have tear a misu for dessert."))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (question, "ponder", harness.state, ()))
+
+    # Both checks run with cues, the misheard one knowing what is being planned; neither runs without cues
+    async def test_the_reply_gate_checks_only_with_cues(self) -> None:
+        cued, _, _  = self.make()
+        plain, _, _ = self.make(condition="no_cues")
+        self.assertEqual([check.on for check in cued.reply_gate.checks], [True, True])
+        self.assertEqual([check.on for check in plain.reply_gate.checks], [False, False])
+        for word in (SCENARIO.event, *(item.label.lower() for item in SCENARIO.items)): self.assertIn(word, cued.reply_gate.checks[1].notes)
 
     # Without cues: the avatar only idles, so no plan or sound goes out, but the participant still gets their card
     async def test_without_cues_only_the_setup_and_the_card_go_out(self) -> None:

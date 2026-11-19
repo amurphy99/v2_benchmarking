@@ -1,5 +1,5 @@
 """
-The planning calls' prompts: how to plan together, each task, and the plan so far.
+The planning calls' prompts: planning together, each task, and the plan so far.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.cooperative_planning.prompts`
 
@@ -12,6 +12,9 @@ constraints are never in a prompt.
 
 A reply can also carry a directive from code, for a turn that has to do one
 thing: read the finished plan back, or nudge a participant who has gone quiet.
+
+The reply check (`features/reply_gate/`) gets this chat's own notes on telling
+whether the user is done, and what is being planned.
 
 """
 from __future__ import annotations
@@ -158,6 +161,21 @@ DIRECTIVES = {
 # Who did something, in the plan block's words
 SIDE_WORDS = {"user": "the user", "avatar": "you"}
 
+# What the reply check should know about this chat when it judges whether the user is done
+PLANNING_TURN_END_NOTES = """
+- The user is planning with the avatar, and often thinks out loud. A list of options still being
+  given ("we could get pizza, or maybe"), or a proposal that breaks off before its choice ("for
+  the main course I was thinking"), isn't finished. A choice, a yes or a no, or a question for
+  the avatar is finished.
+""".strip()
+
+# What the reply check should know about this chat when it looks for a misheard word (`event` and `items` come from the scenario)
+PLANNING_MISHEARD_NOTES = """
+- The names of foods, places, and activities are easily misheard. Read through a slip when the
+  choice it stands for is clear, and choose clarify when you can't tell what they chose.
+- They are planning {event}, choosing: {items}.
+""".strip()
+
 
 # ================================================================================
 # Build Messages
@@ -186,6 +204,10 @@ def _directive_text(directive: Directive, scenario: Scenario, state: PlanningSta
     if directive == "read_back": return DIRECTIVES["read_back"]
     label = next(item.label.lower() for item in scenario.items if item.id == state.open_items[0])
     return DIRECTIVES["nudge"].format(label=label)
+
+# The reply check's notes on misheard words for one scenario (what is being planned, and its items)
+def misheard_notes(scenario: Scenario) -> str:
+    return PLANNING_MISHEARD_NOTES.format(event=scenario.event, items=", ".join(item.label.lower() for item in scenario.items))
 
 
 # --------------------------------------------------------------------------------

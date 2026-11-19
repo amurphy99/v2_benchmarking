@@ -13,25 +13,27 @@ participant's map, the avatar's plans, and the admin listener's view).
 from datetime      import datetime, timezone
 from pathlib       import Path
 from types         import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, json, math, shutil, tempfile, unittest
 
 from pydantic import ValidationError
 
 # From this project
-from chat_app.websocket.consumers.consumers                import ChatConsumer
-from chat_app.websocket.harnesses.base                     import FinalUtterance, InterimSpeech, TurnAttempt
-from chat_app.websocket.harnesses.map_task.cues            import DirectionGlance, LandmarkGlance, MapTaskBackchannels
-from chat_app.websocket.harnesses.map_task.geometry        import approach, beside, direction, distance_band, region, step
-from chat_app.websocket.harnesses.map_task.harness         import MAP_TASK_MAPS, MSG_SAY_AGAIN, MapTaskHarness, MapTaskState
-from chat_app.websocket.harnesses.map_task.map_task_api    import MapTaskAPIError
-from chat_app.websocket.harnesses.map_task.maps            import MAP_TASK_MAPS_DIR, follower_view, giver_view, load_map, map_file_previews
-from chat_app.websocket.harnesses.map_task.pipelines       import assess_then_reply, draft_and_check, draft_answer, single_call
-from chat_app.websocket.harnesses.map_task.prompts         import facts_block
-from chat_app.websocket.harnesses.map_task.response_models import NO_MOVE, AlongPath, DraftCheck, FollowerTurn, SpokenReply, ToLandmark, TurnAssessment, models_for_map
-from chat_app.websocket.harnesses.map_task.understanding   import read_turn
-from chat_app.websocket.harnesses.registry                 import build_harness
+from chat_app.websocket.consumers.consumers                           import ChatConsumer
+from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, TurnAttempt
+from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
+from chat_app.websocket.harnesses.map_task.behaviors                  import MAP_TASK_SOUNDS
+from chat_app.websocket.harnesses.map_task.cues                       import DirectionGlance, LandmarkGlance, MapTaskBackchannels
+from chat_app.websocket.harnesses.map_task.geometry                   import approach, beside, direction, distance_band, region, step
+from chat_app.websocket.harnesses.map_task.harness                    import MAP_TASK_MAPS, MSG_SAY_AGAIN, MapTaskHarness, MapTaskState
+from chat_app.websocket.harnesses.map_task.map_task_api               import MapTaskAPIError
+from chat_app.websocket.harnesses.map_task.maps                       import MAP_TASK_MAPS_DIR, follower_view, giver_view, load_map, map_file_previews
+from chat_app.websocket.harnesses.map_task.pipelines                  import assess_then_reply, draft_and_check, draft_answer, single_call
+from chat_app.websocket.harnesses.map_task.prompts                    import facts_block
+from chat_app.websocket.harnesses.map_task.response_models            import NO_MOVE, AlongPath, DraftCheck, FollowerTurn, SpokenReply, ToLandmark, TurnAssessment, models_for_map
+from chat_app.websocket.harnesses.map_task.understanding              import read_turn
+from chat_app.websocket.harnesses.registry                            import build_harness
 
 # The demo map every turn is read against, where the avatar starts on it, and its paper's proportions
 DEMO_MAP   = MAP_TASK_MAPS["demo"]
@@ -48,8 +50,15 @@ LEFT_OF_BUS = ToLandmark(kind="to_landmark", landmark="bus", side="left_of")
 MAPS_DIR_SETTING = "chat_app.websocket.harnesses.map_task.maps.MAP_TASK_MAPS_DIR"
 
 # Where the signs of listening synthesize their sound, and the clip the stand-in returns
-SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.synthesize_sounds"
+SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.cue.synthesize_sounds"
 SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
+
+# Where the reply gate looks its check client up, and the logger it writes each verdict to
+GET_REPLY_CHECK = "chat_app.websocket.harnesses.features.reply_gate.gate.get_reply_check_api"
+GATE_LOGGER     = "chat_app.websocket.harnesses.features.reply_gate.gate"
+
+# A check that finds the user done, so every reply goes out as usual
+CHECK_DONE = CheckResult(basis="done", verdict=Reply(next_step="reply"))
 
 
 # A connection that records what the harness sends it
@@ -307,8 +316,9 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
 class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
     # A Map Task harness on the default map and condition, with the LLM client replaced
     def setUp(self) -> None:
-        self.api = SimpleNamespace(follow=AsyncMock(), check_draft=AsyncMock(), assess=AsyncMock(), reply=AsyncMock())
-        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS))):
+        self.api   = SimpleNamespace(follow=AsyncMock(), check_draft=AsyncMock(), assess=AsyncMock(), reply=AsyncMock())
+        self.check = SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE))
+        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), patch(GET_REPLY_CHECK, Mock(return_value=self.check))):
             replaced.start()
             self.addCleanup(replaced.stop)
         self.consumer = make_consumer()
@@ -419,6 +429,22 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs(HARNESS_LOGGER, level="ERROR"): outcome = await self.harness.generate(self.attempt("Go right a bit"))
         self.assertEqual((outcome.message, outcome.state), (MSG_SAY_AGAIN, None))
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
+
+    # A likely misheard landmark name gets the reply check's question instead: no move, and a puzzled look as it asks
+    async def test_a_misheard_name_gets_a_question_instead(self) -> None:
+        question = "Sorry, did you say the boulder?"
+        verdict  = {"next_step": "clarify", "misheard": "the bolder", "message": question}
+        self.check.check.return_value = check_model(tuple(MAP_TASK_SOUNDS), MapTaskBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
+        with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go round the bolder"))
+        self.assertEqual((outcome.message, outcome.state), (question, None))
+        self.assertEqual(outcome.avatar_plan["steps"][-1]["face"]["name"], "Face with Raised Eyebrow")
+
+    # Both checks run with cues, the misheard one knowing every landmark name on either map; neither runs without cues
+    def test_the_reply_gate_checks_only_with_cues(self) -> None:
+        plain = build_harness(make_consumer(), "map_task", "no_cues", None)
+        self.assertEqual([check.on for check in self.harness.reply_gate.checks], [True, True])
+        self.assertEqual([check.on for check in plain.reply_gate.checks], [False, False])
+        for name in DEMO_MAP.lexicon: self.assertIn(name, self.harness.reply_gate.checks[1].notes)
 
     # Without cues the participant still gets their map, but the avatar holds none, has no sounds, and is sent no plans
     async def test_no_cues_sends_only_the_participants_map(self) -> None:

@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from chat_app.websocket.harnesses.avatar                              import synthesize_sounds
 from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, TurnAttempt
 from chat_app.websocket.harnesses.cues                                import BackToListening
-from chat_app.websocket.harnesses.features.config                     import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
+from chat_app.websocket.harnesses.features.backchannels.config        import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
 from chat_app.websocket.harnesses.registry                            import build_harness
 from chat_app.websocket.harnesses.speech_elicitation.behaviors        import ELICITATION_SIGNS, ELICITATION_SOUNDS
@@ -41,7 +41,7 @@ TOPIC = ELICITATION_TOPICS["pet_person"]
 # Where the harness, the reply gate, and the signs of listening look up what these tests replace
 HARNESS      = "chat_app.websocket.harnesses.speech_elicitation.harness"
 GATE         = "chat_app.websocket.harnesses.features.reply_gate.gate"
-BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels"
+BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels.cue"
 
 # The setup's sounds as the stand-in synthesis returns them
 SOUNDS = {name: {"audio": "AAA=", "sample_rate": 24_000} for name in ELICITATION_SOUNDS}
@@ -212,7 +212,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     # A likely misheard word gets the reply check's question instead, asked with a curious look, and the thread stays where it was
     async def test_a_misheard_word_gets_a_question_instead(self) -> None:
         question = "Sorry, did you say 'tad person'?"
-        verdict  = check_model(tuple(ELICITATION_SOUNDS), turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": {"next_step": "clarify", "misheard": "tad person", "message": question}})
+        verdict  = check_model(tuple(ELICITATION_SOUNDS), ElicitationBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": {"next_step": "clarify", "misheard": "tad person", "message": question}})
         harness, _, _ = self.make(reply=turn("A tad person! What's that?"), check=SimpleNamespace(check=AsyncMock(return_value=verdict)))
         harness.state = ElicitationState(follow_ups=2)
 

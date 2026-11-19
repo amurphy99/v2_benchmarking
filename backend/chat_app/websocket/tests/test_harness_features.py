@@ -19,8 +19,9 @@ from pydantic import ValidationError
 
 # From this project
 from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
-from chat_app.websocket.harnesses.features.backchannels               import BACKCHANNEL_NOD, BACKCHANNEL_TILT, Backchannels, listening_sound
-from chat_app.websocket.harnesses.features.config                     import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC, REPLY_CHECK_CONTEXT_MESSAGES
+from chat_app.websocket.harnesses.features.backchannels.config        import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
+from chat_app.websocket.harnesses.features.backchannels.cue           import BACKCHANNEL_NOD, BACKCHANNEL_TILT, Backchannels, listening_sound
+from chat_app.websocket.harnesses.features.reply_gate.config          import REPLY_CHECK_CONTEXT_MESSAGES
 from chat_app.websocket.harnesses.features.reply_gate.gate            import MisheardCheck, ReplyGate, TurnEndCheck
 from chat_app.websocket.harnesses.features.reply_gate.prompts         import build_check_messages
 from chat_app.websocket.harnesses.features.reply_gate.reply_check_api import ReplyCheckAPIError
@@ -28,11 +29,12 @@ from chat_app.websocket.harnesses.features.reply_gate.response_models import Che
 
 # Where the gate and the signs of listening look up what these tests replace
 GATE         = "chat_app.websocket.harnesses.features.reply_gate.gate"
-BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels"
+BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels.cue"
 
-# The stand-in chat's sounds, and the check's response with both checks on
+# The stand-in chat's sounds and gestures, and the check's response with both checks on
 SOUNDS      = {"mm_hm": "Mm-hm.", "oh_no": "Oh no."}
-CHECK_MODEL = check_model(tuple(SOUNDS), turn_end=True, misheard=True)
+GESTURES    = Backchannels.GESTURES
+CHECK_MODEL = check_model(tuple(SOUNDS), GESTURES, turn_end=True, misheard=True)
 
 # An utterance long enough for a sign of listening
 LONG_ENOUGH = " ".join(["word"] * BACKCHANNEL_MIN_WORDS)
@@ -260,11 +262,18 @@ class CheckPromptTests(unittest.TestCase):
     def test_the_response_offers_only_the_steps_switched_on(self) -> None:
         for turn_end, misheard, steps in ((True, False, ["Reply", "Wait"]), (False, True, ["ReplyHeard", "Clarify"]), (True, True, ["ReplyHeard", "Wait", "Clarify"])):
             with self.subTest(turn_end=turn_end, misheard=misheard):
-                schema = check_model(tuple(SOUNDS), turn_end=turn_end, misheard=misheard).model_json_schema()
+                schema = check_model(tuple(SOUNDS), GESTURES, turn_end=turn_end, misheard=misheard).model_json_schema()
                 self.assertEqual(list(schema["properties"]), ["basis", "verdict"])
                 self.assertEqual([branch["$ref"].rsplit("/", 1)[-1] for branch in schema["properties"]["verdict"]["oneOf"]], steps)
-        wait = check_model(tuple(SOUNDS), turn_end=True, misheard=False).model_json_schema()["$defs"]["Wait"]
+        wait = check_model(tuple(SOUNDS), GESTURES, turn_end=True, misheard=False).model_json_schema()["$defs"]["Wait"]
         self.assertEqual(wait["properties"]["sound"]["enum"], ["none", *SOUNDS])
+
+    # A chat type's own gestures limit what the check may pair with a sound, in the response and in the prompt
+    def test_a_chat_types_gestures_limit_the_checks_sign(self) -> None:
+        neutral = ("nod", "tilt", "none")
+        wait    = check_model(tuple(SOUNDS), neutral, turn_end=True, misheard=False).model_json_schema()["$defs"]["Wait"]
+        self.assertEqual(wait["properties"]["gesture"]["enum"], list(neutral))
+        self.assertIn("gesture: one of nod, tilt, none.", build_check_messages((TurnEndCheck(make_harness()),), SOUNDS, neutral, [], "Well.")[0]["content"])
 
     # A clarification hands the turn back, so it must be a question
     def test_a_clarification_must_be_a_question(self) -> None:
@@ -273,7 +282,7 @@ class CheckPromptTests(unittest.TestCase):
     # The prompt covers only the checks switched on, with the chat's notes and sounds, and reads only the last few messages
     def test_the_prompt_follows_the_checks_switched_on(self) -> None:
         history  = [{"role": ("user" if (index % 2) else "assistant"), "content": f"message {index}"} for index in range(REPLY_CHECK_CONTEXT_MESSAGES + 4)]
-        messages = build_check_messages((TurnEndCheck(make_harness(), "- A note of this chat's own."),), SOUNDS, history, "Well, I went.")
+        messages = build_check_messages((TurnEndCheck(make_harness(), "- A note of this chat's own."),), SOUNDS, GESTURES, history, "Well, I went.")
         system   = messages[0]["content"]
         for expected in ("IS THE USER DONE?", "- A note of this chat's own.", 'oh_no for "Oh no."'): self.assertIn(expected, system)
         self.assertNotIn("WAS ANYTHING MISHEARD?", system)
@@ -282,7 +291,7 @@ class CheckPromptTests(unittest.TestCase):
     # A turn of several sentences has its last one quoted on its own, and with both checks on, waiting comes first
     def test_the_last_sentence_of_a_longer_turn_is_quoted(self) -> None:
         checks = (TurnEndCheck(make_harness()), MisheardCheck(make_harness()))
-        longer = build_check_messages(checks, SOUNDS, [], "We went to the lake. It was cold, and then we")[0]["content"]
+        longer = build_check_messages(checks, SOUNDS, GESTURES, [], "We went to the lake. It was cold, and then we")[0]["content"]
         self.assertIn('THEIR LAST SENTENCE: "It was cold, and then we"', longer)
         self.assertIn("choose wait over clarify", longer)
-        self.assertNotIn("THEIR LAST SENTENCE", build_check_messages(checks, SOUNDS, [], "We went to the lake.")[0]["content"])
+        self.assertNotIn("THEIR LAST SENTENCE", build_check_messages(checks, SOUNDS, GESTURES, [], "We went to the lake.")[0]["content"])

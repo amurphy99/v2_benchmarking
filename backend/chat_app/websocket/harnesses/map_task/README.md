@@ -35,6 +35,11 @@ finalized user text
     -> describe every landmark from the avatar's spot: direction, distance, part of the map
     -> pick the route: simple_question, instruction, mismatch, or other
 
+    CHECK (harnesses/features/reply_gate/, with cues; it starts alongside REPLY)
+    -> wait: the user seems mid-direction, so a sign of listening, and REPLY waits 2 s for more
+    -> clarify: a near-miss landmark name gets a question ("did you say the windmill?") instead
+    -> reply: REPLY goes out as usual
+
     REPLY (pipelines.py, the pipeline ROUTE_PIPELINES gives the route)
     -> with cues, the avatar raises its map and reads it while this runs
     -> FollowerReply: the words, what they do (act), and the move
@@ -233,9 +238,16 @@ left.
   count). Neither fires while a reply owns the avatar. `BackToListening` lowers the map when
   newer speech cancels a reply.
 - **Signs of listening** (`MapTaskBackchannels`, the shared feature in
-  `harnesses/features/`): a nod, a tilt of the head, or "mm-hm" when the user pauses partway
-  through a direction. They stay neutral: "yeah" would sound like the avatar had found the
-  landmark just named, and "right" like a direction.
+  `harnesses/features/backchannels/`): a nod, a tilt of the head, or "mm-hm" when the user
+  pauses partway through a direction. They stay neutral: "yeah" would sound like the avatar
+  had found the landmark just named, and "right" like a direction.
+- **The reply check** (the shared reply gate, `harnesses/features/reply_gate/`) runs beside
+  every reply to finished speech. When a direction breaks off before where it stops ("go down
+  past the"), the reply waits up to 2 s for the rest, with a sign of listening. A word that
+  sounds like a landmark name on either map but isn't one ("the wind meal") gets a question
+  instead of a reply, even when the name is easy to guess: the turn is read in code, and code
+  only knows a landmark by its exact name. A name the avatar's map lacks is never treated as
+  misheard. The check's notes are in `prompts.py`.
 
 **With `no_cues`** the avatar holds no map, no plans are sent, and it only idles. Everything
 else is the same: the same pipelines, the same moves, and the participant's map.
@@ -277,10 +289,10 @@ else is the same: the same pipelines, the same moves, and the participant's map.
  ├── geometry.py              # Directions, distance bands, parts of the map, and where a move stops
  ├── understanding.py         # Reads a turn in code: names heard, question or move, the facts, and the route
  ├── pipelines.py             # draft_and_check, single_call, assess_then_reply, and ROUTE_PIPELINES
- ├── prompts.py               # The follower instructions, each call's task, and the map facts block
+ ├── prompts.py               # The follower instructions, each call's task, the map facts block, and its notes for the reply check
  ├── response_models.py       # Moves, each call's structured response, and the per-map schemas
  ├── map_task_api.py          # MapTaskAPI: one method per call, on the shared StructuredAPI
- └── config.py                # Request limits, and each call's temperature and thinking switch
+ └── config.py                # Request limits, each call's temperature and thinking switch, and the reply check's hold
 ```
 
 The distances that count as "right next to", "nearby", and "far away", and the step sizes,

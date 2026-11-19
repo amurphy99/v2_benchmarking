@@ -10,6 +10,10 @@ It never receives the giver's route or the giver's landmark coordinates.
 Each task lists the fields its response fills in, because the model never sees
 the schema's field descriptions (`response_models.py`).
 
+The reply check (`features/reply_gate/`) gets this chat's own notes on telling
+whether a direction is finished, and every landmark name on either map, so it can
+tell a misheard name from one the avatar's map simply lacks.
+
 """
 from __future__ import annotations
 from typing     import TYPE_CHECKING
@@ -18,7 +22,9 @@ from typing     import TYPE_CHECKING
 from .geometry        import MAP_TASK_BESIDE_GAP, MAP_TASK_STEPS, region
 from .response_models import MAP_TASK_MAX_WAYPOINTS
 
-if TYPE_CHECKING: from .understanding import TurnReading
+if TYPE_CHECKING:
+    from .maps          import TaskMap
+    from .understanding import TurnReading
 
 # How each direction reads from the follower's spot ("the bus is to your right")
 MAP_TASK_DIRECTION_WORDS = {
@@ -143,6 +149,25 @@ Say clearly what doesn't match your map, and offer what you do have nearby if it
 - message: what you say back, in one or two short sentences.
 """.strip()
 
+# What the reply check should know about this chat when it judges whether the user is done
+MAP_TASK_TURN_END_NOTES = """
+- The user is giving the avatar directions across a map, often a piece at a time. A direction
+  that breaks off before where it stops ("go down past the", "keep going until"), or ends on
+  "and" or "then", isn't finished. A whole step ("go down to the bus") or a question about the
+  avatar's map ("do you have a bridge?") is finished, even when more steps will follow.
+""".strip()
+
+# What the reply check should know about this chat when it looks for a misheard word (`names`: every landmark name on either map)
+MAP_TASK_MISHEARD_NOTES = """
+- The user names landmarks from their own map. A landmark name from either map, said as it is,
+  is never misheard, even when the avatar's map doesn't have it: the maps differ on purpose, and
+  the avatar handles that itself.
+- For landmark names, unlike other words, choose clarify when a word sounds like one of them but
+  isn't one ("the wind meal" for "the windmill"), even when you can tell which name they meant:
+  the avatar only knows a landmark by its exact name.
+- The landmark names on the two maps: {names}.
+""".strip()
+
 
 # ================================================================================
 # Build Messages
@@ -171,3 +196,7 @@ def facts_block(reading: TurnReading) -> str:
     # Names the giver said that the avatar's map lacks
     if reading.missing: lines.append(f"NOT ON YOUR MAP (the giver named these, but your map doesn't have them): {', '.join(reading.missing)}")
     return "\n".join(lines)
+
+# The reply check's notes on misheard words for one pair of maps (every landmark name on either one)
+def misheard_notes(task_map: TaskMap) -> str:
+    return MAP_TASK_MISHEARD_NOTES.format(names=", ".join(sorted(task_map.lexicon)))

@@ -16,7 +16,7 @@ avatar holds its own card: its constraints at the top, then a line for each item
 Card points are 0-1 across and down the card as the avatar reads it, from its
 top-left corner (`HARNESS_PROTOCOL.md` §8.2).
 
-The signs of listening at the user's pauses (`features/backchannels.py`) stay
+The signs of listening at the user's pauses (`features/backchannels/`) stay
 neutral here: nods, a tilt, and "mm-hm". "Yeah" in the middle of a proposal
 would sound like the avatar had agreed to it.
 
@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing     import Sequence, TYPE_CHECKING
 
 # From this project
-from ..features.backchannels import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds

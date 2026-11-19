@@ -14,7 +14,7 @@ while the avatar is listening (their plans would cut a reply's plan short):
   says it ("go up", "to the right").
 
 `MapTaskBackchannels` gives signs of listening when the user pauses mid-direction:
-the shared feature (`features/backchannels.py`) with this chat's neutral signs
+the shared feature (`features/backchannels/`) with this chat's neutral signs
 (`behaviors.py`), on in the conditions its switch lists (with cues).
 
 """
@@ -24,12 +24,12 @@ from typing     import TYPE_CHECKING
 import re
 
 # From this project
-from ...services.bg_helpers   import fire_and_log
-from  ..avatar                import send_avatar_plan
-from  ..cues                  import KeywordCue
-from  ..features.backchannels import Backchannels
-from   .behaviors             import MAP_TASK_SIGNS, MAP_TASK_SOUNDS, direction_plan, landmark_glance_plan, search_plan
-from   .understanding         import lexicon_pattern, names_on_map
+from ...services.bg_helpers       import fire_and_log
+from  ..avatar                    import send_avatar_plan
+from  ..cues                      import KeywordCue
+from  ..features.backchannels.cue import Backchannels
+from   .behaviors                 import MAP_TASK_SIGNS, MAP_TASK_SOUNDS, direction_plan, landmark_glance_plan, search_plan
+from   .understanding             import lexicon_pattern, names_on_map
 
 if TYPE_CHECKING:
     from ..avatar  import AvatarPlan
@@ -92,7 +92,8 @@ class DirectionGlance(KeywordCue):
         _send_plan(self.harness, direction_plan(self.harness.state.position, name, self._looks, self.harness.task_map.scale), "direction_glance")
 
 
-# Signs of listening at pauses, with this chat's neutral sound and signs
+# Signs of listening at pauses, with this chat's neutral sound, signs, and gestures (a smile could read as an answer)
 class MapTaskBackchannels(Backchannels):
-    SOUNDS = MAP_TASK_SOUNDS
-    SIGNS  = MAP_TASK_SIGNS
+    SOUNDS   = MAP_TASK_SOUNDS
+    SIGNS    = MAP_TASK_SIGNS
+    GESTURES = ("nod", "tilt", "none")

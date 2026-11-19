@@ -14,7 +14,7 @@ from typing     import TYPE_CHECKING
 
 # From this project
 from .....services.llm.structured_api import StructuredAPI
-from    ..config                      import REPLY_CHECK_MAX_RETRIES, REPLY_CHECK_TEMP, REPLY_CHECK_THINKING, REPLY_CHECK_TIMEOUT_SEC
+from     .config                      import REPLY_CHECK_MAX_RETRIES, REPLY_CHECK_TEMP, REPLY_CHECK_THINKING, REPLY_CHECK_TIMEOUT_SEC
 
 if TYPE_CHECKING: from .response_models import CheckResult
 

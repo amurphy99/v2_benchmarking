@@ -1,7 +1,7 @@
 """
 Signs of listening at pauses in the user's speech: a cue each chat type styles.
 --------------------------------------------------------------------------------
-`backend.chat_app.websocket.harnesses.features.backchannels`
+`backend.chat_app.websocket.harnesses.features.backchannels.cue`
 
 A sign is a nod or a tilt of the head, often with a short sound in the avatar's
 own voice ("mm-hm"). It goes out as an avatar plan, not a reply: the sound is a
@@ -9,11 +9,12 @@ clip synthesized once and sent in the chat's setup, then played by name beside
 any reply's audio (`HARNESS_PROTOCOL.md` §2 and §3.3), so newer speech can't
 cancel it and it is never saved as a message.
 
-A chat type styles its signs in a small subclass: the sounds its avatar can make
-and the signs it gives at pauses, in the order they take turns (and its own pause
-length, word count, or gap, when the defaults in `config.py` don't suit it).
-While the reply check holds a reply, it gives the sign it picked through the same
-cue (`chosen_sign`), so signs of the two kinds never come close together.
+A chat type styles its signs in a small subclass: the sounds its avatar can make,
+the signs it gives at pauses (in the order they take turns), and the gestures the
+reply check may pair with a sound (and its own pause length, word count, or gap,
+when the defaults in `config.py` don't suit it). While the reply check holds a
+reply, it gives the sign it picked through the same cue (`chosen_sign`), so signs
+of the two kinds never come close together.
 
 """
 from __future__ import annotations
@@ -22,14 +23,15 @@ from typing     import TYPE_CHECKING
 import time
 
 # From this project
-from ...services.bg_helpers import fire_and_log
-from  ..avatar              import send_avatar_plan, synthesize_sounds
-from  ..cues                import SilenceWatcher
-from   .config              import BACKCHANNEL_MIN_GAP_SEC, BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC, BACKCHANNEL_SOUND_VOLUME, FEATURE_BACKCHANNELS_CONDITIONS
+from ....services.bg_helpers import fire_and_log
+from  ...avatar              import send_avatar_plan, synthesize_sounds
+from  ...cues                import SilenceWatcher
+from   ..config              import FEATURE_BACKCHANNELS_CONDITIONS
+from    .config              import BACKCHANNEL_MIN_GAP_SEC, BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC, BACKCHANNEL_SOUND_VOLUME
 
 if TYPE_CHECKING:
-    from ..avatar import AvatarPlan, AvatarSounds
-    from ..base   import ChatHarness, FinalUtterance, InterimSpeech
+    from ...avatar import AvatarPlan, AvatarSounds
+    from ...base   import ChatHarness, FinalUtterance, InterimSpeech
 
 # The movements and the face a sign is made of (the Smiley's names, `HARNESS_PROTOCOL.md` §9)
 BACKCHANNEL_NOD   = {"name": "Nod",          "strength": 0.3 }
@@ -61,18 +63,20 @@ class Backchannels(SilenceWatcher):
     reply is the answer. A sign also waits for the utterance to have a few words
     (a short answer gets a reply instead) and for a gap since the last sign.
 
-    The feature runs in the conditions `config.FEATURE_BACKCHANNELS_CONDITIONS`
-    lists. Switched off, it gives no signs and the setup carries no sounds.
+    The feature runs in the conditions `FEATURE_BACKCHANNELS_CONDITIONS` lists
+    (`features/config.py`). Switched off, it gives no signs and the setup carries
+    no sounds.
 
     NOTE: How often a pause is caught depends on the speech recognizer, which ends
           an utterance by its own rules. If it usually ends one before
           `THRESHOLDS_SEC` has passed, the signs at pauses will be rare.
     """
-    SOUNDS         : dict[str, str]                = {}                        # Name a sign plays -> the words the avatar's voice says
-    SIGNS          : tuple[dict[str, object], ...] = ()                        # Signs at pauses, in the order they take turns (some silent)
-    THRESHOLDS_SEC : tuple[float, ...]             = (BACKCHANNEL_PAUSE_SEC,)  # The pause that gets a sign
-    MIN_WORDS      : int                           = BACKCHANNEL_MIN_WORDS     # Words the utterance needs first
-    MIN_GAP_SEC    : float                         = BACKCHANNEL_MIN_GAP_SEC   # Shortest time between two signs of either kind
+    SOUNDS         : dict[str, str]                = {}                          # Name a sign plays -> the words the avatar's voice says
+    SIGNS          : tuple[dict[str, object], ...] = ()                          # Signs at pauses, in the order they take turns (some silent)
+    GESTURES       : tuple[str, ...]               = tuple(BACKCHANNEL_GESTURES) # Gestures the reply check may pick for its sign
+    THRESHOLDS_SEC : tuple[float, ...]             = (BACKCHANNEL_PAUSE_SEC,)    # The pause that gets a sign
+    MIN_WORDS      : int                           = BACKCHANNEL_MIN_WORDS       # Words the utterance needs first
+    MIN_GAP_SEC    : float                         = BACKCHANNEL_MIN_GAP_SEC     # Shortest time between two signs of either kind
 
     # Start with nothing heard and no sign given, switched on only in the conditions that use it
     def __init__(self, harness: ChatHarness) -> None:

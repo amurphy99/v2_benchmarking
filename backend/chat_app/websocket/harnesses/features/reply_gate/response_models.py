@@ -9,7 +9,7 @@ inside it pick the branch, and the schema then allows only that branch's fields:
 with a sign of listening), or `clarify` (a likely misheard word hides what they
 meant, so the avatar asks about it instead). The response offers only the
 branches of the checks switched on (`check_model`), and `wait` only the chat
-type's own sounds.
+type's own sounds and gestures.
 
 NOTE: In instructor's JSON_SCHEMA mode the model never sees the field
       descriptions; the schema only constrains its output. The prompt
@@ -23,7 +23,7 @@ import functools
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
-# A movement the check can pair with a sign of listening (`backchannels.BACKCHANNEL_GESTURES`)
+# A movement the check can pair with a sign of listening (`backchannels/cue.BACKCHANNEL_GESTURES`)
 Gesture = Literal["nod", "tilt", "smile", "none"]
 
 
@@ -46,7 +46,7 @@ class ReplyHeard(Reply):
 class Wait(_Branch):
     next_step : Literal["wait"]
     sound     : str      # One of the chat type's sounds, or "none" (`check_model` limits it)
-    gesture   : Gesture
+    gesture   : Gesture  # `check_model` limits it to the chat type's gestures
 
 # A likely misheard word hides what the user meant: ask about it instead of replying
 class Clarify(_Branch):
@@ -71,11 +71,18 @@ class CheckResult(BaseModel):
     basis   : str = Field(..., min_length=1, max_length=200)  # A few words on why (for the logs)
     verdict : Reply                                           # `check_model` widens it to the branches switched on
 
-# The response for one chat type's sounds and the checks switched on, at least one (built once for each combination)
+# The response for one chat type's signs and the checks switched on, at least one (built once for each combination)
 @functools.cache
-def check_model(sounds: tuple[str, ...], *, turn_end: bool, misheard: bool) -> type[CheckResult]:
+def check_model(
+    sounds   : tuple[str, ...],  # The chat type's sounds (a held reply may also play none)
+    gestures : tuple[str, ...],  # The gestures the chat type allows, "none" among them
+    *,
+
+    turn_end : bool,  # The turn-end check is on (a `wait` branch)
+    misheard : bool,  # The misheard check is on (a `clarify` branch, and `likely_said`)
+) -> type[CheckResult]:
     branches: list[type[_Branch]] = [ReplyHeard if misheard else Reply]
-    if turn_end: branches.append(create_model("Wait", __base__=Wait, sound=(Literal[("none", *sounds)], ...)))
+    if turn_end: branches.append(create_model("Wait", __base__=Wait, sound=(Literal[("none", *sounds)], ...), gesture=(Literal[gestures], ...)))
     if misheard: branches.append(Clarify)
     verdict = Annotated[Union[tuple(branches)], Field(discriminator="next_step")]
     return create_model("CheckResult", __base__=CheckResult, verdict=(verdict, ...))

@@ -16,6 +16,11 @@ reads the plan back, and the user's yes ends the chat with the scenario's
 closing line. When the avatar's own yes settles the last item, it takes a turn
 to read the plan back as soon as that reply has been heard.
 
+Every reply to finished speech goes through the reply gate
+(`features/reply_gate/`), which holds it while the user seems mid-thought, or
+asks about a likely misheard word instead, in the conditions those checks run
+in.
+
 With the `cues` condition the avatar holds its own card, reads it over while it
 works out each reply, every reply carries an avatar plan for the behavior it
 picked (`behaviors.py`), and the cues run (`cues.py`, and the shared
@@ -44,12 +49,14 @@ from  ...services.bg_helpers         import fire_and_log
 from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
+from   ..features.reply_gate.gate    import MisheardCheck, ReplyGate, TurnEndCheck
 from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan, writing_plan
-from    .config                      import PLANNING_PIPELINE
+from    .config                      import PLANNING_HOLD_SEC, PLANNING_PIPELINE
 from    .cues                        import ItemGlance, PlanningBackchannels, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
 from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
+from    .prompts                     import PLANNING_TURN_END_NOTES, misheard_notes
 from    .response_models             import models_for_scenario
 from    .scenarios                   import load_scenario
 
@@ -95,7 +102,7 @@ class CooperativePlanningHarness(ChatHarness):
     state : PlanningState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's scenario, its responses, and its cues
+    # Load this connection's scenario, its responses, its cues, and its reply gate
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
@@ -109,6 +116,14 @@ class CooperativePlanningHarness(ChatHarness):
         self.cues         = [self.backchannels]
         if self.with_cues: self.cues += [BackToListening(self), ItemGlance(self), QuietNudge(self)]
 
+        # Every reply to finished speech is checked first (each check runs in the conditions its switch lists)
+        self.reply_gate = ReplyGate(
+            self,
+            checks       = (TurnEndCheck(self, PLANNING_TURN_END_NOTES), MisheardCheck(self, misheard_notes(self.scenario))),
+            backchannels = self.backchannels,
+            hold_sec     = PLANNING_HOLD_SEC,
+        )
+
     # The connection is ready: set the avatar up (with the signs' sound when they are on), show the participant's card, and open the chat
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
@@ -117,7 +132,7 @@ class CooperativePlanningHarness(ChatHarness):
         self.request_turn()
 
     # --------------------------------------------------------------------------------
-    # Answer one turn through the pipeline, and propose the plan its changes leave
+    # Answer one turn through the reply gate and the pipeline, and propose the plan its changes leave
     # --------------------------------------------------------------------------------
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome:
         # Wait for the last exchange's tracking (reply_then_track), so this turn sees its plan
@@ -127,6 +142,11 @@ class CooperativePlanningHarness(ChatHarness):
         if not attempt.context:            return self._outcome(self.scenario.opening_line, "pleased", None, self.state, ())
         if self.state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, self.state, ())
 
+        # The reply waits while the user seems mid-thought, or gives way to a question about a misheard word
+        return await self.reply_gate.run(attempt, self._reply, self._clarify)
+
+    # Answer the turn through the pipeline, and propose the plan its changes leave
+    async def _reply(self, attempt: TurnAttempt) -> PlanningOutcome:
         # With cues, the avatar raises its card and reads it over while it works out the reply
         # (published from here, not from a cue, so it always goes out before the reply's own plan)
         if self.with_cues: await attempt.publish_plan(thinking_plan(self.turn_number))
@@ -149,6 +169,10 @@ class CooperativePlanningHarness(ChatHarness):
         if state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, state, results)
         follow_up = None if (reply.follow_up is None) else (lambda: self._track_after_reply(reply.follow_up))
         return self._outcome(reply.message, reply.behavior, reply.about, state, results, follow_up)
+
+    # Ask about a word the reply check thinks was misheard (the plan stays as it was)
+    def _clarify(self, message: str) -> PlanningOutcome:
+        return self._outcome(message, "ponder", None, self.state, ())
 
     # The outcome for a reply: the plan it proposes, its avatar plan (with cues), and the chat's end once approved
     def _outcome(

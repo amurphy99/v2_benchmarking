@@ -14,6 +14,7 @@ MAP_TASK_FOLLOW_TEMP     = 0.30     # Temperature for the single-call reply
 MAP_TASK_CHECK_TEMP      = 0.00     # Temperature for checking a drafted answer
 MAP_TASK_ASSESS_TEMP     = 0.10     # Temperature for assessing a mismatched turn
 MAP_TASK_REPLY_TEMP      = 0.50     # Temperature for the reply after an assessment
+MAP_TASK_HOLD_SEC        = 2.00     # How long a reply waits while the user seems mid-direction (`features/reply_gate/`)
 
 # Which Map Task calls let the model think first (slower, for the harder turns)
 MAP_TASK_FOLLOW_THINKING = False    # The single-call reply
