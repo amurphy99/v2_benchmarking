@@ -24,8 +24,8 @@ from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 # From this project
 from .geometry import Direction, Side, StepSize
 
-# What the follower's reply does
-FollowerAct = Literal["acknowledge", "answer", "clarify", "report_missing", "other"]
+# What the follower's reply does (`finish`: the giver says it has reached the finish, `finish.py`)
+FollowerAct = Literal["acknowledge", "answer", "clarify", "report_missing", "finish", "other"]
 
 # Waypoints per reply (with its starting point, the gaze trace stays below 64)
 MAP_TASK_MAX_WAYPOINTS = 32

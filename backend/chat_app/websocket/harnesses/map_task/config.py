@@ -1,5 +1,5 @@
 """
-Map Task LLM tunables: request limits, and each call's temperature and thinking.
+Map Task tunables: request limits, each call's settings, and where the task ends.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.map_task.config`
 
@@ -21,3 +21,10 @@ MAP_TASK_FOLLOW_THINKING = False    # The single-call reply
 MAP_TASK_CHECK_THINKING  = False    # Checking a drafted answer
 MAP_TASK_ASSESS_THINKING = True     # Assessing a mismatched turn
 MAP_TASK_REPLY_THINKING  = False    # The reply after an assessment
+
+
+# --------------------------------------------------------------------------------
+# Ending the Task
+# --------------------------------------------------------------------------------
+# How close to the finish a reply must leave the avatar to end the chat (map units: longer side 1)
+MAP_TASK_FINISH_RADIUS = 0.08

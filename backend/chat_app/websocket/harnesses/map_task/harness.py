@@ -19,7 +19,10 @@ checks run in.
 
 The chat opens with the shared intro (`features/intro/`): what the task is, and
 how it works for anyone new to it. Its replies leave the avatar where it is, and
-an answer that already gives a direction goes straight to the task.
+an answer that already gives a direction goes straight to the task. The task
+ends itself (`finish.py`): a reply that leaves the avatar at the finish ends the
+chat with a closing line, and so does the user's word that it's there, once the
+avatar has said where it is and asked.
 
 The participant's map goes out as a `task_card` frame when the chat starts. With
 the `cues` condition the avatar holds its own map, reads it while it works out
@@ -50,6 +53,7 @@ from   ..features.reply_gate.gate    import MisheardCheck, ReplyGate, TurnEndChe
 from    .behaviors                   import intro_plan, reply_plan, setup_for, start_plan, thinking_plan
 from    .config                      import MAP_TASK_HOLD_SEC
 from    .cues                        import DirectionGlance, LandmarkGlance, MapTaskBackchannels
+from    .finish                      import finish_step
 from    .geometry                    import approach, beside, step
 from    .map_task_api                import MapTaskAPIError, get_map_task_api
 from    .maps                        import Point, follower_view, giver_view, load_map
@@ -62,6 +66,7 @@ if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
     from  ..base                import MonitorView, RevealView
     from  ..features.intro.flow import IntroState, IntroTurn
+    from   .finish              import MapTaskEnd
     from   .response_models     import FollowerAct, Move
     from   .understanding       import Route
 
@@ -82,13 +87,15 @@ class MapTaskReply:
     act       : FollowerAct  # What the reply did
     waypoints : int          # Waypoints its move added to the path (0 when the avatar stayed put)
 
-# Where the avatar is, every committed waypoint and saved reply, and the intro's progress
+# Where the avatar is, its waypoints and saved replies, the intro's progress, and the task's end
 @dataclass(frozen=True, slots=True)
 class MapTaskState:
-    position : Point                            # Where the avatar is now
-    path     : tuple[Point,        ...]         # Every committed waypoint, from the start
-    replies  : tuple[MapTaskReply, ...] = ()    # Every saved reply, in order
-    intro    : IntroState | None        = None  # The shared intro (None for a chat without one)
+    position     : Point                             # Where the avatar is now
+    path         : tuple[Point,        ...]          # Every committed waypoint, from the start
+    replies      : tuple[MapTaskReply, ...] = ()     # Every saved reply, in order
+    intro        : IntroState | None        = None   # The shared intro (None for a chat without one)
+    finish_asked : bool                     = False  # The avatar asked whether it's at the finish (`finish.py`)
+    ended        : MapTaskEnd | None        = None   # How the task ended (None while it runs, or for a chat ended otherwise)
 
 
 # ================================================================================
@@ -179,16 +186,24 @@ class MapTaskHarness(ChatHarness):
     def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
         return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), (), self.state.intro)
 
-    # Propose the full path, including loops that return to their starting point, with the reply added to the record
+    # Propose the full path (loops included), the reply added to the record, and the task's end
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...], intro: IntroState | None) -> ResponseOutcome:
+        # Where the move leaves the avatar, and whether the task ends (at the finish, or on their word)
+        position = path[-1] if path else self.state.position
+        finish   = finish_step(self.task_map, position, reply.act, reply.message, self.state.finish_asked, self.state.ended)
+        if finish.ended is not None: logger.info(f"{LLM_MAIN}[Map Task] The task ends: {BOLD}{finish.ended}{UNBOLD}.{RESET}")
+
+        # The state once the reply is saved, and the chat's close after it when the task ended
         plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path) if self.with_cues else None
         state = MapTaskState(
-            position = path[-1] if path else self.state.position,
-            path     = (*self.state.path, *path),
-            replies  = (*self.state.replies, MapTaskReply(route=reading.route, act=reply.act, waypoints=len(path))),
-            intro    = intro,
+            position     = position,
+            path         = (*self.state.path, *path),
+            replies      = (*self.state.replies, MapTaskReply(route=reading.route, act=reply.act, waypoints=len(path))),
+            intro        = intro,
+            finish_asked = finish.asked,
+            ended        = finish.ended,
         )
-        return ResponseOutcome(message=reply.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
+        return ResponseOutcome(message=finish.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state), close_after=(finish.ended is not None))
 
     # An intro reply: the avatar stays where it is, records no reply, and only the intro moves on
     def _intro_outcome(self, turn: IntroTurn) -> ResponseOutcome:
@@ -231,6 +246,7 @@ class MapTaskHarness(ChatHarness):
             "path"     : [list(point) for point in saved.path],
             "replies"  : [asdict(reply) for reply in saved.replies],
             "intro"    : intro_record(saved.intro),
+            "ended"    : saved.ended,
         }
 
     # What the participant is shown once the chat ends: the avatar's map, and the path it took

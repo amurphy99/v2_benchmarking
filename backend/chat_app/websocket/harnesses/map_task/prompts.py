@@ -70,13 +70,19 @@ How to play:
 - Move only when instructed. Questions, acknowledgements, and requests for clarification
   do not authorize a move. If you need clarification, choose stay.
 - You do not know the giver's route or finish. Never invent the rest of the route.
+- When the giver says you have reached the finish, asks whether you have, or says yes after you
+  asked whether you're at the finish, choose act finish. You can't see the finish, so never
+  answer that yourself: choosing finish lets you check your spot with them.
 """.strip()
 
 # The `act` field, for the calls that fill it in
 ACT_FIELD = """
 - act: what your reply does. acknowledge: you understood a direction. answer: you answered a
   question about your map. clarify: you need them to explain. report_missing: they named
-  something your map doesn't have. other: anything else.
+  something your map doesn't have. finish: they say you have reached the finish or the end of
+  the route, ask whether you have ("are you at the finish?" is finish, not answer), or say yes
+  after you asked whether you're at the finish (still fill in any move they gave). other:
+  anything else.
 """.strip()
 
 # The `move` field, for the calls that fill it in

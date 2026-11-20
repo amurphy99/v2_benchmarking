@@ -335,7 +335,7 @@ export interface Download {
 // (copied from `MapTaskReply` in `backend/chat_app/websocket/harnesses/map_task/harness.py`)
 export type MapTaskReplyRecord = {
     route     : "simple_question" | "instruction" | "mismatch" | "other";
-    act       : "acknowledge" | "answer" | "clarify" | "report_missing" | "other";
+    act       : "acknowledge" | "answer" | "clarify" | "report_missing" | "finish" | "other";
     waypoints : number;
 };
 
@@ -348,7 +348,11 @@ export type MapTaskHistory = {
     position : MapPoint | null;
     replies? : MapTaskReplyRecord[] | null;  // Absent from snapshots saved before replies were recorded; null for an unsaved session
     intro?   : IntroRecord | null;           // Absent from snapshots saved before the intro; null for a chat without one
+    ended?   : MapTaskEnd | null;            // Absent from snapshots saved before the task could end itself; null when it didn't
 };
+
+// How a Map Task ended itself (copied from `MapTaskEnd` in `harnesses/map_task/finish.py`)
+export type MapTaskEnd = "reached_finish" | "giver_confirmed";
 
 // How a task chat's intro went (copied from `intro_record` in `harnesses/features/intro/flow.py`)
 export type IntroRecord = {

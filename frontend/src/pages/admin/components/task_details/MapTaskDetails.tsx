@@ -16,14 +16,14 @@ import type { ReactElement } from "react";
 import      { useMemo      } from "react";
 
 // From this project
-import type { MapPoint, MapShape, MapTaskHistory, MapTaskReplyRecord } from "@/api";
-import        CombinedMap                                              from "@/components/map_task/CombinedMap";
-import        MapDifferencesList                                       from "@/components/map_task/MapDifferencesList";
-import        MapTaskMap                                               from "@/components/map_task/MapTaskMap";
-import      { MAP_TASK_PAPER, differingIds, mapDifferences           } from "@/components/map_task/mapTaskViews";
-import      { Pill                                                   } from "../ui/Pill";
-import      { StatTile, StatTileRow                                  } from "../ui/StatTile";
-import        IntroTile                                                from "./IntroTile";
+import type { MapPoint, MapShape, MapTaskEnd, MapTaskHistory, MapTaskReplyRecord } from "@/api";
+import        CombinedMap                                                          from "@/components/map_task/CombinedMap";
+import        MapDifferencesList                                                   from "@/components/map_task/MapDifferencesList";
+import        MapTaskMap                                                           from "@/components/map_task/MapTaskMap";
+import      { MAP_TASK_PAPER, differingIds, mapDifferences                       } from "@/components/map_task/mapTaskViews";
+import      { Pill                                                               } from "../ui/Pill";
+import      { StatTile, StatTileRow                                              } from "../ui/StatTile";
+import        IntroTile                                                            from "./IntroTile";
 
 // How each kind of turn reads (copied from `Route` in `backend/chat_app/websocket/harnesses/map_task/understanding.py`)
 const MAP_TURN_LABELS: Record<MapTaskReplyRecord["route"], string> = {
@@ -39,7 +39,14 @@ const MAP_REPLY_LABELS: Record<MapTaskReplyRecord["act"], string> = {
     answer         : "Answered",
     clarify        : "Asked again",
     report_missing : "Said it lacked a landmark",
+    finish         : "Checked the finish",
     other          : "Other",
+};
+
+// How the task ended itself (copied from `MapTaskEnd` in `harnesses/map_task/finish.py`)
+const MAP_END_LABELS: Record<MapTaskEnd, {value: string; sub: string}> = {
+    reached_finish  : {value: "At the finish", sub: "the avatar got there"},
+    giver_confirmed : {value: "On their word", sub: "they confirmed its spot"},
 };
 
 // Each section's card, and the headings over them
@@ -67,6 +74,9 @@ export default function MapTaskDetails({view}: {
     const fromFinish = (view.position !== null) ? mapDistance(view.position, finish, scale)                           : null;
     const pathRatio  = (view.path     !== null) ? (lineLength(view.path, scale) / lineLength(view.giver.route, scale)) : null;
 
+    // How the task ended: by itself, otherwise (End chat, a dropped connection), or not recorded
+    const ending = (view.ended === undefined) ? {value: "—", sub: "not recorded"} : (view.ended === null) ? {value: "Not by the task", sub: "ended by hand, or dropped"} : MAP_END_LABELS[view.ended];
+
     // The saved replies (absent from older snapshots), and how many of them match ("—" when they weren't recorded)
     const replies      = view.replies ?? null;
     const countReplies = (matches: (reply: MapTaskReplyRecord) => boolean): string => (replies === null) ? "—" : String(replies.filter(matches).length);
@@ -88,6 +98,7 @@ export default function MapTaskDetails({view}: {
                     <StatTile label="Directions"      value={countReplies((reply: MapTaskReplyRecord) => reply.route === "instruction")} sub="turns telling it where to go" help="Turns read as a direction: a move, or a landmark to head for" />
                     <StatTile label="Clarifications"  value={countReplies((reply: MapTaskReplyRecord) => reply.act === "clarify")}       sub="times the avatar asked again" help="Replies asking the participant to say it again or explain, including a likely misheard name" />
                     <StatTile label="Moves"           value={moves}                                                                      sub="replies that moved it"         help="Replies whose move added at least one point to the avatar's path" />
+                    <StatTile label="Ended"           value={ending.value}                                                               sub={ending.sub}                   help="How the chat ended: the avatar reached the finish, the participant said it was there (after it checked), or neither" />
                     <IntroTile intro={view.intro} />
                 </StatTileRow>
 

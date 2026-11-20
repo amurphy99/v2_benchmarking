@@ -59,7 +59,7 @@ which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_pl
 | `unguided` | Open conversation (the default). Spoken end-chat and pause requests get scripted replies; everything else goes to the single-stage LLM | none | none |
 | `active_listening` | An LLM assessment of each turn shapes the reply (experimental; see its README) | none | none |
 | `activity` | The memory activity: its RAG pipeline and closing flow | none | none |
-| `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
+| `map_task` | The Map Task: the user gives directions from their map, and the avatar follows them on its own. The chat ends itself at the finish, or on the user's word once the avatar has said where it is (see its README) | `cues`, `no_cues` | `demo`, `hcrc_1` to `hcrc_4` |
 | `cooperative_planning` | The user and the avatar work out a plan together, each with a brief (who they are) and private constraints; the participant's card fills in as items are agreed | `cues`, `no_cues` | `dinner_party`, `day_trip`, `birthday_party`, `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`, `apartment_hunt`, `camping_trip`, `flight_rebooking` |
 | `speech_elicitation` | The avatar opens with one light question and keeps the user talking: every reply reacts to what they said, digs into their answer before moving on, and ends with another question. With cues it gives audible signs of listening ("mm-hm") when the user pauses, holds a reply while they seem mid-thought, and asks about a likely misheard word. Nothing to finish; the participant ends the chat | `cues`, `no_cues` | `pet_person`, `mountains_or_beaches`, `retirement_spot` |
 
@@ -424,7 +424,9 @@ A chat ends normally in one of two ways: the client sends `end_chat`, or a reply
 `ChatConsumer.end_chat`, which sends the harness's `reveal_view()` (when it returns one) as a
 `task_reveal` frame, then `chat_ended` after a `close_after` reply, then closes the socket
 with code `1000`; `disconnect` does the rest. A failure to build or send those frames is
-logged, and the socket still closes.
+logged, and the socket still closes. `cooperative_planning` ends itself once the user approves
+the finished plan, and `map_task` once the avatar reaches the finish or the user confirms it's
+there (`map_task/finish.py`).
 
 The reveal is what the participant is shown once the chat is over, so their page can keep the
 task on screen and fill in what they couldn't see (`consumers/HARNESS_PROTOCOL.md` §14):
@@ -494,8 +496,9 @@ snapshot in `ResponseOutcome.task_snapshot`. Saving the exchange also saves that
 so a failed commit or cancelled generation cannot archive an uncommitted decision or move.
 The planning harness also awaits a snapshot write when `reply_then_track` finishes tracking.
 
-Map Task snapshots include both maps, the follower's full path, and each saved reply: the
-kind of turn it answered (`route`), what it did (`act`), and the waypoints it added. Planning
+Map Task snapshots include both maps, the follower's full path, each saved reply (the kind
+of turn it answered, `route`; what it did, `act`; and the waypoints it added), and how the
+task ended (`ended`: `reached_finish`, `giver_confirmed`, or null). Planning
 snapshots include the scenario, both sides' constraints, agreements (with the side that first
 suggested each), pending choices, suggestions, refusals (with who suggested each), every
 choice either side put forward, the avatar's constraints it mentioned, and the approval stage.
@@ -520,6 +523,6 @@ chat type has its own view (`frontend/src/pages/admin/components/task_details/`)
 
 | Chat type | What its task details show |
 |---|---|
-| `map_task` | How far from the finish the avatar stopped, its path's length against the route, the turns by kind and the replies by act, how the intro went, both maps as one, and each map with what differs |
+| `map_task` | How far from the finish the avatar stopped, its path's length against the route, how the task ended, the turns by kind and the replies by act, how the intro went, both maps as one, and each map with what differs |
 | `cooperative_planning` | The items agreed, each side's ideas and turned-down ones, the avatar's constraints it mentioned, how the intro went, both sides' materials, and each decision with who suggested what |
 | `speech_elicitation` | The threads and follow-ups, the participant's average answer, the held replies (from each reply's saved timing), the replies by kind, each thread, and the topic |

@@ -139,7 +139,10 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   condition: it says what the task is and asks whether the user has done one before, and tells
   anyone new to it how it works before waiting for the first direction. It sends the
   participant's map as a `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`,
-  and sends no `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
+  and sends no `robot_action`. It has no spoken end-chat or pause, but the task ends itself: once
+  the avatar reaches the finish, or once the user confirms it's there after the avatar says where
+  it is, a closing line goes out and the backend sends `chat_ended`. The client can end the chat
+  at any time.
 - `cooperative_planning` -- the user and the avatar work out a plan together (two friends
   planning an event, or a hotel guest and the receptionist), agreeing on one choice for each
   item while each side has private constraints. The avatar speaks first, with the same intro as

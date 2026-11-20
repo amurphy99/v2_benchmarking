@@ -55,6 +55,11 @@ finalized user text
     -> to a landmark's nearest edge (or above, below, left of, or right of it),
        one direction by a small, medium, or large step, or a path through open space
     -> proposed in ResponseOutcome.state, and entered only once the reply is saved
+
+    FINISH (finish.py; Ending the task, below)
+    -> the move leaves the avatar at the finish: a closing line, and the chat ends
+    -> act `finish` (the user says it's at the finish): it says where it is and asks,
+       and a `finish` answering that question ends the chat on the user's word
 ```
 
 Newer speech can cancel a reply at any point, like in every chat type. The move is entered
@@ -74,6 +79,34 @@ spoken directions and choosing those points remains the model's responsibility.
 
 Each turn logs one block: its route, the pipeline, the time taken, the names heard, the
 reply's reason and act, and the move with the spot it reaches.
+
+<br>
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Ending the Task                                                                  -->
+<!-- -------------------------------------------------------------------------------- -->
+## Ending the task
+
+The avatar never knows where the finish is, but code does: the last point of the
+participant's route (`finish.py`). The task ends itself in one of two ways, and the reply
+that ends it carries `close_after`, so the chat ends once its audio has gone out (the
+harnesses README, The end of a chat):
+
+- **At the finish.** A reply that leaves the avatar within `MAP_TASK_FINISH_RADIUS` (0.08 map
+  units, in `config.py`) of the finish gets a closing line after its own words: "That's the
+  finish! We made it. Thanks for guiding me."
+- **On the user's word.** When the user says (or asks whether) the avatar has reached the
+  finish, the reply's act is `finish`. The first time, the avatar says where it is on its own
+  map and asks: "Alright, I'm in the bottom left corner, below the saloon bar. Is that the
+  finish?" Where it is comes from code (`where_am_i`: the part of the map, and the nearest
+  landmark when one is close by), so it always matches its real spot. A `finish` act answering
+  that question takes the user's word for it and ends the chat ("Great, we made it! Thanks for
+  guiding me."); any other reply carries on and drops the question.
+
+How it ended (`reached_finish` or `giver_confirmed`) is kept in the state as `ended`, with
+`finish_asked` while the avatar waits for an answer, and saved in the task history (`ended`,
+null when the chat ended some other way). A closing line cut off by newer speech before the
+close leaves `ended` set, so the next reply says it again and closes.
 
 <br>
 
@@ -285,8 +318,8 @@ else is the same: the same pipelines, the same moves, and the participant's map.
 - **The admin task details page,** for a completed chat, from its saved task history
   (`frontend/src/pages/admin/components/task_details/MapTaskDetails.tsx`): how far from the
   finish the avatar stopped and its path's length against the route (both measured in the
-  paper's real proportions), the turns by kind and the replies by act, both maps as one, and
-  each map with what differs.
+  paper's real proportions), how the task ended, the turns by kind and the replies by act, how
+  the intro went, both maps as one, and each map with what differs.
 
 <br>
 
@@ -305,13 +338,14 @@ else is the same: the same pipelines, the same moves, and the participant's map.
  │   └── hcrc_<n>.json        # HCRC Map Task Corpus maps 1-4 (portrait, CC BY 4.0)
  ├── behaviors.py             # The avatar's setup, its map, the plan while thinking, each reply's plan, and its signs of listening
  ├── cues.py                  # LandmarkGlance, DirectionGlance, MapTaskBackchannels
- ├── geometry.py              # Directions, distance bands, parts of the map, and where a move stops
+ ├── geometry.py              # Directions, distances and distance bands, parts of the map, and where a move stops
+ ├── finish.py                # Ending the task: at the finish, or on the user's word once the avatar says where it is
  ├── understanding.py         # Reads a turn in code: names heard, question or move, the facts, and the route
  ├── pipelines.py             # draft_and_check, single_call, assess_then_reply, and ROUTE_PIPELINES
  ├── prompts.py               # The follower instructions, each call's task, the map facts block, and its notes for the reply check
  ├── response_models.py       # Moves, each call's structured response, and the per-map schemas
  ├── map_task_api.py          # MapTaskAPI: one method per call, on the shared StructuredAPI
- └── config.py                # Request limits, each call's temperature and thinking switch, and the reply check's hold
+ └── config.py                # Request limits, each call's temperature and thinking switch, the reply check's hold, and the finish radius
 ```
 
 The distances that count as "right next to", "nearby", and "far away", and the step sizes,

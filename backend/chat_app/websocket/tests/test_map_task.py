@@ -29,6 +29,7 @@ from chat_app.websocket.harnesses.features.intro.prompts              import INT
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
 from chat_app.websocket.harnesses.map_task.behaviors                  import MAP_TASK_SOUNDS
 from chat_app.websocket.harnesses.map_task.cues                       import DirectionGlance, LandmarkGlance, MapTaskBackchannels
+from chat_app.websocket.harnesses.map_task.finish                     import MSG_FINISH_CONFIRMED, MSG_REACHED_FINISH, at_finish, finish_step, where_am_i
 from chat_app.websocket.harnesses.map_task.geometry                   import approach, beside, direction, distance_band, region, step
 from chat_app.websocket.harnesses.map_task.harness                    import MAP_TASK_MAPS, MSG_SAY_AGAIN, MapTaskHarness, MapTaskState
 from chat_app.websocket.harnesses.map_task.map_task_api               import MapTaskAPIError
@@ -40,8 +41,9 @@ from chat_app.websocket.harnesses.map_task.understanding              import rea
 from chat_app.websocket.harnesses.registry                            import build_harness
 
 # The demo map every turn is read against, where the avatar starts on it, and its paper's proportions
-DEMO_MAP   = MAP_TASK_MAPS["demo"]
-DEMO_START = DEMO_MAP.start
+DEMO_MAP    = MAP_TASK_MAPS["demo"]
+DEMO_START  = DEMO_MAP.start
+DEMO_FINISH = DEMO_MAP.giver.route[-1]  # Just below the bridge, in the top left corner
 DEMO_SCALE = DEMO_MAP.scale
 
 # Logger the harness writes each turn's line to
@@ -279,6 +281,46 @@ class TurnReadingTests(unittest.TestCase):
 
 
 # ================================================================================
+# Ending the Task
+# ================================================================================
+class FinishTests(unittest.TestCase):
+    # The finish is the route's last point, and the avatar is there within the radius around it
+    def test_the_finish_counts_within_its_radius(self) -> None:
+        self.assertTrue (at_finish(DEMO_MAP, DEMO_FINISH ))
+        self.assertTrue (at_finish(DEMO_MAP, (0.19, 0.25)))
+        self.assertFalse(at_finish(DEMO_MAP, (0.14, 0.40)))
+
+    # Where the avatar is, from its own map: the part of the map, and a landmark close by
+    def test_the_avatar_says_where_it_is_from_its_own_map(self) -> None:
+        self.assertEqual(where_am_i(DEMO_MAP, DEMO_FINISH ), "in the top left corner, right by the bridge")
+        self.assertEqual(where_am_i(DEMO_MAP, (0.14, 0.40)), "on the left side, below the bridge")
+        self.assertEqual(where_am_i(DEMO_MAP, DEMO_START  ), "on the left side, above and to the left of the tree")
+        self.assertEqual(where_am_i(DEMO_MAP, (0.05, 0.60)), "on the left side")
+
+    # At the finish, the reply ends the task with a closing line after its own words
+    def test_reaching_the_finish_ends_the_task(self) -> None:
+        step = finish_step(DEMO_MAP, DEMO_FINISH, "acknowledge", "Okay, up past the bridge.", asked=False, ended=None)
+        self.assertEqual((step.message, step.ended, step.asked), (f"Okay, up past the bridge. {MSG_REACHED_FINISH}", "reached_finish", False))
+
+    # The user's word: the avatar first says where it is and asks, and a yes to that ends the task
+    def test_the_users_word_ends_the_task_once_the_avatar_has_checked(self) -> None:
+        check = finish_step(DEMO_MAP, (0.14, 0.40), "finish", "Okay.", asked=False, ended=None)
+        yes   = finish_step(DEMO_MAP, (0.14, 0.40), "finish", "Okay.", asked=True,  ended=None)
+        self.assertEqual((check.message, check.ended, check.asked), ("Alright, I'm on the left side, below the bridge. Is that the finish?", None, True))
+        self.assertEqual((yes.message,   yes.ended,   yes.asked  ), (MSG_FINISH_CONFIRMED, "giver_confirmed", False))
+
+    # Anything else after the check carries on, and drops the question
+    def test_a_reply_about_something_else_drops_the_check(self) -> None:
+        step = finish_step(DEMO_MAP, (0.14, 0.40), "acknowledge", "Going down a bit.", asked=True, ended=None)
+        self.assertEqual((step.message, step.ended, step.asked), ("Going down a bit.", None, False))
+
+    # A task already over (its closing line was cut off before the close) closes again on the next reply
+    def test_a_task_already_over_closes_again(self) -> None:
+        step = finish_step(DEMO_MAP, (0.14, 0.40), "acknowledge", "Wait, what?", asked=False, ended="giver_confirmed")
+        self.assertEqual((step.message, step.ended), (MSG_FINISH_CONFIRMED, "giver_confirmed"))
+
+
+# ================================================================================
 # Pipelines
 # ================================================================================
 class PipelineTests(unittest.IsolatedAsyncioTestCase):
@@ -440,6 +482,31 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs(HARNESS_LOGGER, level="ERROR"): outcome = await self.harness.generate(self.attempt("Go right a bit"))
         self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (MSG_SAY_AGAIN, (DEMO_START,), "clarify"))
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
+
+    # A move that leaves the avatar at the finish ends the chat once the reply has gone out
+    async def test_reaching_the_finish_ends_the_chat(self) -> None:
+        self.api.follow.return_value = FollowerTurn(basis="Up to the bridge.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_FINISH]), message="Okay, up to just below the bridge.")
+        with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go up to just below the bridge"))
+        self.assertEqual(outcome.message, f"Okay, up to just below the bridge. {MSG_REACHED_FINISH}")
+        self.assertEqual((outcome.close_after, outcome.state.ended, outcome.task_snapshot["ended"]), (True, "reached_finish", "reached_finish"))
+
+    # The user's word ends the chat once the avatar has said where it is and asked
+    async def test_the_users_word_ends_the_chat_after_the_avatar_checks(self) -> None:
+        self.api.follow.return_value = FollowerTurn(basis="They say I'm there.", act="finish", move=NO_MOVE, message="Okay.")
+        with self.assertLogs(HARNESS_LOGGER, level="INFO"): check = await self.harness.generate(self.attempt("I think you're at the finish"))
+        self.assertEqual(check.message, f"Alright, I'm {where_am_i(DEMO_MAP, DEMO_START)}. Is that the finish?")
+        self.assertEqual((check.close_after, check.state.finish_asked, check.state.replies[-1].act), (False, True, "finish"))
+
+        self.harness.on_reply_saved(check)
+        with self.assertLogs(HARNESS_LOGGER, level="INFO"): done = await self.harness.generate(self.attempt("Yes"))
+        self.assertEqual((done.message, done.close_after, done.state.ended), (MSG_FINISH_CONFIRMED, True, "giver_confirmed"))
+
+    # A direction after the avatar's check carries on, and drops the question
+    async def test_a_direction_after_the_check_carries_on(self) -> None:
+        self.harness.state = replace(self.harness.state, finish_asked=True)
+        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay, left of the bus.")
+        with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("No, go to the left of the bus"))
+        self.assertEqual((outcome.message, outcome.close_after, outcome.state.finish_asked), ("Okay, left of the bus.", False, False))
 
     # A likely misheard landmark name gets the reply check's question instead: no move, and a puzzled look as it asks
     # (the reply worked out beside the check is dropped)
@@ -614,7 +681,7 @@ class MapTaskMonitorTests(unittest.IsolatedAsyncioTestCase):
 
         channel, event = consumer.channel_layer.send.await_args.args
         self.assertEqual((channel, event["type"]), ("listener-1", "ws.task_monitor"))
-        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)], "replies": [], "intro": None})
+        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)], "replies": [], "intro": None, "ended": None})
 
     # A chat type without a view sends nothing
     async def test_a_chat_type_without_a_view_sends_nothing(self) -> None:

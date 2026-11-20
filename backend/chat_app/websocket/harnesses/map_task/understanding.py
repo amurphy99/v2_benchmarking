@@ -13,10 +13,10 @@ from __future__  import annotations
 from dataclasses import dataclass
 from typing      import Literal, TYPE_CHECKING
 
-import math, re
+import re
 
 # From this project
-from .geometry import Direction, DistanceBand, direction, distance_band, region
+from .geometry import Direction, DistanceBand, direction, distance, distance_band, region
 
 if TYPE_CHECKING: from .maps import Landmark, Point, Scale, TaskMap
 
@@ -84,7 +84,7 @@ def read_turn(
 
     # Named landmarks first (in the order said), then the rest from nearest to farthest
     named_ids = [landmark.id for landmark in named]
-    others    = sorted((landmark for landmark in task_map.landmarks.values() if landmark.id not in named_ids), key=lambda landmark: _map_distance(position, landmark.at, task_map.scale))
+    others    = sorted((landmark for landmark in task_map.landmarks.values() if landmark.id not in named_ids), key=lambda landmark: distance(position, landmark.at, task_map.scale))
     facts     = tuple(_fact(landmark, position, task_map.scale, mentioned=(landmark.id in named_ids)) for landmark in (*named, *others))
 
     return TurnReading(
@@ -116,10 +116,6 @@ def _fact(landmark: Landmark, position: Point, scale: Scale, *, mentioned: bool)
         region    = region       (          landmark.at       ),
         mentioned = mentioned,
     )
-
-# How far apart two points are in map units (for ordering landmarks nearest first)
-def _map_distance(a: Point, b: Point, scale: Scale) -> float:
-    return math.hypot((b[0] - a[0]) * scale[0], (b[1] - a[1]) * scale[1])
 
 
 # --------------------------------------------------------------------------------

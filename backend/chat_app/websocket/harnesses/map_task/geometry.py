@@ -84,6 +84,10 @@ def distance_band(origin: Point, landmark: Landmark, scale: Scale) -> DistanceBa
     if gap <= MAP_TASK_NEAR_DISTANCE: return "near"
     return "far"
 
+# How far apart two points are, in map units
+def distance(a: Point, b: Point, scale: Scale) -> float:
+    return math.hypot(*_offset(a, b, scale))
+
 # The part of the map a point is in ("in the top left corner", "at the bottom")
 def region(point: Point) -> str:
     # A point on the right or bottom edge (1.0) belongs to the last third
