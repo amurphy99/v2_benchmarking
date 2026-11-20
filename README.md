@@ -48,6 +48,7 @@ SSH:/home/user/
 +│   │   ├── .env                     # Created programmatically during startup script
  │   │   ├── backend/                 # Django app
  │   │   ├── chat_app/                # Core Python backend logic
+ │   │   │   ├── models/              # Database models, one module per family (see its README)
  │   │   │   ├── websocket/
  │   │   │   │   ├── routing.py       # Routes to different chat modes
  │   │   │   │   ├── biomarkers/      # Cognitive biomarker extraction

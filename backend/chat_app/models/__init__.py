@@ -9,7 +9,8 @@ imports every model class, and callers keep importing them from
 chats and what they record in `chat.py`, and the memory activity's
 instructions and turn logs in `activities.py`. A task chat's run (how it was
 run, and the task's own record) is in `runs/`, which will also hold post-chat
-questionnaires. The field arguments they share are in `field_args.py`.
+questionnaires. The field arguments they share are in `field_args.py`. This
+folder's README describes each model, how they relate, and how to change them.
 
 """
 # From this project

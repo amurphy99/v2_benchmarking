@@ -270,7 +270,8 @@ networks:
 
 Migrations for both apps (`chat_app/migrations/` and `rag_vectorstore/migrations/`)
 are committed, so every database follows the same history and keeps its data when the
-schema changes. Startup never writes a migration file. It first checks that every model
+schema changes. The `chat_app` models themselves, how they relate, and how to move data
+between them in a migration are described in `chat_app/models/README.md`. Startup never writes a migration file. It first checks that every model
 change has one (`makemigrations --check --dry-run`) and refuses to start when one is
 missing, printing the migration it expected. Then `migrate` applies whatever that
 database has not applied yet.
