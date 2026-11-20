@@ -431,10 +431,12 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
 
     # A likely misheard landmark name gets the reply check's question instead: no move, and a puzzled look as it asks
+    # (the reply worked out beside the check is dropped)
     async def test_a_misheard_name_gets_a_question_instead(self) -> None:
         question = "Sorry, did you say the boulder?"
         verdict  = {"next_step": "clarify", "misheard": "the bolder", "message": question}
         self.check.check.return_value = check_model(tuple(MAP_TASK_SOUNDS), MapTaskBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
+        self.api.follow.return_value  = FollowerTurn(basis="No bolder here.", act="clarify", move=NO_MOVE, message="Which way round?")
         with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go round the bolder"))
         self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (question, (DEMO_START,), "clarify"))
         self.assertEqual(outcome.avatar_plan["steps"][-1]["face"]["name"], "Face with Raised Eyebrow")

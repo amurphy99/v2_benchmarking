@@ -405,8 +405,9 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         consumer.request_harness_turn.assert_called_once()
 
     # A likely misheard word gets the reply check's question instead, with a pondering look, and the plan stays as it was
+    # (the reply worked out beside the check is dropped, with the change it proposed)
     async def test_a_misheard_word_gets_a_question_instead(self) -> None:
-        harness, _, _ = self.make()
+        harness, _, _ = self.make(track=plan_update({"op": "suggest", "item": "dessert", "choice": "tear a misu"}), reply=spoken_turn("Tear a misu? Sounds tasty."))
         question = "Sorry, did you say tiramisu?"
         verdict  = {"next_step": "clarify", "misheard": "tear a misu", "message": question}
         result   = check_model(tuple(PLANNING_SOUNDS), PlanningBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})

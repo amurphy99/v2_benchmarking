@@ -324,7 +324,10 @@ The reply's own plans (its thinking look) wait for the verdict, so the avatar
 keeps listening while the check runs. The verdict is a union told apart by
 `next_step`, built per chat type with only the steps of the checks switched on.
 `reply_now` replies and harness turns skip the check. A check that fails lets
-the reply go out as usual (a specified fallback; the failure is logged once).
+the reply go out as usual (a specified fallback; the failure is logged once),
+and so does a check still running `REPLY_CHECK_GRACE_SEC` (1 s) after the reply
+is ready: the check usually answers first, and a slow one would otherwise hold a
+finished reply in silence (`features/reply_gate/config.py`).
 
 Each chat type adds its own notes to a check's prompt (`TurnEndCheck(self, notes)`,
 in its `prompts.py`) and sets its own hold (in its `config.py`):

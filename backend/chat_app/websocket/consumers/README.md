@@ -232,6 +232,11 @@ so a later retry includes both the earlier text and the continuation. Once respo
 generation succeeds, the commit is shielded from cancellation so database and in-memory
 state cannot be left half-updated.
 
+Nothing new starts while listening is paused. Google returns the last finals for audio
+sent before a pause just after it, and a reply to them then would go unheard, so they
+stay staged. When `set_listening` resumes listening, `ChatHandler.answer_staged()`
+answers them, unless the chat is in manual mode or another reply owns the turn.
+
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Chat Types and Intent Detection                                                  -->
 <!-- -------------------------------------------------------------------------------- -->
@@ -298,6 +303,12 @@ chat session. Automatic responses do not create these rows.
 Because each flush ends a Google stream, word-time offsets are anchored to the arrival of
 each stream's first chunk (not to when the stream was prepared), so audio queued during a
 handoff keeps accurate timestamps.
+
+Google also ends any stream after 305 seconds, dropping the words in flight. A stream that
+has run for `STT_ROTATE_AFTER_SEC` (4 minutes) ends itself at the next quiet moment instead:
+the last result was a final, and nothing new has come for `STT_ROTATE_QUIET_SEC`. It ends
+on a barrier nobody waits on, so a successor stream takes the queued audio, just as after a
+flush (`speechProvider.py`).
 
 Pausing listening rejects new audio chunks immediately but does not discard chunks that
 the backend already accepted. The provider queues a pause barrier after them, which ends

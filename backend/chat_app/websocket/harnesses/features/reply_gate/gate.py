@@ -5,8 +5,10 @@ The reply gate: check a turn beside its reply, then speak, hold, or clarify.
 
 A chat type's `generate` hands its reply to `ReplyGate.run`. For a reply to
 finished speech, one quick LLM call (the reply check) starts at the same moment
-as the chat type's own reply, so a reply that goes out isn't delayed by it, and
-its verdict decides what happens:
+as the chat type's own reply, so it usually answers before the reply is ready.
+A reply that is ready waits at most `REPLY_CHECK_GRACE_SEC` for a check still
+running, then goes out unchecked, so a slow check never leaves the user in a
+long silence. The verdict decides what happens:
 
 * `reply`: the reply goes out as usual.
 * `wait`: the user seems mid-thought. The avatar gives the sign of listening the
@@ -36,6 +38,7 @@ from .....services.llm.chat_utilities import prepare_LLM_messages
 from .....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG, USER_MSG
 from .....services.step_timing        import timed_step
 from   ..config                       import FEATURE_MISHEARD_CONDITIONS, FEATURE_TURN_END_CONDITIONS
+from    .config                       import REPLY_CHECK_GRACE_SEC
 from    .prompts                      import build_check_messages
 from    .reply_check_api              import ReplyCheckAPIError, get_reply_check_api
 from    .response_models              import Reply, ReplyHeard, Wait, check_model
@@ -104,7 +107,8 @@ class ReplyGate:
         held = _HeldPlans(attempt.publish_plan)
         async with asyncio.TaskGroup() as group:
             replying = group.create_task(reply(replace(attempt, publish_plan=held.publish)), name=f"{self.harness.NAME}::gated_reply")
-            verdict  = await self._check(attempt, checks)
+            checking = group.create_task(self._check(attempt, checks),                      name=f"{self.harness.NAME}::reply_check")
+            verdict  = await _verdict_in_time(checking, replying)
 
             # A likely misheard word: drop the reply, and ask about it instead
             if verdict.next_step == "clarify":
@@ -141,6 +145,19 @@ class ReplyGate:
     async def _give_sign(self, attempt: TurnAttempt, wait: Wait) -> None:
         plan = self.backchannels.chosen_sign(wait.sound, wait.gesture)
         if plan is not None: await attempt.publish_plan(plan)
+
+
+# The check's verdict, or a plain reply once a ready reply has waited out the grace
+async def _verdict_in_time(checking: asyncio.Task[Reply | Wait | Clarify], replying: asyncio.Task[ResponseOutcome]) -> Reply | Wait | Clarify:
+    # The check usually answers first; a reply that is ready first gives it a little longer
+    await asyncio.wait((checking, replying), return_when=asyncio.FIRST_COMPLETED)
+    if not checking.done(): await asyncio.wait((checking,), timeout=REPLY_CHECK_GRACE_SEC)
+    if checking.done():     return checking.result()
+
+    # Still running: drop it, and the reply goes out unchecked (the call still shows in its timing)
+    checking.cancel()
+    logger.info(f"{LLM_MAIN}[Reply check] Still running {BOLD}{REPLY_CHECK_GRACE_SEC:.1f}s{UNBOLD} after the reply was ready, so the reply goes out unchecked.{RESET}")
+    return Reply(next_step="reply")
 
 
 # Log the verdict with what came with it, the time it took, and why

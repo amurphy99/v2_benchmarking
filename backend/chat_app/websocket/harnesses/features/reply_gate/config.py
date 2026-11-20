@@ -7,6 +7,7 @@ A chat type sets its own hold length and prompt notes.
 
 """
 REPLY_CHECK_TIMEOUT_SEC      = 5.0    # Longest the check may take before the reply goes out unchecked
+REPLY_CHECK_GRACE_SEC        = 1.0    # Longest a reply that is ready waits for a check still running (then it goes out unchecked)
 REPLY_CHECK_MAX_RETRIES      = 0      # No retry: a verdict after one would come too late to matter
 REPLY_CHECK_TEMP             = 0.0    # Temperature for the check (a judgment, not prose)
 REPLY_CHECK_THINKING         = False  # Whether the check lets the model think first (slower)

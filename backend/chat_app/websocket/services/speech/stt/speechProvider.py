@@ -13,6 +13,11 @@ Every interim and final result goes to `consumers/processing/speech.py` on the
 chat's event loop, in the order Google returned them, so the chat type's harness
 hears the same speech the reply pipeline does.
 
+Google ends a stream after 305 seconds and drops the words still in flight. A
+stream that has run for `STT_ROTATE_AFTER_SEC` ends itself at the next quiet
+moment instead (a final, then no new speech for `STT_ROTATE_QUIET_SEC`), and a
+successor stream takes the audio queued behind it.
+
 """
 import logging, asyncio, threading, weakref
 logger = logging.getLogger(__name__)
@@ -47,6 +52,10 @@ KEEP_ALIVE_SEC = 0.100                 # Seconds between silence frames while wa
 CHUNK_SIZE     =  2_048                # Bytes in 64 ms of 16-bit mono PCM audio
 SILENCE        = b"\x00" * CHUNK_SIZE  # Silent PCM frame used to keep Google streaming
 
+# Fresh streams before Google's limit (it ends one after 305 s, losing the words in flight)
+STT_ROTATE_AFTER_SEC = 240.0  # A stream this old ends at the next quiet moment, and a successor takes the queued audio
+STT_ROTATE_QUIET_SEC =   1.5  # Time since a final, with no interim after it, that counts as a quiet moment
+
 
 # ================================================================================
 # Streaming STT via audio bytes received from the ChatConsumer client
@@ -62,6 +71,8 @@ class SpeechToTextProvider:
         self._thread              = None                # The thread we use for streaming
         self._pause_barrier       = None                # Boundary after audio accepted before the latest listening pause
         self._stream_start_dt     = None                # Wall-clock anchor for word-time offsets (set from each stream's first chunk)
+        self._last_result_at      = now_ts()            # When Google last returned a result (a quiet moment has none for a while)
+        self._last_result_final   = True                # Whether that result was a final (after an interim, the user is mid-utterance)
 
         # Used to avoid processing duplicate STT results
         self._recent_transcript    = ""
@@ -99,6 +110,13 @@ class SpeechToTextProvider:
         """
         started = now_ts()
         while True:
+            # A long stream ends at a quiet moment, before Google's limit cuts off the words in flight
+            # (a barrier nobody waits on, like `abort`'s, hands the queued audio to a successor stream)
+            if self._rotation_due(started):
+                logger.info(f"{STT_MAIN} Starting a fresh stream at a quiet moment, {BOLD}{now_ts() - started:.0f}s{UNBOLD} into this one (Google ends one at 305 s).{RESET}")
+                ended_on.append(AudioBarrier())
+                return
+
             # Keep streaming alive during short pauses
             #try: item = self._audio_buffer.get(timeout=KEEP_ALIVE_SEC)
             #except Empty:
@@ -127,6 +145,11 @@ class SpeechToTextProvider:
             if self._stream_start_dt is None: self._stream_start_dt = datetime.now(timezone.utc) - timedelta(seconds=now_ts() - item.received_at)
             yield speech.StreamingRecognizeRequest(audio_content=item.data)
 
+    # A stream this old can end now: its last result was a final, and nothing has come since
+    def _rotation_due(self, started: float) -> bool:
+        now = now_ts()
+        return ((now - started) >= STT_ROTATE_AFTER_SEC) and self._last_result_final and ((now - self._last_result_at) >= STT_ROTATE_QUIET_SEC)
+
     # Validate transcripts from the STT results
     def _check_transcript(self, transcript: str) -> tuple[bool, str]:
         # Check length
@@ -148,6 +171,10 @@ class SpeechToTextProvider:
     def _prepare_stream(self) -> threading.Thread:
         self._stream_start_dt = None  # The request generator anchors it to the stream's first chunk
         self._interim_progress.reset()
+
+        # A fresh stream has heard nothing yet
+        self._last_result_at    = now_ts()
+        self._last_result_final = True
 
         # Configure the stream
         config = speech.RecognitionConfig(
@@ -322,6 +349,10 @@ class SpeechToTextProvider:
                     transcript = result.alternatives[0].transcript.strip()
                     if not transcript: continue
 
+                    # The user is mid-utterance, so the stream doesn't end here (`_rotation_due`)
+                    self._last_result_at    = now_ts()
+                    self._last_result_final = False
+
                     consumer = self._consumer()
                     if consumer is None: continue
 
@@ -340,9 +371,11 @@ class SpeechToTextProvider:
                 # --------------------------------------------------------------------------------
                 # Final Result: validate and extract words
                 # --------------------------------------------------------------------------------
-                # 1) Make sure this isn't a duplicate transcript
+                # 1) Make sure this isn't a duplicate transcript (a quiet moment can follow any final)
                 transcript = result.alternatives[0].transcript.strip()
                 self._interim_progress.record_final(result)
+                self._last_result_at    = now_ts()
+                self._last_result_final = True
                 valid, transcript = self._check_transcript(transcript)
                 if not valid: continue
 

@@ -270,7 +270,7 @@ accepted from a primary client (the robot), not just from the admin page.
 | `repeat_last` | *(none)* | Re-speaks the last assistant response. Rejected with `ok: false` if there is no prior response. |
 | `send_custom` | `{"message": "text to say"}` | Speaks supplied text as the assistant. Rejected if `message` is missing/blank. |
 | `reply_now` | *(none)* | Forces a response from everything heard up to the request, including the last words before it. Later speech does not cancel it. Buddy does not need this (auto-reply is on). Clients in `manual` mode use it for every turn; see section 4.1. |
-| `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. |
+| `set_listening` | `{"state": "active"\|"paused"}` | Starts or stops the backend STT stream. Only meaningful for audio clients. While paused, nothing is answered on its own: the last words recognized from audio sent before the pause are kept, and in `automatic` mode they are answered as soon as listening resumes (newer speech joins them, as usual). |
 | `set_response_mode` | `{"mode": "automatic"\|"manual"}` | Turns automatic replies on or off. |
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
 | `resume_and_respond` | *(none)* | Shortcut: restores automatic mode **and** immediately replies. |

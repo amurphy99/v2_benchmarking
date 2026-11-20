@@ -121,9 +121,27 @@ class ChatHandler:
             # When in "Pause & Listen" mode, we still stage and echo user text, but we don't auto-respond
             if consumer.response_mode == "manual": return
 
+            # While listening is paused, the words wait staged (`answer_staged` answers them on resume)
+            if not consumer.streaming_active: return
+
             # Create a new cancellable automatic response task
             consumer._pending_response_trigger = "automatic"
             consumer._pending_response_task = asyncio.create_task(ChatHandler._execute_response(consumer), name="chat::pending_response")
+
+    # Answer the words staged while listening was paused, now that it resumed (newer speech cancels it)
+    @staticmethod
+    async def answer_staged(consumer: ChatConsumer) -> None:
+        """
+        A reply to them while paused would never be heard. Nothing starts while automatic
+        replies are off, nothing is staged, or another reply owns the turn.
+        """
+        async with consumer._stage_lock:
+            replies = (consumer._pending_response_task, consumer._reply_now_task, consumer._manual_response_task)
+            if consumer._close_scheduled or (consumer.response_mode == "manual") or (not consumer._staged_utterances): return
+            if any((task is not None) and (not task.done()) for task in replies):                                    return
+
+            consumer._pending_response_trigger = "automatic"
+            consumer._pending_response_task    = fire_and_log(ChatHandler._execute_response(consumer), name="chat::resumed_response")
 
     # --------------------------------------------------------------------------------
     # STT progress (invalidate outdated response snapshots when we get new speech)

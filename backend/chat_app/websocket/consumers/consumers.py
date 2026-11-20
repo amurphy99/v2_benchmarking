@@ -327,6 +327,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     def request_harness_turn(self) -> asyncio.Task[str | None] | None:
         return ChatHandler.request_harness_turn(self)
 
+    # Listening resumed: answer the words staged while it was paused
+    async def answer_staged(self) -> None:
+        await ChatHandler.answer_staged(self)
+
     # End the chat normally: the task's reveal (and `chat_ended` when `announce`), then the close
     async def end_chat(self, *, announce: bool) -> None:
         """

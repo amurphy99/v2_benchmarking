@@ -26,9 +26,13 @@ creates: `CognibotAPI` (`websocket/harnesses/unguided/cognibot_api.py`), or `Dum
 when `USE_LLM=false`.
 
 `structured_api.StructuredAPI` sends one instructor request (JSON_SCHEMA mode) and retries it
-a set number of times before raising its subclass's own error type. A request can also ask the
-endpoint to skip the model's thinking (`thinking=False`). The `active_listening` and `map_task`
-API clients subclass it.
+a set number of times before raising its subclass's own error type. The OpenAI client under it
+never retries on its own (`max_retries=0`), so a timed-out or rate-limited request comes straight
+back to that loop, which logs every failed try; the library's default retried without a log
+line and waited out a 429's `retry-after` (60 s from the hosted endpoint). A request can also ask
+the endpoint to skip the model's thinking (`thinking=False`). Every chat type's API client
+(`active_listening`, `map_task`, `cooperative_planning`, `speech_elicitation`) and the reply
+check's (`harnesses/features/reply_gate/`) subclass it.
 
 Both `StructuredAPI._request` and `get_LLM_response` time each call, retries included, under
 its label (`services/step_timing.py`). Inside a reply attempt the call becomes a step of that

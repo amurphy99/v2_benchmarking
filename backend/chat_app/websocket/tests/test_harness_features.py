@@ -100,10 +100,10 @@ def interim(text: str) -> InterimSpeech:
 def sent_plans(consumer: SimpleNamespace) -> list[dict]:
     return [call.args[0]["data"] for call in consumer.send_json.await_args_list]
 
-# A check client whose verdict arrives a moment after it is asked, so the reply has started by then
-def check_client(verdict: dict[str, object] | None, *, fails: bool = False) -> SimpleNamespace:
+# A check client that answers `delay_sec` after it is asked (by default, once the reply has started)
+def check_client(verdict: dict[str, object] | None, *, fails: bool = False, delay_sec: float = 0.01) -> SimpleNamespace:
     async def check(messages: list[dict[str, str]], response_model: type) -> CheckResult:
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(delay_sec)
         if fails: raise ReplyCheckAPIError("Reply check check failed after all attempts")
         return CHECK_MODEL.model_validate({"basis": "b", "verdict": verdict})
     return SimpleNamespace(check=AsyncMock(side_effect=check))
@@ -181,8 +181,17 @@ class BackchannelTests(unittest.IsolatedAsyncioTestCase):
 # ================================================================================
 class ReplyGateTests(unittest.IsolatedAsyncioTestCase):
     # A gate with both checks for a chat in one condition, and the check client it reaches
-    def make(self, verdict: dict[str, object] | None, condition: str = "cues", *, hold_sec: float = 0.0, fails: bool = False) -> tuple[ReplyGate, SimpleNamespace]:
-        client  = check_client(verdict, fails=fails)
+    def make(
+        self,
+        verdict   : dict[str, object] | None,  # What the check answers (None when it fails)
+        condition : str = "cues",              # The chat's condition (its switches decide which checks run)
+        *,
+
+        hold_sec  : float = 0.0,               # How long a held reply waits
+        fails     : bool  = False,             # The check's call fails
+        check_sec : float = 0.01,              # How long the check takes to answer
+    ) -> tuple[ReplyGate, SimpleNamespace]:
+        client  = check_client(verdict, fails=fails, delay_sec=check_sec)
         started = patch(f"{GATE}.get_reply_check_api", Mock(return_value=client))
         started.start()
         self.addCleanup(started.stop)
@@ -257,6 +266,23 @@ class ReplyGateTests(unittest.IsolatedAsyncioTestCase):
         gate, _ = self.make(None, fails=True)
         with self.assertLogs(GATE, level="ERROR"): outcome = await gate.run(make_attempt(), StubReply(), clarify)
         self.assertIs(outcome, REPLY)
+
+    # A check still running the grace after the reply is ready is dropped, and the reply goes out
+    async def test_a_slow_check_lets_a_ready_reply_out_after_the_grace(self) -> None:
+        gate, _ = self.make(MISHEARD, check_sec=60)
+        with patch(f"{GATE}.REPLY_CHECK_GRACE_SEC", 0.05), self.assertLogs(GATE, level="INFO") as logs:
+            async with asyncio.timeout(2): outcome = await gate.run(make_attempt(), StubReply(), clarify)
+        self.assertIs(outcome, REPLY)
+        self.assertIn("goes out unchecked", logs.output[-1])
+
+    # A verdict within the grace still counts, though the reply was ready first (its plans never go out)
+    async def test_a_verdict_within_the_grace_still_counts(self) -> None:
+        gate, _        = self.make(MISHEARD, check_sec=0.05)
+        attempt, reply = make_attempt(), StubReply()
+        with self.assertLogs(GATE, level="INFO"): outcome = await gate.run(attempt, reply, clarify)
+        self.assertEqual(outcome.message, QUESTION)
+        self.assertFalse(reply.cancelled)
+        attempt.publish_plan.assert_not_awaited()
 
 
 # ================================================================================

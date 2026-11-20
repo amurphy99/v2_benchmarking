@@ -99,10 +99,12 @@ async def _send_custom(consumer: ChatConsumer, payload: dict[str, object]) -> No
 # --------------------------------------------------------------------------------
 # High level controls (i.e., simple pause, resume)
 # --------------------------------------------------------------------------------
-# Apply the caller's requested listening state
+# Apply the caller's listening state (words staged while paused are answered once it resumes)
 async def _set_listening(consumer: ChatConsumer, payload: dict[str, object]) -> None:
-    state = _required_choice(payload, "state", LISTENING_STATES)
+    state   = _required_choice(payload, "state", LISTENING_STATES)
+    resumed = (state == "active") and (not consumer.streaming_active)
     await set_streaming_active(consumer, active=(state == "active"))
+    if resumed: await consumer.answer_staged()
 
 # Apply the caller's requested automatic-response mode
 async def _set_response_mode(consumer: ChatConsumer, payload: dict[str, object]) -> None:

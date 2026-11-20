@@ -30,6 +30,9 @@ from chat_app.websocket.services.speech.stt.stream_state    import InterimProgre
 # A chat type without shared features, for consumers whose commands don't touch any
 NO_FEATURES = SimpleNamespace(features={})
 
+# Where the STT provider looks up what these tests replace
+STT_PROVIDER = "chat_app.websocket.services.speech.stt.speechProvider"
+
 
 # ================================================================================
 # Staged Utterance Buffer Tests
@@ -199,6 +202,33 @@ class SpeechFlushTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.staged, ["before pause", "after resume"])
         self.assertEqual(client.streams, [b"before pause", b"after resume"])
 
+    # A stream past its age limit ends at a quiet moment, and the audio after it goes to a fresh stream
+    async def test_a_long_stream_hands_over_at_a_quiet_moment(self) -> None:
+        client = self.provider._client = FakeSpeechClient()
+        with patch(f"{STT_PROVIDER}.STT_ROTATE_AFTER_SEC", 0.2), patch(f"{STT_PROVIDER}.STT_ROTATE_QUIET_SEC", 0.0):
+            self.provider.send_audio(b"hello ")
+            await asyncio.sleep(0.4)
+            self.provider.send_audio(b"world")  # Sent past the limit, so the stream ends right after it
+            self.provider.send_audio(b"next")
+
+            self.provider.stop()
+            await self.provider.create_audio_barrier().wait(timeout=2)
+        self.assertEqual(client.streams, [b"hello world", b"next"])
+        self.assertEqual(self.staged,    ["hello world", "next"])
+
+    # A stream past its age limit keeps going while the user is mid-utterance (an interim came last)
+    async def test_a_long_stream_waits_for_the_user_to_finish(self) -> None:
+        client = self.provider._client = FakeSpeechClient()
+        with patch(f"{STT_PROVIDER}.STT_ROTATE_AFTER_SEC", 0.05), patch(f"{STT_PROVIDER}.STT_ROTATE_QUIET_SEC", 0.0):
+            self.provider.send_audio(b"hello ")
+            self.provider._last_result_final = False  # As an interim result leaves it
+            await asyncio.sleep(0.1)
+            self.provider.send_audio(b"world")
+
+            self.provider.stop()
+            await self.provider.create_audio_barrier().wait(timeout=2)
+        self.assertEqual(client.streams, [b"hello world"])
+
 
 class ReplyNowCoordinatorTests(unittest.IsolatedAsyncioTestCase):
     """
@@ -257,6 +287,86 @@ class ReplyNowCoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await ChatHandler.request_reply_now(consumer, barrier))
         flushed = next(event for event in consumer.events if event[0] == "flushed")
         self.assertLess(asyncio.get_running_loop().time() - flushed[1], 0.1)
+
+
+# ================================================================================
+# Paused Listening Tests
+# ================================================================================
+class PausedListeningTests(unittest.IsolatedAsyncioTestCase):
+    """
+    Google returns the last finals before a pause just after it. Those words wait
+    staged with no reply, which would go unheard, and are answered once listening
+    resumes.
+    """
+    # A paused chat whose replies record the words they answer instead of generating anything
+    def make_consumer(self, *, mode: str = "automatic") -> SimpleNamespace:
+        consumer = SimpleNamespace(
+            response_mode             = mode,
+            streaming_active          = False,
+            save_audio                = False,
+            use_backend_STT           = False,
+            use_backend_TTS           = False,
+            replies                   = [],
+            harness                   = NO_FEATURES,
+            stt_provider              = SimpleNamespace(start=Mock(), stop=Mock()),
+            audio_recorder            = SimpleNamespace(resume=Mock(), pause=Mock()),
+            send                      = AsyncMock(),
+            _broadcast_stream_status  = AsyncMock(),
+            _close_scheduled          = False,
+            _stage_lock               = asyncio.Lock(),
+            _staged_utterances        = StagedUtteranceBuffer(),
+            _stt_progress_revision    = 0,
+            _pending_response_task    = None,
+            _pending_response_trigger = None,
+            _reply_now_task           = None,
+            _manual_response_task     = None,
+        )
+        consumer.answer_staged = lambda: ChatHandler.answer_staged(consumer)
+
+        async def execute(consumer_: SimpleNamespace, trigger: str = "automatic") -> str:
+            snapshot = consumer_._staged_utterances.snapshot()
+            consumer_.replies.append([item.text for item in snapshot])
+            consumer_._staged_utterances.consume(snapshot)
+            return "reply"
+
+        execute_patch = patch.object(ChatHandler, "_execute_response", new=execute)
+        execute_patch.start()
+        self.addCleanup(execute_patch.stop)
+        return consumer
+
+    # Resume listening the way a client does
+    async def resume(self, consumer: SimpleNamespace) -> None:
+        ack = await dispatch_command(consumer, {"id": "resume", "name": "set_listening", "data": {"state": "active"}})
+        self.assertTrue(ack["ok"])
+        self.assertEqual(ack["state"]["listening"], "active")
+
+    # Words finalized while paused get no reply, and the resume answers them
+    async def test_words_finalized_while_paused_wait_for_the_resume(self) -> None:
+        consumer = self.make_consumer()
+        await ChatHandler.stage_and_schedule(consumer, "Gosh.", 0.0, None)
+        self.assertIsNone(consumer._pending_response_task)
+        self.assertEqual([item.text for item in consumer._staged_utterances], ["Gosh."])
+
+        await self.resume(consumer)
+        self.assertEqual(await consumer._pending_response_task, "reply")
+        self.assertEqual(consumer.replies, [["Gosh."]])
+
+    # The resume starts nothing in manual mode, with nothing staged, or while another reply owns it
+    async def test_the_resume_leaves_replies_that_are_not_its_to_start(self) -> None:
+        cases = {
+            "manual mode"   : ("manual",    "Gosh.", False),
+            "nothing staged": ("automatic", None,    False),
+            "a forced reply": ("automatic", "Gosh.", True ),
+        }
+        for name, (mode, text, forced) in cases.items():
+            with self.subTest(name):
+                consumer = self.make_consumer(mode=mode)
+                if text is not None: consumer._staged_utterances.append(text=text, words=None, timestamp=0.0)
+                if forced:           consumer._reply_now_task = asyncio.get_running_loop().create_future()
+
+                await self.resume(consumer)
+                self.assertIsNone(consumer._pending_response_task)
+                self.assertEqual(consumer.replies, [])
 
 
 # ================================================================================

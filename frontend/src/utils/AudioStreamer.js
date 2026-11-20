@@ -37,14 +37,31 @@ export default class AudioStreamer {
         this.worklet = null;
         this.stream  = null;
         this.running = false;
+
+        // A start still opening the microphone, and a stop asked for meanwhile
+        this.starting    = null;
+        this.stopPending = false;
     }
 
     // ================================================================================
     // Start Audio Streaming
     // ================================================================================
+    // Open the microphone once, even when a resume asks twice (the button, then `stream_status`)
     async start() {
+        // Already open, or still opening: wait for that start (a stop asked for meanwhile is taken back)
         if (this.running) return;
+        if (this.starting) { this.stopPending = false; return this.starting; }
 
+        // Open it, then apply a stop that came while it was opening
+        this.stopPending = false;
+        this.starting    = this._open();
+        try     { await this.starting; }
+        finally { this.starting = null; }
+        if (this.stopPending) { this.stopPending = false; this.stop(); }
+    }
+
+    // Request the microphone and route its frames through the worklet (a failure goes to `onError`)
+    async _open() {
         try {
             // Request the microphone and preferred output sample rate
             this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -76,6 +93,8 @@ export default class AudioStreamer {
     // Stop Audio Streaming
     // ================================================================================
     stop() {
+        // A stop while the microphone is still opening takes effect once it opens
+        if (this.starting) { this.stopPending = true; return; }
         if (!this.running) return;
         this.running = false;
 

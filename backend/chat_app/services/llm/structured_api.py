@@ -13,6 +13,12 @@ NOTE: A response that fails its schema's validation counts as a failed attempt.
       Instructor is left at its default of one try, so it never re-asks the
       model with the validation error inside an attempt.
 
+NOTE: The OpenAI client underneath never retries on its own (`max_retries=0`).
+      Its default retried timed-out and rate-limited requests without a log
+      line, and waited out a server's `retry-after`: 60 s for a 429 from the
+      hosted endpoint, in the middle of a live chat. Every attempt is now one of
+      this class's, and each failed one is logged.
+
 """
 from __future__ import annotations
 from   typing   import TypeVar
@@ -60,7 +66,7 @@ class StructuredAPI:
         self.max_retries     = max_retries
         self.retry_delay_sec = retry_delay_sec
         self.client          = instructor.from_openai(
-            AsyncOpenAI(base_url=LLM_URL, api_key=API_KEY, timeout=timeout_sec),
+            AsyncOpenAI(base_url=LLM_URL, api_key=API_KEY, timeout=timeout_sec, max_retries=0),  # Only `_request` retries (see the NOTE above)
             mode=instructor.Mode.JSON_SCHEMA,
         )
         logger.info(f"{LLM_MAIN}[LLM] {BOLD}{type(self).__name__}{UNBOLD} initialized. URL: {LLM_URL}, model: {BOLD}{self.model}{RESET}")
