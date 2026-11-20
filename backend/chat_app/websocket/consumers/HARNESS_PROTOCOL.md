@@ -10,7 +10,8 @@ can observe.
 
 > **Status:** the `map_task` and `cooperative_planning` chat types send setups, plans, and
 > task cards, and `speech_elicitation` sends setups and plans (their harnesses are in
-> `websocket/harnesses/`), every `audio_chunk` carries
+> `websocket/harnesses/`); all three send a `task_reveal` as the chat ends (the web app's chat
+> page doesn't show it yet), every `audio_chunk` carries
 > `sentence`, and `avatar_feedback` is logged. The web app's chat page runs them, and the
 > avatar demo page (`/avatar-demo`) plays the backend's part with example plans. The existing
 > pathway (`robot_action`, `CLIENT_PROTOCOL.md` §3.1) is unchanged, and every client and chat
@@ -33,6 +34,7 @@ client rejects any plan it can't run completely (§7).
 | `avatar_plan`     | backend → client | Steps that run in order on the client's clock (§3) |
 | `avatar_feedback` | client → backend | What happened to a plan, when the plan asks; rejections always (§6) |
 | `task_card`       | backend → client | The participant's task card: what they see beside the avatar (§13) |
+| `task_reveal`     | backend → client | The rest of the task, shown once the chat ends, just before the socket closes (§14) |
 
 **Who decides what:** the backend decides everything that *means* something; the client keeps
 what keeps the face alive, plus anything timed to its own audio.
@@ -439,6 +441,10 @@ pipeline only carries them.
 * **`avatar_feedback`** is checked and logged once per event
   (`consumers/processing/avatar_feedback.py`); a rejection is a warning, since it always means
   a bug or a name out of sync. Nothing waits on feedback, and it isn't stored yet.
+* **`task_reveal`** is the harness's `reveal_view()`. `ChatConsumer.end_chat` sends it just
+  before the socket closes, on either normal end: the client's `end_chat`, or a reply that ends
+  the chat (then just before `chat_ended`). A failure to build or send it is logged, and the
+  socket closes anyway.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Examples                                                                         -->
@@ -603,5 +609,82 @@ map, which differs in places, never goes to the participant's client.
     {"id": "castle", "label": "castle", "icon": "castle", "at": [0.40, 0.16], "radius": 0.04}
   ],
   "route": [[0.30, 0.66], [0.66, 0.60], [0.60, 0.44], [0.14, 0.22]]
+}}
+```
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- Task Reveal                                                                      -->
+<!-- -------------------------------------------------------------------------------- -->
+## 14. `task_reveal` -- the rest of the task, once the chat ends
+
+What the participant is shown once the chat is over: the parts of the task they couldn't see
+during it. The backend sends one just before it closes the socket, on either normal end: the
+client's `end_chat` (`CLIENT_PROTOCOL.md` §2.4), or a reply that ends the chat (then just
+before `chat_ended`). A client that wants it waits for the backend's close after sending
+`end_chat`, rather than closing the socket itself; a dropped connection gets none. `kind` says
+which chat type's reveal it is, and the rest of `data` depends on it. A client that can't show
+a kind ignores it.
+
+**`map_task`:** the avatar's map, in the same form as the participant's map in their
+`task_card` (§13): its paper, every landmark on it, and its start, plus the path the avatar
+took (every committed waypoint, from the start). A landmark has the same `id` on both maps, so
+a client can compare them: a landmark can be on only one map, or sit somewhere else or go by
+another name on the avatar's.
+
+```json
+{"type": "task_reveal", "data": {
+  "kind": "map_task",
+  "shape": "landscape",
+  "landmarks": [
+    {"id": "bridge", "label": "bridge", "icon": "bridge", "at": [0.14, 0.14], "radius": 0.04},
+    {"id": "lake",   "label": "lake",   "icon": "lake",   "at": [0.84, 0.16], "radius": 0.07},
+    {"id": "tree",   "label": "tree",   "icon": "tree",   "at": [0.48, 0.88], "radius": 0.04}
+  ],
+  "start": [0.30, 0.66],
+  "path": [[0.30, 0.66], [0.66, 0.66], [0.60, 0.40]]
+}}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `shape`, `landmarks` | | As in the participant's `task_card` (§13), for the avatar's map |
+| `start` | `[x, y]` | Where the avatar started (the route's first point) |
+| `path` | array of `[x, y]` | Every committed waypoint, in order, from the start |
+
+**`cooperative_planning`:** the avatar's brief and private constraints, each marked if the
+avatar mentioned it during the chat. Both are worded to the avatar, as the participant's card is
+worded to them.
+
+```json
+{"type": "task_reveal", "data": {
+  "kind": "cooperative_planning",
+  "brief": "You are planning a dinner party together with the user, a friend of yours. The two of you are hosting it.",
+  "constraints": [
+    {"text": "Your oven is broken.",                              "mentioned": true },
+    {"text": "One of the guests doesn't like spicy food.",        "mentioned": false},
+    {"text": "You'd like a dessert you can make the day before.", "mentioned": true }
+  ]
+}}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `brief` | string | Who the avatar is and the situation, worded to it (it calls the participant "the user") |
+| `constraints[].text` | string | One of the avatar's constraints, in order |
+| `constraints[].mentioned` | boolean | The avatar brought it up during the chat |
+
+**`speech_elicitation`:** every thread the conversation followed, in order. The topic's
+opening question starts the first, and each reply that took a new angle starts another (its
+words are the thread's `question`). `replies` lists what each reply on the thread did after
+that, in order: `follow_up`, `share`, `challenge`, `wind_down` (the participant said they
+wanted to stop), or `fallback` (the reply call failed, and the avatar asked them to say more).
+
+```json
+{"type": "task_reveal", "data": {
+  "kind": "speech_elicitation",
+  "threads": [
+    {"question": "Hi! I've got a fun one for us today. Are you a cat person, a dog person, or a plant person?", "replies": ["follow_up", "share", "follow_up"]},
+    {"question": "Fair enough! So what's the funniest thing a pet of yours has ever done?",                   "replies": ["follow_up"]}
+  ]
 }}
 ```

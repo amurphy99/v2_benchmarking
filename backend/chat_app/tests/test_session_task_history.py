@@ -19,6 +19,7 @@ from chat_app.services.db_services                               import ChatServ
 from chat_app.websocket.harnesses.cooperative_planning.harness    import PLANNING_SCENARIOS
 from chat_app.websocket.harnesses.cooperative_planning.plan_state import initial_state, planning_history
 from chat_app.websocket.harnesses.map_task.harness                import MapTaskHarness, MapTaskState
+from chat_app.websocket.harnesses.speech_elicitation.topics       import ELICITATION_TOPICS
 
 
 # ================================================================================
@@ -56,13 +57,13 @@ class SessionTaskHistoryTests(TestCase):
         self.client.force_authenticate(user=self.owner)
         self.assertNotIn("task_snapshot", self.client.get(reverse("chatsession", kwargs={"sessionid": self.session.id})).data)
 
-    # Older maps expose current materials with an explicit unknown path
+    # Older sessions expose current materials with explicitly unknown results
     def test_legacy_materials_do_not_invent_results(self) -> None:
-        # Map Task: current maps, no path
+        # Map Task: current maps, no path or replies
         self.client.force_authenticate(user=self.staff)
         data = self.client.get(self.url).data
         self.assertFalse(data["recorded"])
-        self.assertIsNone(data["view"]["path"])
+        self.assertEqual((data["view"]["path"], data["view"]["replies"]), (None, None))
         self.assertIn("giver", data["view"])
 
         # Cooperative Planning: current scenario, no stage or decisions
@@ -73,6 +74,13 @@ class SessionTaskHistoryTests(TestCase):
         self.assertIsNone(view["stage"])
         self.assertTrue(all(item["state"] is None for item in view["items"]))
         self.assertTrue(view["avatar_constraints"])
+
+        # Speech elicitation: the current topic, no threads
+        self.session.chat_type = "speech_elicitation"
+        self.session.variant   = "pet_person"
+        self.session.save()
+        view = self.client.get(self.url).data["view"]
+        self.assertEqual((view["kind"], view["opening"], view["threads"]), ("speech_elicitation", ELICITATION_TOPICS["pet_person"].opening, None))
 
     # Archived materials take precedence over later map-file edits
     def test_snapshot_is_saved_with_the_exchange_and_returned_unchanged(self) -> None:

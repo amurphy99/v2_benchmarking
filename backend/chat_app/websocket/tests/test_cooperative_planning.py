@@ -23,7 +23,7 @@ from chat_app.websocket.harnesses.cooperative_planning.behaviors       import PL
 from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, PlanningBackchannels, QuietNudge
 from chat_app.websocket.harnesses.cooperative_planning.harness         import MSG_SAY_AGAIN, PLANNING_SCENARIOS, PlanningOutcome
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
-from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, apply_changes, card_frame, initial_state
+from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, Suggestion, apply_changes, card_frame, initial_state, planning_history, planning_reveal
 from chat_app.websocket.harnesses.cooperative_planning.planning_api    import PlanningAPIError
 from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, plan_block
 from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
@@ -221,6 +221,46 @@ class PlanRuleTests(unittest.TestCase):
         ])
         self.assertEqual((state.user_avoids, state.revealed), (("fish",), ("broken_oven",)))
         self.assertEqual([result.refused for result in results], ["", "already noted", "", "already mentioned"])
+
+
+# ================================================================================
+# History and the Reveal
+# ================================================================================
+class HistoryTests(unittest.TestCase):
+    """
+    The completed-session history says who suggested what, and the participant's
+    client is shown the avatar's side once the chat ends.
+    """
+    # The side that first put a choice forward is kept once it is agreed or turned down
+    def test_the_history_says_who_suggested_each_choice(self) -> None:
+        state, _ = apply_changes(initial_state(SCENARIO), [
+            ("avatar", avatar_change(op="suggest",       item="starter", choice="Breadsticks")),
+            ("user",   user_change  (op="ask_to_settle", item="starter", choice="breadsticks")),
+            ("avatar", avatar_change(op="accept",        item="starter")),
+            ("user",   user_change  (op="suggest",       item="main",    choice="salmon")),
+            ("avatar", avatar_change(op="reject",        item="main",    choice="salmon", reason="the oven is broken")),
+            ("avatar", avatar_change(op="reject",        item="main",    choice="roast",  reason="too much work")),
+        ])
+        self.assertEqual(state.items["starter"].put_forward, (Suggestion("Breadsticks", "avatar"),))
+
+        # A choice turned down before either side suggested it has no suggester
+        items = {item["id"]: item["state"] for item in planning_history(SCENARIO, state)["items"]}
+        self.assertEqual((items["starter"]["agreed"], items["starter"]["suggested_by"]), ("breadsticks", "avatar"))
+        self.assertEqual(items["main"]["put_forward"], [{"choice": "salmon", "by": "user"}])
+        self.assertEqual(items["main"]["refused"], [
+            {"choice": "salmon", "by": "avatar", "reason": "the oven is broken", "suggested_by": "user"},
+            {"choice": "roast",  "by": "avatar", "reason": "too much work",      "suggested_by": None  },
+        ])
+
+    # The history lists the avatar's constraints it mentioned, in order, and the reveal marks them
+    def test_the_avatars_mentioned_constraints_are_kept_and_revealed(self) -> None:
+        state, _ = apply_changes(initial_state(SCENARIO), [("avatar", avatar_change(op="reveal", constraint="make_ahead")), ("avatar", avatar_change(op="reveal", constraint="broken_oven"))])
+        texts    = {constraint.id: constraint.text for constraint in SCENARIO.avatar.constraints}
+        self.assertEqual(planning_history(SCENARIO, state)["avatar_mentioned"], [texts["make_ahead"], texts["broken_oven"]])
+
+        reveal = planning_reveal(SCENARIO, state)
+        self.assertEqual((reveal["kind"], reveal["brief"]), ("cooperative_planning", SCENARIO.avatar.brief))
+        self.assertEqual(reveal["constraints"], [{"text": texts[constraint_id], "mentioned": constraint_id != "no_spicy"} for constraint_id in SCENARIO.avatar_constraint_ids])
 
 
 # ================================================================================

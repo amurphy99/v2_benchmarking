@@ -7,8 +7,10 @@ The user is the instruction giver and the avatar is the follower. Each turn is
 read in code against the avatar's map (`understanding.py`), the pipeline its
 route picks writes the reply (`pipelines.py`), and the move that reply carries
 is applied in code (`geometry.py`). The new position takes effect only once the
-reply is saved, so a reply cut off by newer speech never moves the avatar. See
-this directory's README for the map files and the turn flow.
+reply is saved, so a reply cut off by newer speech never moves the avatar. Each
+saved reply is also recorded for the task history: the kind of turn it answered,
+what it did, and how far it moved. See this directory's README for the map files
+and the turn flow.
 
 Every reply to finished speech goes through the reply gate
 (`features/reply_gate/`), which holds it while the user seems mid-direction, or
@@ -21,11 +23,12 @@ each reply, every reply carries an avatar plan showing what it did on the map
 (`behaviors.py`), and the cues run (`cues.py`, and the shared `BackToListening`),
 including signs of listening at the user's pauses. With `no_cues` no plan is
 sent and the avatar only idles. Admin listeners get both maps and the avatar's
-path (`monitor_view`).
+path (`monitor_view`), and once the chat ends the participant's client is shown
+the avatar's map and the path it took (`reveal_view`).
 
 """
 from __future__  import annotations
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools   import partial
 from typing      import TYPE_CHECKING
 
@@ -52,8 +55,9 @@ from    .understanding               import TurnReading, read_turn
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
-    from  ..base                import MonitorView
-    from   .response_models     import Move
+    from  ..base                import MonitorView, RevealView
+    from   .response_models     import FollowerAct, Move
+    from   .understanding       import Route
 
 # Maps a client can pick with `variant` (each one is `maps/<variant>.json`; the HCRC ones are the corpus's maps 1-4)
 MAP_TASK_VARIANTS = ("demo", "hcrc_1", "hcrc_2", "hcrc_3", "hcrc_4")
@@ -65,11 +69,19 @@ MAP_TASK_MAPS = {variant: load_map(variant) for variant in MAP_TASK_VARIANTS}
 MSG_SAY_AGAIN = "Sorry, could you say that again?"
 
 
-# Where the avatar is on its map, and every committed waypoint
+# One saved reply, for the task history: the kind of turn it answered, what it did, and how far it moved
+@dataclass(frozen=True, slots=True)
+class MapTaskReply:
+    route     : Route        # Which kind of turn the user's words were read as
+    act       : FollowerAct  # What the reply did
+    waypoints : int          # Waypoints its move added to the path (0 when the avatar stayed put)
+
+# Where the avatar is on its map, every committed waypoint, and every saved reply
 @dataclass(frozen=True, slots=True)
 class MapTaskState:
-    position : Point              # Where the avatar is now
-    path     : tuple[Point, ...]  # Every committed waypoint, from the start
+    position : Point                          # Where the avatar is now
+    path     : tuple[Point,        ...]       # Every committed waypoint, from the start
+    replies  : tuple[MapTaskReply, ...] = ()  # Every saved reply, in order
 
 
 # ================================================================================
@@ -84,7 +96,7 @@ class MapTaskHarness(ChatHarness):
     # The chat starts with the user's first direction, not an opener line
     CONTEXT_OPENER = None
 
-    # Where the avatar is (each saved reply that moves it replaces this)
+    # Where the avatar is, and the replies so far (each saved reply replaces this)
     state : MapTaskState
 
     # --------------------------------------------------------------------------------
@@ -150,10 +162,14 @@ class MapTaskHarness(ChatHarness):
     def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
         return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), ())
 
-    # Propose the full path, including loops that return to their starting point
+    # Propose the full path, including loops that return to their starting point, with the reply added to the record
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...]) -> ResponseOutcome:
         plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path) if self.with_cues else None
-        state = MapTaskState(position=path[-1], path=(*self.state.path, *path)) if path else None
+        state = MapTaskState(
+            position = path[-1] if path else self.state.position,
+            path     = (*self.state.path, *path),
+            replies  = (*self.state.replies, MapTaskReply(route=reading.route, act=reply.act, waypoints=len(path))),
+        )
         return ResponseOutcome(message=reply.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
 
     # Resolve a move to its actual waypoints, removing only consecutive repeated points
@@ -174,13 +190,13 @@ class MapTaskHarness(ChatHarness):
         return tuple(path)
 
     # --------------------------------------------------------------------------------
-    # Monitoring
+    # Task Views
     # --------------------------------------------------------------------------------
-    # The admin listener's view: both maps, the avatar's spot, and every committed waypoint
+    # The admin listener's view: both maps, the avatar's spot, every committed waypoint, and every saved reply
     def monitor_view(self) -> MonitorView:
         return self.history_view()
 
-    # Freeze both maps and the proposed or current path for later review
+    # Freeze both maps, the proposed or current path, and the replies for later review
     def history_view(self, state: MapTaskState | None = None) -> dict[str, object]:
         saved = self.state if (state is None) else state
         return {
@@ -189,7 +205,12 @@ class MapTaskHarness(ChatHarness):
             "follower" : follower_view(self.task_map),
             "position" : list(saved.position),
             "path"     : [list(point) for point in saved.path],
+            "replies"  : [asdict(reply) for reply in saved.replies],
         }
+
+    # What the participant is shown once the chat ends: the avatar's map, and the path it took
+    def reveal_view(self) -> RevealView:
+        return {"kind": "map_task", **follower_view(self.task_map), "path": [list(point) for point in self.state.path]}
 
 
 # --------------------------------------------------------------------------------

@@ -381,11 +381,11 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.harness.monitor_view()["path"], [list(point) for point in expected])
         self.assertEqual(self.harness.state.position, DEMO_START)
 
-    # A path that never leaves the current spot has no movement effect
-    async def test_a_stationary_path_proposes_no_state(self) -> None:
+    # A path that never leaves the current spot moves nothing (the reply is still recorded, with no waypoints)
+    async def test_a_stationary_path_moves_nothing(self) -> None:
         self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_START, DEMO_START]), message="I'm there.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Stay there"))
-        self.assertIsNone(outcome.state)
+        self.assertEqual((outcome.state.position, outcome.state.path, outcome.state.replies[-1].waypoints), (DEMO_START, (DEMO_START,), 0))
         self.assertNotIn("trace", outcome.avatar_plan["steps"][0]["gaze"])
 
     # A landmark destination reaches its edge instead of its center
@@ -395,22 +395,22 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(outcome.state.position[0], 0.70)
         self.assertAlmostEqual(outcome.state.position[1], 0.66)
 
-    # A question about the map is answered from a draft, locking onto the landmark, and a reply that stays proposes no new state
+    # A question about the map is answered from a draft, locking onto the landmark, and the avatar stays where it is
     async def test_a_simple_question_stays_put(self) -> None:
         self.api.check_draft.return_value = DraftCheck(ok=True)
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Do you have a bus?"))
-        self.assertEqual((outcome.message, outcome.state), ("Yes, I have the bus, a long way to my right.", None))
+        self.assertEqual((outcome.message, outcome.state.path), ("Yes, I have the bus, a long way to my right.", (DEMO_START,)))
         self.assertEqual(outcome.avatar_plan["steps"][0]["gaze"]["at"], [0.74, 0.66])
         self.assertEqual(outcome.avatar_plan["steps"][1]["face"]["name"], "Wide-Eyed")
         self.api.follow.assert_not_awaited()
 
     # A move that ends where the avatar already is changes nothing (no new stop on its path)
-    async def test_a_move_to_where_it_is_proposes_nothing(self) -> None:
+    async def test_a_move_to_where_it_is_adds_no_stop(self) -> None:
         bridge = DEMO_MAP.landmarks["bridge"].at
         self.harness.state = MapTaskState(position=bridge, path=(DEMO_START, bridge))
         self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=ToLandmark(kind="to_landmark", landmark="bridge", side="at"), message="I'm there.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go to the bridge"))
-        self.assertIsNone(outcome.state)
+        self.assertEqual((outcome.state.position, outcome.state.path), (bridge, (DEMO_START, bridge)))
         self.assertNotIn("trace", outcome.avatar_plan["steps"][0]["gaze"])
 
     # A landmark it doesn't have: a search while thinking, then a last sweep and a head shake
@@ -427,7 +427,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_failed_call_asks_again_without_moving(self) -> None:
         self.api.follow.side_effect = MapTaskAPIError("Map Task follow failed after all attempts")
         with self.assertLogs(HARNESS_LOGGER, level="ERROR"): outcome = await self.harness.generate(self.attempt("Go right a bit"))
-        self.assertEqual((outcome.message, outcome.state), (MSG_SAY_AGAIN, None))
+        self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (MSG_SAY_AGAIN, (DEMO_START,), "clarify"))
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
 
     # A likely misheard landmark name gets the reply check's question instead: no move, and a puzzled look as it asks
@@ -436,8 +436,26 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         verdict  = {"next_step": "clarify", "misheard": "the bolder", "message": question}
         self.check.check.return_value = check_model(tuple(MAP_TASK_SOUNDS), MapTaskBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
         with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go round the bolder"))
-        self.assertEqual((outcome.message, outcome.state), (question, None))
+        self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (question, (DEMO_START,), "clarify"))
         self.assertEqual(outcome.avatar_plan["steps"][-1]["face"]["name"], "Face with Raised Eyebrow")
+
+    # Each saved reply joins the task history: the kind of turn it answered, what it did, and the waypoints it added
+    async def test_each_saved_reply_is_recorded_in_the_history(self) -> None:
+        self.api.follow.return_value      = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
+        self.api.check_draft.return_value = DraftCheck(ok=True)
+        for text in ("Go to the left of the bus", "Do you have a bus?"):
+            with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt(text))
+            self.harness.on_reply_saved(outcome)
+        await asyncio.sleep(0)
+
+        expected = [{"route": "instruction", "act": "acknowledge", "waypoints": 1}, {"route": "simple_question", "act": "answer", "waypoints": 0}]
+        self.assertEqual(self.harness.history_view()["replies"], expected)
+        self.assertEqual(outcome.task_snapshot["replies"], expected)
+
+    # Once the chat ends, the participant is shown the avatar's map and the path it took
+    def test_the_reveal_shows_the_avatars_map_and_its_path(self) -> None:
+        self.harness.state = MapTaskState(position=(0.4, 0.5), path=(DEMO_START, (0.4, 0.5)))
+        self.assertEqual(self.harness.reveal_view(), {"kind": "map_task", **follower_view(DEMO_MAP), "path": [list(DEMO_START), [0.4, 0.5]]})
 
     # Both checks run with cues, the misheard one knowing every landmark name on either map; neither runs without cues
     def test_the_reply_gate_checks_only_with_cues(self) -> None:
@@ -525,7 +543,7 @@ class MapTaskMonitorTests(unittest.IsolatedAsyncioTestCase):
 
         channel, event = consumer.channel_layer.send.await_args.args
         self.assertEqual((channel, event["type"]), ("listener-1", "ws.task_monitor"))
-        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)]})
+        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)], "replies": []})
 
     # A chat type without a view sends nothing
     async def test_a_chat_type_without_a_view_sends_nothing(self) -> None:

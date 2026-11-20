@@ -6,13 +6,15 @@ The speech elicitation chat type: one light question, then keep them talking.
 The avatar opens with the topic's question (`topics.py`), and every reply after
 it reacts to what the user said and ends with a question of its own, so the turn
 always goes back to them (`prompts.py`; the response schema refuses a reply that
-doesn't). Each answer opens a thread, and the state counts how far the current
-one has gone, so the reply digs into it before moving on. Code tells the reply
-when the conversation is flagging: after short answers, or when the user has
-gone quiet (`QuietPrompt`, in both conditions). There is nothing to finish: the
-participant ends the chat from the client when they feel done. When they say so
-out loud, the avatar thanks them, asks nothing, and stops speaking up after
-silences.
+doesn't). The opening question starts a thread, and so does each reply that
+takes a new angle. The state keeps every thread with what each reply on it did,
+so the reply digs into the current one before moving on, and the task history
+and the participant's end view can list them (`reveal_view`). Code tells the
+reply when the conversation is flagging: after short answers, or when the user
+has gone quiet (`QuietPrompt`, in both conditions). There is nothing to finish:
+the participant ends the chat from the client when they feel done. When they
+say so out loud, the avatar thanks them, asks nothing, and stops speaking up
+after silences.
 
 Every reply to finished speech goes through the reply gate
 (`features/reply_gate/`), which holds it while the user seems mid-thought, or
@@ -30,8 +32,8 @@ say more.
 
 """
 from __future__  import annotations
-from dataclasses import dataclass
-from typing      import TYPE_CHECKING
+from dataclasses import dataclass, replace
+from typing      import Literal, TYPE_CHECKING
 
 import logging, time
 logger = logging.getLogger(__name__)
@@ -52,19 +54,39 @@ from    .topics                      import ELICITATION_TOPICS, ELICITATION_VARI
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
+    from  ..base                import RevealView
     from   .prompts             import Directive
     from   .response_models     import Behavior, ElicitationTurn, ReplyMove
+    from   .topics              import Topic
 
 # What the avatar says when no reply could be made (it still hands the turn back with a question)
 MSG_SAY_MORE = "Sorry, I lost my train of thought for a second. Could you tell me a little more about that?"
 
+# What one reply on a thread did: its move (a new angle starts the next thread instead), or `fallback` for the scripted line
+ThreadReply = Literal["follow_up", "share", "challenge", "wind_down", "fallback"]
 
-# Where the conversation stands: how far the current thread has gone, and whether the user wants to stop
+
+# --------------------------------------------------------------------------------
+# Conversation State
+# --------------------------------------------------------------------------------
+# One thread: the question that opened it, and what each reply on it did
+@dataclass(frozen=True, slots=True)
+class Thread:
+    question : str                           # The topic's opening question, or the reply that took a new angle
+    replies  : tuple[ThreadReply, ...] = ()  # Each saved reply on it after that, in order
+
+# Where the conversation stands: every thread so far, whether the user wants to stop, and how it is flagging
 @dataclass(frozen=True, slots=True)
 class ElicitationState:
-    wound_down    : bool = False  # The user has said they want to stop (the avatar stops speaking up after silences)
-    follow_ups    : int  = 0      # Replies on the current thread (the opening question and each new angle start one)
-    short_answers : int  = 0      # The user's short answers in a row
+    threads        : tuple[Thread, ...] = ()     # Every thread so far, the current one last
+    wound_down     : bool               = False  # The user has said they want to stop (the avatar stops speaking up after silences)
+    short_answers  : int                = 0      # The user's short answers in a row
+    clarifications : int                = 0      # Questions about a likely misheard word (they leave the thread where it was)
+
+    # Replies on the current thread so far
+    @property
+    def follow_ups(self) -> int:
+        return len(self.threads[-1].replies) if self.threads else 0
 
 
 # One reply, with what it decided beyond the base outcome (for the logs and the notebook view)
@@ -120,7 +142,7 @@ class SpeechElicitationHarness(ChatHarness):
     # Open with the topic's question, then answer each turn through the reply gate
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome:
         # Scripted opening question (it starts the first thread)
-        if not attempt.context: return self._outcome(self.topic.opening, "smile", ElicitationState())
+        if not attempt.context: return self._outcome(self.topic.opening, "smile", ElicitationState(threads=(Thread(question=self.topic.opening),)))
 
         # The reply waits while the user seems mid-thought, or gives way to a question about a misheard word
         return await self.reply_gate.run(attempt, self._reply, self._clarify)
@@ -140,29 +162,73 @@ class SpeechElicitationHarness(ChatHarness):
         try: turn = await get_elicitation_api().reply(self.topic, prepare_LLM_messages(attempt.context), directive, angles)
         except ElicitationAPIError:
             logger.exception(f"{LLM_MAIN}[Elicitation] The reply call failed; asking the user to say more.{RESET}")
-            return self._outcome(MSG_SAY_MORE, "curious", _next_state(self.state, directive, "follow_up"))
+            return self._outcome(MSG_SAY_MORE, "curious", _next_state(self.state, directive, "fallback", MSG_SAY_MORE))
 
         _log_turn(turn, directive, angles, time.monotonic() - started)
-        return self._outcome(turn.message, turn.behavior, _next_state(self.state, directive, turn.move))
+        return self._outcome(turn.message, turn.behavior, _next_state(self.state, directive, turn.move, turn.message))
 
     # Ask about a word the reply check thinks was misheard (the thread stays where it was)
     def _clarify(self, message: str) -> ElicitationOutcome:
-        return self._outcome(message, "curious", self.state)
+        return self._outcome(message, "curious", replace(self.state, clarifications=self.state.clarifications + 1))
 
-    # The outcome for a reply: the state it leaves, and its avatar plan (with cues)
+    # The outcome for a reply: the state it leaves (saved with it), and its avatar plan (with cues)
     def _outcome(self, message: str, behavior: Behavior, state: ElicitationState) -> ElicitationOutcome:
         plan = reply_plan(self.turn_number, behavior) if self.with_cues else None
-        return ElicitationOutcome(message=message, state=state, avatar_plan=plan, behavior=behavior)
+        return ElicitationOutcome(message=message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state), behavior=behavior)
+
+    # --------------------------------------------------------------------------------
+    # Task Views
+    # --------------------------------------------------------------------------------
+    # Freeze the topic and every thread so far (or the ones a reply proposes) for later review
+    def history_view(self, state: ElicitationState | None = None) -> dict[str, object]:
+        return elicitation_history(self.topic, self.state if (state is None) else state)
+
+    # What the participant is shown once the chat ends: every thread, and the replies it got
+    def reveal_view(self) -> RevealView:
+        return {"kind": "speech_elicitation", "threads": [_thread_view(thread) for thread in self.state.threads]}
 
 
-# The conversation once a reply is saved: a new angle starts a fresh thread, and short answers add up until a longer one
-def _next_state(state: ElicitationState, directive: Directive | None, move: ReplyMove) -> ElicitationState:
-    if move == "new_angle": return ElicitationState()
+# --------------------------------------------------------------------------------
+# State Changes and History
+# --------------------------------------------------------------------------------
+# The conversation once a reply is saved: a new angle starts a thread, and short answers add up until a longer one
+def _next_state(
+    state     : ElicitationState,                 # Where the conversation stood before the reply
+    directive : Directive | None,                 # What code asked of the reply
+    move      : ReplyMove | Literal["fallback"],  # What the reply did (`fallback` for the scripted line)
+    message   : str,                              # What the avatar said (a new angle's question opens its thread)
+) -> ElicitationState:
+    # A new angle starts a thread, and so does a reply while none is open (the opening question never went out)
+    if (move == "new_angle") or (not state.threads): return replace(state, threads=(*state.threads, Thread(question=message)), wound_down=(move == "wind_down"), short_answers=0)
+
+    # Short answers add up (a silence leaves the count as it was)
     if   directive == "quiet":                        short_answers = state.short_answers
     elif directive in ("short_answer", "thread_dry"): short_answers = state.short_answers + 1
     else:                                             short_answers = 0
-    return ElicitationState(wound_down=(move == "wind_down"), follow_ups=(state.follow_ups + 1), short_answers=short_answers)
 
+    # The reply joins the current thread
+    current = replace(state.threads[-1], replies=(*state.threads[-1].replies, move))
+    return replace(state, threads=(*state.threads[:-1], current), wound_down=(move == "wind_down"), short_answers=short_answers)
+
+# Preserve the topic and every thread for completed-session history; None means an older unsaved state
+def elicitation_history(topic: Topic, state: ElicitationState | None) -> dict[str, object]:
+    return {
+        "kind"           : "speech_elicitation",
+        "opening"        : topic.opening,
+        "angles"         : list(topic.angles),
+        "threads"        : None if (state is None) else [_thread_view(thread) for thread in state.threads],
+        "clarifications" : None if (state is None) else state.clarifications,
+        "wound_down"     : None if (state is None) else state.wound_down,
+    }
+
+# One thread as the history and the reveal carry it
+def _thread_view(thread: Thread) -> dict[str, object]:
+    return {"question": thread.question, "replies": list(thread.replies)}
+
+
+# --------------------------------------------------------------------------------
+# Log a Turn
+# --------------------------------------------------------------------------------
 # Log the time taken, what code asked of the reply, and what the reply decided
 def _log_turn(
     turn        : ElicitationTurn,   # The reply call's response

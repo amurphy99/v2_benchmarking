@@ -16,6 +16,8 @@ from ..websocket.harnesses.cooperative_planning.harness    import PLANNING_SCENA
 from ..websocket.harnesses.cooperative_planning.plan_state import planning_history
 from ..websocket.harnesses.map_task.harness                import MAP_TASK_MAPS
 from ..websocket.harnesses.map_task.maps                   import follower_view, giver_view
+from ..websocket.harnesses.speech_elicitation.harness      import elicitation_history
+from ..websocket.harnesses.speech_elicitation.topics       import ELICITATION_TOPICS
 
 if TYPE_CHECKING: from ..models import ChatSession
 
@@ -31,7 +33,9 @@ def session_task_history(session: ChatSession) -> dict[str, object]:
     view = None
     if (session.chat_type == "map_task") and (session.variant in MAP_TASK_MAPS):
         task_map = MAP_TASK_MAPS[session.variant]
-        view = {"kind": "map_task", "giver": giver_view(task_map), "follower": follower_view(task_map), "path": None, "position": None}
+        view = {"kind": "map_task", "giver": giver_view(task_map), "follower": follower_view(task_map), "path": None, "position": None, "replies": None}
     elif (session.chat_type == "cooperative_planning") and (session.variant in PLANNING_SCENARIOS):
         view = planning_history(PLANNING_SCENARIOS[session.variant], None)
+    elif (session.chat_type == "speech_elicitation") and (session.variant in ELICITATION_TOPICS):
+        view = elicitation_history(ELICITATION_TOPICS[session.variant], None)
     return {"recorded": False, "view": view}

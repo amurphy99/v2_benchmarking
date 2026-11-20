@@ -68,7 +68,9 @@ avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
 participant their task materials (`task_card`). With cues, all three give signs of
 listening at the user's pauses and check each reply before it goes out (Shared
 features, below). The others send `robot_action` moods. `map_task` also gives the admin
-live chat page a view of its state (Monitoring, below).
+live chat page a view of its state (Monitoring, below), and all three show the participant
+something once the chat ends: the avatar's side of the task, or the threads it followed
+(The end of a chat, below).
 
 ```diff
 +harnesses/
@@ -166,6 +168,7 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `turn_number` | Reply attempts so far, counted in `on_reply_started` (avatar plans carry it as their `turn`) |
 | `history_view()` | Private task materials and current state for the initial session snapshot; `None` for chat types without archived materials |
 | `monitor_view()` | What the admin listener's task panel shows about this chat now; `None` (the default) for a chat type without one (Monitoring, below) |
+| `reveal_view()` | What the participant's client is shown about the task once the chat ends (`task_reveal`); `None` (the default) for a chat type with nothing to show (The end of a chat, below) |
 | `on_interim`, `on_final`, `on_reply_started`, `on_reply_cancelled`, `on_playback` | Turn events (next section), passed on to each cue |
 
 `generate` runs inside the reply attempt. When newer speech arrives, any reply but
@@ -188,8 +191,8 @@ for a plan-driven chat type).
 
 `ResponseOutcome` carries `message`, `state` (entered in `on_reply_saved`),
 `task_snapshot` (private materials and proposed state, saved in the same transaction as the reply),
-`pause_listening`, `close_after` (send `chat_ended` and close once the reply has
-gone out), and `avatar_plan`: a plan sent just before the reply's `llm_response`, so
+`pause_listening`, `close_after` (end the chat once the reply has gone out: The end of
+a chat, below), and `avatar_plan`: a plan sent just before the reply's `llm_response`, so
 its reply moments mean this reply (`consumers/HARNESS_PROTOCOL.md` §4.1). A harness
 may return a subclass of `ResponseOutcome` that carries more for its own
 `on_reply_saved` (the planning harness's `PlanningOutcome`).
@@ -365,8 +368,34 @@ listener alone). The admin live chat page shows each kind it knows in its own ta
 (`frontend/src/pages/admin/components/LiveSidePanel.tsx`). Only the listeners get
 it: the participant's client never sees it.
 
-The Map Task's view is both maps, where the avatar is, and every spot it has
-stopped at (`map_task/harness.py`, and its README).
+The Map Task's view is both maps, where the avatar is, every spot it has
+stopped at, and each saved reply (`map_task/harness.py`, and its README).
+
+<br>
+
+<!-- -------------------------------------------------------------------------------- -->
+<!-- The End of a Chat                                                                -->
+<!-- -------------------------------------------------------------------------------- -->
+## The end of a chat
+
+A chat ends normally in one of two ways: the client sends `end_chat`, or a reply's
+`close_after` ends it once the reply has gone out. Both go through
+`ChatConsumer.end_chat`, which sends the harness's `reveal_view()` (when it returns one) as a
+`task_reveal` frame, then `chat_ended` after a `close_after` reply, then closes the socket
+with code `1000`; `disconnect` does the rest. A failure to build or send those frames is
+logged, and the socket still closes.
+
+The reveal is what the participant is shown once the chat is over, so their page can keep the
+task on screen and fill in what they couldn't see (`consumers/HARNESS_PROTOCOL.md` §14):
+
+| Chat type | Its reveal |
+|---|---|
+| `map_task` | The avatar's map, and the path it took |
+| `cooperative_planning` | The avatar's brief and constraints, each marked if it mentioned it |
+| `speech_elicitation` | Every thread: the question that opened it, and what each reply on it did |
+
+It goes only to the participant's own client, and only as the chat ends. The completed task
+history (below) stays private to staff and linked caregivers.
 
 <br>
 
@@ -424,12 +453,19 @@ snapshot in `ResponseOutcome.task_snapshot`. Saving the exchange also saves that
 so a failed commit or cancelled generation cannot archive an uncommitted decision or move.
 The planning harness also awaits a snapshot write when `reply_then_track` finishes tracking.
 
-Map Task snapshots include both maps and the follower's full path. Planning snapshots include
-the scenario, both sides' constraints, agreements, pending choices, suggestions, refusals,
-and approval stage. This is the final state, not a replayable sequence of task events.
+Map Task snapshots include both maps, the follower's full path, and each saved reply: the
+kind of turn it answered (`route`), what it did (`act`), and the waypoints it added. Planning
+snapshots include the scenario, both sides' constraints, agreements (with the side that first
+suggested each), pending choices, suggestions, refusals (with who suggested each), every
+choice either side put forward, the avatar's constraints it mentioned, and the approval stage.
+Speech elicitation snapshots include the topic (its opening question and fresh angles), every
+thread with what each reply on it did, how many questions asked about a misheard word, and
+whether the participant said they wanted to stop. This is the final state, not a replayable
+sequence of task events.
 
 Staff and linked caregivers read `/api/chatsession/<id>/task-history/`; participants cannot
 read this private view, and it is not in the ordinary session serializer. The response is
 `{recorded, view}`. When `recorded` is false, an older session may identify the current
-materials for its registered variant, but its path and decisions remain unknown. The admin
-history page labels these as current materials, never as an archived outcome.
+materials for its registered variant, but its results (path and replies, decisions, or
+threads) remain unknown. The admin history page labels these as current materials, never as
+an archived outcome. Fields added to a snapshot later are absent from the ones saved before.

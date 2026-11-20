@@ -17,10 +17,14 @@ and `apply_changes` makes only the ones these rules allow:
 
 A change the rules don't allow is kept with the reason it was refused, for the
 turn's log and the notebook view. Choices match ignoring case and extra spaces.
+Every choice either side puts forward is also kept, with the side that did so
+first, so the completed-session history can say who suggested what.
 
 The participant's card shows their own brief and constraints, the agreed
 choices, and a choice waiting for a yes. It goes out as a `task_card` frame
-(`HARNESS_PROTOCOL.md` §13) whenever a saved reply changes it.
+(`HARNESS_PROTOCOL.md` §13) whenever a saved reply changes it. Once the chat
+ends, their client is shown the avatar's side too: its brief and constraints,
+marking the ones it mentioned (`task_reveal`, §14).
 
 """
 from __future__  import annotations
@@ -62,6 +66,7 @@ class ItemState:
     settling    : Suggestion | None      = None  # Asked to settle on, waiting for the other side's yes (`by` asked)
     suggestions : tuple[Suggestion, ...] = ()    # Ideas under discussion
     refused     : tuple[Refusal, ...]    = ()    # Ideas turned down
+    put_forward : tuple[Suggestion, ...] = ()    # Every choice either side has put forward, each with the side that did first (never pruned)
 
 # The whole plan, and what the avatar knows about the participant so far
 @dataclass(frozen=True, slots=True)
@@ -141,6 +146,7 @@ def _apply(state: PlanningState, by: Side, change: Change) -> tuple[PlanningStat
         return _with_item(state, change.item, replace(item,
             suggestions = (*item.suggestions, Suggestion(change.choice, by)),
             refused     = _without_refusal(item.refused, change.choice),
+            put_forward = _with_idea(item.put_forward, change.choice, by),
         )), ""
 
     # Turning an idea down (a choice waiting for a yes, or already agreed, is taken back too)
@@ -162,6 +168,7 @@ def _apply(state: PlanningState, by: Side, change: Change) -> tuple[PlanningStat
             settling    = Suggestion(change.choice, by),
             suggestions = item.suggestions if suggested else (*item.suggestions, Suggestion(change.choice, by)),
             refused     = _without_refusal(item.refused, change.choice),
+            put_forward = _with_idea(item.put_forward, change.choice, by),
         )), ""
 
     # Saying yes to the other side's request: the choice goes on the card
@@ -215,9 +222,17 @@ def _without_suggestion(suggestions: tuple[Suggestion, ...], choice: str) -> tup
 def _without_refusal(refused: tuple[Refusal, ...], choice: str) -> tuple[Refusal, ...]:
     return tuple(r for r in refused if not _same(r.choice, choice))
 
+# The choices put forward, with one more unless it was put forward before (the side that did first keeps it)
+def _with_idea(put_forward: tuple[Suggestion, ...], choice: str, by: Side) -> tuple[Suggestion, ...]:
+    return put_forward if any(_same(idea.choice, choice) for idea in put_forward) else (*put_forward, Suggestion(choice, by))
+
+# The side that first put a choice forward (None for a choice turned down before either side suggested it)
+def _first_by(put_forward: tuple[Suggestion, ...], choice: str) -> Side | None:
+    return next((idea.by for idea in put_forward if _same(idea.choice, choice)), None)
+
 
 # ================================================================================
-# The Participant's Card
+# What the Participant Sees
 # ================================================================================
 # The card as the `task_card` frame carries it: the participant's brief and constraints, then each item's line
 def card_frame(scenario: Scenario, state: PlanningState) -> dict[str, object]:
@@ -238,12 +253,21 @@ def _card_line(item_id: str, label: str, item: ItemState) -> dict[str, object]:
 async def send_task_card(consumer: ChatConsumer, scenario: Scenario, state: PlanningState) -> None:
     await consumer.send_json(card_frame(scenario, state))
 
+# The avatar's side, shown to the participant once the chat ends: its brief, and each constraint with whether it mentioned it
+def planning_reveal(scenario: Scenario, state: PlanningState) -> dict[str, object]:
+    return {
+        "kind"        : "cooperative_planning",
+        "brief"       : scenario.avatar.brief,
+        "constraints" : [{"text": constraint.text, "mentioned": constraint.id in state.revealed} for constraint in scenario.avatar.constraints],
+    }
+
 
 # --------------------------------------------------------------------------------
 # Completed Task History
 # --------------------------------------------------------------------------------
 # Preserve both sides' materials and decisions; None means an older unsaved state
 def planning_history(scenario: Scenario, state: PlanningState | None) -> dict[str, object]:
+    avatar_texts = {constraint.id: constraint.text for constraint in scenario.avatar.constraints}
     return {
         "kind"                    : "cooperative_planning",
         "title"                   : scenario.title,
@@ -256,14 +280,17 @@ def planning_history(scenario: Scenario, state: PlanningState | None) -> dict[st
         "items"                   : [{"id": item.id, "label": item.label, "state": None if (state is None) else _item_history(state.items[item.id])} for item in scenario.items],
         "user_wants"              : [] if (state is None) else list(state.user_wants),
         "user_avoids"             : [] if (state is None) else list(state.user_avoids),
+        "avatar_mentioned"        : [] if (state is None) else [avatar_texts[constraint_id] for constraint_id in state.revealed],
     }
 
 
-# JSON-native collections keep the saved snapshot identical to the API view
+# JSON-native collections keep the saved snapshot identical to the API view (who first suggested a choice is looked up here)
 def _item_history(item: ItemState) -> dict[str, object]:
     return {
-        "agreed"      : item.agreed,
-        "settling"    : None if (item.settling is None) else asdict(item.settling),
-        "suggestions" : [asdict(idea) for idea in item.suggestions],
-        "refused"     : [asdict(idea) for idea in item.refused],
+        "agreed"       : item.agreed,
+        "suggested_by" : None if (item.agreed is None) else _first_by(item.put_forward, item.agreed),
+        "settling"     : None if (item.settling is None) else asdict(item.settling),
+        "suggestions"  : [asdict(idea) for idea in item.suggestions],
+        "refused"      : [{**asdict(idea), "suggested_by": _first_by(item.put_forward, idea.choice)} for idea in item.refused],
+        "put_forward"  : [asdict(idea) for idea in item.put_forward],
     }

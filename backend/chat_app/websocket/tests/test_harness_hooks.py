@@ -4,8 +4,9 @@ Turn events reaching a chat type's harness, its shared cues, and harness turns.
 `backend.chat_app.websocket.tests.test_harness_hooks`
 
 Covers how STT results and playback reports reach the harness, the reply
-lifecycle events `ChatHandler` sends, turns a harness starts on its own, and the
-keyword and silence cues chat types build on.
+lifecycle events `ChatHandler` sends, turns a harness starts on its own, the
+harness's reveal as the chat ends, and the keyword and silence cues chat types
+build on.
 
 """
 from datetime      import datetime, timezone
@@ -16,7 +17,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import asyncio, json, re, unittest
 
 # From this project
-from chat_app.websocket.consumers.handlers.ws_events         import handle_transcription_message
+from chat_app.websocket.consumers.consumers                  import ChatConsumer
+from chat_app.websocket.consumers.handlers.ws_events         import handle_receive_json, handle_transcription_message
 from chat_app.websocket.consumers.processing.avatar_feedback import handle_avatar_feedback
 from chat_app.websocket.consumers.processing.playback        import handle_playback_event
 from chat_app.websocket.consumers.processing.speech          import handle_final, handle_interim
@@ -27,6 +29,9 @@ from chat_app.websocket.services.chat_state                  import StagedUttera
 
 # Logger the avatar feedback handler writes each event to
 FEEDBACK_LOGGER = "chat_app.websocket.consumers.processing.avatar_feedback"
+
+# Logger the chat consumer writes a failure to send the chat's last frames to
+CONSUMER_LOGGER = "chat_app.websocket.consumers.consumers"
 
 # Silence thresholds short enough for a test, with room for a busy machine
 SILENCE_TEST_SEC = (0.1, 0.2)
@@ -367,6 +372,63 @@ class AvatarFeedbackTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(payload=str(payload)[:40]), self.assertLogs(FEEDBACK_LOGGER, level="WARNING") as logs:
                 await handle_avatar_feedback(consumer, payload)
             self.assertIn("Ignoring", logs.output[0])
+
+
+# ================================================================================
+# Ending the Chat
+# ================================================================================
+class ChatEndTests(PipelineTestCase):
+    """
+    Both normal ends send the harness's reveal (when it has one) just before the
+    socket closes: the client's `end_chat`, and a reply that ends the chat, which
+    adds `chat_ended`.
+    """
+    # A connection whose frames and close are recorded in one list, in order
+    def ending_consumer(self, reveal: Mock | None = None) -> SimpleNamespace:
+        events  : list[object] = []
+        harness = ScriptedHarness(SimpleNamespace())
+        if reveal is not None: harness.reveal_view = reveal
+        return SimpleNamespace(
+            harness   = harness,
+            events    = events,
+            send_json = AsyncMock(side_effect=lambda frame: events.append(frame)),
+            close     = AsyncMock(side_effect=lambda code: events.append(("close", code))),
+        )
+
+    # The reveal, then `chat_ended` when the backend ended the chat, then the normal close
+    async def test_the_reveal_goes_out_just_before_the_close(self) -> None:
+        consumer = self.ending_consumer(Mock(return_value={"kind": "scripted", "shown": True}))
+        await ChatConsumer.end_chat(consumer, announce=True)
+        self.assertEqual(consumer.events, [{"type": "task_reveal", "data": {"kind": "scripted", "shown": True}}, {"type": "chat_ended"}, ("close", 1000)])
+
+    # A chat type with nothing to show just closes
+    async def test_a_chat_type_with_nothing_to_show_just_closes(self) -> None:
+        consumer = self.ending_consumer()
+        await ChatConsumer.end_chat(consumer, announce=False)
+        self.assertEqual(consumer.events, [("close", 1000)])
+
+    # A reveal that fails is logged, and the chat still closes (its teardown runs from the close)
+    async def test_a_failed_reveal_still_closes_the_chat(self) -> None:
+        consumer = self.ending_consumer(Mock(side_effect=RuntimeError("broken view")))
+        with self.assertLogs(CONSUMER_LOGGER, level="ERROR"): await ChatConsumer.end_chat(consumer, announce=True)
+        self.assertEqual(consumer.events, [("close", 1000)])
+
+    # The client's `end_chat` ends the chat without `chat_ended` (the client asked for it)
+    async def test_the_clients_end_chat_ends_it_without_announcing(self) -> None:
+        consumer = SimpleNamespace(end_chat=AsyncMock())
+        await handle_receive_json(consumer, {"type": "end_chat"})
+        consumer.end_chat.assert_awaited_once_with(announce=False)
+
+    # A reply that ends the chat is saved first, then the chat ends with `chat_ended`
+    async def test_a_reply_that_ends_the_chat_announces_it_once_saved(self) -> None:
+        consumer = make_consumer()
+        consumer.end_chat         = AsyncMock()
+        consumer.harness.generate = AsyncMock(return_value=ResponseOutcome(message="Goodbye!", close_after=True))
+
+        await ChatHandler.request_harness_turn(consumer)
+
+        self.mocks["message"].assert_awaited_once()
+        consumer.end_chat.assert_awaited_once_with(announce=True)
 
 
 # ================================================================================

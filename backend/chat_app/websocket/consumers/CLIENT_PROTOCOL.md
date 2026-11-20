@@ -21,10 +21,10 @@ the implementation is authoritative.
 > first; it describes that loop and the rules the audio stream has to follow.
 >
 > **Harness frames:** chat types that drive a capable avatar from the backend
-> (`map_task` and `cooperative_planning` today) also send `avatar_setup`, `avatar_plan`,
-> and `task_card`, and accept `avatar_feedback`. They are documented separately in
-> `HARNESS_PROTOCOL.md` beside this file. A client that never picks those chat types never
-> receives them, and can skip that file.
+> (`map_task`, `cooperative_planning`, and `speech_elicitation`) also send `avatar_setup` and
+> `avatar_plan` (the first two `task_card` too), send `task_reveal` as the chat ends, and accept
+> `avatar_feedback`. They are documented separately in `HARNESS_PROTOCOL.md` beside this file.
+> A client that never picks those chat types never receives them, and can skip that file.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Connecting                                                                       -->
@@ -158,6 +158,10 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   misheard instead of replying) or `no_cues` (it only idles). It
   sends no `task_card` and no `robot_action`. There is nothing to finish and no spoken
   end-chat; the client ends the chat when the participant is done.
+
+Those three also send one more frame just before the backend closes the socket, on either normal
+end (`end_chat`, or a chat that ends itself): `task_reveal`, what the participant is shown once
+the chat is over (`HARNESS_PROTOCOL.md` §14).
 
 Only `map_task`, `cooperative_planning`, and `speech_elicitation` take a `variant` or a `condition` so far. Sending a `condition` or `variant` the chat type doesn't
 have is refused. Values are exact (they are not lowercased the way `source` is). The chat
@@ -297,8 +301,11 @@ current value from `state` (section 3.6) and send the opposite:
 
 Closes the socket with code `1000` and runs the full session teardown (flush staged text,
 finalize/discard the recording, close the `ChatSession` row, run post-chat analysis). There
-is no body and no response -- the socket simply closes. Simply dropping the TCP connection
-also works and runs the same teardown, but sending `end_chat` is cleaner.
+is no body. A task chat type first sends its `task_reveal` (`HARNESS_PROTOCOL.md` §14);
+otherwise there is no response -- the socket simply closes. A client that wants the reveal
+waits for the backend's close instead of closing the socket itself. Simply dropping the TCP
+connection also works and runs the same teardown (with no reveal), but sending `end_chat` is
+cleaner.
 
 ### 2.5 `tts_playback` (optional)
 
@@ -381,7 +388,7 @@ mode (section 3.9), and the admin listener sends the same frame on its own socke
 | `user_utt`         | No (webapp only) | Backend STT transcript of the user |
 | `audio_chunk`      | No (webapp only) | Streamed TTS audio |
 | `cancel_audio`     | No (webapp only) | Discard buffered TTS audio |
-| `avatar_setup`, `avatar_plan`, `task_card` | No (harness chat types only) | Drive a capable avatar, and show the participant's task card (`HARNESS_PROTOCOL.md`) |
+| `avatar_setup`, `avatar_plan`, `task_card`, `task_reveal` | No (harness chat types only) | Drive a capable avatar, show the participant's task card, and show them the rest of the task once the chat ends (`HARNESS_PROTOCOL.md`) |
 | `pong`             | Only if you ping | Echo of your `ping` (section 2.7) |
 | `reply_timing`, `control_state` | No (debug mode only) | How long each reply took, and control state an admin's command changed (section 3.9) |
 
@@ -588,7 +595,8 @@ back-to-back commands even when no new finalized text is available.
 
 Sent when the *user* ended the chat conversationally -- they said something like "goodbye"
 and then confirmed. The backend sends the goodbye line as a normal `llm_response` first,
-then sends `chat_ended` and closes the socket with code `1000`.
+then (for a task chat type) its `task_reveal`, then `chat_ended`, and closes the socket with
+code `1000`.
 
 In `unguided` chats the intent phrases live in `websocket/harnesses/unguided/intents.py`;
 `active_listening` chats recognize the same requests with the LLM. The flow is a two-step
@@ -880,7 +888,8 @@ Things most likely to trip up a new client:
 | Command vocabulary, ack body, control state | `consumers/processing/commands.py` |
 | `robot_action` payload construction | `consumers/utils/groups.py` |
 | `message` broadcast shape | `consumers/processing/messages.py` |
-| `llm_response`, `cancel_audio`, `chat_ended`, `user_utt` | `websocket/services/chatHelpers.py` |
+| `llm_response`, `cancel_audio`, `user_utt` | `websocket/services/chatHelpers.py` |
+| `chat_ended`, `task_reveal`, and the normal close | `consumers/consumers.py` (`end_chat`); each chat type's reveal is its harness's `reveal_view` (`websocket/harnesses/`) |
 | `reply_now` coordination and wait times | `websocket/services/chatHelpers.py` |
 | `reply_now` recognition flush | `websocket/services/speech/stt/speechProvider.py` |
 | `stream_status` | `consumers/processing/stream.py` |

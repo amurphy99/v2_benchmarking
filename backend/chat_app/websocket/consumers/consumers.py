@@ -327,6 +327,20 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     def request_harness_turn(self) -> asyncio.Task[str | None] | None:
         return ChatHandler.request_harness_turn(self)
 
+    # End the chat normally: the task's reveal (and `chat_ended` when `announce`), then the close
+    async def end_chat(self, *, announce: bool) -> None:
+        """
+        Both normal ends come here: the client's `end_chat`, and a reply that ends the
+        chat (`announce`). It starts the teardown, so a failure to build or send the
+        frames is logged and the socket still closes (`disconnect` runs from there).
+        """
+        try:
+            view = self.harness.reveal_view()
+            if view is not None: await self.send_json({"type": "task_reveal", "data": view})
+            if announce:         await self.send_json({"type": "chat_ended"})
+        except Exception: logger.exception(f"{lu.CC_MAIN} Failed to send the chat's last frames; closing anyway.{lu.RESET}")
+        await self.close(code=1000)
+
     # --------------------------------------------------------------------------------
     # Persist the literal command before scheduling the response it requested
     # --------------------------------------------------------------------------------

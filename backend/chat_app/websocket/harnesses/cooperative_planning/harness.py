@@ -29,7 +29,8 @@ picked (`behaviors.py`), and the cues run (`cues.py`, and the shared
 sent and the avatar only idles.
 
 The participant's card goes out as a `task_card` frame when the chat starts and
-whenever the plan on it changes.
+whenever the plan on it changes. Once the chat ends, their client is shown the
+avatar's brief and constraints, marking the ones it mentioned (`reveal_view`).
 
 """
 from __future__  import annotations
@@ -54,7 +55,7 @@ from    .behaviors                   import reply_plan, setup_for, start_plan, t
 from    .config                      import PLANNING_HOLD_SEC, PLANNING_PIPELINE
 from    .cues                        import ItemGlance, PlanningBackchannels, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
-from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, send_task_card
+from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, planning_reveal, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
 from    .prompts                     import PLANNING_TURN_END_NOTES, misheard_notes
 from    .response_models             import models_for_scenario
@@ -62,6 +63,7 @@ from    .scenarios                   import load_scenario
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
+    from  ..base                import RevealView
     from   .pipelines           import PlanningReply, ProposedChanges
     from   .response_models     import Behavior
 
@@ -202,6 +204,10 @@ class CooperativePlanningHarness(ChatHarness):
     # Freeze the scenario, private constraints, and proposed or committed decisions
     def history_view(self, state: PlanningState | None = None) -> dict[str, object]:
         return planning_history(self.scenario, self.state if (state is None) else state)
+
+    # What the participant is shown once the chat ends: the avatar's brief and constraints, marking the ones it mentioned
+    def reveal_view(self) -> RevealView:
+        return planning_reveal(self.scenario, self.state)
 
     # --------------------------------------------------------------------------------
     # Once a reply is saved: show the card it changed, and start any tracking it left

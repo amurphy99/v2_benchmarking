@@ -6,9 +6,10 @@ Speech elicitation replies, prompts, threads, cues, and the harness.
 The LLM clients are replaced with stand-ins that return fixed structured
 responses, so these tests check what code decides: that every reply hands the
 turn back with a question, how deep a thread goes before the reply may move on,
-what the prompt tells the model when the chat is flagging, which frames go to
-the client, and when the avatar speaks up. The reply gate and the signs of
-listening themselves are tested in `test_harness_features.py`.
+which threads the task history and the participant's end view list, what the
+prompt tells the model when the chat is flagging, which frames go to the client,
+and when the avatar speaks up. The reply gate and the signs of listening
+themselves are tested in `test_harness_features.py`.
 
 """
 from datetime      import datetime, timezone
@@ -30,7 +31,7 @@ from chat_app.websocket.harnesses.speech_elicitation.behaviors        import ELI
 from chat_app.websocket.harnesses.speech_elicitation.config           import ELICITATION_DRY_AFTER_SHORT, ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_MIN_FOLLOW_UPS, ELICITATION_QUIET_AFTER_SEC
 from chat_app.websocket.harnesses.speech_elicitation.cues             import ElicitationBackchannels, QuietPrompt
 from chat_app.websocket.harnesses.speech_elicitation.elicitation_api  import ElicitationAPIError
-from chat_app.websocket.harnesses.speech_elicitation.harness          import MSG_SAY_MORE, ElicitationState
+from chat_app.websocket.harnesses.speech_elicitation.harness          import MSG_SAY_MORE, ElicitationState, Thread
 from chat_app.websocket.harnesses.speech_elicitation.prompts          import ELICITATION_NO_ANGLES_YET, build_messages, directive_for, offer_angles
 from chat_app.websocket.harnesses.speech_elicitation.response_models  import ElicitationTurn
 from chat_app.websocket.harnesses.speech_elicitation.topics           import ELICITATION_TOPICS
@@ -53,6 +54,10 @@ SOUNDS = {name: {"audio": "AAA=", "sample_rate": 24_000} for name in ELICITATION
 # A reply call's response
 def turn(message: str, move: str = "follow_up", behavior: str = "none") -> ElicitationTurn:
     return ElicitationTurn(basis="b", move=move, behavior=behavior, message=message)
+
+# The conversation once the opening question is out, with the replies its thread has had so far
+def opened(*replies: str, **fields: object) -> ElicitationState:
+    return ElicitationState(threads=(Thread(question=TOPIC.opening, replies=replies),), **fields)
 
 # One reply attempt after the avatar's opening question ("" for a turn of the avatar's own)
 def make_attempt(text: str) -> TurnAttempt:
@@ -159,7 +164,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_opening_turn_asks_the_topics_question(self) -> None:
         harness, _, api = self.make()
         outcome = await harness.generate(TurnAttempt(context=[], user_text="", trigger="harness", publish_mood=AsyncMock(), publish_plan=AsyncMock()))
-        self.assertEqual((outcome.message, outcome.state), (TOPIC.opening, ElicitationState()))
+        self.assertEqual((outcome.message, outcome.state), (TOPIC.opening, opened()))
         api.reply.assert_not_awaited()
 
     # Each reply carries the plan for the behavior it picked, but only with cues
@@ -183,27 +188,32 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
                 await harness.generate(make_attempt(text))
                 self.assertEqual(api.reply.await_args.args[2], directive)
 
-    # Each reply on a thread counts toward it, short answers add up until a longer one, and a new angle starts over
+    # Each reply on a thread joins it, short answers add up until a longer one, and a new angle starts the next thread
     async def test_the_state_follows_the_thread(self) -> None:
         harness, _, api = self.make()
+        harness.state          = opened()
         api.reply.return_value = turn("Ha! Which dog?")
         outcome = await harness.generate(make_attempt("Dogs."))
-        self.assertEqual(outcome.state, ElicitationState(follow_ups=1, short_answers=1))
+        self.assertEqual(outcome.state, opened("follow_up", short_answers=1))
 
-        harness.state = outcome.state
-        outcome       = await harness.generate(make_attempt("Our old beagle, Rusty, who used to howl at the mailman."))
-        self.assertEqual(outcome.state, ElicitationState(follow_ups=2, short_answers=0))
+        harness.state          = outcome.state
+        api.reply.return_value = turn("Beagles are so loud! What did the mailman make of it?", move="share")
+        outcome = await harness.generate(make_attempt("Our old beagle, Rusty, who used to howl at the mailman."))
+        self.assertEqual((outcome.state, outcome.state.follow_ups), (opened("follow_up", "share", short_answers=0), 2))
 
+        harness.state          = outcome.state
         api.reply.return_value = turn("Fair enough! What about plants?", move="new_angle")
-        self.assertEqual((await harness.generate(make_attempt("Dogs."))).state, ElicitationState())
+        outcome = await harness.generate(make_attempt("Dogs."))
+        self.assertEqual(outcome.state.threads, (Thread(TOPIC.opening, ("follow_up", "share")), Thread("Fair enough! What about plants?")))
+        self.assertEqual((outcome.state.follow_ups, outcome.state.short_answers), (0, 0))
 
     # The reply is offered the fresh angles only once its thread has had its follow-ups, or has run dry
     async def test_a_new_thread_is_kept_from_the_fresh_angles(self) -> None:
         harness, _, api = self.make(reply=turn("Ha! Which dog?"))
         cases = (
-            (ElicitationState(),                                              "Our old beagle used to howl at the mailman.", False),
-            (ElicitationState(follow_ups=ELICITATION_MIN_FOLLOW_UPS),         "Our old beagle used to howl at the mailman.", True ),
-            (ElicitationState(short_answers=ELICITATION_DRY_AFTER_SHORT - 1), "Dogs.",                                       True ),
+            (opened(),                                              "Our old beagle used to howl at the mailman.", False),
+            (opened(*("follow_up",) * ELICITATION_MIN_FOLLOW_UPS),  "Our old beagle used to howl at the mailman.", True ),
+            (opened(short_answers=ELICITATION_DRY_AFTER_SHORT - 1), "Dogs.",                                       True ),
         )
         for state, text, angles in cases:
             with self.subTest(state=state):
@@ -211,23 +221,44 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
                 await harness.generate(make_attempt(text))
                 self.assertEqual(api.reply.await_args.args[3], angles)
 
-    # A likely misheard word gets the reply check's question instead, asked with a curious look, and the thread stays where it was
+    # A likely misheard word gets the reply check's question instead, asked with a curious look; the thread stays where it was, and the question is counted
     async def test_a_misheard_word_gets_a_question_instead(self) -> None:
         question = "Sorry, did you say 'tad person'?"
         verdict  = check_model(tuple(ELICITATION_SOUNDS), ElicitationBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": {"next_step": "clarify", "misheard": "tad person", "message": question}})
         harness, _, _ = self.make(reply=turn("A tad person! What's that?"), check=SimpleNamespace(check=AsyncMock(return_value=verdict)))
-        harness.state = ElicitationState(follow_ups=2)
+        harness.state = opened("follow_up", "follow_up")
 
         with self.assertLogs(GATE, level="INFO"): outcome = await harness.generate(make_attempt("I'm a tad person."))
-        self.assertEqual((outcome.message, outcome.behavior, outcome.state), (question, "curious", ElicitationState(follow_ups=2)))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state), (question, "curious", opened("follow_up", "follow_up", clarifications=1)))
         self.assertEqual(outcome.avatar_plan["steps"][0]["move"]["name"], "Head Tilt")
 
-    # A call that fails every attempt still hands the turn back with a question
+    # A call that fails every attempt still hands the turn back with a question, recorded on the thread as the scripted line
     async def test_a_failed_call_asks_the_user_to_say_more(self) -> None:
         harness, _, _ = self.make(reply=ElicitationAPIError("down"))
+        harness.state = opened()
         with self.assertLogs(HARNESS, level="ERROR"): outcome = await harness.generate(make_attempt("Dogs, because they are loyal."))
-        self.assertEqual(outcome.message, MSG_SAY_MORE)
+        self.assertEqual((outcome.message, outcome.state.threads[-1].replies), (MSG_SAY_MORE, ("fallback",)))
         self.assertTrue(MSG_SAY_MORE.endswith("?"))
+
+    # Each reply is saved with the topic and every thread, and once the chat ends the participant is shown the threads
+    async def test_the_threads_go_into_the_history_and_the_reveal(self) -> None:
+        harness, _, _ = self.make(reply=turn("Fair enough! What about plants?", move="new_angle"))
+        harness.state = opened("follow_up", "share", clarifications=1)
+        outcome       = await harness.generate(make_attempt("I have nothing more to say about dogs."))
+        threads       = [{"question": TOPIC.opening, "replies": ["follow_up", "share"]}, {"question": "Fair enough! What about plants?", "replies": []}]
+        self.assertEqual(outcome.task_snapshot, {"kind": "speech_elicitation", "opening": TOPIC.opening, "angles": list(TOPIC.angles), "threads": threads, "clarifications": 1, "wound_down": False})
+
+        harness.state = outcome.state
+        self.assertEqual(harness.reveal_view(), {"kind": "speech_elicitation", "threads": threads})
+
+    # A reply while no thread is open (the user spoke before the opening question went out) starts the first thread, and still winds down
+    async def test_a_reply_with_no_thread_open_starts_one(self) -> None:
+        for message, move in (("Dogs! What kind?", "follow_up"), ("Thanks, this was fun!", "wind_down")):
+            with self.subTest(move):
+                harness, _, _ = self.make(reply=turn(message, move=move))
+                attempt = TurnAttempt(context=[("user", "Dogs, definitely.", 0.0)], user_text="Dogs, definitely.", trigger="automatic", publish_mood=AsyncMock(), publish_plan=AsyncMock())
+                state   = (await harness.generate(attempt)).state
+                self.assertEqual((state.threads, state.wound_down), ((Thread(message),), move == "wind_down"))
 
 
 # ================================================================================
@@ -260,6 +291,7 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
         for _ in range(ELICITATION_MAX_QUIET_PROMPTS + 2): prompt.on_silence(ELICITATION_QUIET_AFTER_SEC)
         self.assertEqual(self.consumer.request_harness_turn.call_count, ELICITATION_MAX_QUIET_PROMPTS)
 
+        self.harness.state = opened("follow_up")
         prompt.on_final(FinalUtterance(text="I think I'm done", words=()))
         with patch(f"{HARNESS}.get_elicitation_api", Mock(return_value=SimpleNamespace(reply=AsyncMock(return_value=turn("Thanks, this was fun!", move="wind_down"))))):
             self.harness.on_reply_saved(await self.harness.generate(make_attempt("I think I'm done")))

@@ -18,7 +18,11 @@ user never heard.
 
 A chat type with state worth watching gives the admin listener a view of it
 (`monitor_view`): it goes to every listener whenever a saved reply changes the
-state, and to each listener as it joins.
+state, and to each listener as it joins. A chat type with something to show the
+participant once the chat ends (the avatar's map, its constraints, the threads
+it followed) gives their client a view of it too (`reveal_view`): it goes out
+just before the socket closes, after either the client's `end_chat` or a reply
+that ends the chat.
 
 """
 from __future__  import annotations
@@ -55,6 +59,9 @@ PlanPublisher = Callable[[AvatarPlan], Awaitable[None]]
 
 # What the admin listener's task panel shows about a chat, in the wire format (`task_monitor`)
 MonitorView = dict[str, object]
+
+# What the participant's client is shown about the task once the chat ends, in the wire format (`task_reveal`)
+RevealView = dict[str, object]
 
 # A shared feature a chat type uses (`features/`), switched on or off for each connection
 class Feature(Protocol):
@@ -166,7 +173,7 @@ class ChatHarness(ABC):
         self._tell_cues("stop")
 
     # --------------------------------------------------------------------------------
-    # Monitoring
+    # Task Views
     # --------------------------------------------------------------------------------
     # What the admin listener's task panel shows about this chat now (None for a chat type without one)
     def monitor_view(self) -> MonitorView | None:
@@ -174,6 +181,10 @@ class ChatHarness(ABC):
 
     # Private materials and committed state for completed-session history
     def history_view(self) -> dict[str, object] | None:
+        return None
+
+    # What the participant is shown about the task once the chat ends (None for a chat type with nothing to show)
+    def reveal_view(self) -> RevealView | None:
         return None
 
     # Send the task panel's view to every admin listener (nothing for a chat type without one)

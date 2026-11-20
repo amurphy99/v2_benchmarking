@@ -54,7 +54,9 @@ finalized user text
 Newer speech can cancel a reply at any point, like in every chat type. The move is entered
 only when the reply's exchange is saved, so the avatar never moves for a reply the user never
 heard. Consecutive repeated points are removed. A path that never leaves the current spot
-proposes no new state; a loop returning to its start still records all its bends.
+adds nothing to the path; a loop returning to its start still records all its bends. Every
+saved reply also joins the state's record of replies (the route, the act, and the waypoints
+it added), which the task history keeps.
 
 `path` moves carry 1–32 normalized `[x, y]` waypoints, excluding the current position.
 The response schema rejects empty paths, nonfinite coordinates, and points outside the
@@ -262,10 +264,13 @@ else is the same: the same pipelines, the same moves, and the participant's map.
 - **The participant's map,** as a `task_card` frame of kind `map_task` when the chat starts
   (`consumers/HARNESS_PROTOCOL.md` §13): their landmarks and the route. The chat page draws it
   beside the avatar (`frontend/src/pages/chat/components/MapTaskMapPanel.tsx`). The avatar's
-  map never goes to the participant's client.
+  map goes to the participant's client only once the chat ends.
+- **The participant's reveal,** as a `task_reveal` frame just before the socket closes
+  (`reveal_view` in `harness.py`, `consumers/HARNESS_PROTOCOL.md` §14): the avatar's map, and
+  the path it took.
 - **The admin live chat page,** a `task_monitor` view (`monitor_view` in `harness.py`): both
-  maps, where the avatar is, and every committed waypoint. It arrives as the page
-  connects and after every saved move, and shows in the side column's **Map** tab: the
+  maps, where the avatar is, every committed waypoint, and each saved reply. It arrives as
+  the page connects and after every saved reply, and shows in the side column's **Map** tab: the
   avatar's map with its path and the participant's route drawn faintly over it, the
   participant's map, and what differs between them.
 
@@ -306,7 +311,7 @@ are constants at the top of `geometry.py`.
 ## Not built yet
 
 - **Scoring** the avatar's path against the route.
-- **A per-turn research event log.** Both maps and the accumulated path are saved in
-  `ChatSession.task_snapshot` with each committed reply and shown in completed-session history.
-  A timeline of moves, cues, and plans is not saved yet.
+- **A per-turn research event log.** Both maps, the accumulated path, and each reply's route,
+  act, and waypoints are saved in `ChatSession.task_snapshot` with each committed reply and
+  shown in completed-session history. A timeline of cues and plans is not saved yet.
 - **HCRC maps 5 to 16.** Maps 1 to 4 are in; the rest of the corpus's 16 can be traced the same way.

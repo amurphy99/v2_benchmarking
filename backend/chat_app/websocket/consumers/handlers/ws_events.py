@@ -58,7 +58,7 @@ async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
     elif msg_type == "tts_playback"      : await handle_playback_event       (consumer, data)
     elif msg_type == "avatar_feedback"   : await handle_avatar_feedback      (consumer, data)
     elif msg_type == "ping"              : await handle_ping                 (consumer, data)
-    elif msg_type == "end_chat"          : await consumer.close(code=1000)
+    elif msg_type == "end_chat"          : await consumer.end_chat(announce=False)
 
     # Unknown JSON
     else: logger.info(f"{CC_MAIN} {lu.RED}Unknown JSON{CC_R} received: {data} {RESET}")

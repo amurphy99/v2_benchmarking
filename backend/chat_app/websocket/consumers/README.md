@@ -137,7 +137,7 @@ Frontend JSON
 | `tts_playback` | `processing.playback.handle_playback_event` | Store optional assistant playback timing (a "started" report completes the reply's timing) |
 | `overlapped_speech` | `ws_events.handle_overlap` | Track a frontend overlap notification |
 | `ping` | `ws_events.handle_ping` | Echo the client's timestamp in a `pong`, so it can time the round trip |
-| `end_chat` | `ChatConsumer.close` | Close the primary socket and session |
+| `end_chat` | `ChatConsumer.end_chat` | Send the chat type's reveal (`task_reveal`, if it has one), then close the primary socket and session |
 
 The router handles transport validation. Downstream processing functions receive
 normalized values or a validated payload rather than owning WebSocket dispatch.
@@ -440,4 +440,6 @@ Completed task materials and state are archived privately in `ChatSession.task_s
 `processing/messages.py` passes a reply's snapshot to the same database transaction as its
 messages. The consumer saves initial materials before calling `harness.start()`. This adds
 no primary-client frame; the admin history page uses the scoped REST task-history endpoint
-(documented in `harnesses/README.md`).
+(documented in `harnesses/README.md`). The participant's client gets a smaller view of its
+own once the chat ends instead: `ChatConsumer.end_chat` sends the harness's `reveal_view()` as
+a `task_reveal` frame on either normal end, just before the close.

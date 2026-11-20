@@ -331,6 +331,14 @@ export interface Download {
     fileContents        : string;
 }
 
+// One saved Map Task reply: the kind of turn it answered, what it did, and the waypoints it added
+// (copied from `MapTaskReply` in `backend/chat_app/websocket/harnesses/map_task/harness.py`)
+export type MapTaskReplyRecord = {
+    route     : "simple_question" | "instruction" | "mismatch" | "other";
+    act       : "acknowledge" | "answer" | "clarify" | "report_missing" | "other";
+    waypoints : number;
+};
+
 // Private task history from /api/chatsession/<id>/task-history/ (staff and linked caregivers)
 export type MapTaskHistory = {
     kind     : "map_task";
@@ -338,17 +346,23 @@ export type MapTaskHistory = {
     follower : MapTaskFollowerMap;
     path     : MapPoint[] | null;
     position : MapPoint | null;
+    replies? : MapTaskReplyRecord[] | null;  // Absent from snapshots saved before replies were recorded; null for an unsaved session
 };
+
+// One side of the planning task: the participant, or the avatar
+export type PlanningSide = "user" | "avatar";
 
 // Planning choices retain pending proposals and refusals, separately from agreements
 export type PlanningItemHistory = {
     id    : string;
     label : string;
     state : {
-        agreed      : string | null;
-        settling    : {choice: string; by: "user" | "avatar"} | null;
-        suggestions : {choice: string; by: "user" | "avatar"}[];
-        refused     : {choice: string; by: "user" | "avatar"; reason: string}[];
+        agreed        : string | null;
+        suggested_by? : PlanningSide | null;   // Who first put the agreed choice forward (absent from snapshots saved before it was kept)
+        settling      : {choice: string; by: PlanningSide} | null;
+        suggestions   : {choice: string; by: PlanningSide}[];
+        refused       : {choice: string; by: PlanningSide; reason: string; suggested_by?: PlanningSide | null}[];
+        put_forward?  : {choice: string; by: PlanningSide}[];  // Every choice either side put forward, with the side that did first
     } | null;
 };
 
@@ -365,7 +379,24 @@ export type PlanningTaskHistory = {
     items                   : PlanningItemHistory[];
     user_wants              : string[];
     user_avoids             : string[];
+    avatar_mentioned?       : string[];  // The avatar's constraints it mentioned, in order (absent from older snapshots)
+};
+
+// What one reply on an elicitation thread did (copied from `ThreadReply` in `speech_elicitation/harness.py`)
+export type ElicitationThreadReply = "follow_up" | "share" | "challenge" | "wind_down" | "fallback";
+
+// One elicitation thread: the question that opened it, and each reply on it after that
+export type ElicitationThread = {question: string; replies: ElicitationThreadReply[]};
+
+// The topic and every thread (null fields for an unsaved older session)
+export type ElicitationTaskHistory = {
+    kind           : "speech_elicitation";
+    opening        : string;
+    angles         : string[];
+    threads        : ElicitationThread[] | null;
+    clarifications : number | null;
+    wound_down     : boolean | null;
 };
 
 // Unsaved older sessions may show current variant materials, without historical outcomes
-export type SessionTaskHistory = {recorded: boolean; view: MapTaskHistory | PlanningTaskHistory | null};
+export type SessionTaskHistory = {recorded: boolean; view: MapTaskHistory | PlanningTaskHistory | ElicitationTaskHistory | null};

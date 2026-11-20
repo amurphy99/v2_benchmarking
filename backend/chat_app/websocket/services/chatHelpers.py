@@ -386,11 +386,8 @@ class ChatHandler:
                 # Update the consumer state
                 finally: consumer._tts_streaming = False
 
-            # Close the WebSocket if the user confirmed they wish to end the chat (disconnect() is called automatically)
-            if close_after:
-                try: await consumer.send(json.dumps({"type": "chat_ended"}))
-                except Exception: pass
-                await consumer.close()
+            # A reply that ends the chat: the task's reveal and `chat_ended`, then the close (disconnect() runs from there)
+            if close_after: await consumer.end_chat(announce=True)
 
             return system_resp
 
