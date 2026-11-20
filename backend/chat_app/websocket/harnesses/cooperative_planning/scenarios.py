@@ -8,7 +8,10 @@ Each variant is one file, `scenarios/<variant>.json`:
     description     Where the scenario comes from
     title           The heading on the participant's card ("Plan a dinner party")
     event           What the two of them are working out, in a few words ("a dinner party"), for the history
-    opening_line    The avatar's first words
+    opening_line    The avatar's first words, in a chat without the intro
+    intro           What the task is, in plain words, for the intro (`features/intro/`):
+                    "Today we're going to plan a dinner party together."
+    start_line      The avatar's first words of the task itself, once the intro is over
     settle_example  How the avatar might ask to settle one of the items ("So, breadsticks for the starter?")
     closing_line    Its last words, once the participant approves the whole plan
     items           The things to agree on, in order: {id, label, also_called?}
@@ -30,6 +33,11 @@ participant might use for an item ("entree" for "Main course"), for the cues.
 `settle_example` is the prompts' one worked example, so it belongs to the
 scenario: an example from another scenario would put its choices in the
 avatar's mouth.
+
+The intro speaks out of character, so a role-play scenario's `intro` names both
+roles ("Today I'll play a hotel receptionist, and you're a guest..."), and its
+`start_line` is the avatar's first words in character. A scenario between two
+friends starts with what they need to pick, without a second hello.
 Every id is lowercase letters, digits, and underscores, and differs from the
 others of its kind.
 
@@ -84,6 +92,8 @@ class Scenario(_ScenarioPart):
     title          : ScenarioText
     event          : ScenarioText
     opening_line   : ScenarioText
+    intro          : ScenarioText
+    start_line     : ScenarioText
     settle_example : ScenarioText
     closing_line   : ScenarioText
     items          : tuple[PlanItem, ...] = Field(min_length=1)

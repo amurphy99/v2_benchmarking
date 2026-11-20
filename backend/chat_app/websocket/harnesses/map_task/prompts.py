@@ -12,15 +12,18 @@ the schema's field descriptions (`response_models.py`).
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
 whether a direction is finished, and every landmark name on either map, so it can
-tell a misheard name from one the avatar's map simply lacks.
+tell a misheard name from one the avatar's map simply lacks. The shared intro
+(`features/intro/`) gets the Map Task's own lines: what it is, how it works, and
+the first thing the avatar says once the user is ready.
 
 """
 from __future__ import annotations
 from typing     import TYPE_CHECKING
 
 # From this project
-from .geometry        import MAP_TASK_BESIDE_GAP, MAP_TASK_STEPS, region
-from .response_models import MAP_TASK_MAX_WAYPOINTS
+from ..features.intro.flow import IntroScript
+from  .geometry            import MAP_TASK_BESIDE_GAP, MAP_TASK_STEPS, region
+from  .response_models     import MAP_TASK_MAX_WAYPOINTS
 
 if TYPE_CHECKING:
     from .maps          import TaskMap
@@ -167,6 +170,18 @@ MAP_TASK_MISHEARD_NOTES = """
   the avatar only knows a landmark by its exact name.
 - The landmark names on the two maps: {names}.
 """.strip()
+
+# The Map Task's own lines for the shared intro (`features/intro/`), in plain words
+MAP_TASK_INTRO = IntroScript(
+    about       = "Today we're going to do a map task together, where you guide me along a route on your map.",
+    rules       = (
+        "Here's how it works. Your map has a route on it, from the start to the finish. My map shows the same "
+        "place, but without the route, and some of our landmarks are different. We can't see each other's maps, "
+        "so describe the route to me step by step, and I'll follow along on mine."
+    ),
+    start       = "I'm at the start. Where should I go first?",
+    starts_task = "a direction to follow, a landmark, or a question about the maps",
+)
 
 
 # ================================================================================

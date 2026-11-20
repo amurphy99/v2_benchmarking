@@ -27,6 +27,12 @@ open space. It never receives the giver's route or landmark coordinates.
 <!-- -------------------------------------------------------------------------------- -->
 ## Turn flow
 
+The chat opens with the shared intro (`features/intro/`; see the harnesses README): the
+avatar says what the task is, in plain words, and asks whether the user has done one before,
+telling anyone new to it how it works (`MAP_TASK_INTRO` in `prompts.py`). Its turns leave the
+avatar where it is and aren't recorded as replies. An answer that already gives a direction
+goes through the flow below, like every turn after the intro.
+
 ```text
 finalized user text
     READ THE TURN (understanding.py, code only)

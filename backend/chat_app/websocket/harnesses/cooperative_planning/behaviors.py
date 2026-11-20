@@ -72,6 +72,17 @@ PLANNING_BEHAVIOR_ACTIONS: dict[str, dict[str, object]] = {
     "ponder"     : {"face": {"name": "Face with Raised Eyebrow",       "strength": 0.5, "hold_ms": 1_200}},
 }
 
+# How the avatar acts while saying each intro line (`features/intro/`)
+PLANNING_INTRO_BEHAVIORS = {
+    "opening"   : "pleased",
+    "ask_again" : "none",
+    "explain"   : "glance_at_card",
+    "answer"    : "nod",
+    "wait"      : "nod",
+    "start"     : "pleased",
+    "say_again" : "apologetic",
+}
+
 # The nod while "writing" a settled choice in
 PLANNING_WRITE_NOD = {"name": "Nod", "strength": 0.3}
 

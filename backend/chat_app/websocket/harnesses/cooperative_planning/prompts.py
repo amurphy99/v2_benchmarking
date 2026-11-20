@@ -14,11 +14,16 @@ A reply can also carry a directive from code, for a turn that has to do one
 thing: read the finished plan back, or nudge a participant who has gone quiet.
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
-whether the user is done, and what is being planned.
+whether the user is done, and what is being planned. The shared intro
+(`features/intro/`) gets how planning works, the same for every scenario, with
+each scenario's own words for what the task is and its first line.
 
 """
 from __future__ import annotations
 from typing     import Literal, TYPE_CHECKING
+
+# From this project
+from ..features.intro.flow import IntroScript
 
 if TYPE_CHECKING:
     from .plan_state import ItemState, PlanningState, Side
@@ -169,6 +174,16 @@ PLANNING_TURN_END_NOTES = """
   the avatar is finished.
 """.strip()
 
+# How planning works, for the shared intro (the same for every scenario; the card lists the items)
+PLANNING_INTRO_RULES = (
+    "Here's how it works. We need to agree on everything on your card. Your card shows your side of things, "
+    "and I have a few things of my own that you can't see. Tell me your ideas and what matters to you, and "
+    "I'll do the same. Once we agree on something, it goes on the card."
+)
+
+# What an answer to the intro that already starts the planning holds
+PLANNING_INTRO_STARTS_TASK = "an idea for the plan, or something they need or want"
+
 # What the reply check should know about this chat when it looks for a misheard word (`event` and `items` come from the scenario)
 PLANNING_MISHEARD_NOTES = """
 - The names of foods, places, and activities are easily misheard. Read through a slip when the
@@ -208,6 +223,10 @@ def _directive_text(directive: Directive, scenario: Scenario, state: PlanningSta
 # The reply check's notes on misheard words for one scenario (what is being planned, and its items)
 def misheard_notes(scenario: Scenario) -> str:
     return PLANNING_MISHEARD_NOTES.format(event=scenario.event, items=", ".join(item.label.lower() for item in scenario.items))
+
+# The intro's lines for one scenario: its description and first line, and how planning works
+def intro_script(scenario: Scenario) -> IntroScript:
+    return IntroScript(about=scenario.intro, rules=PLANNING_INTRO_RULES, start=scenario.start_line, starts_task=PLANNING_INTRO_STARTS_TASK)
 
 
 # --------------------------------------------------------------------------------

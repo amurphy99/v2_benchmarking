@@ -3,6 +3,8 @@
     "title"          : "Plan a day trip",
     "event"          : "a day trip",
     "opening_line"   : "Hi! I'm so glad we're planning this day trip together. We need to pick a destination, how we'll get there, and what to have for lunch. Do you have any ideas?",
+    "intro"          : "Today we're going to plan a day trip together.",
+    "start_line"     : "We need to pick a destination, how we'll get there, and what to have for lunch. Do you have any ideas?",
     "settle_example" : "So, the art museum for the destination?",
     "closing_line"   : "That's our whole day planned, then. Thanks for planning this with me, it's going to be a lovely trip!",
     "items": [

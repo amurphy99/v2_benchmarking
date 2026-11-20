@@ -4,12 +4,12 @@
 
 From the session's saved task history. The stats come first: the items agreed,
 the choices each side put forward and turned down, the avatar's constraints it
-mentioned, and what it learned about the participant. Both sides' briefs and
-constraints follow, the avatar's marked where it mentioned one. Then each item:
-the agreed choice and the side that first suggested it, anything still pending
-or under discussion, and every idea turned down, by whom, why, and who
-suggested it. A snapshot saved before who-suggested-what was kept shows the
-decisions without it.
+mentioned, what it learned about the participant, and how the intro went. Both
+sides' briefs and constraints follow, the avatar's marked where it mentioned
+one. Then each item: the agreed choice and the side that first suggested it,
+anything still pending or under discussion, and every idea turned down, by whom,
+why, and who suggested it. A snapshot saved before who-suggested-what was kept
+shows the decisions without it.
 
 */
 import type { ReactElement         } from "react";
@@ -18,6 +18,7 @@ import      { LuMessageSquareQuote } from "react-icons/lu";
 // From this project
 import type { PlanningItemHistory, PlanningSide, PlanningTaskHistory } from "@/api";
 import      { StatTile, StatTileRow                                  } from "../ui/StatTile";
+import        IntroTile                                                from "./IntroTile";
 
 // One item's saved state (null for a session that saved no decisions)
 type PlanningItemState = NonNullable<PlanningItemHistory["state"]>;
@@ -82,6 +83,7 @@ export default function PlanningDetails({view}: {
                     <StatTile label="Turned down"         value={saved ? String(refused.length) : "—"}                                               sub={saved ? `participant ${refusedBy("user")} · avatar ${refusedBy("avatar")}` : undefined} help="Ideas turned down by either side and still turned down at the end (one suggested again comes off the list)" />
                     <StatTile label="Avatar mentioned"    value={(saved && (mentioned !== undefined)) ? `${mentioned.length} of ${view.avatar_constraints.length}` : "—"} sub="of its constraints" help="The avatar's own constraints it brought up during the chat" />
                     <StatTile label="Learned about them"  value={saved ? String(view.user_wants.length + view.user_avoids.length) : "—"}            sub="needs, wants, and things to avoid"    help="What the avatar noted about the participant from what they said" />
+                    <IntroTile intro={view.intro} />
                 </StatTileRow>
             </header>
 

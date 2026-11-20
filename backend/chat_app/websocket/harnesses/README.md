@@ -65,7 +65,8 @@ which copies each chat type's `VARIANTS`). It offers `unguided`, `cooperative_pl
 
 `map_task`, `cooperative_planning`, and `speech_elicitation` use cues and drive the
 avatar with plans (`consumers/HARNESS_PROTOCOL.md`); the first two also show the
-participant their task materials (`task_card`). With cues, all three give signs of
+participant their task materials (`task_card`), and open with the shared intro: what the
+task is, and how it works for anyone new to it (Shared features, below). With cues, all three give signs of
 listening at the user's pauses and check each reply before it goes out (Shared
 features, below). The others send `robot_action` moods. `map_task` also gives the admin
 live chat page a view of its state (Monitoring, below), and all three show the participant
@@ -84,6 +85,11 @@ something once the chat ends: the avatar's side of the task, or the threads it f
 +│   ├── backchannels/            # Signs of listening at the user's pauses, styled by each chat type
  │   │   ├── cue.py               # Backchannels, and the movements and sounds its signs are made of
  │   │   └── config.py            # The pause, word count, gap, and volume a chat type can override
++│   ├── intro/                   # What the task is, and how it works for anyone new to it, before the task starts
+ │   │   ├── flow.py              # Intro, the lines a chat type gives it (IntroScript), its state, and its history record
+ │   │   ├── prompts.py           # The fixed lines every chat type shares, and the prompt that reads an answer
+ │   │   ├── intro_api.py         # IntroAPI: the one reading call, on the shared StructuredAPI, and its response
+ │   │   └── config.py            # The reading call's settings
 +│   └── reply_gate/              # The check before each reply to finished speech: let it out, hold it, or ask about a word
  │       ├── gate.py              # ReplyGate, and the checks a chat type picks (TurnEndCheck, MisheardCheck)
  │       ├── prompts.py           # What each check looks for, and every field its response fills in
@@ -298,6 +304,7 @@ reply's timing records which were on.
 | Signs of listening at pauses (`backchannels/`) | `FEATURE_BACKCHANNELS_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
 | Holding a reply while the user seems mid-thought (`reply_gate/`, `TurnEndCheck`) | `FEATURE_TURN_END_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
 | Asking about a likely misheard word instead of replying (`reply_gate/`, `MisheardCheck`) | `FEATURE_MISHEARD_CONDITIONS` | `map_task`, `cooperative_planning`, `speech_elicitation` |
+| Opening with what the task is, and how it works for anyone new to it (`intro/`) | `FEATURE_INTRO_CONDITIONS` (both conditions) | `map_task`, `cooperative_planning` |
 
 **Signs of listening.** `Backchannels` is a `SilenceWatcher` that gives a sign (a
 nod or a tilt of the head, often with a short sound in the avatar's own voice)
@@ -352,6 +359,37 @@ self.features     = {feature.NAME: feature for feature in (self.backchannels, *s
 
 # In generate, after any scripted turns (`_reply` is the chat type's own reply, `_clarify` its outcome for a question)
 return await self.reply_gate.run(attempt, self._reply, self._clarify)
+```
+
+**The intro.** A task chat type can open with the shared intro (`intro/flow.py`). The
+avatar says hello and what the task is, and asks whether the user has done one before.
+One LLM call reads each answer and picks what comes next: begin ("Great, let's begin!" and
+the task's own first line), explain how the task works and ask if they're ready, answer a
+question about it from those rules, give them time, or, when the answer already starts the
+task (a direction, an idea for the plan), let the task answer it. Every line but an answer
+to a question is fixed, so every participant hears the same words: the shared ones in
+`intro/prompts.py`, and the chat type's own in its `IntroScript` (what the task is, how it
+works, its first line, and what an answer that starts the task holds). A nudge while the
+intro waits asks its question again, and a reading that fails asks the user to say that
+again (a specified fallback, logged once).
+
+The intro explains the task rather than acting as a cue, so its switch lists both conditions,
+and it is decided as the chat starts: it isn't in `self.features`, and no command switches
+it. Intro turns skip the reply gate. Its state lives in the chat type's own state (`intro`,
+None for a chat without one), so it moves on only once a reply is saved, and the task history
+keeps what it learned (`intro_record`). A chat type opts in with its lines, and runs the intro
+first in `generate`:
+
+```python
+self.intro = Intro(self, MAP_TASK_INTRO)
+self.state = MapTaskState(..., intro=self.intro.initial_state())
+
+# In generate (its `start()` asks for the opening turn with `self.request_turn()`)
+intro = self.state.intro
+if (intro is not None) and intro.running:
+    turn = await self.intro.take_turn(attempt, intro)
+    if turn.message is not None: return self._intro_outcome(turn)  # The intro's reply: nothing else changes
+    intro = turn.state                                              # The answer starts the task: the task's reply carries this
 ```
 
 <br>
@@ -461,6 +499,9 @@ kind of turn it answered (`route`), what it did (`act`), and the waypoints it ad
 snapshots include the scenario, both sides' constraints, agreements (with the side that first
 suggested each), pending choices, suggestions, refusals (with who suggested each), every
 choice either side put forward, the avatar's constraints it mentioned, and the approval stage.
+Both also carry the intro's record (`intro`, null for a chat without one): whether the
+participant said they had done one before, whether they heard how it works, how many
+questions about it they asked, and whether the intro finished.
 Speech elicitation snapshots include the topic (its opening question and fresh angles), every
 thread with what each reply on it did, how many questions asked about a misheard word, and
 whether the participant said they wanted to stop. This is the final state, not a replayable
@@ -479,6 +520,6 @@ chat type has its own view (`frontend/src/pages/admin/components/task_details/`)
 
 | Chat type | What its task details show |
 |---|---|
-| `map_task` | How far from the finish the avatar stopped, its path's length against the route, the turns by kind and the replies by act, both maps as one, and each map with what differs |
-| `cooperative_planning` | The items agreed, each side's ideas and turned-down ones, the avatar's constraints it mentioned, both sides' materials, and each decision with who suggested what |
+| `map_task` | How far from the finish the avatar stopped, its path's length against the route, the turns by kind and the replies by act, how the intro went, both maps as one, and each map with what differs |
+| `cooperative_planning` | The items agreed, each side's ideas and turned-down ones, the avatar's constraints it mentioned, how the intro went, both sides' materials, and each decision with who suggested what |
 | `speech_elicitation` | The threads and follow-ups, the participant's average answer, the held replies (from each reply's saved timing), the replies by kind, each thread, and the topic |

@@ -28,6 +28,9 @@ from chat_app.websocket.harnesses.cooperative_planning.planning_api    import Pl
 from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, plan_block
 from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
 from chat_app.websocket.harnesses.cooperative_planning.scenarios       import PLANNING_SCENARIOS_DIR, load_scenario
+from chat_app.websocket.harnesses.features.intro.flow                  import IntroState
+from chat_app.websocket.harnesses.features.intro.intro_api             import IntroReading
+from chat_app.websocket.harnesses.features.intro.prompts               import INTRO_QUESTION
 from chat_app.websocket.harnesses.features.reply_gate.response_models  import CheckResult, Reply, check_model
 from chat_app.websocket.harnesses.registry                             import build_harness
 
@@ -45,6 +48,13 @@ SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
 # Where the reply gate looks its check client up, and the logger it writes each verdict to
 GET_REPLY_CHECK = "chat_app.websocket.harnesses.features.reply_gate.gate.get_reply_check_api"
 GATE_LOGGER     = "chat_app.websocket.harnesses.features.reply_gate.gate"
+
+# The intro's switch (patched to `()` where a test is about the planning itself), and its call
+INTRO_SWITCH = "chat_app.websocket.harnesses.features.intro.flow.FEATURE_INTRO_CONDITIONS"
+GET_INTRO    = "chat_app.websocket.harnesses.features.intro.flow.get_intro_api"
+
+# Where every harness module logs (the intro, the reply gate, and the planning's own)
+HARNESSES_LOGGER = "chat_app.websocket.harnesses"
 
 # A check that finds the user done, so every reply goes out as usual
 CHECK_DONE = CheckResult(basis="done", verdict=Reply(next_step="reply"))
@@ -131,6 +141,11 @@ class ScenarioFileTests(unittest.TestCase):
         self.assertEqual(SCENARIO.items[1].names, ("main course", "main", "entree", "main dish"))
         self.assertEqual(len(SCENARIO.participant.constraints), 3)
         self.assertEqual(SCENARIO.avatar_constraint_ids, ("broken_oven", "no_spicy", "make_ahead"))
+
+    # The task's first line, said after the intro's "Hi!", never says hi again
+    def test_no_scenario_starts_its_task_with_a_second_hello(self) -> None:
+        for variant, scenario in PLANNING_SCENARIOS.items():
+            with self.subTest(variant): self.assertFalse(scenario.start_line.startswith("Hi"), scenario.start_line)
 
     # Every scenario has the same shape, so a session's variant never changes how much there is to plan
     def test_every_scenario_has_three_items_and_three_constraints_a_side(self) -> None:
@@ -385,11 +400,17 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
 # Harness
 # ================================================================================
 class HarnessTests(unittest.IsolatedAsyncioTestCase):
-    # A planning harness with the cues on (or off), and the stand-in client every call reaches
-    def make(self, condition: str = "cues", pipeline: str = "track_then_reply", **responses: object) -> tuple[object, SimpleNamespace, StubPlanningAPI]:
+    # A planning harness and the client its calls reach (cues on or off; no intro unless asked)
+    def make(
+        self,
+        condition   : str  = "cues",              # The chat's condition
+        pipeline    : str  = "track_then_reply",  # The pipeline that answers each turn
+        intro       : bool = False,               # Open with the intro (left out where a test is about the planning)
+        **responses : object,                     # Each stand-in call's response, by its name
+    ) -> tuple[object, SimpleNamespace, StubPlanningAPI]:
         consumer = make_consumer()
         api      = StubPlanningAPI(**responses)
-        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline), (SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), (GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE))))):
+        for target, value in ((f"{HARNESS}.get_planning_api", Mock(return_value=api)), (f"{HARNESS}.PLANNING_PIPELINE", pipeline), (SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), (GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE)))), (INTRO_SWITCH, ("cues", "no_cues") if intro else ())):
             started = patch(target, value)
             started.start()
             self.addCleanup(started.stop)
@@ -432,6 +453,34 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
         self.assertEqual([type(cue) for cue in harness.cues], [PlanningBackchannels])
         self.assertEqual({name: feature.on for name, feature in harness.features.items()}, {"backchannels": False, "turn_end": False, "misheard": False})
+
+    # With the intro: what the scenario is first, then its first line once they're ready
+    async def test_the_intro_opens_the_chat_then_the_scenarios_first_line(self) -> None:
+        harness, consumer, api = self.make(intro=True)
+        self.addCleanup(harness.stop)
+        reading = SimpleNamespace(read=AsyncMock(return_value=IntroReading(basis="Done it before.", knows_task=True, next_step="start", answer=None)))
+        with patch(GET_INTRO, Mock(return_value=reading)):
+            opening = await harness.generate(TurnAttempt(context=[], user_text="", trigger="harness", publish_mood=AsyncMock(), publish_plan=AsyncMock()))
+            harness.on_reply_saved(opening)
+            with self.assertLogs(HARNESSES_LOGGER, level="INFO"): started = await harness.generate(make_attempt("Yes, I have."))
+        await asyncio.sleep(0)
+
+        self.assertEqual((opening.message, opening.behavior), (f"Hi! {SCENARIO.intro} {INTRO_QUESTION}", "pleased"))
+        self.assertEqual((started.message, started.state.intro), (f"Great, let's begin! {SCENARIO.start_line}", IntroState(stage="done", knew_task=True)))
+        self.assertEqual(api.calls, [])
+        self.assertNotIn("task_card", sent_types(consumer))  # The intro's progress alone doesn't send the card again
+
+    # An answer to the intro that offers an idea goes to the planning, and the intro is over
+    async def test_an_answer_with_an_idea_goes_to_the_planning(self) -> None:
+        harness, _, _ = self.make(intro=True, track=plan_update({"op": "suggest", "item": "starter", "choice": "soup"}), reply=spoken_turn("Soup sounds nice."))
+        harness.state = replace(harness.state, intro=IntroState(stage="asked"))
+        reading       = SimpleNamespace(read=AsyncMock(return_value=IntroReading(basis="Offered an idea.", knows_task=None, next_step="task", answer=None)))
+        with patch(GET_INTRO, Mock(return_value=reading)), self.assertLogs(HARNESSES_LOGGER, level="INFO"):
+            outcome = await harness.generate(make_attempt("Sure. How about soup to start?"))
+
+        self.assertEqual(outcome.message, "Soup sounds nice.")
+        self.assertEqual(outcome.state.items["starter"].suggestions, (Suggestion("soup", "user"),))
+        self.assertEqual((outcome.state.intro, outcome.task_snapshot["intro"]["finished"]), (IntroState(stage="done"), True))
 
     # The avatar's first turn says the scenario's opening line, with no LLM call
     async def test_the_opening_turn_says_the_scenarios_line(self) -> None:
@@ -529,8 +578,11 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
 # Cues
 # ================================================================================
 class CueTests(unittest.IsolatedAsyncioTestCase):
-    # A harness with its cues, and a connection that records what they send
+    # A harness with its cues (and no intro), and a connection that records what they send
     async def asyncSetUp(self) -> None:
+        no_intro = patch(INTRO_SWITCH, ())
+        no_intro.start()
+        self.addCleanup(no_intro.stop)
         self.consumer = make_consumer()
         self.harness  = build_harness(self.consumer, "cooperative_planning", "cues", None)
 

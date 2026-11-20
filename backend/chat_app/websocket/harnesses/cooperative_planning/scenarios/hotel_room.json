@@ -3,6 +3,8 @@
     "title"          : "Sort out your hotel room",
     "event"          : "a fix for a hotel guest's room complaints",
     "opening_line"   : "Hello, and welcome to the front desk. How can I help you today?",
+    "intro"          : "Today I'll play a hotel receptionist, and you're a guest with some problems with your room.",
+    "start_line"     : "Hello, and welcome to the front desk. How can I help you today?",
     "settle_example" : "So, five o'clock for the move time?",
     "closing_line"   : "That's everything arranged, then. Thank you for your patience, and enjoy the rest of your stay!",
     "items": [

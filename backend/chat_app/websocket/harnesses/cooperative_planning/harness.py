@@ -7,8 +7,12 @@ The two sides agree on one choice for each item of a scenario (a starter, a main
 course, and a dessert for a dinner party), and each has private constraints the
 other learns only by being told. A scenario also gives each side its brief: who
 it is and the situation (two friends planning, or a hotel guest and the
-receptionist). The avatar opens with the scenario's line, and
-each turn is answered by the pipeline `config.PLANNING_PIPELINE` names
+receptionist). The chat opens with the shared intro (`features/intro/`): what
+the task is in the scenario's own words, and how planning works for anyone new
+to it, then the scenario's first line; without the intro, the avatar opens with
+the scenario's opening line. An answer to the intro that already offers an idea
+goes straight to the planning. Each turn is answered by the pipeline
+`config.PLANNING_PIPELINE` names
 (`pipelines.py`). The changes it proposes are applied in code (`plan_state.py`),
 and the new plan takes effect only once the reply is saved, so a reply cut off
 by newer speech never writes on the card. Once every item is agreed, the avatar
@@ -35,6 +39,7 @@ avatar's brief and constraints, marking the ones it mentioned (`reveal_view`).
 """
 from __future__  import annotations
 from dataclasses import dataclass, replace
+from functools   import partial
 from typing      import Awaitable, Callable, TYPE_CHECKING
 
 import asyncio, logging, time
@@ -50,20 +55,22 @@ from  ...services.bg_helpers         import fire_and_log
 from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
+from   ..features.intro.flow         import Intro, intro_record
 from   ..features.reply_gate.gate    import MisheardCheck, ReplyGate, TurnEndCheck
-from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan, writing_plan
+from    .behaviors                   import PLANNING_INTRO_BEHAVIORS, reply_plan, setup_for, start_plan, thinking_plan, writing_plan
 from    .config                      import PLANNING_HOLD_SEC, PLANNING_PIPELINE
 from    .cues                        import ItemGlance, PlanningBackchannels, QuietNudge
 from    .pipelines                   import PIPELINES, PlanningTurn
 from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, planning_reveal, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
-from    .prompts                     import PLANNING_TURN_END_NOTES, misheard_notes
+from    .prompts                     import PLANNING_TURN_END_NOTES, intro_script, misheard_notes
 from    .response_models             import models_for_scenario
 from    .scenarios                   import load_scenario
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
     from  ..base                import RevealView
+    from  ..features.intro.flow import IntroState
     from   .pipelines           import PlanningReply, ProposedChanges
     from   .response_models     import Behavior
 
@@ -104,13 +111,14 @@ class CooperativePlanningHarness(ChatHarness):
     state : PlanningState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's scenario, its responses, its cues, its reply gate, and their switches
+    # Load the scenario, its responses, intro, cues, reply gate, and their switches
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
         self.scenario     = PLANNING_SCENARIOS[variant]
         self.models       = models_for_scenario(self.scenario.item_ids, self.scenario.avatar_constraint_ids)
-        self.state        = initial_state(self.scenario)
+        self.intro        = Intro(self, intro_script(self.scenario))
+        self.state        = replace(initial_state(self.scenario), intro=self.intro.initial_state())
         self.with_cues    = (condition == "cues")
         self.backchannels = PlanningBackchannels(self)
         self._tracking    : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
@@ -143,15 +151,22 @@ class CooperativePlanningHarness(ChatHarness):
         # Wait for the last exchange's tracking (reply_then_track), so this turn sees its plan
         if (self._tracking is not None) and (not self._tracking.done()): await asyncio.wait({self._tracking})
 
-        # Scripted opening line, and the closing line once a later tracking approved the plan
+        # The intro answers until the user is ready (an answer offering an idea goes on to the planning)
+        intro = self.state.intro
+        if (intro is not None) and intro.running:
+            turn = await self.intro.take_turn(attempt, intro)
+            if turn.message is not None: return self._outcome(turn.message, PLANNING_INTRO_BEHAVIORS[turn.move], None, replace(self.state, intro=turn.state), ())
+            intro = turn.state
+
+        # The opening line (without the intro), and the closing line once later tracking approved the plan
         if not attempt.context:            return self._outcome(self.scenario.opening_line, "pleased", None, self.state, ())
         if self.state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, self.state, ())
 
         # The reply waits while the user seems mid-thought, or gives way to a question about a misheard word
-        return await self.reply_gate.run(attempt, self._reply, self._clarify)
+        return await self.reply_gate.run(attempt, partial(self._reply, intro=intro), self._clarify)
 
-    # Answer the turn through the pipeline, and propose the plan its changes leave
-    async def _reply(self, attempt: TurnAttempt) -> PlanningOutcome:
+    # Answer through the pipeline and propose the plan it leaves (the intro over, if it handed on)
+    async def _reply(self, attempt: TurnAttempt, intro: IntroState | None) -> PlanningOutcome:
         # With cues, the avatar raises its card and reads it over while it works out the reply
         # (published from here, not from a cue, so it always goes out before the reply's own plan)
         if self.with_cues: await attempt.publish_plan(thinking_plan(self.turn_number))
@@ -163,10 +178,10 @@ class CooperativePlanningHarness(ChatHarness):
         try: reply = await pipeline(get_planning_api(), turn)
         except PlanningAPIError:
             logger.exception(f"{LLM_MAIN}[Planning] The {PLANNING_PIPELINE} pipeline failed; asking the user to say it again.{RESET}")
-            return self._outcome(MSG_SAY_AGAIN, "apologetic", None, self.state, ())
+            return self._outcome(MSG_SAY_AGAIN, "apologetic", None, replace(self.state, intro=intro), ())
 
         # Apply the changes, and start the final check once the reply has read the finished plan back
-        state, results = apply_changes(self.state, reply.changes)
+        state, results = apply_changes(replace(self.state, intro=intro), reply.changes)
         if (reply.directive == "read_back") and (state.stage == "planning") and state.all_agreed: state = replace(state, stage="final_check")
         _log_turn(reply, results, state, time.monotonic() - started)
 
@@ -201,9 +216,10 @@ class CooperativePlanningHarness(ChatHarness):
             follow_up     = follow_up,
         )
 
-    # Freeze the scenario, private constraints, and proposed or committed decisions
+    # Freeze the scenario, private constraints, proposed or committed decisions, and the intro's record
     def history_view(self, state: PlanningState | None = None) -> dict[str, object]:
-        return planning_history(self.scenario, self.state if (state is None) else state)
+        saved = self.state if (state is None) else state
+        return {**planning_history(self.scenario, saved), "intro": intro_record(saved.intro)}
 
     # What the participant is shown once the chat ends: the avatar's brief and constraints, marking the ones it mentioned
     def reveal_view(self) -> RevealView:
@@ -213,9 +229,10 @@ class CooperativePlanningHarness(ChatHarness):
     # Once a reply is saved: show the card it changed, and start any tracking it left
     # --------------------------------------------------------------------------------
     def on_reply_saved(self, outcome: ResponseOutcome) -> None:
+        # The card shows the plan, so the intro's progress alone doesn't send it again
         before = self.state
         super().on_reply_saved(outcome)
-        if self.state != before: fire_and_log(send_task_card(self.consumer, self.scenario, self.state), name="cooperative_planning::card")
+        if replace(self.state, intro=None) != replace(before, intro=None): fire_and_log(send_task_card(self.consumer, self.scenario, self.state), name="cooperative_planning::card")
         if isinstance(outcome, PlanningOutcome) and (outcome.follow_up is not None): self._tracking = fire_and_log(outcome.follow_up(), name="cooperative_planning::tracking")
 
     # The reply whose yes settled the last item has been heard: take a turn to read the whole plan back

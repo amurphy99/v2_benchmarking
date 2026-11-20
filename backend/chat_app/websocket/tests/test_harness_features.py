@@ -1,12 +1,13 @@
 """
-Shared harness features: signs of listening, and the reply gate.
+Shared harness features: signs of listening, the reply gate, and the intro.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_harness_features`
 
 The features run for a stand-in chat, the gate's replies are stand-ins, and the
-check client returns a fixed verdict, so these tests check what code decides:
-when a sign of listening goes out, when a reply goes out, waits, or gives way to
-a question, what newer speech cancels, and what the check is asked.
+check and intro clients return fixed results, so these tests check what code
+decides: when a sign of listening goes out, when a reply goes out, waits, or
+gives way to a question, what newer speech cancels, what the check is asked,
+and which line the intro says next.
 
 """
 from datetime      import datetime, timezone
@@ -22,15 +23,19 @@ from chat_app.services.step_timing                                    import col
 from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
 from chat_app.websocket.harnesses.features.backchannels.config        import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
 from chat_app.websocket.harnesses.features.backchannels.cue           import BACKCHANNEL_NOD, BACKCHANNEL_TILT, Backchannels, listening_sound
+from chat_app.websocket.harnesses.features.intro.flow                 import Intro, IntroScript, IntroState, intro_record
+from chat_app.websocket.harnesses.features.intro.intro_api            import IntroAPIError, IntroReading
+from chat_app.websocket.harnesses.features.intro.prompts              import INTRO_QUESTION, INTRO_READY, INTRO_SAY_AGAIN, INTRO_WAIT, build_intro_messages
 from chat_app.websocket.harnesses.features.reply_gate.config          import REPLY_CHECK_CONTEXT_MESSAGES
 from chat_app.websocket.harnesses.features.reply_gate.gate            import MisheardCheck, ReplyGate, TurnEndCheck
 from chat_app.websocket.harnesses.features.reply_gate.prompts         import build_check_messages
 from chat_app.websocket.harnesses.features.reply_gate.reply_check_api import ReplyCheckAPIError
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Clarify, check_model
 
-# Where the gate and the signs of listening look up what these tests replace
+# Where the gate, the signs of listening, and the intro look up what these tests replace
 GATE         = "chat_app.websocket.harnesses.features.reply_gate.gate"
 BACKCHANNELS = "chat_app.websocket.harnesses.features.backchannels.cue"
+INTRO        = "chat_app.websocket.harnesses.features.intro.flow"
 
 # The stand-in chat's sounds and gestures, and the check's response with both checks on
 SOUNDS      = {"mm_hm": "Mm-hm.", "oh_no": "Oh no."}
@@ -44,6 +49,14 @@ LONG_ENOUGH = " ".join(["word"] * BACKCHANNEL_MIN_WORDS)
 THINKING = {"id": "t1-think", "steps": [{"state": "thinking"}]}
 REPLY    = ResponseOutcome(message="Oh, which dog was that?")
 QUESTION = "Sorry, did you say 'tad person'?"
+
+# The stand-in chat's own lines for the intro
+INTRO_SCRIPT = IntroScript(
+    about       = "Today we're going to sort some shapes together.",
+    rules       = "Here's how it works: I name a shape, and you tell me where it goes.",
+    start       = "First, a circle. Where does it go?",
+    starts_task = "a place for a shape",
+)
 
 # Each verdict the stand-in check can give
 DONE      = {"next_step": "reply",   "likely_said": None}
@@ -95,6 +108,19 @@ def make_attempt(trigger: str = "automatic") -> TurnAttempt:
 # One interim result: the utterance so far
 def interim(text: str) -> InterimSpeech:
     return InterimSpeech(text=text, new_speech=True, stability=0.9, ended_at=datetime.now(timezone.utc))
+
+# A harness turn with nothing staged (the opening, or a nudge after a silence)
+def quiet_turn() -> TurnAttempt:
+    return TurnAttempt(context=[], user_text="", trigger="harness", publish_mood=AsyncMock(), publish_plan=AsyncMock())
+
+# The user's answer to the intro, after its opening
+def intro_answer(text: str) -> TurnAttempt:
+    context = [("assistant", f"Hi! {INTRO_SCRIPT.about} {INTRO_QUESTION}", 0.0), ("user", text, 0.0)]
+    return TurnAttempt(context=context, user_text=text, trigger="automatic", publish_mood=AsyncMock(), publish_plan=AsyncMock())
+
+# One reading of the user's answer, as the intro's call returns it
+def reading(step: str, knows: bool | None = None, answer: str | None = None) -> IntroReading:
+    return IntroReading(basis="b", knows_task=knows, next_step=step, answer=answer)
 
 # The avatar plans a connection was sent, in order
 def sent_plans(consumer: SimpleNamespace) -> list[dict]:
@@ -326,3 +352,92 @@ class CheckPromptTests(unittest.TestCase):
         self.assertIn('THEIR LAST SENTENCE: "It was cold, and then we"', longer)
         self.assertIn("choose wait over clarify", longer)
         self.assertNotIn("THEIR LAST SENTENCE", build_check_messages(checks, SOUNDS, GESTURES, [], "We went to the lake.")[0]["content"])
+
+
+# ================================================================================
+# The Intro
+# ================================================================================
+class IntroTests(unittest.IsolatedAsyncioTestCase):
+    # The intro for a stand-in chat, whose readings return `readings` in turn (an exception raises)
+    def make(self, *readings: IntroReading | Exception) -> tuple[Intro, SimpleNamespace]:
+        client  = SimpleNamespace(read=AsyncMock(side_effect=list(readings)))
+        started = patch(f"{INTRO}.get_intro_api", Mock(return_value=client))
+        started.start()
+        self.addCleanup(started.stop)
+        return Intro(make_harness(), INTRO_SCRIPT), client
+
+    # The opening: hello, what the task is, and whether they've done one before (no call needed)
+    async def test_the_opening_says_what_the_task_is_and_asks(self) -> None:
+        intro, client = self.make()
+        turn = await intro.take_turn(quiet_turn(), intro.initial_state())
+        self.assertEqual((turn.message, turn.move, turn.state.stage), (f"Hi! {INTRO_SCRIPT.about} {INTRO_QUESTION}", "opening", "asked"))
+        client.read.assert_not_awaited()
+
+    # Someone who knows the task starts it at once: "Great, let's begin!" and the task's own first line
+    async def test_someone_who_knows_it_starts_the_task(self) -> None:
+        intro, _ = self.make(reading("start", knows=True))
+        with self.assertLogs(INTRO, level="INFO"): turn = await intro.take_turn(intro_answer("Yes, lots of times."), IntroState(stage="asked"))
+        self.assertEqual(turn.message, f"Great, let's begin! {INTRO_SCRIPT.start}")
+        self.assertEqual(turn.state, IntroState(stage="done", knew_task=True))
+
+    # Someone new to it hears how it works, then starts when ready (what they first said is kept)
+    async def test_someone_new_to_it_hears_how_it_works_first(self) -> None:
+        intro, _ = self.make(reading("explain", knows=False), reading("start", knows=True))
+        with self.assertLogs(INTRO, level="INFO"):
+            explained = await intro.take_turn(intro_answer("No, never."), IntroState(stage="asked"))
+            started   = await intro.take_turn(intro_answer("Okay, ready."), explained.state)
+        self.assertEqual(explained.message, f"{INTRO_SCRIPT.rules} {INTRO_READY}")
+        self.assertEqual(explained.state, IntroState(stage="ready_check", knew_task=False, explained=True))
+        self.assertEqual(started.state,   IntroState(stage="done",        knew_task=False, explained=True))
+
+    # A question gets the reading's answer, then whether they're ready
+    async def test_a_question_gets_its_answer_then_the_ready_check(self) -> None:
+        intro, _ = self.make(reading("answer", answer="You tell me where each shape goes."))
+        with self.assertLogs(INTRO, level="INFO"): turn = await intro.take_turn(intro_answer("What do I have to do?"), IntroState(stage="asked"))
+        self.assertEqual(turn.message, f"You tell me where each shape goes. {INTRO_READY}")
+        self.assertEqual((turn.state.stage, turn.state.questions), ("ready_check", 1))
+
+    # An answer that starts the task gets no intro line: the task answers it, and the intro is over
+    async def test_an_answer_that_starts_the_task_goes_on_to_it(self) -> None:
+        intro, _ = self.make(reading("task", knows=True))
+        with self.assertLogs(INTRO, level="INFO"): turn = await intro.take_turn(intro_answer("Yes. The circle goes on the left."), IntroState(stage="asked"))
+        self.assertEqual((turn.message, turn.move, turn.state), (None, "task", IntroState(stage="done", knew_task=True)))
+
+    # Someone not ready yet is told to take their time, and the intro waits where it was
+    async def test_someone_not_ready_yet_gets_time(self) -> None:
+        intro, _ = self.make(reading("wait"))
+        with self.assertLogs(INTRO, level="INFO"): turn = await intro.take_turn(intro_answer("Hang on a second."), IntroState(stage="ready_check", explained=True))
+        self.assertEqual((turn.message, turn.state), (INTRO_WAIT, IntroState(stage="ready_check", explained=True)))
+
+    # A turn with no words (a nudge after a silence) asks the waiting question again, without a call
+    async def test_a_quiet_turn_asks_its_question_again(self) -> None:
+        intro, client = self.make()
+        for stage, question in (("asked", INTRO_QUESTION), ("ready_check", INTRO_READY)):
+            turn = await intro.take_turn(quiet_turn(), IntroState(stage=stage))
+            self.assertEqual((turn.message, turn.state.stage), (question, stage))
+        client.read.assert_not_awaited()
+
+    # A failed reading asks them to say that again, and the intro stays where it was
+    async def test_a_failed_reading_asks_again_and_stays(self) -> None:
+        intro, _ = self.make(IntroAPIError("Intro intro failed after all attempts"))
+        with self.assertLogs(INTRO, level="ERROR"): turn = await intro.take_turn(intro_answer("Mm."), IntroState(stage="asked"))
+        self.assertEqual((turn.message, turn.state), (INTRO_SAY_AGAIN, IntroState(stage="asked")))
+
+    # Its switch decides whether a chat has an intro at all, and the history keeps what it learned
+    def test_the_switch_and_the_record(self) -> None:
+        with patch(f"{INTRO}.FEATURE_INTRO_CONDITIONS", ("cues",)):
+            self.assertIsNone(Intro(make_harness("no_cues"), INTRO_SCRIPT).initial_state())
+            self.assertEqual (Intro(make_harness("cues"),    INTRO_SCRIPT).initial_state(), IntroState())
+        self.assertIsNone(intro_record(None))
+        self.assertEqual(intro_record(IntroState(stage="done", knew_task=False, explained=True, questions=2)), {"knew_task": False, "explained": True, "questions": 2, "finished": True})
+
+    # The reading gets where the intro is, what the task is, and how it works, then the conversation
+    def test_the_reading_gets_the_task_and_where_the_intro_is(self) -> None:
+        history  = [{"role": "assistant", "content": "Hi!"}, {"role": "user", "content": "No."}]
+        messages = build_intro_messages(INTRO_SCRIPT, "asked", history)
+        for text in (INTRO_SCRIPT.about, INTRO_SCRIPT.rules, INTRO_SCRIPT.starts_task, "asked whether they have done one"): self.assertIn(text, messages[0]["content"])
+        self.assertEqual(messages[1:], history)
+
+    # A reading that answers a question has to carry the answer
+    def test_an_answer_step_needs_its_answer(self) -> None:
+        with self.assertRaises(ValidationError): IntroReading(basis="b", knows_task=None, next_step="answer", answer=None)

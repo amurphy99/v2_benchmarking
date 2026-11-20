@@ -10,6 +10,7 @@ replies, where the avatar ends up, and what the clients are sent (the
 participant's map, the avatar's plans, and the admin listener's view).
 
 """
+from dataclasses   import replace
 from datetime      import datetime, timezone
 from pathlib       import Path
 from types         import SimpleNamespace
@@ -22,6 +23,9 @@ from pydantic import ValidationError
 # From this project
 from chat_app.websocket.consumers.consumers                           import ChatConsumer
 from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, TurnAttempt
+from chat_app.websocket.harnesses.features.intro.flow                 import IntroState
+from chat_app.websocket.harnesses.features.intro.intro_api            import IntroReading
+from chat_app.websocket.harnesses.features.intro.prompts              import INTRO_QUESTION, INTRO_READY
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
 from chat_app.websocket.harnesses.map_task.behaviors                  import MAP_TASK_SOUNDS
 from chat_app.websocket.harnesses.map_task.cues                       import DirectionGlance, LandmarkGlance, MapTaskBackchannels
@@ -30,7 +34,7 @@ from chat_app.websocket.harnesses.map_task.harness                    import MAP
 from chat_app.websocket.harnesses.map_task.map_task_api               import MapTaskAPIError
 from chat_app.websocket.harnesses.map_task.maps                       import MAP_TASK_MAPS_DIR, follower_view, giver_view, load_map, map_file_previews
 from chat_app.websocket.harnesses.map_task.pipelines                  import assess_then_reply, draft_and_check, draft_answer, single_call
-from chat_app.websocket.harnesses.map_task.prompts                    import facts_block
+from chat_app.websocket.harnesses.map_task.prompts                    import MAP_TASK_INTRO, facts_block
 from chat_app.websocket.harnesses.map_task.response_models            import NO_MOVE, AlongPath, DraftCheck, FollowerTurn, SpokenReply, ToLandmark, TurnAssessment, models_for_map
 from chat_app.websocket.harnesses.map_task.understanding              import read_turn
 from chat_app.websocket.harnesses.registry                            import build_harness
@@ -56,6 +60,13 @@ SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
 # Where the reply gate looks its check client up, and the logger it writes each verdict to
 GET_REPLY_CHECK = "chat_app.websocket.harnesses.features.reply_gate.gate.get_reply_check_api"
 GATE_LOGGER     = "chat_app.websocket.harnesses.features.reply_gate.gate"
+
+# The intro's switch (patched to `()` where a test is about the task itself), and its call
+INTRO_SWITCH = "chat_app.websocket.harnesses.features.intro.flow.FEATURE_INTRO_CONDITIONS"
+GET_INTRO    = "chat_app.websocket.harnesses.features.intro.flow.get_intro_api"
+
+# Where every harness module logs (the intro, the reply gate, and the Map Task's own)
+HARNESSES_LOGGER = "chat_app.websocket.harnesses"
 
 # A check that finds the user done, so every reply goes out as usual
 CHECK_DONE = CheckResult(basis="done", verdict=Reply(next_step="reply"))
@@ -314,11 +325,11 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
 # Map Task Harness
 # ================================================================================
 class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
-    # A Map Task harness on the default map and condition, with the LLM client replaced
+    # A Map Task harness on the default map and condition, with the LLM client replaced (and no intro)
     def setUp(self) -> None:
         self.api   = SimpleNamespace(follow=AsyncMock(), check_draft=AsyncMock(), assess=AsyncMock(), reply=AsyncMock())
         self.check = SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE))
-        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), patch(GET_REPLY_CHECK, Mock(return_value=self.check))):
+        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), patch(GET_REPLY_CHECK, Mock(return_value=self.check)), patch(INTRO_SWITCH, ())):
             replaced.start()
             self.addCleanup(replaced.stop)
         self.consumer = make_consumer()
@@ -484,11 +495,63 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
 
 
 # --------------------------------------------------------------------------------
+# The Intro
+# --------------------------------------------------------------------------------
+class MapTaskIntroTests(unittest.IsolatedAsyncioTestCase):
+    # A Map Task chat that opens with the intro, its reading and the Map Task's calls replaced
+    def setUp(self) -> None:
+        self.api     = SimpleNamespace(follow=AsyncMock(), check_draft=AsyncMock(), assess=AsyncMock(), reply=AsyncMock())
+        self.reading = SimpleNamespace(read=AsyncMock())
+        for replaced in (patch("chat_app.websocket.harnesses.map_task.harness.get_map_task_api", return_value=self.api), patch(GET_INTRO, Mock(return_value=self.reading)), patch(SYNTHESIZE_SOUNDS, AsyncMock(return_value=SOUNDS)), patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_DONE))))):
+            replaced.start()
+            self.addCleanup(replaced.stop)
+        self.consumer = SimpleNamespace(send_json=AsyncMock(), broadcast_task_monitor=AsyncMock(), streaming_active=True, request_harness_turn=Mock(return_value=Mock()))
+        self.harness  = build_harness(self.consumer, "map_task", None, None)
+
+    # The user's answer to the intro's question
+    def answer(self, text: str) -> TurnAttempt:
+        return TurnAttempt(context=[("assistant", "Have you done one of these before?", 0.0), ("user", text, 0.0)], user_text=text, trigger="automatic", publish_mood=AsyncMock(), publish_plan=AsyncMock())
+
+    # The avatar opens the chat once the map is out: its own turn says hello, what the task is, and asks
+    async def test_the_avatar_opens_with_the_intro(self) -> None:
+        await self.harness.start()
+        self.consumer.request_harness_turn.assert_called_once_with()
+
+        outcome = await self.harness.generate(TurnAttempt(context=[], user_text="", trigger="harness", publish_mood=AsyncMock(), publish_plan=AsyncMock()))
+        self.assertEqual(outcome.message, f"Hi! {MAP_TASK_INTRO.about} {INTRO_QUESTION}")
+        self.assertEqual((outcome.state.path, outcome.state.replies, outcome.state.intro.stage), ((DEMO_START,), (), "asked"))
+        self.assertEqual(outcome.task_snapshot["intro"], {"knew_task": None, "explained": False, "questions": 0, "finished": False})
+        self.assertEqual(outcome.avatar_plan["steps"][0]["gaze"]["on"], "user")
+
+    # Someone new to the task hears how it works, and the avatar stays at the start
+    async def test_someone_new_hears_how_it_works(self) -> None:
+        self.harness.state = replace(self.harness.state, intro=IntroState(stage="asked"))
+        self.reading.read.return_value = IntroReading(basis="Never played.", knows_task=False, next_step="explain", answer=None)
+        with self.assertLogs(HARNESSES_LOGGER, level="INFO"): outcome = await self.harness.generate(self.answer("No, what is it?"))
+        self.assertEqual(outcome.message, f"{MAP_TASK_INTRO.rules} {INTRO_READY}")
+        self.assertEqual((outcome.state.path, outcome.state.replies, outcome.state.intro.explained), ((DEMO_START,), (), True))
+        self.api.follow.assert_not_awaited()
+
+    # An answer that already gives a direction goes to the task: the avatar moves, and the intro is over
+    async def test_an_answer_with_a_direction_goes_to_the_task(self) -> None:
+        self.harness.state = replace(self.harness.state, intro=IntroState(stage="asked"))
+        self.reading.read.return_value = IntroReading(basis="Gave a direction.", knows_task=True, next_step="task", answer=None)
+        self.api.follow.return_value   = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay, left of the bus.")
+        with self.assertLogs(HARNESSES_LOGGER, level="INFO"): outcome = await self.harness.generate(self.answer("Yes. Go to the left of the bus."))
+        self.assertEqual(outcome.message, "Okay, left of the bus.")
+        self.assertEqual((len(outcome.state.path), len(outcome.state.replies)), (2, 1))
+        self.assertEqual(outcome.state.intro, IntroState(stage="done", knew_task=True))
+
+
+# --------------------------------------------------------------------------------
 # Cues
 # --------------------------------------------------------------------------------
 class MapTaskCueTests(unittest.IsolatedAsyncioTestCase):
-    # A Map Task harness with cues, and a connection that records what they send
+    # A Map Task harness with cues (and no intro), and a connection that records what they send
     def setUp(self) -> None:
+        no_intro = patch(INTRO_SWITCH, ())
+        no_intro.start()
+        self.addCleanup(no_intro.stop)
         self.consumer = make_consumer()
         self.harness  = build_harness(self.consumer, "map_task", "cues", None)
         self.addCleanup(self.harness.stop)
@@ -537,6 +600,12 @@ class MapTaskCueTests(unittest.IsolatedAsyncioTestCase):
 # The Admin Listener's View
 # --------------------------------------------------------------------------------
 class MapTaskMonitorTests(unittest.IsolatedAsyncioTestCase):
+    # Chats without the intro (its record is tested with it)
+    def setUp(self) -> None:
+        no_intro = patch(INTRO_SWITCH, ())
+        no_intro.start()
+        self.addCleanup(no_intro.stop)
+
     # A listener that joins gets both maps and the avatar's path from the primary connection
     async def test_a_joining_listener_gets_the_view(self) -> None:
         consumer = SimpleNamespace(channel_layer=SimpleNamespace(send=AsyncMock()))
@@ -545,7 +614,7 @@ class MapTaskMonitorTests(unittest.IsolatedAsyncioTestCase):
 
         channel, event = consumer.channel_layer.send.await_args.args
         self.assertEqual((channel, event["type"]), ("listener-1", "ws.task_monitor"))
-        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)], "replies": []})
+        self.assertEqual(event["data"], {"kind": "map_task", "giver": giver_view(DEMO_MAP), "follower": follower_view(DEMO_MAP), "position": list(DEMO_START), "path": [list(DEMO_START)], "replies": [], "intro": None})
 
     # A chat type without a view sends nothing
     async def test_a_chat_type_without_a_view_sends_nothing(self) -> None:

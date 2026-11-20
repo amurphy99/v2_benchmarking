@@ -151,6 +151,11 @@ def _reply_audio_step(reply: FollowerReply) -> dict[str, object]:
 def _named_landmark(reading: TurnReading) -> Landmark | None:
     return next((mention.landmark for mention in reading.mentions if mention.landmark is not None), None)
 
+# An intro reply's plan: the map down and eyes on the user as its audio starts, then listening
+def intro_plan(turn: int) -> AvatarPlan:
+    step = {"start_on": "reply_audio", "state": "listening", "prop": {"raise": 0}, "gaze": {"on": "user", "hold_ms": MAP_TASK_LOOK_BACK_MS}, "face": "rest"}
+    return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": [step]}
+
 
 # ================================================================================
 # Cue Plans (while listening)

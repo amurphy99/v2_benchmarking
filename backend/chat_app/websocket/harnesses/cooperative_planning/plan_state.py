@@ -33,8 +33,9 @@ from typing      import Literal, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
-    from  .response_models      import Change
-    from  .scenarios            import Scenario
+    from  ..features.intro.flow import IntroState
+    from   .response_models     import Change
+    from   .scenarios           import Scenario
 
 # Who proposed a change: the participant, or the avatar
 Side = Literal["user", "avatar"]
@@ -68,14 +69,15 @@ class ItemState:
     refused     : tuple[Refusal, ...]    = ()    # Ideas turned down
     put_forward : tuple[Suggestion, ...] = ()    # Every choice either side has put forward, each with the side that did first (never pruned)
 
-# The whole plan, and what the avatar knows about the participant so far
+# The whole plan, what the avatar knows about the participant so far, and the intro's progress
 @dataclass(frozen=True, slots=True)
 class PlanningState:
-    items       : dict[str, ItemState]          # Each item by id, in the scenario's order (replaced, never changed in place)
-    user_wants  : tuple[str, ...] = ()          # What the participant needs or wants
-    user_avoids : tuple[str, ...] = ()          # What the participant must avoid
-    revealed    : tuple[str, ...] = ()          # The avatar's own constraints it has mentioned, by id
-    stage       : Stage           = "planning"
+    items       : dict[str, ItemState]             # Each item by id, in the scenario's order (replaced, never changed in place)
+    user_wants  : tuple[str, ...]   = ()           # What the participant needs or wants
+    user_avoids : tuple[str, ...]   = ()           # What the participant must avoid
+    revealed    : tuple[str, ...]   = ()           # The avatar's own constraints it has mentioned, by id
+    stage       : Stage             = "planning"
+    intro       : IntroState | None = None         # The shared intro, before the planning starts (None for a chat without one)
 
     # Every item has a choice on the card
     @property

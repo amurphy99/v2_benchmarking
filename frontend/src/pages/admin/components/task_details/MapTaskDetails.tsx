@@ -5,11 +5,11 @@
 From the session's saved task history. The stats come first: how far from the
 finish the avatar stopped, and how long its path was against the route, both
 measured in the paper's real proportions (its longer side is 1), as the backend
-measures. The turns by kind and the avatar's replies by what they did come
-from the saved replies (`replies`). The combined map draws both maps as one
-(`CombinedMap`); under it, each map on its own, with the landmarks that differ
-ringed on both and named. A session saved before its path or replies were
-recorded shows only what it has.
+measures. The turns by kind and the avatar's replies by what they did come from
+the saved replies (`replies`), and how the intro went from its record. The
+combined map draws both maps as one (`CombinedMap`); under it, each map on its
+own, with the landmarks that differ ringed on both and named. A session saved
+before its path or replies were recorded shows only what it has.
 
 */
 import type { ReactElement } from "react";
@@ -23,6 +23,7 @@ import        MapTaskMap                                               from "@/c
 import      { MAP_TASK_PAPER, differingIds, mapDifferences           } from "@/components/map_task/mapTaskViews";
 import      { Pill                                                   } from "../ui/Pill";
 import      { StatTile, StatTileRow                                  } from "../ui/StatTile";
+import        IntroTile                                                from "./IntroTile";
 
 // How each kind of turn reads (copied from `Route` in `backend/chat_app/websocket/harnesses/map_task/understanding.py`)
 const MAP_TURN_LABELS: Record<MapTaskReplyRecord["route"], string> = {
@@ -87,6 +88,7 @@ export default function MapTaskDetails({view}: {
                     <StatTile label="Directions"      value={countReplies((reply: MapTaskReplyRecord) => reply.route === "instruction")} sub="turns telling it where to go" help="Turns read as a direction: a move, or a landmark to head for" />
                     <StatTile label="Clarifications"  value={countReplies((reply: MapTaskReplyRecord) => reply.act === "clarify")}       sub="times the avatar asked again" help="Replies asking the participant to say it again or explain, including a likely misheard name" />
                     <StatTile label="Moves"           value={moves}                                                                      sub="replies that moved it"         help="Replies whose move added at least one point to the avatar's path" />
+                    <IntroTile intro={view.intro} />
                 </StatTileRow>
 
                 {/* Every reply, by the kind of turn it answered and by what it did */}

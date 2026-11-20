@@ -3,6 +3,8 @@
     "title"          : "Plan Sam's birthday party",
     "event"          : "a surprise birthday party for Sam, a friend of you both",
     "opening_line"   : "Hi! I'm so glad we're planning Sam's surprise party together. We need to pick a place, an activity, and a gift. Do you have any ideas?",
+    "intro"          : "Today we're going to plan a surprise birthday party together, for our friend Sam.",
+    "start_line"     : "We need to pick a place, an activity, and a gift. Do you have any ideas?",
     "settle_example" : "So, a scarf for the gift?",
     "closing_line"   : "That's the whole party planned, then. Thanks for planning this with me, Sam is going to love it!",
     "items": [

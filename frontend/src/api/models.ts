@@ -347,6 +347,15 @@ export type MapTaskHistory = {
     path     : MapPoint[] | null;
     position : MapPoint | null;
     replies? : MapTaskReplyRecord[] | null;  // Absent from snapshots saved before replies were recorded; null for an unsaved session
+    intro?   : IntroRecord | null;           // Absent from snapshots saved before the intro; null for a chat without one
+};
+
+// How a task chat's intro went (copied from `intro_record` in `harnesses/features/intro/flow.py`)
+export type IntroRecord = {
+    knew_task : boolean | null;  // Whether they said they had done one before (null: they didn't say)
+    explained : boolean;         // They heard how the task works
+    questions : number;          // Their questions about the task that the avatar answered
+    finished  : boolean;         // The intro reached the task
 };
 
 // One side of the planning task: the participant, or the avatar
@@ -379,7 +388,8 @@ export type PlanningTaskHistory = {
     items                   : PlanningItemHistory[];
     user_wants              : string[];
     user_avoids             : string[];
-    avatar_mentioned?       : string[];  // The avatar's constraints it mentioned, in order (absent from older snapshots)
+    avatar_mentioned?       : string[];            // The avatar's constraints it mentioned, in order (absent from older snapshots)
+    intro?                  : IntroRecord | null;  // Absent from snapshots saved before the intro; null for a chat without one
 };
 
 // What one reply on an elicitation thread did (copied from `ThreadReply` in `speech_elicitation/harness.py`)

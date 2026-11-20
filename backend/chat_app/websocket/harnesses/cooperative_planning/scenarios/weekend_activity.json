@@ -3,6 +3,8 @@
     "title"          : "Plan a weekend activity",
     "event"          : "something to do together this weekend",
     "opening_line"   : "Hi! I'm so glad we get to spend some time together this weekend. We need to pick an activity, and when and where to meet. Do you have any ideas?",
+    "intro"          : "Today we're going to plan something to do together this weekend.",
+    "start_line"     : "We need to pick an activity, and when and where to meet. Do you have any ideas?",
     "settle_example" : "So, the library steps for the meeting place?",
     "closing_line"   : "That's our weekend sorted, then. Thanks for planning this with me, I can't wait!",
     "items": [

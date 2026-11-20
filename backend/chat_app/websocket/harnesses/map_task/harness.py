@@ -17,6 +17,10 @@ Every reply to finished speech goes through the reply gate
 asks about a likely misheard landmark name instead, in the conditions those
 checks run in.
 
+The chat opens with the shared intro (`features/intro/`): what the task is, and
+how it works for anyone new to it. Its replies leave the avatar where it is, and
+an answer that already gives a direction goes straight to the task.
+
 The participant's map goes out as a `task_card` frame when the chat starts. With
 the `cues` condition the avatar holds its own map, reads it while it works out
 each reply, every reply carries an avatar plan showing what it did on the map
@@ -28,7 +32,7 @@ the avatar's map and the path it took (`reveal_view`).
 
 """
 from __future__  import annotations
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from functools   import partial
 from typing      import TYPE_CHECKING
 
@@ -41,21 +45,23 @@ from ....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN
 from   ..avatar                      import send_avatar_plan, send_avatar_setup
 from   ..base                        import ChatHarness, ResponseOutcome, TurnAttempt
 from   ..cues                        import BackToListening
+from   ..features.intro.flow         import Intro, intro_record
 from   ..features.reply_gate.gate    import MisheardCheck, ReplyGate, TurnEndCheck
-from    .behaviors                   import reply_plan, setup_for, start_plan, thinking_plan
+from    .behaviors                   import intro_plan, reply_plan, setup_for, start_plan, thinking_plan
 from    .config                      import MAP_TASK_HOLD_SEC
 from    .cues                        import DirectionGlance, LandmarkGlance, MapTaskBackchannels
 from    .geometry                    import approach, beside, step
 from    .map_task_api                import MapTaskAPIError, get_map_task_api
 from    .maps                        import Point, follower_view, giver_view, load_map
 from    .pipelines                   import ROUTE_PIPELINES
-from    .prompts                     import MAP_TASK_TURN_END_NOTES, misheard_notes
+from    .prompts                     import MAP_TASK_INTRO, MAP_TASK_TURN_END_NOTES, misheard_notes
 from    .response_models             import NO_MOVE, FollowerReply
 from    .understanding               import TurnReading, read_turn
 
 if TYPE_CHECKING:
     from ...consumers.consumers import ChatConsumer
     from  ..base                import MonitorView, RevealView
+    from  ..features.intro.flow import IntroState, IntroTurn
     from   .response_models     import FollowerAct, Move
     from   .understanding       import Route
 
@@ -76,12 +82,13 @@ class MapTaskReply:
     act       : FollowerAct  # What the reply did
     waypoints : int          # Waypoints its move added to the path (0 when the avatar stayed put)
 
-# Where the avatar is on its map, every committed waypoint, and every saved reply
+# Where the avatar is, every committed waypoint and saved reply, and the intro's progress
 @dataclass(frozen=True, slots=True)
 class MapTaskState:
-    position : Point                          # Where the avatar is now
-    path     : tuple[Point,        ...]       # Every committed waypoint, from the start
-    replies  : tuple[MapTaskReply, ...] = ()  # Every saved reply, in order
+    position : Point                            # Where the avatar is now
+    path     : tuple[Point,        ...]         # Every committed waypoint, from the start
+    replies  : tuple[MapTaskReply, ...] = ()    # Every saved reply, in order
+    intro    : IntroState | None        = None  # The shared intro (None for a chat without one)
 
 
 # ================================================================================
@@ -93,19 +100,20 @@ class MapTaskHarness(ChatHarness):
     CONDITIONS = ("cues", "no_cues")
     VARIANTS   = MAP_TASK_VARIANTS
 
-    # The chat starts with the user's first direction, not an opener line
+    # The context starts empty (the intro opens the chat, or the user's first direction does)
     CONTEXT_OPENER = None
 
     # Where the avatar is, and the replies so far (each saved reply replaces this)
     state : MapTaskState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's map, put the avatar at its start, and build its cues, its reply gate, and their switches
+    # Load the map, put the avatar at its start, and build its intro, cues, reply gate, and switches
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
         self.task_map     = MAP_TASK_MAPS[variant]
-        self.state        = MapTaskState(position=self.task_map.start, path=(self.task_map.start,))
+        self.intro        = Intro(self, MAP_TASK_INTRO)
+        self.state        = MapTaskState(position=self.task_map.start, path=(self.task_map.start,), intro=self.intro.initial_state())
         self.with_cues    = (condition == "cues")
         self.backchannels = MapTaskBackchannels(self)
         self.cues         = [self.backchannels]
@@ -122,23 +130,32 @@ class MapTaskHarness(ChatHarness):
         # The shared features a command can switch partway through the chat, by name
         self.features = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
 
-    # The connection is ready: set the avatar up (with the signs' sound, even while they are off), and show the participant their map
+    # Connection ready: the avatar's setup (with its signs' sound), the map, and the intro's turn
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())
         await self.consumer.send_json({"type": "task_card", "data": {"kind": "map_task", **giver_view(self.task_map)}})
+        if self.state.intro is not None: self.request_turn()
 
     # --------------------------------------------------------------------------------
-    # Read the turn against the map, then reply through the reply gate
+    # The intro first, then read each turn against the map and reply through the reply gate
     # --------------------------------------------------------------------------------
     async def generate(self, attempt: TurnAttempt) -> ResponseOutcome:
+        # The intro answers until the user is ready (an answer giving a direction goes on to the task)
+        intro = self.state.intro
+        if (intro is not None) and intro.running:
+            turn = await self.intro.take_turn(attempt, intro)
+            if turn.message is not None: return self._intro_outcome(turn)
+            intro = turn.state
+
+        # Read the turn against the map
         reading = read_turn(attempt.user_text, self.task_map, self.state.position, path=self.state.path)
 
         # The reply waits while the user seems mid-direction, or gives way to a question about a misheard name
-        return await self.reply_gate.run(attempt, partial(self._reply, reading=reading), partial(self._clarify, reading))
+        return await self.reply_gate.run(attempt, partial(self._reply, reading=reading, intro=intro), partial(self._clarify, reading))
 
-    # Reply through the pipeline the turn's route picks, and propose the move
-    async def _reply(self, attempt: TurnAttempt, reading: TurnReading) -> ResponseOutcome:
+    # Reply through the route's pipeline and propose the move (the intro over, if it handed on)
+    async def _reply(self, attempt: TurnAttempt, reading: TurnReading, intro: IntroState | None) -> ResponseOutcome:
         started  = time.monotonic()
         pipeline = ROUTE_PIPELINES[reading.route]
 
@@ -150,27 +167,34 @@ class MapTaskHarness(ChatHarness):
         try: reply = await pipeline(get_map_task_api(), reading, prepare_LLM_messages(attempt.context))
         except MapTaskAPIError:
             logger.exception(f"{LLM_MAIN}[Map Task] The {pipeline.__name__} pipeline failed; asking the user to say it again.{RESET}")
-            return self._outcome(reading, FollowerReply(message=MSG_SAY_AGAIN, act="clarify", move=NO_MOVE, basis="Every call failed."), ())
+            return self._outcome(reading, FollowerReply(message=MSG_SAY_AGAIN, act="clarify", move=NO_MOVE, basis="Every call failed."), (), intro)
 
         # Propose where the move takes the avatar
         path     = self._movement_path(reply.move)
         position = path[-1] if path else self.state.position
         _log_turn(reading, pipeline.__name__, reply, position, time.monotonic() - started)
-        return self._outcome(reading, reply, path)
+        return self._outcome(reading, reply, path, intro)
 
-    # Ask about a landmark name the reply check thinks was misheard (the avatar stays where it is)
+    # Ask about a name the check thinks was misheard (the avatar and the intro stay where they are)
     def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
-        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), ())
+        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), (), self.state.intro)
 
     # Propose the full path, including loops that return to their starting point, with the reply added to the record
-    def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...]) -> ResponseOutcome:
+    def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...], intro: IntroState | None) -> ResponseOutcome:
         plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path) if self.with_cues else None
         state = MapTaskState(
             position = path[-1] if path else self.state.position,
             path     = (*self.state.path, *path),
             replies  = (*self.state.replies, MapTaskReply(route=reading.route, act=reply.act, waypoints=len(path))),
+            intro    = intro,
         )
         return ResponseOutcome(message=reply.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
+
+    # An intro reply: the avatar stays where it is, records no reply, and only the intro moves on
+    def _intro_outcome(self, turn: IntroTurn) -> ResponseOutcome:
+        state = replace(self.state, intro=turn.state)
+        plan  = intro_plan(self.turn_number) if self.with_cues else None
+        return ResponseOutcome(message=turn.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
 
     # Resolve a move to its actual waypoints, removing only consecutive repeated points
     def _movement_path(self, move: Move) -> tuple[Point, ...]:
@@ -196,7 +220,7 @@ class MapTaskHarness(ChatHarness):
     def monitor_view(self) -> MonitorView:
         return self.history_view()
 
-    # Freeze both maps, the proposed or current path, and the replies for later review
+    # Freeze both maps, the proposed or current path, the replies, and the intro's record
     def history_view(self, state: MapTaskState | None = None) -> dict[str, object]:
         saved = self.state if (state is None) else state
         return {
@@ -206,6 +230,7 @@ class MapTaskHarness(ChatHarness):
             "position" : list(saved.position),
             "path"     : [list(point) for point in saved.path],
             "replies"  : [asdict(reply) for reply in saved.replies],
+            "intro"    : intro_record(saved.intro),
         }
 
     # What the participant is shown once the chat ends: the avatar's map, and the path it took

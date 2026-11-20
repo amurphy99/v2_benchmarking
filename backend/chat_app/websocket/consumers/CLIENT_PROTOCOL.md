@@ -135,13 +135,17 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   `condition` is `cues` (the default: the avatar holds its own map, is
   driven by plans, gives signs of listening, some audible, when the user pauses, holds its
   reply while the user seems mid-direction, and may ask about a landmark name it likely
-  misheard instead of replying) or `no_cues` (it only idles). It sends the participant's map as a
-  `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`, and sends no
-  `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
+  misheard instead of replying) or `no_cues` (it only idles). The avatar speaks first, in either
+  condition: it says what the task is and asks whether the user has done one before, and tells
+  anyone new to it how it works before waiting for the first direction. It sends the
+  participant's map as a `task_card`, drives the avatar with the frames in `HARNESS_PROTOCOL.md`,
+  and sends no `robot_action`. It has no spoken end-chat or pause; the client ends the chat.
 - `cooperative_planning` -- the user and the avatar work out a plan together (two friends
   planning an event, or a hotel guest and the receptionist), agreeing on one choice for each
-  item while each side has private constraints. The avatar speaks first, and
-  once the user approves the finished plan it says goodbye and the backend sends `chat_ended`.
+  item while each side has private constraints. The avatar speaks first, with the same intro as
+  `map_task` (what the task is, and how it works for anyone new to it) and then the scenario's
+  first line, and once the user approves the finished plan it says goodbye and the backend sends
+  `chat_ended`.
   `variant` picks the scenario: `dinner_party` (the default), `day_trip`, `birthday_party`,
   `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`,
   `apartment_hunt`, `camping_trip`, or `flight_rebooking`. `condition` is `cues` (the default:
