@@ -5,11 +5,14 @@ The planning avatar's plans: its setup, its card, and each named behavior.
 
 The reply calls pick a behavior by name (`response_models.Behavior`), and code
 turns it into an avatar plan built from the Smiley's own names
-(`HARNESS_PROTOCOL.md` §9). Every reply's plan starts with the reply's audio: the
-card comes down, the avatar looks at the user (and listens again once it stops
-talking), and the behavior plays on top. When the exchange settled an item, the
-avatar then looks down at that item's line on its card and nods, as if writing
-the choice in.
+(`HARNESS_PROTOCOL.md` §9): one of the avatar's two looks at its card, or one of
+the shared reactions (`harnesses/reactions.py`). Every reply's plan starts with
+the reply's audio: the card comes down, the avatar looks at the user (and listens
+again once it stops talking), and the behavior plays on top. When the exchange
+settled an item, the avatar then looks down at that item's line on its card and
+nods, as if writing the choice in. The reactions with a hand are left out of this
+chat's menu, since the avatar's own hands fade while it holds the card (Ponder
+keeps its look up and away, without the hand on the chin).
 
 The cues and the harness send these only in the `cues` condition, where the
 avatar holds its own card: its constraints at the top, then a line for each item.
@@ -26,6 +29,7 @@ from typing     import Sequence, TYPE_CHECKING
 
 # From this project
 from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+from ..reactions                 import reaction_steps
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
@@ -58,29 +62,15 @@ PLANNING_REPLY_PLAN_EXPIRE_MS = 45_000  # A reply's plan waits for the end of it
 PLANNING_CARD_THINK_RAISE = 0.6
 PLANNING_CARD_READ_RAISE  = 1.0
 
-# Where the eyes go while pondering: up and to the viewer's left of the user
-PLANNING_PONDER_OFFSET = (-0.45, -0.35)
-
-# What each simple behavior adds to the reply's first moment (Smiley names, `HARNESS_PROTOCOL.md` §9)
-PLANNING_BEHAVIOR_ACTIONS: dict[str, dict[str, object]] = {
-    "none"       : {},
-    "nod"        : {"move": {"name": "Nod", "strength": 0.6}},
-    "pleased"    : {"face": {"name": "Smiling Face with Smiling Eyes", "strength": 0.7, "hold_ms": 2_500}},
-    "excited"    : {"face": {"name": "Grinning Face with Big Eyes",    "strength": 0.8, "hold_ms": 2_000}, "move": {"name": "Bounce",    "strength": 0.5}},
-    "apologetic" : {"face": {"name": "Pensive Face",                   "strength": 0.5, "hold_ms": 2_000}, "move": {"name": "Head Tilt", "strength": 0.4}},
-    "surprised"  : {"face": {"name": "Wide-Eyed",                      "strength": 0.7, "hold_ms":   800}},
-    "ponder"     : {"face": {"name": "Face with Raised Eyebrow",       "strength": 0.5, "hold_ms": 1_200}},
-}
-
 # How the avatar acts while saying each intro line (`features/intro/`)
 PLANNING_INTRO_BEHAVIORS = {
-    "opening"   : "pleased",
+    "opening"   : "smile",
     "ask_again" : "none",
     "explain"   : "glance_at_card",
     "answer"    : "nod",
     "wait"      : "nod",
-    "start"     : "pleased",
-    "say_again" : "apologetic",
+    "start"     : "smile",
+    "say_again" : "sorry",
 }
 
 # The nod while "writing" a settled choice in
@@ -174,12 +164,5 @@ def _behavior_steps(scenario: Scenario, behavior: Behavior, about: str | None) -
             {"prop": {"raise": 0}, "gaze": at_user},
         ]
 
-    # Look up and away while thinking it over, then back to the user
-    if behavior == "ponder":
-        return [
-            {**start, "prop": {"raise": 0}, "gaze": {"on": "user", "offset": PLANNING_PONDER_OFFSET, "hold_ms": PLANNING_GLANCE_MS}, **PLANNING_BEHAVIOR_ACTIONS["ponder"]},
-            {"gaze": at_user},
-        ]
-
-    # A face or a movement on top of looking at the user
-    return [{**start, "prop": {"raise": 0}, "gaze": at_user, **PLANNING_BEHAVIOR_ACTIONS[behavior]}]
+    # A shared reaction as the card comes down, beside looking at the user
+    return reaction_steps(behavior, {**start, "prop": {"raise": 0}}, at_user)

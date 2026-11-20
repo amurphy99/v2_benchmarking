@@ -14,6 +14,7 @@ themselves are tested in `test_harness_features.py`.
 """
 from datetime      import datetime, timezone
 from types         import SimpleNamespace
+from typing        import get_args
 from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, unittest
@@ -26,14 +27,15 @@ from chat_app.websocket.harnesses.base                                import Fin
 from chat_app.websocket.harnesses.cues                                import BackToListening
 from chat_app.websocket.harnesses.features.backchannels.config        import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Reply, check_model
+from chat_app.websocket.harnesses.reactions                           import REACTIONS
 from chat_app.websocket.harnesses.registry                            import build_harness
 from chat_app.websocket.harnesses.speech_elicitation.behaviors        import ELICITATION_SIGNS, ELICITATION_SOUNDS
 from chat_app.websocket.harnesses.speech_elicitation.config           import ELICITATION_DRY_AFTER_SHORT, ELICITATION_MAX_QUIET_PROMPTS, ELICITATION_MIN_FOLLOW_UPS, ELICITATION_QUIET_AFTER_SEC
 from chat_app.websocket.harnesses.speech_elicitation.cues             import ElicitationBackchannels, QuietPrompt
 from chat_app.websocket.harnesses.speech_elicitation.elicitation_api  import ElicitationAPIError
 from chat_app.websocket.harnesses.speech_elicitation.harness          import MSG_SAY_MORE, ElicitationState, Thread
-from chat_app.websocket.harnesses.speech_elicitation.prompts          import ELICITATION_NO_ANGLES_YET, build_messages, directive_for, offer_angles
-from chat_app.websocket.harnesses.speech_elicitation.response_models  import ElicitationTurn
+from chat_app.websocket.harnesses.speech_elicitation.prompts          import ELICITATION_NO_ANGLES_YET, REPLY_TASK, build_messages, directive_for, offer_angles
+from chat_app.websocket.harnesses.speech_elicitation.response_models  import Behavior, ElicitationTurn
 from chat_app.websocket.harnesses.speech_elicitation.topics           import ELICITATION_TOPICS
 
 # The topic every test talks about (the default variant)
@@ -112,6 +114,13 @@ class ReplyTests(unittest.TestCase):
         self.assertTrue(offer_angles(ELICITATION_MIN_FOLLOW_UPS, None))
         self.assertTrue(offer_angles(0, "thread_dry"))
         self.assertTrue(offer_angles(0, "quiet"))
+
+    # Each behavior is a shared reaction, in the prompt with its look and when it fits (none first)
+    def test_every_behavior_is_a_shared_reaction_in_the_prompt(self) -> None:
+        menu = get_args(Behavior)
+        self.assertEqual(menu[0], "none")
+        self.assertLessEqual(set(menu), set(REACTIONS))
+        for name in menu: self.assertIn(f"  - {name}: {REACTIONS[name].look}, {REACTIONS[name].when}.", REPLY_TASK)
 
     # The prompt carries the opening question, the angles only when offered, and the directive only when there is one
     def test_the_prompt_carries_the_topic_the_angles_and_the_directive(self) -> None:

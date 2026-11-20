@@ -73,12 +73,29 @@ live chat page a view of its state (Monitoring, below), and all three show the p
 something once the chat ends: the avatar's side of the task, or the threads it followed
 (The end of a chat, below).
 
+**Reactions.** The reply call of each of those three picks how the avatar reacts as the
+reply's audio starts, from a menu of the shared reactions in `reactions.py`: named faces,
+movements, and animations from the Smiley's catalog (`HARNESS_PROTOCOL.md` §9), each with
+prompt words for what it looks like and when it fits. Every menu starts with `none`, and
+the prompt asks for a reaction only when one fits. A chat type hand-picks its menu (in its
+`response_models.py`) and can word when a reaction fits its own way (in its `prompts.py`).
+The avatar's own hands fade while it holds its map or card, so only `speech_elicitation`
+offers the reactions with a hand. Each turn's pick is logged, not saved, and with
+`no_cues` it is still picked but no plan goes out.
+
+| Chat type | Field | Its menu |
+|---|---|---|
+| `speech_elicitation` | `behavior` | none, nod, smile, laugh, giggle, love_it, touched, dreamy, surprised, amazed, gasp, curious, thoughtful, ponder, recall, sympathetic, grimace, disagree |
+| `cooperative_planning` | `behavior` | none, nod, smile, delighted (an item gets agreed), love_it, laugh, dreamy, surprised, curious, ponder, sorry (turning an idea down), and its two looks at its card (`glance_at_card`, `check_card`) |
+| `map_task` | `reaction` | none, smile (the user says it's doing well), laugh, surprised, grimace (it went the wrong way). Code picks its own as the task ends (delighted), as the avatar asks whether it's at the finish (curious), and for each intro line |
+
 ```diff
 +harnesses/
  ├── base.py                      # ChatHarness, Cue, the turn events, TurnAttempt, ResponseOutcome
  ├── cues.py                      # Shared cues: KeywordCue and SilenceWatcher to build on, and BackToListening as is
  ├── registry.py                  # chat_type names -> harnesses, the default, and the condition/variant checks
  ├── avatar.py                    # The robot mood vocabulary (ResponseMood), the mood, setup, and plan frames, a setup's sounds, and the shared listening plan
+ ├── reactions.py                 # The shared reactions each plan-driven chat type picks its menu from, their prompt lines, and the steps that play them
  │
 +├── features/                    # Behaviors several chat types share, each opted into by a chat type (Shared features, below)
  │   ├── config.py                # Each feature's switch: the conditions it runs in

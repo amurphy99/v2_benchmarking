@@ -17,8 +17,9 @@ thinking look are off), then the avatar picks up its map. Their spots are on
 the demo's made-up map (`sampleMap`).
 
 The card examples copy what the cooperative planning chat sends with cues
-(`backend/.../cooperative_planning/behaviors.py`): its setup, the card read over
-while a reply is worked out, then the reply's own plan for the behavior the reply
+(`backend/.../cooperative_planning/behaviors.py`, with the shared reactions in
+`backend/.../harnesses/reactions.py`): its setup, the card read over while a
+reply is worked out, then the reply's own plan for the behavior the reply
 picked. Their spots are on the dinner party card (`sampleCard`).
 
 */
@@ -270,9 +271,9 @@ export const DEMO_CARD_EXAMPLES: PlanExample[] = [
     },
     {
         name   : "Ponder",
-        blurb  : "As the reply starts, raises an eyebrow and looks up and away while it thinks the idea over, then looks back at the user.",
+        blurb  : "As the reply starts, lowers the card and ponders, eyes up and away (its hand on its chin stays hidden while it holds the card), then looks back at the user.",
         reply  : {textAtMs: DEMO_CARD_REPLY_AT_MS},
-        frames : [DEMO_CARD_SETUP, cardThinking("ponder-think"), cardReply("ponder-reply", {gaze: {on: "user", offset: [-0.45, -0.35], hold_ms: DEMO_CARD_GLANCE_MS}, face: {name: "Face with Raised Eyebrow", strength: 0.5, hold_ms: 1_200}}, [
+        frames : [DEMO_CARD_SETUP, cardThinking("ponder-think"), cardReply("ponder-reply", {gaze: "release", animation: {name: "Ponder", strength: 0.8, hold_ms: 1_500}}, [
             DEMO_CARD_AT_USER,
         ])],
     },

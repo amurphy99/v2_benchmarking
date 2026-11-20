@@ -8,10 +8,12 @@ conversation) and returns a `FollowerReply`, so `ROUTE_PIPELINES` can pair any
 route with any pipeline. They differ in how much the model does:
 
 * `draft_and_check`: code drafts the answer from the map, and one short call
-  confirms or corrects it.
-* `single_call`: one call writes the reply and picks the move.
+  confirms or corrects it. The reply has no reaction (finding the landmark on
+  the map is the look).
+* `single_call`: one call writes the reply, picks the move, and picks the reply's
+  reaction.
 * `assess_then_reply`: one call works out the turn and its move, and a second
-  writes the reply from that assessment.
+  writes the reply from that assessment, with its reaction.
 
 """
 from __future__ import annotations
@@ -60,19 +62,19 @@ Pipeline = Callable[["MapTaskAPI", "TurnReading", list[dict[str, str]]], Awaitab
 async def draft_and_check(api: MapTaskAPI, reading: TurnReading, history: list[dict[str, str]]) -> FollowerReply:
     draft = draft_answer(reading)
     check = await api.check_draft(reading, history, draft)
-    if check.ok: return FollowerReply(message=draft,         act="answer", move=NO_MOVE, basis="The drafted answer checked out.")
-    else:        return FollowerReply(message=check.message, act="answer", move=NO_MOVE, basis=f"The check corrected the draft {draft!r}.")
+    if check.ok: return FollowerReply(message=draft,         act="answer", move=NO_MOVE, reaction="none", basis="The drafted answer checked out.")
+    else:        return FollowerReply(message=check.message, act="answer", move=NO_MOVE, reaction="none", basis=f"The check corrected the draft {draft!r}.")
 
 # Write the reply and pick the move in one call
 async def single_call(api: MapTaskAPI, reading: TurnReading, history: list[dict[str, str]]) -> FollowerReply:
     turn = await api.follow(reading, history)
-    return FollowerReply(message=turn.message, act=turn.act, move=turn.move, basis=turn.basis)
+    return FollowerReply(message=turn.message, act=turn.act, move=turn.move, reaction=turn.reaction, basis=turn.basis)
 
 # Work out the turn and its move first, then write the reply from that assessment
 async def assess_then_reply(api: MapTaskAPI, reading: TurnReading, history: list[dict[str, str]]) -> FollowerReply:
     assessment = await api.assess(reading, history)
     spoken     = await api.reply(reading, history, assessment)
-    return FollowerReply(message=spoken.message, act=assessment.act, move=assessment.move, basis=assessment.basis)
+    return FollowerReply(message=spoken.message, act=assessment.act, move=assessment.move, reaction=spoken.reaction, basis=assessment.basis)
 
 
 # Which pipeline replies to each route (`understanding.read_turn` picks the route)

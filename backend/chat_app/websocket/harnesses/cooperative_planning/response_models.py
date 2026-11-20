@@ -27,8 +27,14 @@ import functools
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+# What the avatar does with its card while it says a reply (`behaviors.py`)
+CardBehavior = Literal["glance_at_card", "check_card"]
+
+# This chat's shared reactions (`harnesses/reactions.py`), none with a hand (the card would hide it)
+PlanningReaction = Literal["none", "nod", "smile", "delighted", "love_it", "laugh", "dreamy", "surprised", "curious", "ponder", "sorry"]
+
 # How the avatar acts while it says a reply (`behaviors.py` turns each one into an avatar plan)
-Behavior = Literal["none", "glance_at_card", "check_card", "nod", "pleased", "excited", "apologetic", "ponder", "surprised"]
+Behavior = Literal[PlanningReaction, CardBehavior]
 
 # The most changes one side makes in a turn
 PLANNING_MAX_CHANGES = 8

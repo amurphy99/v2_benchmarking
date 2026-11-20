@@ -27,11 +27,12 @@ avatar has said where it is and asked.
 The participant's map goes out as a `task_card` frame when the chat starts. With
 the `cues` condition the avatar holds its own map, reads it while it works out
 each reply, every reply carries an avatar plan showing what it did on the map
-(`behaviors.py`), and the cues run (`cues.py`, and the shared `BackToListening`),
-including signs of listening at the user's pauses. With `no_cues` no plan is
-sent and the avatar only idles. Admin listeners get both maps and the avatar's
-path (`monitor_view`), and once the chat ends the participant's client is shown
-the avatar's map and the path it took (`reveal_view`).
+and the reaction it picked (`behaviors.py`), and the cues run (`cues.py`, and
+the shared `BackToListening`), including signs of listening at the user's
+pauses. With `no_cues` no plan is sent and the avatar only idles. Admin
+listeners get both maps and the avatar's path (`monitor_view`), and once the
+chat ends the participant's client is shown the avatar's map and the path it
+took (`reveal_view`).
 
 """
 from __future__  import annotations
@@ -174,7 +175,7 @@ class MapTaskHarness(ChatHarness):
         try: reply = await pipeline(get_map_task_api(), reading, prepare_LLM_messages(attempt.context))
         except MapTaskAPIError:
             logger.exception(f"{LLM_MAIN}[Map Task] The {pipeline.__name__} pipeline failed; asking the user to say it again.{RESET}")
-            return self._outcome(reading, FollowerReply(message=MSG_SAY_AGAIN, act="clarify", move=NO_MOVE, basis="Every call failed."), (), intro)
+            return self._outcome(reading, FollowerReply(message=MSG_SAY_AGAIN, act="clarify", move=NO_MOVE, reaction="none", basis="Every call failed."), (), intro)
 
         # Propose where the move takes the avatar
         path     = self._movement_path(reply.move)
@@ -184,7 +185,7 @@ class MapTaskHarness(ChatHarness):
 
     # Ask about a name the check thinks was misheard (the avatar and the intro stay where they are)
     def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
-        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, basis="The reply check heard a likely misheard word."), (), self.state.intro)
+        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, reaction="none", basis="The reply check heard a likely misheard word."), (), self.state.intro)
 
     # Propose the full path (loops included), the reply added to the record, and the task's end
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...], intro: IntroState | None) -> ResponseOutcome:
@@ -194,7 +195,7 @@ class MapTaskHarness(ChatHarness):
         if finish.ended is not None: logger.info(f"{LLM_MAIN}[Map Task] The task ends: {BOLD}{finish.ended}{UNBOLD}.{RESET}")
 
         # The state once the reply is saved, and the chat's close after it when the task ended
-        plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path) if self.with_cues else None
+        plan  = reply_plan(self.turn_number, reading, reply, self.state.position, path, finish) if self.with_cues else None
         state = MapTaskState(
             position     = position,
             path         = (*self.state.path, *path),
@@ -208,7 +209,7 @@ class MapTaskHarness(ChatHarness):
     # An intro reply: the avatar stays where it is, records no reply, and only the intro moves on
     def _intro_outcome(self, turn: IntroTurn) -> ResponseOutcome:
         state = replace(self.state, intro=turn.state)
-        plan  = intro_plan(self.turn_number) if self.with_cues else None
+        plan  = intro_plan(self.turn_number, turn.move) if self.with_cues else None
         return ResponseOutcome(message=turn.message, state=state, avatar_plan=plan, task_snapshot=self.history_view(state))
 
     # Resolve a move to its actual waypoints, removing only consecutive repeated points
@@ -257,7 +258,7 @@ class MapTaskHarness(ChatHarness):
 # --------------------------------------------------------------------------------
 # Log one turn
 # --------------------------------------------------------------------------------
-# Log its route, pipeline, and time taken, then what the reply did & where it goes
+# Log its route, pipeline, and time taken, then what the reply did (and its look) & where it goes
 def _log_turn(
     reading       : TurnReading,    # The turn as read against the map
     pipeline_name : str,            # Pipeline that replied
@@ -270,6 +271,6 @@ def _log_turn(
         f"{LLM_MAIN}[Map Task] {BOLD}{reading.route}{UNBOLD} turn replied by {BOLD}{pipeline_name}{UNBOLD} in ({BOLD}{elapsed_sec:.2f}s{UNBOLD}):{RESET}\n"
         f"    {LLM_MAIN}{BOLD}Named: {UNBOLD}{named} (not on the map: {', '.join(reading.missing) or 'none'}){RESET}\n"
         f"    {LLM_MAIN}{BOLD}Basis: {UNBOLD}{reply.basis}{RESET}\n"
-        f"    {LLM_MAIN}{BOLD}Act:   {UNBOLD}{reply.act}{RESET}\n"
+        f"    {LLM_MAIN}{BOLD}Act:   {UNBOLD}{reply.act} (reaction: {reply.reaction}){RESET}\n"
         f"    {LLM_MAIN}{BOLD}Move:  {UNBOLD}{reply.move.model_dump_json()}, to ({position[0]:.2f}, {position[1]:.2f}){RESET}"
     )

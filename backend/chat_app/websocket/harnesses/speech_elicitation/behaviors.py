@@ -7,8 +7,9 @@ Sent only with the `cues` condition. The avatar holds nothing in this chat, so
 the client's own automatic looks run too (`HARNESS_PROTOCOL.md` §2): glances
 while idle, the eyes drifting while it thinks and while it speaks, and a sway
 while it listens. On top of those, each reply's plan plays the behavior the
-reply picked as its audio starts. The faces and movements are the Smiley's
-names (§9).
+reply picked as its audio starts: one of the shared reactions
+(`harnesses/reactions.py`). This chat offers the most of them, including the
+ones with a hand, since the avatar holds nothing here.
 
 The signs of listening (`features/backchannels/`) use this chat's sounds,
 clips in the avatar's own voice sent once in the setup (§2, §3.3). At pauses,
@@ -22,6 +23,7 @@ from typing     import TYPE_CHECKING
 
 # From this project
 from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_SMILE, BACKCHANNEL_TILT, listening_sound
+from ..reactions                 import reaction_steps
 
 if TYPE_CHECKING:
     from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
@@ -33,18 +35,6 @@ ELICITATION_SETUP_NO_CUES = {"rest": "Slightly Smiling Face", "auto": {"idle_gla
 
 # Holding the user's gaze as a reply starts
 ELICITATION_LOOK_BACK_MS = 1_500
-
-# What each behavior adds to the reply's first moment
-ELICITATION_BEHAVIOR_ACTIONS: dict[str, dict[str, object]] = {
-    "none"        : {},
-    "nod"         : {"move": {"name": "Nod", "strength": 0.6}},
-    "smile"       : {"face": {"name": "Smiling Face with Smiling Eyes",  "strength": 0.7, "hold_ms": 2_500}},
-    "laugh"       : {"face": {"name": "Grinning Face with Smiling Eyes", "strength": 0.8, "hold_ms": 2_000}, "move": {"name": "Bounce",    "strength": 0.4}},
-    "surprised"   : {"face": {"name": "Wide-Eyed",                       "strength": 0.7, "hold_ms":   800}},
-    "curious"     : {"face": {"name": "Face with Raised Eyebrow",        "strength": 0.4, "hold_ms": 1_200}, "move": {"name": "Head Tilt", "strength": 0.4}},
-    "thoughtful"  : {"face": {"name": "Neutral Face",                    "strength": 0.6, "hold_ms": 1_500}, "move": {"name": "Nod",       "strength": 0.3, "speed": 0.6}},
-    "sympathetic" : {"face": {"name": "Pensive Face",                    "strength": 0.5, "hold_ms": 2_000}, "move": {"name": "Head Tilt", "strength": 0.3}},
-}
 
 # The sounds the avatar makes while listening: the name a sign plays, and the words its voice says
 # (the last three fit only some of what a user says, so only the reply check picks them)
@@ -83,7 +73,7 @@ def start_plan() -> AvatarPlan:
 def thinking_plan(turn: int) -> AvatarPlan:
     return {"id": f"t{turn}-think", "turn": turn, "steps": [{"state": "thinking"}]}
 
-# One reply's plan: eyes on the user and its behavior as its audio starts, and listening once it stops talking
+# A reply's plan: eyes on the user and its reaction as its audio starts, then listening after
 def reply_plan(turn: int, behavior: Behavior) -> AvatarPlan:
-    step = {"start_on": "reply_audio", "state": "listening", "gaze": {"on": "user", "hold_ms": ELICITATION_LOOK_BACK_MS}, **ELICITATION_BEHAVIOR_ACTIONS[behavior]}
-    return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": [step]}
+    steps = reaction_steps(behavior, {"start_on": "reply_audio", "state": "listening"}, {"on": "user", "hold_ms": ELICITATION_LOOK_BACK_MS})
+    return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": steps}

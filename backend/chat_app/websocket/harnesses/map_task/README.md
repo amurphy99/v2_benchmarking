@@ -48,7 +48,7 @@ finalized user text
 
     REPLY (pipelines.py, the pipeline ROUTE_PIPELINES gives the route)
     -> with cues, the avatar raises its map and reads it while this runs
-    -> FollowerReply: the words, what they do (act), and the move
+    -> FollowerReply: the words, what they do (act), the move, and the look as it says them (reaction)
     -> with cues, the reply carries a plan showing what it did on the map
 
     MOVE (geometry.py)
@@ -78,7 +78,7 @@ its radius; there is no automatic obstacle avoidance or collision correction. In
 spoken directions and choosing those points remains the model's responsibility.
 
 Each turn logs one block: its route, the pipeline, the time taken, the names heard, the
-reply's reason and act, and the move with the spot it reaches.
+reply's reason, act, and reaction, and the move with the spot it reaches.
 
 <br>
 
@@ -129,10 +129,10 @@ The routes are checked in that order. Every pipeline takes the same inputs and r
 - **`draft_and_check`**: code drafts the answer from the map ("Yes, I have the bus, a long
   way to my right." or "The bus is a long way to my right."), and one short call confirms it
   or writes a correction. It never moves the avatar.
-- **`single_call`**: one call writes the reply and picks the move.
+- **`single_call`**: one call writes the reply and picks the move and the reply's reaction.
 - **`assess_then_reply`**: one call works out what the giver means, what doesn't match, and
-  the move; a second call writes the reply from that assessment. It takes longer, which is
-  why it is kept for mismatches.
+  the move; a second call writes the reply from that assessment, with its reaction. It takes
+  longer, which is why it is kept for mismatches.
 
 Each call gets the follower instructions, its own task, and the map facts for this turn
 (`prompts.py`). Every landmark is listed with its id, other names, direction and distance
@@ -272,6 +272,14 @@ left.
   makes one last sweep and shakes its head for one it doesn't have. As the reply's audio
   starts, the map comes down and it looks at the user, with a nod for a direction it took or a
   raised eyebrow for a question back.
+- **The reply's reaction** goes on top as its audio starts. The calls that write the reply
+  (`single_call`, and `assess_then_reply`'s second call) pick one of a few shared reactions
+  (`harnesses/reactions.py`): a smile when the user says it's doing well, a laugh at a joke, a
+  surprised look, a grimace when it went the wrong way, or, for most replies, none. A drafted
+  answer has none (finding the landmark is the look). Code picks its own as the task ends (a
+  delighted bounce), as the avatar asks whether it has reached the finish (a curious tilt),
+  and for each intro line (a smile to say hello and to begin). The menu has no reaction with a
+  hand, since the avatar's own hands fade while it holds its map.
 - **The cues** (`cues.py`, and the shared `BackToListening`) react while the user speaks:
   `LandmarkGlance` glances at a landmark the moment it is named (or searches the map for one
   the avatar doesn't have), and `DirectionGlance` looks from the avatar's spot toward "up",

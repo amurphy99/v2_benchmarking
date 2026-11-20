@@ -14,6 +14,7 @@ from dataclasses   import replace
 from datetime      import datetime, timezone
 from pathlib       import Path
 from types         import SimpleNamespace
+from typing        import get_args
 from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, json, math, shutil, tempfile, unittest
@@ -35,9 +36,10 @@ from chat_app.websocket.harnesses.map_task.harness                    import MAP
 from chat_app.websocket.harnesses.map_task.map_task_api               import MapTaskAPIError
 from chat_app.websocket.harnesses.map_task.maps                       import MAP_TASK_MAPS_DIR, follower_view, giver_view, load_map, map_file_previews
 from chat_app.websocket.harnesses.map_task.pipelines                  import assess_then_reply, draft_and_check, draft_answer, single_call
-from chat_app.websocket.harnesses.map_task.prompts                    import MAP_TASK_INTRO, facts_block
-from chat_app.websocket.harnesses.map_task.response_models            import NO_MOVE, AlongPath, DraftCheck, FollowerTurn, SpokenReply, ToLandmark, TurnAssessment, models_for_map
+from chat_app.websocket.harnesses.map_task.prompts                    import FOLLOW_TASK, MAP_TASK_INTRO, MAP_TASK_REACTION_WHEN, REPLY_TASK, facts_block
+from chat_app.websocket.harnesses.map_task.response_models            import NO_MOVE, AlongPath, DraftCheck, FollowerTurn, MapTaskReaction, SpokenReply, ToLandmark, TurnAssessment, models_for_map
 from chat_app.websocket.harnesses.map_task.understanding              import read_turn
+from chat_app.websocket.harnesses.reactions                           import REACTIONS
 from chat_app.websocket.harnesses.registry                            import build_harness
 
 # The demo map every turn is read against, where the avatar starts on it, and its paper's proportions
@@ -270,7 +272,7 @@ class TurnReadingTests(unittest.TestCase):
         models = models_for_map(tuple(DEMO_MAP.landmarks))
         for model in (models.follower_turn, models.assessment):
             base = {"basis": "Follow the directions", "act": "acknowledge"}
-            if model is models.follower_turn: base.update(message="Okay.")
+            if model is models.follower_turn: base.update(reaction="none", message="Okay.")
             else:                             base.update(meaning="Move", conflict=None)
             valid = model.model_validate({**base, "move": {"kind": "path", "points": [[0.4, 0.6], [0.5, 0.6]]}})
             self.assertEqual(valid.move.points, [(0.4, 0.6), (0.5, 0.6)])
@@ -278,6 +280,19 @@ class TurnReadingTests(unittest.TestCase):
                 with self.subTest(model=model.__name__, points=points):
                     with self.assertRaises(ValidationError): model.model_validate({**base, "move": {"kind": "path", "points": points}})
             with self.assertRaises(ValidationError): model.model_validate({**base, "move": {"kind": "to_landmark", "landmark": "castle", "side": "at"}})
+
+    # The reply calls offer shared reactions in the Map Task's words, no hand (the map hides it)
+    # and no animation (the reply's first moment already holds a face)
+    def test_the_reply_calls_offer_shared_reactions_in_their_own_words(self) -> None:
+        menu = get_args(MapTaskReaction)
+        self.assertEqual(menu[0], "none")
+        self.assertLessEqual(set(menu) | set(MAP_TASK_REACTION_WHEN), set(REACTIONS))
+        self.assertLessEqual(set(MAP_TASK_REACTION_WHEN), set(menu))
+        self.assertFalse({"giggle", "gasp"} & set(menu))
+        self.assertFalse([name for name in menu if "animation" in REACTIONS[name].actions])
+        for task in (FOLLOW_TASK, REPLY_TASK):
+            for name in menu: self.assertIn(f"  - {name}: ", task)
+        self.assertIn(f"  - grimace: a grimace, {MAP_TASK_REACTION_WHEN['grimace']}.", FOLLOW_TASK)
 
 
 # ================================================================================
@@ -324,13 +339,13 @@ class FinishTests(unittest.TestCase):
 # Pipelines
 # ================================================================================
 class PipelineTests(unittest.IsolatedAsyncioTestCase):
-    # A drafted answer the check confirms is said as drafted, with no move
+    # A drafted answer the check confirms is said as drafted, with no move and no reaction
     async def test_draft_and_check_keeps_a_confirmed_draft(self) -> None:
         api     = SimpleNamespace(check_draft=AsyncMock(return_value=DraftCheck(ok=True)))
         reading = read_turn("Do you have a bus?", DEMO_MAP, DEMO_START)
         reply   = await draft_and_check(api, reading, [])
 
-        self.assertEqual((reply.message, reply.move), ("Yes, I have the bus, a long way to my right.", NO_MOVE))
+        self.assertEqual((reply.message, reply.move, reply.reaction), ("Yes, I have the bus, a long way to my right.", NO_MOVE, "none"))
         api.check_draft.assert_awaited_once_with(reading, [], reply.message)
 
     # A drafted answer the check rejects is replaced by its correction
@@ -344,22 +359,22 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(draft_answer(read_turn("Where's the bus?",   DEMO_MAP, DEMO_START                  )), "The bus is a long way to my right.")
         self.assertEqual(draft_answer(read_turn("Do you have a bus?", DEMO_MAP, DEMO_MAP.landmarks["bus"].at)), "Yes, I have the bus, right next to me.")
 
-    # One call's words and move pass straight through
+    # One call's words, move, and reaction pass straight through
     async def test_single_call_passes_the_move_through(self) -> None:
-        turn  = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay, left of the bus.")
+        turn  = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="smile", message="Okay, left of the bus.")
         api   = SimpleNamespace(follow=AsyncMock(return_value=turn))
         reply = await single_call(api, read_turn("Go to the left of the bus", DEMO_MAP, DEMO_START), [])
-        self.assertEqual((reply.message, reply.act, reply.move), ("Okay, left of the bus.", "acknowledge", LEFT_OF_BUS))
+        self.assertEqual((reply.message, reply.act, reply.move, reply.reaction), ("Okay, left of the bus.", "acknowledge", LEFT_OF_BUS, "smile"))
 
-    # The assessment decides the act and the move, and the second call only writes the words
+    # The assessment decides the act and the move; the second call writes the words and the reaction
     async def test_assess_then_reply_moves_by_the_assessment(self) -> None:
         assessment = TurnAssessment(basis="No castle here.", meaning="Go up to the castle.", conflict="I have no castle.", act="report_missing", move=NO_MOVE)
-        spoken     = SpokenReply(message="I don't have a castle. There's a bridge up there.")
+        spoken     = SpokenReply(reaction="surprised", message="A castle? I don't have one. There's a bridge up there.")
         api        = SimpleNamespace(assess=AsyncMock(return_value=assessment), reply=AsyncMock(return_value=spoken))
         reading    = read_turn("Go up to the castle", DEMO_MAP, DEMO_START)
         reply      = await assess_then_reply(api, reading, [])
 
-        self.assertEqual((reply.message, reply.act, reply.move), (spoken.message, "report_missing", NO_MOVE))
+        self.assertEqual((reply.message, reply.act, reply.move, reply.reaction), (spoken.message, "report_missing", NO_MOVE, "surprised"))
         api.reply.assert_awaited_once_with(reading, [], assessment)
 
 
@@ -398,7 +413,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
 
     # The reply proposes the move, traced on the map, and the avatar moves (and the listeners see it) only once the reply is saved
     async def test_the_move_applies_once_the_reply_is_saved(self) -> None:
-        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
+        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="none", message="Okay.")
         attempt = self.attempt("Go to the left of the bus")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(attempt)
         self.assertEqual(self.harness.state.position, DEMO_START)
@@ -419,10 +434,19 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         view = self.consumer.broadcast_task_monitor.await_args.args[0]
         self.assertEqual((view["kind"], len(view["path"]), view["position"]), ("map_task", 2, list(self.harness.state.position)))
 
+    # The reaction goes on top of the act's look (a smile keeps the nod; a laugh bounces instead)
+    async def test_the_reaction_goes_on_top_of_the_acts_look(self) -> None:
+        for reaction, move in (("smile", "Nod"), ("laugh", "Bounce")):
+            with self.subTest(reaction):
+                self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction=reaction, message="Ha, okay.")
+                with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go to the left of the bus"))
+                last = outcome.avatar_plan["steps"][-1]
+                self.assertEqual((last["face"], last["move"]["name"], last["gaze"]["on"]), (REACTIONS[reaction].actions["face"], move, "user"))
+
     # Bends and loops survive in the state, gaze trace, and monitor after commit
     async def test_a_path_preserves_bends_and_a_return_to_the_start(self) -> None:
         points = [DEMO_START, (0.4, 0.66), (0.4, 0.66), (0.4, 0.5), DEMO_START]
-        self.api.follow.return_value = FollowerTurn(basis="Trace a loop.", act="acknowledge", move=AlongPath(kind="path", points=points), message="Back at the start.")
+        self.api.follow.return_value = FollowerTurn(basis="Trace a loop.", act="acknowledge", move=AlongPath(kind="path", points=points), reaction="none", message="Back at the start.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go right, up, then back to the start"))
         expected = (DEMO_START, (0.4, 0.66), (0.4, 0.5), DEMO_START)
         self.assertEqual(self.harness.state.path, (DEMO_START,))
@@ -436,14 +460,14 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
 
     # A path that never leaves the current spot moves nothing (the reply is still recorded, with no waypoints)
     async def test_a_stationary_path_moves_nothing(self) -> None:
-        self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_START, DEMO_START]), message="I'm there.")
+        self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_START, DEMO_START]), reaction="none", message="I'm there.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Stay there"))
         self.assertEqual((outcome.state.position, outcome.state.path, outcome.state.replies[-1].waypoints), (DEMO_START, (DEMO_START,), 0))
         self.assertNotIn("trace", outcome.avatar_plan["steps"][0]["gaze"])
 
     # A landmark destination reaches its edge instead of its center
     async def test_a_landmark_destination_respects_its_radius(self) -> None:
-        self.api.follow.return_value = FollowerTurn(basis="Reach the bus.", act="acknowledge", move=ToLandmark(kind="to_landmark", landmark="bus", side="at"), message="At the bus.")
+        self.api.follow.return_value = FollowerTurn(basis="Reach the bus.", act="acknowledge", move=ToLandmark(kind="to_landmark", landmark="bus", side="at"), reaction="none", message="At the bus.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go to the bus"))
         self.assertAlmostEqual(outcome.state.position[0], 0.70)
         self.assertAlmostEqual(outcome.state.position[1], 0.66)
@@ -461,7 +485,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_move_to_where_it_is_adds_no_stop(self) -> None:
         bridge = DEMO_MAP.landmarks["bridge"].at
         self.harness.state = MapTaskState(position=bridge, path=(DEMO_START, bridge))
-        self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=ToLandmark(kind="to_landmark", landmark="bridge", side="at"), message="I'm there.")
+        self.api.follow.return_value = FollowerTurn(basis="Already there.", act="acknowledge", move=ToLandmark(kind="to_landmark", landmark="bridge", side="at"), reaction="none", message="I'm there.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go to the bridge"))
         self.assertEqual((outcome.state.position, outcome.state.path), (bridge, (DEMO_START, bridge)))
         self.assertNotIn("trace", outcome.avatar_plan["steps"][0]["gaze"])
@@ -469,7 +493,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
     # A landmark it doesn't have: a search while thinking, then a last sweep and a head shake
     async def test_a_missing_landmark_is_searched_for(self) -> None:
         self.api.assess.return_value = TurnAssessment(basis="No castle.", meaning="Go to the castle.", conflict="No castle here.", act="report_missing", move=NO_MOVE)
-        self.api.reply.return_value  = SpokenReply(message="I don't have a castle.")
+        self.api.reply.return_value  = SpokenReply(reaction="none", message="I don't have a castle.")
         attempt = self.attempt("Go up to the castle")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(attempt)
 
@@ -483,28 +507,31 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (MSG_SAY_AGAIN, (DEMO_START,), "clarify"))
         self.assertEqual((outcome.avatar_plan["steps"][-1]["prop"], outcome.avatar_plan["steps"][-1]["face"]["name"]), ({"raise": 0}, "Face with Raised Eyebrow"))
 
-    # A move that leaves the avatar at the finish ends the chat once the reply has gone out
+    # A move that leaves the avatar at the finish ends the chat after the reply, delighted
     async def test_reaching_the_finish_ends_the_chat(self) -> None:
-        self.api.follow.return_value = FollowerTurn(basis="Up to the bridge.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_FINISH]), message="Okay, up to just below the bridge.")
+        self.api.follow.return_value = FollowerTurn(basis="Up to the bridge.", act="acknowledge", move=AlongPath(kind="path", points=[DEMO_FINISH]), reaction="none", message="Okay, up to just below the bridge.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go up to just below the bridge"))
         self.assertEqual(outcome.message, f"Okay, up to just below the bridge. {MSG_REACHED_FINISH}")
         self.assertEqual((outcome.close_after, outcome.state.ended, outcome.task_snapshot["ended"]), (True, "reached_finish", "reached_finish"))
+        self.assertEqual(outcome.avatar_plan["steps"][-1]["face"], REACTIONS["delighted"].actions["face"])
 
-    # The user's word ends the chat once the avatar has said where it is and asked
+    # The user's word ends the chat after the avatar checks where it is (curious, then delighted)
     async def test_the_users_word_ends_the_chat_after_the_avatar_checks(self) -> None:
-        self.api.follow.return_value = FollowerTurn(basis="They say I'm there.", act="finish", move=NO_MOVE, message="Okay.")
+        self.api.follow.return_value = FollowerTurn(basis="They say I'm there.", act="finish", move=NO_MOVE, reaction="smile", message="Okay.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): check = await self.harness.generate(self.attempt("I think you're at the finish"))
         self.assertEqual(check.message, f"Alright, I'm {where_am_i(DEMO_MAP, DEMO_START)}. Is that the finish?")
         self.assertEqual((check.close_after, check.state.finish_asked, check.state.replies[-1].act), (False, True, "finish"))
+        self.assertEqual(check.avatar_plan["steps"][-1]["move"], REACTIONS["curious"].actions["move"])
 
         self.harness.on_reply_saved(check)
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): done = await self.harness.generate(self.attempt("Yes"))
         self.assertEqual((done.message, done.close_after, done.state.ended), (MSG_FINISH_CONFIRMED, True, "giver_confirmed"))
+        self.assertEqual(done.avatar_plan["steps"][-1]["face"], REACTIONS["delighted"].actions["face"])
 
     # A direction after the avatar's check carries on, and drops the question
     async def test_a_direction_after_the_check_carries_on(self) -> None:
         self.harness.state = replace(self.harness.state, finish_asked=True)
-        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay, left of the bus.")
+        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="none", message="Okay, left of the bus.")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("No, go to the left of the bus"))
         self.assertEqual((outcome.message, outcome.close_after, outcome.state.finish_asked), ("Okay, left of the bus.", False, False))
 
@@ -514,14 +541,14 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         question = "Sorry, did you say the boulder?"
         verdict  = {"next_step": "clarify", "misheard": "the bolder", "message": question}
         self.check.check.return_value = check_model(tuple(MAP_TASK_SOUNDS), MapTaskBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
-        self.api.follow.return_value  = FollowerTurn(basis="No bolder here.", act="clarify", move=NO_MOVE, message="Which way round?")
+        self.api.follow.return_value  = FollowerTurn(basis="No bolder here.", act="clarify", move=NO_MOVE, reaction="none", message="Which way round?")
         with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt("Go round the bolder"))
         self.assertEqual((outcome.message, outcome.state.path, outcome.state.replies[-1].act), (question, (DEMO_START,), "clarify"))
         self.assertEqual(outcome.avatar_plan["steps"][-1]["face"]["name"], "Face with Raised Eyebrow")
 
     # Each saved reply joins the task history: the kind of turn it answered, what it did, and the waypoints it added
     async def test_each_saved_reply_is_recorded_in_the_history(self) -> None:
-        self.api.follow.return_value      = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
+        self.api.follow.return_value      = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="none", message="Okay.")
         self.api.check_draft.return_value = DraftCheck(ok=True)
         for text in ("Go to the left of the bus", "Do you have a bus?"):
             with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await self.harness.generate(self.attempt(text))
@@ -554,7 +581,7 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([type(cue) for cue in harness.cues], [MapTaskBackchannels])
         self.assertEqual({name: feature.on for name, feature in harness.features.items()}, {"backchannels": False, "turn_end": False, "misheard": False})
 
-        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
+        self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="none", message="Okay.")
         attempt = self.attempt("Go to the left of the bus")
         with self.assertLogs(HARNESS_LOGGER, level="INFO"): outcome = await harness.generate(attempt)
         self.assertIsNone(outcome.avatar_plan)
@@ -588,7 +615,7 @@ class MapTaskIntroTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome.message, f"Hi! {MAP_TASK_INTRO.about} {INTRO_QUESTION}")
         self.assertEqual((outcome.state.path, outcome.state.replies, outcome.state.intro.stage), ((DEMO_START,), (), "asked"))
         self.assertEqual(outcome.task_snapshot["intro"], {"knew_task": None, "explained": False, "questions": 0, "finished": False})
-        self.assertEqual(outcome.avatar_plan["steps"][0]["gaze"]["on"], "user")
+        self.assertEqual((outcome.avatar_plan["steps"][0]["gaze"]["on"], outcome.avatar_plan["steps"][0]["face"]), ("user", REACTIONS["smile"].actions["face"]))
 
     # Someone new to the task hears how it works, and the avatar stays at the start
     async def test_someone_new_hears_how_it_works(self) -> None:
@@ -603,7 +630,7 @@ class MapTaskIntroTests(unittest.IsolatedAsyncioTestCase):
     async def test_an_answer_with_a_direction_goes_to_the_task(self) -> None:
         self.harness.state = replace(self.harness.state, intro=IntroState(stage="asked"))
         self.reading.read.return_value = IntroReading(basis="Gave a direction.", knows_task=True, next_step="task", answer=None)
-        self.api.follow.return_value   = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay, left of the bus.")
+        self.api.follow.return_value   = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, reaction="none", message="Okay, left of the bus.")
         with self.assertLogs(HARNESSES_LOGGER, level="INFO"): outcome = await self.harness.generate(self.answer("Yes. Go to the left of the bus."))
         self.assertEqual(outcome.message, "Okay, left of the bus.")
         self.assertEqual((len(outcome.state.path), len(outcome.state.replies)), (2, 1))

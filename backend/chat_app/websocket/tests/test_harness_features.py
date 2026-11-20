@@ -1,5 +1,5 @@
 """
-Shared harness features: signs of listening, the reply gate, and the intro.
+Shared harness pieces: signs of listening, the reply gate, the intro, reactions.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.tests.test_harness_features`
 
@@ -7,11 +7,15 @@ The features run for a stand-in chat, the gate's replies are stand-ins, and the
 check and intro clients return fixed results, so these tests check what code
 decides: when a sign of listening goes out, when a reply goes out, waits, or
 gives way to a question, what newer speech cancels, what the check is asked,
-and which line the intro says next.
+and which line the intro says next. The shared reactions are checked against
+the Smiley's catalog as the protocol document lists it, so a misspelled name
+fails here rather than in the client, which would refuse the whole plan.
 
 """
 from datetime      import datetime, timezone
+from pathlib       import Path
 from types         import SimpleNamespace
+from typing        import get_args
 from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, unittest
@@ -31,6 +35,7 @@ from chat_app.websocket.harnesses.features.reply_gate.gate            import Mis
 from chat_app.websocket.harnesses.features.reply_gate.prompts         import build_check_messages
 from chat_app.websocket.harnesses.features.reply_gate.reply_check_api import ReplyCheckAPIError
 from chat_app.websocket.harnesses.features.reply_gate.response_models import CheckResult, Clarify, check_model
+from chat_app.websocket.harnesses.reactions                           import REACTIONS, ReactionName, reaction_lines, reaction_steps
 
 # Where the gate, the signs of listening, and the intro look up what these tests replace
 GATE         = "chat_app.websocket.harnesses.features.reply_gate.gate"
@@ -57,6 +62,9 @@ INTRO_SCRIPT = IntroScript(
     start       = "First, a circle. Where does it go?",
     starts_task = "a place for a shape",
 )
+
+# The protocol document whose §9 lists the Smiley's catalog
+HARNESS_PROTOCOL = Path(__file__).resolve().parents[1] / "consumers" / "HARNESS_PROTOCOL.md"
 
 # Each verdict the stand-in check can give
 DONE      = {"next_step": "reply",   "likely_said": None}
@@ -133,6 +141,13 @@ def check_client(verdict: dict[str, object] | None, *, fails: bool = False, dela
         if fails: raise ReplyCheckAPIError("Reply check check failed after all attempts")
         return CHECK_MODEL.model_validate({"basis": "b", "verdict": verdict})
     return SimpleNamespace(check=AsyncMock(side_effect=check))
+
+# Every item in the Smiley's catalog tables (`HARNESS_PROTOCOL.md` §9): its names and other cells
+def smiley_names() -> set[str]:
+    text    = HARNESS_PROTOCOL.read_text(encoding="utf-8")
+    catalog = text[text.index("## 9. "):text.index("## 10. ")]
+    rows    = [line.strip("|").split("|") for line in catalog.splitlines() if line.startswith("|")]
+    return {item.strip() for row in rows for cell in row for item in cell.split(",")}
 
 
 # ================================================================================
@@ -441,3 +456,26 @@ class IntroTests(unittest.IsolatedAsyncioTestCase):
     # A reading that answers a question has to carry the answer
     def test_an_answer_step_needs_its_answer(self) -> None:
         with self.assertRaises(ValidationError): IntroReading(basis="b", knows_task=None, next_step="answer", answer=None)
+
+
+# ================================================================================
+# Reactions
+# ================================================================================
+class ReactionTests(unittest.TestCase):
+    # Every reaction is in the catalog, and the Smiley has every face, movement, and animation named
+    def test_every_reaction_uses_names_the_smiley_has(self) -> None:
+        self.assertEqual(set(get_args(ReactionName)), set(REACTIONS))
+        used = {action["name"] for reaction in REACTIONS.values() for action in reaction.actions.values()}
+        self.assertLessEqual(used, smiley_names())
+
+    # A menu's prompt lines come in its order, in a chat type's own words where it has them
+    def test_a_menus_prompt_lines_use_a_chat_types_own_words(self) -> None:
+        lines = reaction_lines(("none", "smile"), {"smile": "when they say you got it right"})
+        self.assertEqual(lines, "  - none: nothing special, when nothing else clearly fits.\n  - smile: a warm smile, when they say you got it right.")
+
+    # A reaction joins the opening step beside the look at the user (Ponder lets go of it first)
+    def test_a_reaction_joins_the_opening_step(self) -> None:
+        opening, look = {"start_on": "reply_audio", "state": "listening"}, {"on": "user", "hold_ms": 1_500}
+        self.assertEqual(reaction_steps("none",   opening, look), [{**opening, "gaze": look}])
+        self.assertEqual(reaction_steps("laugh",  opening, look), [{**opening, "gaze": look, **REACTIONS["laugh"].actions}])
+        self.assertEqual(reaction_steps("ponder", opening, look), [{**opening, "gaze": "release", **REACTIONS["ponder"].actions}, {"gaze": look}])

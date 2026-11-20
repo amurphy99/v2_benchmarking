@@ -20,8 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # What a reply does to the conversation (`wind_down`: the user wants to stop, so it asks nothing)
 ReplyMove = Literal["follow_up", "share", "challenge", "new_angle", "wind_down"]
 
-# How the avatar acts while it says a reply (`behaviors.py` turns each one into an avatar plan)
-Behavior = Literal["none", "nod", "smile", "laugh", "surprised", "curious", "thoughtful", "sympathetic"]
+# How the avatar acts while it says a reply: this chat's shared reactions (`harnesses/reactions.py`)
+Behavior = Literal[
+    "none", "nod", "smile", "laugh", "giggle", "love_it", "touched", "dreamy", "surprised", "amazed", "gasp",
+    "curious", "thoughtful", "ponder", "recall", "sympathetic", "grimace", "disagree",
+]
 
 
 # --------------------------------------------------------------------------------

@@ -3,22 +3,25 @@ The speech elicitation reply's prompt: keeping the user talking, and the topic.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.speech_elicitation.prompts`
 
-The one call gets the instructions and its task. Every answer the user gives
-opens a thread, and the reply digs into it before it goes anywhere new: the
-topic's fresh angles are only offered once a thread has had a few follow-ups or
-has run dry. A reply can also carry a directive from code, for a turn where the
-conversation is flagging: the user has gone quiet, or their answers have been
-short.
+The one call gets the instructions and its task, whose behaviors are the shared
+reactions this chat offers, each with its look and when it fits
+(`harnesses/reactions.py`). Every answer the user gives opens a thread, and the
+reply digs into it before it goes anywhere new: the topic's fresh angles are
+only offered once a thread has had a few follow-ups or has run dry. A reply can
+also carry a directive from code, for a turn where the conversation is flagging:
+the user has gone quiet, or their answers have been short.
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
 whether the user is done.
 
 """
 from __future__ import annotations
-from typing     import Literal, TYPE_CHECKING
+from typing     import Literal, TYPE_CHECKING, get_args
 
 # From this project
-from .config import ELICITATION_DRY_AFTER_SHORT, ELICITATION_MIN_FOLLOW_UPS, ELICITATION_SHORT_ANSWER_WORDS
+from ..reactions       import reaction_lines
+from  .config          import ELICITATION_DRY_AFTER_SHORT, ELICITATION_MIN_FOLLOW_UPS, ELICITATION_SHORT_ANSWER_WORDS
+from  .response_models import Behavior
 
 if TYPE_CHECKING: from .topics import Topic
 
@@ -59,8 +62,8 @@ How to keep them talking:
   can end the chat whenever they are ready, and ask nothing.
 """.strip()
 
-# The call's task, and every field its response fills in
-REPLY_TASK = """
+# The call's task and its response's fields (each behavior with its look, and when it fits)
+REPLY_TASK = f"""
 Reply to the user's latest message. Fill in:
 - basis: one short reason for your reply.
 - move: what your reply does:
@@ -69,15 +72,8 @@ Reply to the user's latest message. Fill in:
   - challenge: playfully takes the other side, on the same thread.
   - new_angle: changes direction. Only once the thread has run dry, or they have nothing more to add.
   - wind_down: they want to stop, so you thank them and ask nothing.
-- behavior: how you act while you say it:
-  - none: nothing special.
-  - nod: a nod, when you agree.
-  - smile: a warm smile, when you like what they said.
-  - laugh: a big grin, when it was funny.
-  - surprised: a surprised look, when you didn't expect it.
-  - curious: a tilt of the head, when you want to hear more.
-  - thoughtful: a slow nod, when they made a serious point.
-  - sympathetic: a soft look, when it was sad or hard for them.
+- behavior: how you act while you say it. Choose one only when it fits what they just said:
+{reaction_lines(get_args(Behavior), {})}
 - message: what you say. Unless move is wind_down, it must end with a question mark.
 """.strip()
 

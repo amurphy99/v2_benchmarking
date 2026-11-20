@@ -10,23 +10,28 @@ they want or must avoid. The instructions open with the scenario's brief for the
 avatar (who it is, and who the user is). The participant's own brief and
 constraints are never in a prompt.
 
-A reply can also carry a directive from code: nudge a participant who has gone
-quiet. Once every item is agreed, code reads the plan back itself, with a fixed
-recap question (`recap_line`) after the reply's own words.
+A reply's behavior is one of the shared reactions this chat offers, in
+planning's own words where the catalog's don't fit (`harnesses/reactions.py`),
+or one of the avatar's two looks at its card. A reply can also carry a directive
+from code: nudge a participant who has gone quiet. Once every item is agreed,
+code reads the plan back itself, with a fixed recap question (`recap_line`)
+after the reply's own words.
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
 whether the user is done, and, as each check runs, what is being planned and the
 ideas already on the table, so a slip that sounds like one of them is read as
-that idea. The shared intro
-(`features/intro/`) gets how planning works, the same for every scenario, with
-each scenario's own words for what the task is and its first line.
+that idea. The shared intro (`features/intro/`) gets how planning works, the
+same for every scenario, with each scenario's own words for what the task is and
+its first line.
 
 """
 from __future__ import annotations
-from typing     import Literal, TYPE_CHECKING
+from typing     import Literal, TYPE_CHECKING, get_args
 
 # From this project
 from ..features.intro.flow import IntroScript
+from ..reactions           import reaction_lines
+from  .response_models     import PlanningReaction
 
 if TYPE_CHECKING:
     from .plan_state import ItemState, PlanningState, Side
@@ -98,18 +103,24 @@ AVATAR_ONLY_FIELD = """
   - reveal {constraint}: your reply mentions one of your own constraints (its id).
 """.strip("\n")
 
-# How the avatar acts while it speaks
-BEHAVIOR_FIELD = """
-- behavior: how you act while you say it:
-  - none: nothing special.
+# Planning's own words for when some of the shared reactions fit (the rest keep the catalog's)
+PLANNING_REACTION_WHEN = {
+    "nod"       : "when you agree or take up their idea",
+    "smile"     : "when you like their idea",
+    "delighted" : "when an item gets agreed",
+    "love_it"   : "when they suggest something you really love",
+    "dreamy"    : "when you picture how much fun something will be",
+    "surprised" : "when something they said is unexpected",
+    "ponder"    : "when you need a moment to come up with an idea",
+    "sorry"     : "when you have to turn their idea down",
+}
+
+# How the avatar acts while it speaks: the shared reactions, then its two looks at its card
+BEHAVIOR_FIELD = f"""
+- behavior: how you act while you say it. Choose one only when it fits:
+{reaction_lines(get_args(PlanningReaction), PLANNING_REACTION_WHEN)}
   - glance_at_card: a quick look at your card, when you mention the plan or an item.
   - check_card: read your card carefully first, when you bring up one of your constraints.
-  - nod: a nod, when you agree or take up their idea.
-  - pleased: a warm smile, when you like their idea.
-  - excited: a big happy reaction, when an item gets agreed.
-  - apologetic: a sorry look, when you have to turn their idea down.
-  - ponder: think it over first, when you need a moment to come up with an idea.
-  - surprised: a surprised look, when something they said is unexpected.
 - about: the id of the item your behavior is about, or null.
 """.strip()
 

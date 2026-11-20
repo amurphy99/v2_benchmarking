@@ -27,6 +27,9 @@ from .geometry import Direction, Side, StepSize
 # What the follower's reply does (`finish`: the giver says it has reached the finish, `finish.py`)
 FollowerAct = Literal["acknowledge", "answer", "clarify", "report_missing", "finish", "other"]
 
+# The avatar's look while it says a reply: this chat's shared reactions (`harnesses/reactions.py`)
+MapTaskReaction = Literal["none", "smile", "laugh", "surprised", "grimace"]
+
 # Waypoints per reply (with its starting point, the gaze trace stays below 64)
 MAP_TASK_MAX_WAYPOINTS = 32
 
@@ -80,10 +83,11 @@ NO_MOVE = Stay(kind="stay")
 class FollowerTurn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    basis   : str         = Field(..., min_length=1, max_length=300)  # One short reason for the reply and move
-    act     : FollowerAct                                             # What the reply does
-    move    : Move                                                    # The move the giver asked for, or stay
-    message : str         = Field(..., min_length=1, max_length=300)  # What the follower says back
+    basis    : str             = Field(..., min_length=1, max_length=300)  # One short reason for the reply and move
+    act      : FollowerAct                                                 # What the reply does
+    move     : Move                                                        # The move the giver asked for, or stay
+    reaction : MapTaskReaction                                             # The look on its face while it says the reply
+    message  : str             = Field(..., min_length=1, max_length=300)  # What the follower says back
 
 # The draft-and-check pipeline's verdict on an answer drafted from the map
 class DraftCheck(BaseModel):
@@ -108,11 +112,12 @@ class TurnAssessment(BaseModel):
     act      : FollowerAct                                              # What the reply should do
     move     : Move                                                     # The move they asked for, or stay
 
-# The second call of the assess-then-reply pipeline: what the follower says
+# The assess-then-reply pipeline's second call: the follower's words, and its look as it says them
 class SpokenReply(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    message : str = Field(..., min_length=1, max_length=300)  # What the follower says back
+    reaction : MapTaskReaction                                             # The look on its face while it says the reply
+    message  : str             = Field(..., min_length=1, max_length=300)  # What the follower says back
 
 
 # --------------------------------------------------------------------------------
@@ -138,10 +143,11 @@ def models_for_map(landmark_ids: tuple[str, ...]) -> MapModels:
 # --------------------------------------------------------------------------------
 # Follower Reply
 # --------------------------------------------------------------------------------
-# What every pipeline returns: the words, what they do, the move to make, and why
+# What every pipeline returns: the words, what they do, the move, the look with them, and why
 @dataclass(frozen=True, slots=True)
 class FollowerReply:
-    message : str
-    act     : FollowerAct
-    move    : Move
-    basis   : str  # Why this reply and move (for the turn's log line)
+    message  : str
+    act      : FollowerAct
+    move     : Move
+    reaction : MapTaskReaction  # The look on its face while it says the words (`behaviors.py` adds it to the plan)
+    basis    : str              # Why this reply and move (for the turn's log line)

@@ -9,7 +9,11 @@ landmark it was asked about or doesn't have, or around its own spot otherwise.
 The reply's plan then shows what the reply did as soon as its text arrives:
 tracing the move from the old spot to the new one, locking onto a landmark it
 found, or one last sweep and a head shake for one it doesn't have. The map comes
-down as the reply's audio starts.
+down as the reply's audio starts, with the reaction the reply picked on top: one
+of the few shared reactions this chat offers (`harnesses/reactions.py`), such as
+a smile when the user says it's doing well, or a grimace when it went the wrong
+way. Code picks its own reaction as the task ends (delighted) and as the avatar
+asks whether it has reached the finish (curious), and one for each intro line.
 
 The signs of listening at the user's pauses (`features/backchannels/`) stay
 neutral here: nods, a tilt, and "mm-hm". "Yeah" would sound like the avatar had
@@ -25,14 +29,18 @@ from typing     import TYPE_CHECKING
 
 # From this project
 from ..features.backchannels.cue import BACKCHANNEL_NOD, BACKCHANNEL_TILT, listening_sound
+from ..reactions                 import reaction_steps
 from  .geometry                  import step
 
 if TYPE_CHECKING:
-    from ..avatar          import AvatarPlan, AvatarSetup, AvatarSounds
-    from  .geometry        import Direction
-    from  .maps            import Landmark, Point, Scale
-    from  .response_models import FollowerReply
-    from  .understanding   import TurnReading
+    from ..avatar              import AvatarPlan, AvatarSetup, AvatarSounds
+    from ..features.intro.flow import IntroMove
+    from ..reactions           import ReactionName
+    from  .finish              import FinishStep
+    from  .geometry            import Direction
+    from  .maps                import Landmark, Point, Scale
+    from  .response_models     import FollowerReply
+    from  .understanding       import TurnReading
 
 # Session settings in each condition (with cues, the client's idle glances run too)
 MAP_TASK_SETUP_CUES    = {"rest": "Slightly Smiling Face", "auto": {"idle_glances": True,  "thinking_look": False, "speech_gaze": False, "listening_motions": False}}
@@ -70,6 +78,21 @@ MAP_TASK_FOUND_FACE   = {"name": "Wide-Eyed",                "strength": 0.6, "h
 MAP_TASK_PUZZLED_FACE = {"name": "Face with Raised Eyebrow", "strength": 0.5, "hold_ms": 1_200}
 MAP_TASK_NOT_THERE    = {"name": "Shake No",                 "strength": 0.6}
 MAP_TASK_GOT_IT       = {"name": "Nod",                      "strength": 0.5}
+
+# Code's own reactions: as the task ends, and as the avatar asks if it's at the finish
+MAP_TASK_END_REACTION   = "delighted"
+MAP_TASK_CHECK_REACTION = "curious"
+
+# How the avatar reacts while saying each intro line (`features/intro/`)
+MAP_TASK_INTRO_REACTIONS = {
+    "opening"   : "smile",
+    "ask_again" : "none",
+    "explain"   : "none",
+    "answer"    : "nod",
+    "wait"      : "nod",
+    "start"     : "smile",
+    "say_again" : "sorry",
+}
 
 # The sound the avatar makes while listening: the name a sign plays, and the words its voice says
 MAP_TASK_SOUNDS = {"mm_hm": "Mm-hm."}
@@ -111,8 +134,9 @@ def reply_plan(
     reply   : FollowerReply,      # The reply
     before  : Point,              # Where the avatar was
     path    : tuple[Point, ...],  # Every new waypoint, empty when it stays
+    finish  : FinishStep,         # Where the reply leaves the task (code's own reaction as it ends, or as it asks)
 ) -> AvatarPlan:
-    steps = [*_map_steps(reading, reply, before, path), _reply_audio_step(reply)]
+    steps = [*_map_steps(reading, reply, before, path), *_reply_audio_steps(reply, finish)]
     return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": steps}
 
 # What the reply did on the map, played as soon as the plan arrives (before its audio starts)
@@ -140,21 +164,28 @@ def _map_steps(
     return [{"gaze": {"on": "map", "at": list(before)}, "ms": MAP_TASK_FOUND_MS}]
 
 # As the reply's audio starts: the map down, the eyes on the user, and listening once it stops talking
-# (with a nod for a direction it took, or a puzzled look for a question back)
-def _reply_audio_step(reply: FollowerReply) -> dict[str, object]:
-    step = {"start_on": "reply_audio", "wait_ms": MAP_TASK_LOWER_AFTER_MS, "state": "listening", "prop": {"raise": 0}, "gaze": {"on": "user", "hold_ms": MAP_TASK_LOOK_BACK_MS}, "face": "rest"}
+# (a nod for a direction it took, or a puzzled look for a question back, with the reaction on top)
+def _reply_audio_steps(reply: FollowerReply, finish: FinishStep) -> list[dict[str, object]]:
+    step = {"start_on": "reply_audio", "wait_ms": MAP_TASK_LOWER_AFTER_MS, "state": "listening", "prop": {"raise": 0}, "face": "rest"}
     if   reply.act == "acknowledge": step["move"] = MAP_TASK_GOT_IT
     elif reply.act == "clarify":     step["face"] = MAP_TASK_PUZZLED_FACE
-    return step
+    return reaction_steps(_reaction(reply, finish), step, {"on": "user", "hold_ms": MAP_TASK_LOOK_BACK_MS})
+
+# The reaction: code's own as the task ends or the avatar asks if it's there, else the reply's
+def _reaction(reply: FollowerReply, finish: FinishStep) -> ReactionName:
+    if finish.ended is not None: return MAP_TASK_END_REACTION
+    if finish.asked:             return MAP_TASK_CHECK_REACTION
+    return reply.reaction
 
 # The first landmark the user named that is on the avatar's map (None when they named none)
 def _named_landmark(reading: TurnReading) -> Landmark | None:
     return next((mention.landmark for mention in reading.mentions if mention.landmark is not None), None)
 
-# An intro reply's plan: the map down and eyes on the user as its audio starts, then listening
-def intro_plan(turn: int) -> AvatarPlan:
-    step = {"start_on": "reply_audio", "state": "listening", "prop": {"raise": 0}, "gaze": {"on": "user", "hold_ms": MAP_TASK_LOOK_BACK_MS}, "face": "rest"}
-    return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": [step]}
+# An intro reply's plan: the map down and eyes on the user as its audio starts, with its reaction
+def intro_plan(turn: int, move: IntroMove) -> AvatarPlan:
+    step  = {"start_on": "reply_audio", "state": "listening", "prop": {"raise": 0}, "face": "rest"}
+    steps = reaction_steps(MAP_TASK_INTRO_REACTIONS[move], step, {"on": "user", "hold_ms": MAP_TASK_LOOK_BACK_MS})
+    return {"id": f"t{turn}-reply", "turn": turn, "feedback": "end", "steps": steps}
 
 
 # ================================================================================

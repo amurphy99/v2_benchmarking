@@ -81,7 +81,7 @@ async def track_then_reply(api: PlanningAPI, turn: PlanningTurn) -> PlanningRepl
 
     # An approved plan ends the chat with the scenario's closing line, so it needs no reply call
     tracked, _ = apply_changes(turn.state, user_changes)
-    if tracked.stage == "approved": return PlanningReply(message=turn.scenario.closing_line, behavior="excited", about=None, changes=user_changes, directive=None, basis=basis)
+    if tracked.stage == "approved": return PlanningReply(message=turn.scenario.closing_line, behavior="delighted", about=None, changes=user_changes, directive=None, basis=basis)
 
     # Reply from the updated plan
     directive = directive_for(tracked, nudge=turn.nudge)

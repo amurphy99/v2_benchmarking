@@ -13,25 +13,27 @@ from dataclasses   import replace
 from datetime      import datetime, timezone
 from pathlib       import Path
 from types         import SimpleNamespace
+from typing        import get_args
 from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, json, tempfile, unittest
 
 # From this project
 from chat_app.websocket.harnesses.base                                 import FinalUtterance, InterimSpeech, TurnAttempt
-from chat_app.websocket.harnesses.cooperative_planning.behaviors       import PLANNING_SOUNDS
+from chat_app.websocket.harnesses.cooperative_planning.behaviors       import PLANNING_SOUNDS, reply_plan
 from chat_app.websocket.harnesses.cooperative_planning.cues            import ItemGlance, PlanningBackchannels, QuietNudge
 from chat_app.websocket.harnesses.cooperative_planning.harness         import MSG_SAY_AGAIN, PLANNING_SCENARIOS, PlanningOutcome
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
 from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, Suggestion, apply_changes, card_frame, initial_state, planning_history, planning_reveal
 from chat_app.websocket.harnesses.cooperative_planning.planning_api    import PlanningAPIError
-from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, misheard_notes, plan_block, recap_line
-from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
+from chat_app.websocket.harnesses.cooperative_planning.prompts         import BEHAVIOR_FIELD, COMBINED_TASK, PLANNING_REACTION_WHEN, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, misheard_notes, plan_block, recap_line
+from chat_app.websocket.harnesses.cooperative_planning.response_models import Behavior, CardBehavior, PlanningReaction, models_for_scenario
 from chat_app.websocket.harnesses.cooperative_planning.scenarios       import PLANNING_SCENARIOS_DIR, load_scenario
 from chat_app.websocket.harnesses.features.intro.flow                  import IntroState
 from chat_app.websocket.harnesses.features.intro.intro_api             import IntroReading
 from chat_app.websocket.harnesses.features.intro.prompts               import INTRO_QUESTION
 from chat_app.websocket.harnesses.features.reply_gate.response_models  import CheckResult, Reply, check_model
+from chat_app.websocket.harnesses.reactions                            import REACTIONS
 from chat_app.websocket.harnesses.registry                             import build_harness
 
 # The scenario every test plans, and its responses
@@ -346,6 +348,17 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Turned down: lasagna (by you: my oven is broken).", block)
         self.assertIn("- Nothing yet.", block)
 
+    # The behaviors are the card's two looks and shared reactions with no hand (the card hides it),
+    # each in the prompt, in planning's own words where it has them
+    def test_the_behaviors_are_the_card_looks_and_shared_reactions(self) -> None:
+        reactions = get_args(PlanningReaction)
+        self.assertEqual(set(get_args(Behavior)), {*reactions, *get_args(CardBehavior)})
+        self.assertLessEqual(set(reactions), set(REACTIONS))
+        self.assertLessEqual(set(PLANNING_REACTION_WHEN), set(reactions))
+        self.assertFalse({"giggle", "gasp"} & set(reactions))
+        for name in get_args(Behavior): self.assertIn(f"  - {name}: ", BEHAVIOR_FIELD)
+        self.assertIn(f"  - sorry: a sorry look, {PLANNING_REACTION_WHEN['sorry']}.", BEHAVIOR_FIELD)
+
     # A quiet user gets nudged about the first open item (a finished plan is read back by code instead)
     def test_a_quiet_user_is_nudged_about_the_first_open_item(self) -> None:
         self.assertIsNone(directive_for(every_item_settled(), nudge=True))
@@ -375,14 +388,14 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
     # The reply sees the plan with the user's changes already in it, and both sides' changes come back in order
     async def test_track_then_reply_replies_from_the_plan_the_users_changes_leave(self) -> None:
         api   = StubPlanningAPI(track=plan_update({"op": "suggest", "item": "main", "choice": "pasta"}),
-                                reply=spoken_turn("Pasta sounds great!", {"op": "agree", "item": "main", "choice": "pasta"}, behavior="pleased"))
+                                reply=spoken_turn("Pasta sounds great!", {"op": "agree", "item": "main", "choice": "pasta"}, behavior="smile"))
         reply = await track_then_reply(api, self.turn)
 
         seen_state, directive = api.calls[1][1]
         self.assertEqual([idea.choice for idea in seen_state.items["main"].suggestions], ["pasta"])
         self.assertIsNone(directive)
         self.assertEqual([(by, change.op) for by, change in reply.changes], [("user", "suggest"), ("avatar", "agree")])
-        self.assertEqual((reply.message, reply.behavior, reply.follow_up), ("Pasta sounds great!", "pleased", None))
+        self.assertEqual((reply.message, reply.behavior, reply.follow_up), ("Pasta sounds great!", "smile", None))
 
     # The user's yes to the read-back plan needs no reply call: the closing line ends the chat
     async def test_an_approved_plan_needs_no_reply_call(self) -> None:
@@ -460,7 +473,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         result   = check_model(tuple(PLANNING_SOUNDS), PlanningBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
         with patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=result)))):
             with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await harness.generate(make_attempt("Let's have tear a misu for dessert."))
-        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (question, "ponder", harness.state, ()))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (question, "curious", harness.state, ()))
 
     # Both checks run with cues, the misheard one knowing what is being planned; neither runs without cues
     async def test_the_reply_gate_checks_only_with_cues(self) -> None:
@@ -495,7 +508,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
             with self.assertLogs(HARNESSES_LOGGER, level="INFO"): started = await harness.generate(make_attempt("Yes, I have."))
         await asyncio.sleep(0)
 
-        self.assertEqual((opening.message, opening.behavior), (f"Hi! {SCENARIO.intro} {INTRO_QUESTION}", "pleased"))
+        self.assertEqual((opening.message, opening.behavior), (f"Hi! {SCENARIO.intro} {INTRO_QUESTION}", "smile"))
         self.assertEqual((started.message, started.state.intro), (f"Great, let's begin! {SCENARIO.start_line}", IntroState(stage="done", knew_task=True)))
         self.assertEqual(api.calls, [])
         self.assertNotIn("task_card", sent_types(consumer))  # The intro's progress alone doesn't send the card again
@@ -521,16 +534,23 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(api.calls, [])
         opening.publish_plan.assert_not_awaited()
 
+    # Pondering lowers the card and looks away (Ponder), then back at the user before writing in
+    def test_pondering_looks_away_then_back_at_the_user(self) -> None:
+        steps = reply_plan(SCENARIO, 1, "ponder", None, ["main"])["steps"]
+        self.assertEqual((steps[0]["prop"], steps[0]["gaze"], steps[0]["animation"]["name"]), ({"raise": 0}, "release", "Ponder"))
+        self.assertEqual(steps[1]["gaze"]["on"], "user")
+        self.assertEqual((steps[2]["start_on"], steps[2]["gaze"]["on"]), ("reply_end", "card"))
+
     # Each reply carries the plan for the behavior it picked, but only with cues
     async def test_a_reply_carries_its_behavior_plan_only_with_cues(self) -> None:
-        responses = {"track": plan_update(), "reply": spoken_turn("Nice idea!", behavior="pleased")}
+        responses = {"track": plan_update(), "reply": spoken_turn("Nice idea!", behavior="smile")}
         for condition, sends_plan in (("cues", True), ("no_cues", False)):
             with self.subTest(condition):
                 harness, _, _ = self.make(condition, **responses)
                 attempt = make_attempt("Maybe soup to start?")
                 harness.on_reply_started(attempt)
                 outcome = await harness.generate(attempt)
-                self.assertEqual(outcome.behavior, "pleased")
+                self.assertEqual(outcome.behavior, "smile")
                 self.assertEqual(outcome.avatar_plan is not None, sends_plan)
                 self.assertEqual(attempt.publish_plan.await_count, int(sends_plan))
                 if sends_plan: self.assertEqual(outcome.avatar_plan["id"], "t1-reply")
@@ -538,7 +558,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
     # A saved reply that settles an item sends the new card; the plan writes the choice in after the reply
     async def test_a_saved_reply_that_changes_the_plan_sends_the_card(self) -> None:
         harness, consumer, _ = self.make(track=plan_update({"op": "suggest", "item": "starter", "choice": "soup"}),
-                                         reply=spoken_turn("Soup it is!", {"op": "agree", "item": "starter", "choice": "soup"}, behavior="excited"))
+                                         reply=spoken_turn("Soup it is!", {"op": "agree", "item": "starter", "choice": "soup"}, behavior="delighted"))
         outcome = await harness.generate(make_attempt("How about soup?"))
         self.assertEqual(harness.state.items["starter"].agreed, None)
         self.assertEqual(outcome.avatar_plan["steps"][-2]["gaze"]["on"], "card")
@@ -550,7 +570,7 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
 
     # One call (the default): the last yes brings the read-back at once, and a yes to that ends the chat
     async def test_the_last_yes_reads_the_plan_back_and_the_next_yes_ends_the_chat(self) -> None:
-        last_yes = combined_turn("Tiramisu it is!", user=({"op": "agree", "item": "dessert", "choice": "tiramisu"},), behavior="excited")
+        last_yes = combined_turn("Tiramisu it is!", user=({"op": "agree", "item": "dessert", "choice": "tiramisu"},), behavior="delighted")
         harness, _, api = self.make(pipeline="single_call", combined=last_yes)
         harness.state, _ = apply_changes(agreed_on(("starter", "breadsticks"), ("main", "pasta")), [("avatar", avatar_change(op="suggest", item="dessert", choice="tiramisu"))])
 

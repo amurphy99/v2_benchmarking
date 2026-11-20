@@ -8,7 +8,9 @@ about the avatar's map worked out in code for this turn (`understanding.py`). Th
 model sees its own coordinates, landmark extents, and recent committed trail.
 It never receives the giver's route or the giver's landmark coordinates.
 Each task lists the fields its response fills in, because the model never sees
-the schema's field descriptions (`response_models.py`).
+the schema's field descriptions (`response_models.py`). The calls that write the
+reply also pick its reaction from the shared ones this chat offers, in the Map
+Task's own words for when each fits (`harnesses/reactions.py`).
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
 whether a direction is finished, and every landmark name on either map, so it can
@@ -18,12 +20,13 @@ the first thing the avatar says once the user is ready.
 
 """
 from __future__ import annotations
-from typing     import TYPE_CHECKING
+from typing     import TYPE_CHECKING, get_args
 
 # From this project
 from ..features.intro.flow import IntroScript
+from ..reactions           import reaction_lines
 from  .geometry            import MAP_TASK_BESIDE_GAP, MAP_TASK_STEPS, region
-from  .response_models     import MAP_TASK_MAX_WAYPOINTS
+from  .response_models     import MAP_TASK_MAX_WAYPOINTS, MapTaskReaction
 
 if TYPE_CHECKING:
     from .maps          import TaskMap
@@ -118,12 +121,28 @@ Example on a landscape map with scale [1, 0.704762], starting at [0.30, 0.66]:
 Both legs have length 0.08 map units. Do not jump diagonally to the final point.
 """.strip()
 
+# The Map Task's own words for when each of its reactions fits (`harnesses/reactions.py`)
+MAP_TASK_REACTION_WHEN = {
+    "smile"     : "when they say you're doing well or got it right",
+    "laugh"     : "when they make a joke",
+    "surprised" : "when they tell you something you didn't expect",
+    "grimace"   : "when they say you went the wrong way",
+}
+
+# The `reaction` field, for the calls that write the reply
+REACTION_FIELD = f"""
+- reaction: the look on your face while you say it. Choose one only when it fits:
+{reaction_lines(get_args(MapTaskReaction), MAP_TASK_REACTION_WHEN)}
+""".strip()
+
 # The single-call pipeline's task
 FOLLOW_TASK = f"""
 Reply to the giver's latest message, and work out the move they asked for. Fill in:
 - basis: one short reason for your reply and move.
 {ACT_FIELD}
 {MOVE_FIELD}
+
+{REACTION_FIELD}
 - message: what you say back, in one or two short sentences.
 """.strip()
 
@@ -150,11 +169,12 @@ Don't move toward something you can't find on your map. Fill in:
 """.strip()
 
 # The second task of the assess-then-reply pipeline (`assessment` is the first call's result)
-REPLY_TASK = """
+REPLY_TASK = f"""
 Reply to the giver's latest message, using your assessment of it:
-{assessment}
+{{assessment}}
 
 Say clearly what doesn't match your map, and offer what you do have nearby if it helps. Fill in:
+{REACTION_FIELD}
 - message: what you say back, in one or two short sentences.
 """.strip()
 

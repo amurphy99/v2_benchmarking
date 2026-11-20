@@ -159,8 +159,8 @@ class CooperativePlanningHarness(ChatHarness):
             intro = turn.state
 
         # The opening line (without the intro), and the closing line once later tracking approved the plan
-        if not attempt.context:            return self._outcome(self.scenario.opening_line, "pleased", None, self.state, ())
-        if self.state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, self.state, ())
+        if not attempt.context:            return self._outcome(self.scenario.opening_line, "smile", None, self.state, ())
+        if self.state.stage == "approved": return self._outcome(self.scenario.closing_line, "delighted", None, self.state, ())
 
         # A turn of the avatar's own with every item agreed (a nudge, or after tracking) reads the plan back
         if (not attempt.user_text) and self.state.all_agreed: return self._read_back()
@@ -181,7 +181,7 @@ class CooperativePlanningHarness(ChatHarness):
         try: reply = await pipeline(get_planning_api(), turn)
         except PlanningAPIError:
             logger.exception(f"{LLM_MAIN}[Planning] The {PLANNING_PIPELINE} pipeline failed; asking the user to say it again.{RESET}")
-            return self._outcome(MSG_SAY_AGAIN, "apologetic", None, replace(self.state, intro=intro), ())
+            return self._outcome(MSG_SAY_AGAIN, "sorry", None, replace(self.state, intro=intro), ())
 
         # Apply the changes; a plan they complete is read back after the reply, and the final check starts
         state, results = apply_changes(replace(self.state, intro=intro), reply.changes)
@@ -192,7 +192,7 @@ class CooperativePlanningHarness(ChatHarness):
         _log_turn(reply, results, state, time.monotonic() - started)
 
         # An approved plan ends the chat with the scenario's closing line
-        if state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, state, results)
+        if state.stage == "approved": return self._outcome(self.scenario.closing_line, "delighted", None, state, results)
         follow_up = None if (reply.follow_up is None) else (lambda: self._track_after_reply(reply.follow_up))
         return self._outcome(message, reply.behavior, reply.about, state, results, follow_up)
 
@@ -200,9 +200,9 @@ class CooperativePlanningHarness(ChatHarness):
     def _read_back(self) -> PlanningOutcome:
         return self._outcome(recap_line(self.scenario, self.state), "glance_at_card", None, replace(self.state, stage="final_check"), ())
 
-    # Ask about a word the reply check thinks was misheard (the plan stays as it was)
+    # Ask about a word the reply check thinks was misheard, head tilted (the plan stays as it was)
     def _clarify(self, message: str) -> PlanningOutcome:
-        return self._outcome(message, "ponder", None, self.state, ())
+        return self._outcome(message, "curious", None, self.state, ())
 
     # The outcome for a reply: the plan it proposes, its avatar plan (with cues), and the chat's end once approved
     def _outcome(
