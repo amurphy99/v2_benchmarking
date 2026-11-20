@@ -16,9 +16,11 @@ switch).
 The page stays put when the chat ends, however it ends. The controls give way
 to an end bar with the chat's length and numbers (`useChatStats`) and a button
 that reloads the page for a new chat. The backend's `task_reveal` fills in the
-task's end view (`TaskPanel`): both Map Task maps as one, the avatar's planning
-card, or the threads a speech elicitation chat followed, which get a panel of
-their own beside the avatar.
+task's end view: both Map Task maps as one, or the threads a speech elicitation
+chat followed, which get a panel of their own beside the avatar (`TaskPanel`).
+A planning chat's reveal, the avatar's own card, goes across the page instead,
+under the avatar and the participant's card and above the end bar, so the
+avatar's box keeps its size (`PlanningRevealPanel`).
 
 The avatar dozes until the chat starts and follows the conversation while it
 runs (`useChatAvatar`). A chat type that drives it from the backend sends plans,
@@ -70,6 +72,7 @@ import        ChatControls         from "./components/ChatControls";
 import        ChatEndBar           from "./components/ChatEndBar";
 import        DebugHelpModal       from "./components/DebugHelpModal";
 import        DebugPanel           from "./components/DebugPanel";
+import        PlanningRevealPanel  from "./components/PlanningRevealPanel";
 import        ReplyCaption         from "./components/ReplyCaption";
 import        TaskPanel            from "./components/TaskPanel";
 import        TimingPills          from "./components/TimingPills";
@@ -259,8 +262,8 @@ export function Chat(): ReactElement {
                             </div>
                         </div>
 
-                        {/* Debug mode: the round trip and each reply's stages */}
-                        {debugMode ? <TimingPills timings={timings} /> : null}
+                        {/* Debug mode: each reply's total delay and its stages, and the round trip */}
+                        {debugMode ? <TimingPills features={mode.features} timings={timings} /> : null}
                     </header>
 
                     {/* -------------------------------------------------------------------------------- */}
@@ -275,6 +278,11 @@ export function Chat(): ReactElement {
                         </section>
                         {(panel !== "none") ? <aside className="min-w-0"><TaskPanel mode={mode} card={taskCard} reveal={reveal} /></aside> : null}
                     </main>
+
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* The Avatar's Card, Once a Planning Chat Ends */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {(reveal?.kind === "cooperative_planning") ? <PlanningRevealPanel reveal={reveal} /> : null}
 
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Controls, or the End Bar */}

@@ -36,13 +36,16 @@ export const FEATURE_LABELS: Record<string, SwitchLabel> = {
     misheard     : {label: "Ask if misheard",    icon: BsEar,            help: "The same check looks for a word that was probably misheard and changes what the participant meant. Then the avatar asks about it instead of replying."},
 };
 
+// The shared features that run the reply check (its checks' names in `reply_gate/gate.py`)
+export const REPLY_CHECK_FEATURES: readonly string[] = ["turn_end", "misheard"];
+
 // The timing numbers, in the order the pills show them
 export const TIMING_LABELS: Record<TimingName, DebugLabel> = {
-    network : {label: "Network", help: "The round trip between this page and the server, from a ping every few seconds. It's the part of every wait that depends on where the browser is."},
-    delay   : {label: "Delay",   help: "From the end of the participant's last word to the avatar's voice starting: the wait they hear."},
-    llm     : {label: "LLM",     help: "The reply's own model calls, added up (the reply check isn't counted)."},
-    check   : {label: "Check",   help: "The reply check's model call, which runs alongside the reply."},
-    tts     : {label: "TTS",     help: "Making the speech for the reply's first sentence (the rest is made while it plays)."},
+    delay   : {label: "Total Delay", help: "From the end of the participant's last word to the avatar's voice starting: the wait they hear."},
+    network : {label: "Network",     help: "The round trip between this page and the server, from a ping every few seconds. It's the part of every wait that depends on where the browser is."},
+    llm     : {label: "LLM",         help: "The reply's own model calls, added up (the reply check isn't counted)."},
+    check   : {label: "Check",       help: "The reply check's model call, which runs alongside the reply."},
+    tts     : {label: "TTS",         help: "Making the speech for the reply's first sentence (the rest is made while it plays)."},
 };
 
 

@@ -5,11 +5,12 @@
 During a task chat, the participant's planning card or Map Task map, from the
 backend's `task_card` frames (a placeholder until the first one comes). Once
 the chat ends, the backend's `task_reveal` fills in what the participant
-couldn't see: the Map Task panel shows both maps as one, the avatar's card goes
-under the planning card, and a speech elicitation chat, which has no panel
-while it runs, lists the threads it followed. A chat that ended without a
-reveal keeps its task as it was. The page renders this only when something
-goes beside the avatar.
+couldn't see: the Map Task panel shows both maps as one, and a speech
+elicitation chat, which has no panel while it runs, lists the threads it
+followed. A planning chat's reveal (the avatar's card) goes across the page,
+under this panel (`PlanningRevealPanel`, placed by the page), so the planning
+card stays as it was. A chat that ended without a reveal keeps its task as it
+was. The page renders this only when something goes beside the avatar.
 
 */
 import type { ReactElement } from "react";
@@ -24,7 +25,6 @@ import type { ChatMode   } from "../chatModes";
 import        ElicitationThreadsPanel from "./ElicitationThreadsPanel";
 import        MapTaskMapPanel         from "./MapTaskMapPanel";
 import        PlanningCardPanel       from "./PlanningCardPanel";
-import        PlanningRevealPanel     from "./PlanningRevealPanel";
 
 
 // ================================================================================
@@ -34,21 +34,13 @@ import        PlanningRevealPanel     from "./PlanningRevealPanel";
 export default function TaskPanel({mode, card, reveal}: {
     mode   : ChatMode;            // The chat type running: what goes beside the avatar, and its icon
     card   : TaskCard | null;     // The participant's latest task card (null until the first)
-    reveal : TaskReveal | null;   // What the backend revealed as the chat ended (null until then, or when none came)
+    reveal : TaskReveal | null;   // What the backend revealed as the chat ended (null until then; a planning reveal isn't shown here)
 }): ReactElement {
     // A speech elicitation chat's threads
     if (reveal?.kind === "speech_elicitation") return <ElicitationThreadsPanel reveal={reveal} />;
 
-    // The planning card, with the avatar's under it once revealed
-    if (mode.panel === "card") {
-        if (card?.kind !== "cooperative_planning") return <TaskWaiting what="card" icon={mode.icon} />;
-        return (
-            <div className="flex flex-col gap-6">
-                <PlanningCardPanel card={card} />
-                {(reveal?.kind === "cooperative_planning") ? <PlanningRevealPanel reveal={reveal} /> : null}
-            </div>
-        );
-    }
+    // The planning card (the page puts the avatar's, once revealed, across the page)
+    if (mode.panel === "card") return (card?.kind === "cooperative_planning") ? <PlanningCardPanel card={card} /> : <TaskWaiting what="card" icon={mode.icon} />;
 
     // The Map Task map, with the avatar's drawn in once revealed
     if (card?.kind !== "map_task") return <TaskWaiting what="map" icon={mode.icon} />;
