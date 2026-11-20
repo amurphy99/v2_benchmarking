@@ -44,6 +44,9 @@ export function useCommandAcks({
 
         // Save the audio recording on chat completion
         set_recording      : false,
+
+        // Switch a shared feature on or off (the admin page's switches aren't built yet)
+        set_feature        : false,
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
 

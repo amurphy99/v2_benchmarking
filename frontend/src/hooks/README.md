@@ -26,6 +26,7 @@ TODO:
  │   ├── avatarPlanFrames.ts     # Avatar plan frame types (`pages/common/avatar/README.md`)
  │   ├── avatarPlanChecks.ts     # Checks avatar plan and setup frames on arrival
  │   ├── taskCardFrame.ts        # The participant's task card frame (`task_card`: a planning card or a Map Task map), checked on arrival
+ │   ├── debugFrames.ts          # Command acks and the debug-mode frames (`reply_timing`, `control_state`, `pong`), checked on arrival
  │   └── ...
  │
  ├── chat-listener/          # The admin chat monitor page 

@@ -17,6 +17,7 @@ export interface UserSettings {
   taskType          : string;
   taskSubtype       : string;
   modelChoice       : string;
+  debug_mode        : boolean;   // The chat page opens in debug mode (read-only here; staff and caregivers switch it on the admin page)
 }
 
 // Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
@@ -104,7 +105,6 @@ export interface Profile {
   birthDate             : string;
   locationStatus        : string;
   save_audio_by_default : boolean;
-  debug_mode            : boolean;   // Their chat page opens in debug mode (staff switch it on the admin page)
   settings              : UserSettings;
   goal                  : Goal;
 }

@@ -2,9 +2,10 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/chat/components/ChatControls`
 
-One large button starts the chat (or pauses and resumes it), and a second ends
-it. A status pill says whether the avatar is listening, and a red dot shows
-when an admin has set the chat's audio to be kept.
+One button starts the chat (or pauses and resumes it), and a second ends it,
+in one slim bar (the buttons are still at least 44 px tall, easy to hit). A
+status pill says whether the avatar is listening, and a red dot shows when an
+admin has set the chat's audio to be kept.
 
 */
 import type { ReactElement                        } from "react";
@@ -34,11 +35,11 @@ export default function ChatControls({started, recording, chatEnding, adminRecor
         started    ? {label: "Paused",            dot: "bg-status-paused"               } :
                      {label: "Ready to start",    dot: "bg-status-offline"              };
 
-    const buttonBase = "flex items-center gap-3! rounded-full! px-7 py-4! text-xl font-semibold transition disabled:opacity-40";
+    const buttonBase = "flex min-h-11 items-center gap-2! rounded-full! px-6 py-2! text-lg font-semibold transition disabled:opacity-40";
     return (
-        <div className="flex flex-col items-center gap-4! rounded-3xl border border-chat-border! bg-chat-panel px-6 py-5! shadow-sm md:flex-row md:justify-between">
+        <div className="flex flex-col items-center gap-3! rounded-2xl border border-chat-border! bg-chat-panel px-5! py-3! shadow-sm sm:flex-row sm:justify-between">
             {/* Status, and whether the audio is being kept */}
-            <div className="flex items-center gap-4! text-lg text-chat-text">
+            <div className="flex items-center gap-4! text-base text-chat-text">
                 <span className="flex items-center gap-2">
                     <span aria-hidden="true" className={`h-3 w-3 rounded-full ${status.dot}`} />
                     {status.label}
@@ -52,7 +53,7 @@ export default function ChatControls({started, recording, chatEnding, adminRecor
             </div>
 
             {/* Start or pause, and end */}
-            <div className="flex items-center gap-4!">
+            <div className="flex items-center gap-3!">
                 {recording ? (
                     <button className={`${buttonBase} border-2 border-chat-accent bg-chat-panel text-chat-accent hover:bg-chat-accentSoft`} onClick={onPause} disabled={chatEnding}>
                         <BsPauseFill aria-hidden="true" /> Pause

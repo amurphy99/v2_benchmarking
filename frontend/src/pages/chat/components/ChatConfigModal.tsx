@@ -6,7 +6,9 @@ The modal edits a draft copy of the page's settings, made fresh each time it
 opens. Save hands the draft back to the page; Cancel, Escape, or a click outside
 drops it. Picking another chat type moves the draft to that type's default task
 version. The page disables the button that opens this once the chat starts, so
-the choices are fixed for the whole chat.
+the choices are fixed for the whole chat. In debug mode the cues switch stays on:
+the backend always runs the cues, and the debug panel hides them in the browser
+instead, so they can come back partway through the chat.
 
 It is a native `<dialog>` (focus stays inside, Escape closes it) styled with the
 chat theme. Bootstrap's reset (buttons, headings) and its own `!important`
@@ -118,14 +120,15 @@ function ConfigSwitch({label, checked, disabled = false, onChange}: {
 // Chat Config Modal
 // ================================================================================
 // Pick the chat type, cues, task version, subtitles, and avatar before the chat starts
-export default function ChatConfigModal({show, config, onClose, onSave}: {
-    show    : boolean;                        // Modal is open
-    config  : ChatConfig;                     // The page's current settings (each opening's draft starts from these)
-    onClose : () => void;                     // Closed without saving
-    onSave  : (config: ChatConfig) => void;   // Saved, with the new settings
+export default function ChatConfigModal({show, config, debugMode, onClose, onSave}: {
+    show      : boolean;                        // Modal is open
+    config    : ChatConfig;                     // The page's current settings (each opening's draft starts from these)
+    debugMode : boolean;                        // The page is in debug mode (the cues switch stays on)
+    onClose   : () => void;                     // Closed without saving
+    onSave    : (config: ChatConfig) => void;   // Saved, with the new settings
 }): ReactElement | null {
     // Mounting the body on open starts its draft from the page's settings
-    return show ? <ConfigDialog config={config} onClose={onClose} onSave={onSave} /> : null;
+    return show ? <ConfigDialog config={config} debugMode={debugMode} onClose={onClose} onSave={onSave} /> : null;
 }
 
 
@@ -133,13 +136,21 @@ export default function ChatConfigModal({show, config, onClose, onSave}: {
 // Config Dialog
 // ================================================================================
 // The open modal and its draft
-function ConfigDialog({config, onClose, onSave}: {
-    config  : ChatConfig;                     // Where the draft starts
-    onClose : () => void;                     // Closed without saving
-    onSave  : (config: ChatConfig) => void;   // Saved, with the draft
+function ConfigDialog({config, debugMode, onClose, onSave}: {
+    config    : ChatConfig;                     // Where the draft starts
+    debugMode : boolean;                        // The page is in debug mode (the cues switch stays on)
+    onClose   : () => void;                     // Closed without saving
+    onSave    : (config: ChatConfig) => void;   // Saved, with the draft
 }): ReactElement {
     const [draft, setDraft] = useState<ChatConfig>(config);
     const ModeIcon = draft.mode.icon;
+
+    // The cues switch can be flipped only for a chat type with cues, outside debug mode
+    const cuesLocked = !draft.mode.hasCues || debugMode;
+    const cuesHelp   =
+        !draft.mode.hasCues ? "This chat type has no behavioral cues yet." :
+        debugMode           ? "Debug mode always runs the cues. Hide them from the debug panel during the chat instead." :
+                              "The avatar's behavioral cues for this task (off runs the no-cues condition).";
 
     // Open as a modal once mounted (React calls this with null on unmount)
     const openDialog = useCallback((node: HTMLDialogElement | null): void => { if (node !== null) node.showModal(); }, []);
@@ -216,13 +227,13 @@ function ConfigDialog({config, onClose, onSave}: {
                         ) : null}
 
                         <ConfigRow
-                            disabled = {!draft.mode.hasCues}
-                            help     = {draft.mode.hasCues ? "The avatar's behavioral cues for this task (off runs the no-cues condition)." : "This chat type has no behavioral cues yet."}
+                            disabled = {cuesLocked}
+                            help     = {cuesHelp}
                             label    = "Behavioral cues"
                         >
                             <ConfigSwitch
-                                checked  = {draft.mode.hasCues && draft.cues}
-                                disabled = {!draft.mode.hasCues}
+                                checked  = {draft.mode.hasCues && (debugMode || draft.cues)}
+                                disabled = {cuesLocked}
                                 label    = "Behavioral cues"
                                 onChange = {(cues: boolean) => setDraft({...draft, cues})}
                             />

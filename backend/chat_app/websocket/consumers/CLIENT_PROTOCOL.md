@@ -361,8 +361,8 @@ it straight back in a `pong`, with its own Unix time in seconds:
 
 The round trip is the time from sending a ping to receiving its `pong`, on your own clock
 (`server_ts` comes from a clock yours doesn't share). A ping without a numeric `client_ts` is
-dropped with a warning and gets no reply. The admin listener sends the same frame on its own
-socket.
+dropped with a warning and gets no reply. The web app's chat page pings every 3 seconds in debug
+mode (section 3.9), and the admin listener sends the same frame on its own socket.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Messages you receive                                                             -->

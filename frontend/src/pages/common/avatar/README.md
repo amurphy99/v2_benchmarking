@@ -253,6 +253,14 @@ hold). It gives back:
 Every animation frame it ticks the scheduler with the time and the replies'
 moments, and passes the scheduler's audio hold to the player.
 
+On the chat page, the backend's setups and plans reach the hook through
+`plans/useCueHiding.ts`, which debug mode's cues switch uses to hide the cues in
+this browser only. While they are hidden, a setup applies with every automatic
+behavior off, and plans are ignored (the session's first one is kept). Hiding
+also drops the running plan, puts the held prop away, and rests the avatar.
+Showing them again applies the latest setup as sent and runs the session's first
+plan again, which picks the prop back up.
+
 ### 4.3 The scheduler (`plans/planScheduler.ts`)
 
 Pure timing: no timers of its own, ticked by the hook. One plan runs at a time.
@@ -543,9 +551,10 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
 ```diff
  frontend/src/
  ├── hooks/
- │   ├── useLiveChat.ts                    # The chat page's socket, microphone, TTS player, and avatar plans (reports `tts_playback`)
+ │   ├── useLiveChat.ts                    # The chat page's socket, microphone, TTS player, avatar plans (reports `tts_playback`), commands, and debug mode's pings
  │   └── live-chat/
- │       ├── useChatSocket.ts              # Routes the chat socket's frames, checking the plan frames and task cards
+ │       ├── useChatSocket.ts              # Routes the chat socket's frames, checking the plan frames, task cards, acks, and debug frames
+ │       ├── debugFrames.ts                # Command acks and the debug-mode frames (`reply_timing`, `control_state`, `pong`), checked on arrival
  │       ├── taskCardFrame.ts              # The `task_card` frame's types, checked on arrival
  │       ├── avatarPlanFrames.ts           # The plan frames' types and vocabularies, as the client runs them
  │       ├── avatarPlanChecks.ts           # Checks a setup or plan on arrival: the frame, or its rejection
@@ -560,6 +569,7 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   ├── useSpeakingAvatar.ts          # The mouth (and speech phases) from the reply's audio
      │   ├── plans/
      │   │   ├── useAvatarPlans.ts         # Runs plans and setups on the page's avatar, and sends feedback
+     │   │   ├── useCueHiding.ts           # Holds the backend's cues back in this browser while debug mode hides them
      │   │   └── planScheduler.ts          # Step timing, reply moments, cancelling, expiry, feedback events
      │   ├── smiley/                       # The Smiley (see its README for the rest)
      │   │   ├── useFaceController.ts      # The frame loop, the handle, the plan levers, and setups
@@ -576,7 +586,10 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
      │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`, `variant`)
      │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
-     │   └── components/                   # The configure-chat modal, the reply caption, the controls, the planning card, the Map Task map
+     │   ├── useChatTimings.ts             # Debug mode: each reply's timing and the round trips, as the pills show them
+     │   ├── useFeatureSwitches.ts         # Debug mode: the shared feature switches, before and during the chat
+     │   ├── debugLabels.ts                # Debug mode: what each switch and timing number is called, and one line on each
+     │   └── components/                   # The configure-chat modal, the reply caption, the controls, the planning card, the Map Task map, and debug mode's panel, help, and timing pills
      │
      ├── avatar_demo/
      │   ├── AvatarDemo.tsx                # The demo page

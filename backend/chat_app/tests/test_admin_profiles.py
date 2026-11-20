@@ -102,9 +102,9 @@ class AdminProfileSettingsTests(TestCase):
         self.api.force_authenticate(user=self.patient)
         self.assertEqual(self.api.get(reverse("settings")).data["modelChoice"], "talkinghead")
 
-        # Their own profile shows debug mode, which only staff and caregivers can change
-        self.assertTrue(self.api.get(reverse("profile")).data["debug_mode"])
-        self.api.patch(reverse("profile"), {"debug_mode": False}, format="json")
+        # Their own settings say the chat page opens in debug mode, which only staff and caregivers can change
+        self.assertTrue(self.api.get(reverse("settings")).data["debug_mode"])
+        self.api.patch(reverse("settings"), {"debug_mode": False}, format="json")
         self.profile.refresh_from_db()
         self.assertTrue(self.profile.debug_mode)
 

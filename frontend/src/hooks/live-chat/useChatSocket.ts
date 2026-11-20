@@ -8,17 +8,23 @@ frame type goes to its own callback. The frames only some chat types send
 `backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`) are checked here,
 where they arrive: a malformed avatar frame gets one warning and a rejection
 sent back (`onAvatarRejected`), and a task card this page can't show is dropped
-with a warning. `extraQuery` adds the chat type's parameters (`chat_type`,
-`condition`, `variant`) to the socket URL. The URL carries the access token, so
-it is never logged.
+with a warning. Command acks and the debug-mode frames (`control_state`,
+`reply_timing`, `pong`) are checked here too (`debugFrames`), and one that
+doesn't match is dropped with a warning. `extraQuery` adds the chat type's
+parameters (`chat_type`, `condition`, `variant`) to the socket URL. The URL
+carries the access token, so it is never logged.
 
 */
 import { useRef, useEffect, useState, useCallback } from "react";
 
 // From this project
 import      { getAccess                               } from "@/context/AuthProvider";
+import type { CommandAck, ControlState                } from "@/hooks/chat-listener/chat-controls/types";
 import      { parseAvatarPlan, parseAvatarSetup       } from "@/hooks/live-chat/avatarPlanChecks";
 import type { AvatarFeedback, AvatarPlan, AvatarSetup } from "@/hooks/live-chat/avatarPlanFrames";
+import type { ReplyTimingFrame                        } from "@/hooks/live-chat/debugFrames";
+import      { parseCommandAck, parseControlState      } from "@/hooks/live-chat/debugFrames";
+import      { parsePong, parseReplyTiming             } from "@/hooks/live-chat/debugFrames";
 import type { TaskCard                                } from "@/hooks/live-chat/taskCardFrame";
 import      { parseTaskCard                           } from "@/hooks/live-chat/taskCardFrame";
 
@@ -32,21 +38,25 @@ const MAX_PENDING_MESSAGES =   500; // Maximum messages retained while the socke
 export default function useChatSocket({
     recording,
     wsPath             = "/ws/chat/",
-    onLLMResponse      = (unknown                   ) => {},
-    onScores           = (WSMessage : any           ) => {},
-    onUserUtt          = (text      : string        ) => {},
-    onAudio            = (data                      ) => {},
-    onRobotAction      = (data                      ) => {},
-    onStreamStatus     = (data      : any           ) => {},
-    onChatClosed       = (                          ) => {},
-    onRecordingStatus  = (enabled   : boolean       ) => {},
-    onCancelAudio      = (                          ) => {},
+    onLLMResponse      = (unknown                     ) => {},
+    onScores           = (WSMessage : any             ) => {},
+    onUserUtt          = (text      : string          ) => {},
+    onAudio            = (data                        ) => {},
+    onRobotAction      = (data                        ) => {},
+    onStreamStatus     = (data      : any             ) => {},
+    onChatClosed       = (                            ) => {},
+    onRecordingStatus  = (enabled   : boolean         ) => {},
+    onCancelAudio      = (                            ) => {},
     extraQuery         = "",                                  // More socket URL parameters, already encoded ("chat_type=map_task")
-    onAvatarSetup      = (setup     : AvatarSetup   ) => {},  // A checked `avatar_setup` arrived
-    onAvatarPlan       = (plan      : AvatarPlan    ) => {},  // A checked `avatar_plan` arrived
-    onAvatarRejected   = (rejection : AvatarFeedback) => {},  // An avatar frame failed its checks (send the rejection back)
-    onTaskCard         = (card      : TaskCard      ) => {},  // A `task_card` this page can show arrived
-    onConnectionClosed = (                          ) => {},  // The socket closed (the chat type's avatar setup no longer applies)
+    onAvatarSetup      = (setup     : AvatarSetup     ) => {},  // A checked `avatar_setup` arrived
+    onAvatarPlan       = (plan      : AvatarPlan      ) => {},  // A checked `avatar_plan` arrived
+    onAvatarRejected   = (rejection : AvatarFeedback  ) => {},  // An avatar frame failed its checks (send the rejection back)
+    onTaskCard         = (card      : TaskCard        ) => {},  // A `task_card` this page can show arrived
+    onConnectionClosed = (                            ) => {},  // The socket closed (the chat type's avatar setup no longer applies)
+    onCommandAck       = (ack       : CommandAck      ) => {},  // A command's ack arrived, with the complete control state
+    onControlState     = (state     : ControlState    ) => {},  // Debug mode: an admin's command changed the control state
+    onReplyTiming      = (timing    : ReplyTimingFrame) => {},  // Debug mode: a reply's timing (again once its audio started)
+    onPong             = (clientTs  : number          ) => {},  // A ping came back (its own send time, on this page's clock)
 }) {
     // WebSocket setup    
     const [connected, setConnected] = useState(false);
@@ -63,10 +73,10 @@ export default function useChatSocket({
     // --------------------------------------------------------------------------------
     // Callback props often receive a new identity on every parent render. Keep the WebSocket
     // message handler stable while still invoking the newest callback implementations.
-    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed});
+    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong});
     useEffect(() => {
-        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed};
-    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed]);
+        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong};
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong]);
 
     const onMessage = useCallback((event: MessageEvent) => {
         // One malformed backend frame should not break handling of later socket messages
@@ -113,9 +123,34 @@ export default function useChatSocket({
             else               { console.warn("Dropped a task card this page can't show"); }
         }
 
-        // Committed transcript echo (this UI renders from user_utt/llm_response instead) & command results
+        // Committed transcript echo (this UI renders from user_utt/llm_response instead)
         else if (type === "message"         ) { /* transcript echo; nothing to do here */ }
-        else if (type === "command_ack"     ) { console.log("Backend accepted command:", data); }
+
+        // A command's result, with the complete control state
+        else if (type === "command_ack"     ) {
+            const ack = parseCommandAck(data);
+            if (ack !== null) { console.log("Backend acknowledged command:", ack.name, ack.ok); handlers.onCommandAck(ack); }
+            else              { console.warn("Dropped a malformed command ack"); }
+        }
+
+        // Debug mode: control state an admin's command changed, and each reply's timing
+        else if (type === "control_state"   ) {
+            const state = parseControlState(data);
+            if (state !== null) { handlers.onControlState(state); }
+            else                { console.warn("Dropped a malformed control_state frame"); }
+        }
+        else if (type === "reply_timing"    ) {
+            const timing = parseReplyTiming(data);
+            if (timing !== null) { handlers.onReplyTiming(timing); }
+            else                 { console.warn("Dropped a malformed reply_timing frame"); }
+        }
+
+        // A ping coming back (its fields sit at the frame's top level)
+        else if (type === "pong"            ) {
+            const clientTs = parsePong(response);
+            if (clientTs !== null) { handlers.onPong(clientTs); }
+            else                   { console.warn("Dropped a malformed pong"); }
+        }
 
         else { console.debug("Unhandled WS event type:", type, response); }
     }, []);

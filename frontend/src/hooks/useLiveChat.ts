@@ -15,18 +15,26 @@ their feedback goes back on the same socket. Each reply's text and every
 `robot_action` are noted for the plans, and the setup is forgotten when the
 socket closes. Task cards pass through to the page (`onTaskCard`).
 
+Commands go out through `sendCommand`, and every ack's control state is kept
+(`controlState`). For debug mode, the page can hide the backend's cues on the
+avatar (`hideCues`, `useCueHiding`), ping the backend to time the round trip
+(`pingMs`, `onLatency`), and hear each reply's timing (`onReplyTiming`).
+
 */
 import      { useQueryClient                           } from "@tanstack/react-query";
 import type { RefObject                                } from "react";
 import      { useState, useEffect, useRef, useCallback } from "react";
 
 // From this project
+import type { CommandAck, ControlState        } from "@/hooks/chat-listener/chat-controls/types";
 import      { useChatSocket, useAudioStreamer } from "@/hooks/live-chat";
 import type { AvatarFeedback                  } from "@/hooks/live-chat/avatarPlanFrames";
 import      { avatarFeedbackFrame             } from "@/hooks/live-chat/avatarPlanFrames";
+import type { ReplyTimingFrame                } from "@/hooks/live-chat/debugFrames";
 import type { TaskCard                        } from "@/hooks/live-chat/taskCardFrame";
 import type { AvatarHandle                    } from "@/pages/common/avatar/avatarRegistry";
 import      { useAvatarPlans                  } from "@/pages/common/avatar/plans/useAvatarPlans";
+import      { useCueHiding                    } from "@/pages/common/avatar/plans/useCueHiding";
 import      { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
 // What the hook gives the chat page
@@ -38,6 +46,8 @@ interface LiveChatControls {
     systemSpeaking      : boolean;                                                 // Reply speech is playing
     readSpeechLoudness  : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness of the reply heard from `fromSec` from now, per frame
     readSpeechRemaining : () => number | null;                                     // Seconds until the reply's final audio is heard (null while unknown)
+    controlState        : ControlState | null;                                     // The backend's latest control state (null until the first command's ack)
+    sendCommand         : (name: string, data?: Record<string, unknown>) => void;  // Send one command (its ack comes back through `onCommandAck`)
 }
 
 // ================================================================================
@@ -60,6 +70,11 @@ export default function useLiveChat({
     avatarRef,         // The page's avatar, which runs the backend's plans
     avatarModel,       // The avatar showing (null while the settings load)
     extraQuery = "",   // The chat type's socket parameters, already encoded ("chat_type=map_task")
+    onCommandAck,      // A command's ack arrived (its control state is kept as `controlState` too)
+    onReplyTiming,     // Debug mode: a reply's timing arrived (once it is saved, and again once its audio started)
+    onLatency,         // A ping's round trip came back, in ms
+    pingMs   = null,   // Ping the backend this often while connected (null: never)
+    hideCues = false,  // Keep the backend's cues off the avatar (debug mode's switch acts in the browser only)
 } : {
     onUserUtterance   : (text    : string) => void;
     onSystemUtterance : (text    : string) => void;
@@ -75,6 +90,11 @@ export default function useLiveChat({
     avatarRef          : RefObject<AvatarHandle | null>;
     avatarModel        : string | null;
     extraQuery        ?: string;
+    onCommandAck      ?: (ack: CommandAck) => void;
+    onReplyTiming     ?: (timing: ReplyTimingFrame) => void;
+    onLatency         ?: (ms: number) => void;
+    pingMs            ?: number | null;
+    hideCues          ?: boolean;
 }): LiveChatControls {
     // Misc. setup
     const qc = useQueryClient();
@@ -98,6 +118,9 @@ export default function useLiveChat({
     const [recording,   setRecording  ] = useState(false);  // When we need to pause/unpause
     const [chatEnding,  setChatEnding ] = useState(false);  // True after backend sends "chat_ended"
 
+    // The backend's control state, from every command's ack (and in debug mode, from an admin's command)
+    const [controlState, setControlState] = useState<ControlState | null>(null);
+
     // Playback events use the same socket but the audio player is initialized first
     const socketSendRef = useRef<(message: object) => void>(() => {});
     const reportPlaybackState = useCallback((responseId: number, state: "started" | "finished") => {
@@ -117,6 +140,12 @@ export default function useLiveChat({
     // Backend avatar plans run on the page's avatar, timed to this player's replies (their feedback goes back on the socket)
     const sendAvatarFeedback = useCallback((feedback: AvatarFeedback) => { socketSendRef.current(avatarFeedbackFrame(feedback)); }, []);
     const plans = useAvatarPlans(avatarRef, avatarModel, {read: readReplyTimeline, leadMs: readAudioLeadMs, holdNext: holdNextReply}, sendAvatarFeedback);
+
+    // The backend's setups and plans reach the avatar through the cue gate (it holds them back while debug mode hides the cues)
+    const cues = useCueHiding(plans, hideCues);
+
+    // A command's ack carries the complete control state
+    const onAck = (ack: CommandAck) => { setControlState(ack.state); onCommandAck?.(ack); };
 
     // A `robot_action` counts as a newer plan (it drops the running plan's waiting steps)
     const onRobotActionWrapped = (data: any) => { plans.noteRobotAction(); onRobotAction(data); };
@@ -151,7 +180,7 @@ export default function useLiveChat({
     // --------------------------------------------------------------------------------
     // Chat Socket
     // --------------------------------------------------------------------------------
-	const { send, prepareConnection } = useChatSocket({
+	const { send, connected, prepareConnection } = useChatSocket({
 		recording,
         wsPath,
         extraQuery,
@@ -164,22 +193,36 @@ export default function useLiveChat({
         onRobotAction      : onRobotActionWrapped,
         onRecordingStatus  : (enabled) => onRecordingStatus?.(enabled),
         onCancelAudio      : cancelAudio,
-        onAvatarSetup      : plans.applySetup,
-        onAvatarPlan       : plans.runPlan,
+        onAvatarSetup      : cues.applySetup,
+        onAvatarPlan       : cues.runPlan,
         onAvatarRejected   : sendAvatarFeedback,
         onTaskCard         : (card: TaskCard) => onTaskCard?.(card),
-        onConnectionClosed : plans.clearSetup,
+        onConnectionClosed : cues.clearSetup,
+        onCommandAck       : onAck,
+        onControlState     : setControlState,
+        onReplyTiming      : (timing: ReplyTimingFrame) => onReplyTiming?.(timing),
+        onPong             : (clientTs: number) => onLatency?.(Date.now() - clientTs),
 	});
     socketSendRef.current = send;
 	const { start: startAud, stop: stopAud } = useAudioStreamer({ chunkMs: 64, sendToServer: send, });
     startAudRef.current = startAud;
     stopAudRef .current = stopAud;
 
+    // Debug mode: time the round trip to the backend every `pingMs` while the socket is open
+    useEffect(() => {
+        if ((pingMs === null) || !connected) return;
+        const timer = window.setInterval(() => socketSendRef.current({type: "ping", client_ts: Date.now()}), pingMs);
+        return () => window.clearInterval(timer);
+    }, [pingMs, connected]);
+
     // --------------------------------------------------------------------------------
-    // Start, Stop, & Save 
+    // Commands, Start, Stop, & Save
     // --------------------------------------------------------------------------------
-    const setListening = (state: "active" | "paused") =>
-        send({type: "command", data: {id: crypto.randomUUID(), name: "set_listening", data: {state}}});
+    // Send one command (a body left out is left out of the frame too)
+    const sendCommand = useCallback((name: string, data?: Record<string, unknown>): void => {
+        socketSendRef.current({type: "command", data: {id: crypto.randomUUID(), name, data}});
+    }, []);
+    const setListening = (state: "active" | "paused") => sendCommand("set_listening", {state});
 
     const start = () => { prepareConnection(); setRecording(true); startAud(); startPlayer(); setListening("active"); };
 	const stop  = () => {                                           stopAud();  stopPlayer(); setListening("paused"); };
@@ -187,6 +230,6 @@ export default function useLiveChat({
         qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Save invalidates chatSessions queries to force a DB refresh
     };
 
-    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing), plus the reply speech state for the avatar
-    return { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining };
+    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing), the reply speech state for the avatar, and commands
+    return { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand };
 }

@@ -15,15 +15,24 @@ which `useLiveChat` runs on it. The settings are re-read every time the page
 opens, so an avatar picked on the admin or caregiver page shows on the next
 visit, unless the participant picked another one for this chat.
 
+An account with debug mode on (its settings' `debug_mode`, switched on the
+admin Participants page) also gets the debug panel under the controls and the
+timing pills under the title. The panel switches the subtitles, the cues (in
+this browser only, so its chats always run `condition=cues`), and the chat
+type's shared features (`useFeatureSwitches`). The pills show the round trip to
+the backend and each reply's stages (`useChatTimings`).
+
 */
 import type { ReactElement, ReactNode    } from "react";
 import      { useEffect, useRef, useState } from "react";
+import        toast                        from "react-hot-toast";
 import type { IconType                   } from "react-icons";
 import      { useNavigate                } from "react-router-dom";
 import      { BsBadgeCc, BsLightningCharge, BsLockFill, BsRobot, BsSliders } from "react-icons/bs";
 
 // From this project
 import        SaveChatModal                         from "@/components/modals/SaveChatModal";
+import type { CommandAck                          } from "@/hooks/chat-listener/chat-controls/types";
 import      { useLocalChatSession                 } from "@/hooks/live-chat";
 import type { TaskCard                            } from "@/hooks/live-chat/taskCardFrame";
 import      { useUserSettings                     } from "@/hooks/queries/useUserSettings";
@@ -34,17 +43,25 @@ import      { getAvatarEntry                      } from "@/pages/common/avatar/
 import type { ChatPanel                           } from "./chatModes";
 import      { CHAT_MODES, CHAT_PATH, chatModeQuery } from "./chatModes";
 import      { useChatAvatar                       } from "./useChatAvatar";
+import      { useChatTimings                      } from "./useChatTimings";
+import      { useFeatureSwitches                  } from "./useFeatureSwitches";
 
 // Components
 import type { ChatConfig         } from "./components/ChatConfigModal";
 import        ChatConfigModal      from "./components/ChatConfigModal";
 import        ChatControls         from "./components/ChatControls";
+import        DebugHelpModal       from "./components/DebugHelpModal";
+import        DebugPanel           from "./components/DebugPanel";
 import        MapTaskMapPanel      from "./components/MapTaskMapPanel";
 import        PlanningCardPanel    from "./components/PlanningCardPanel";
 import        ReplyCaption         from "./components/ReplyCaption";
+import        TimingPills          from "./components/TimingPills";
 
 // What the caption says before the avatar's first reply
 const CHAT_IDLE_TEXT = "Press Start when you're ready.";
+
+// How often debug mode times the round trip to the backend (the admin live chat page pings as often)
+const CHAT_PING_MS = 3_000;
 
 // The button that opens the configure-chat modal (`!` outranks Bootstrap's button reset)
 const CHAT_CONFIG_BUTTON_CLASS = "flex items-center gap-2 rounded-full! border-2! border-chat-accent! bg-chat-panel px-5! py-2.5 text-lg font-semibold text-chat-accent shadow-sm hover:bg-chat-accentSoft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-accent disabled:border-chat-border! disabled:text-chat-subtext disabled:shadow-none disabled:hover:bg-chat-panel";
@@ -111,6 +128,12 @@ export function Chat(): ReactElement {
     // Local (view-only) record of the conversation
     const { pushMessage } = useLocalChatSession();
 
+    // Debug mode (from this visit's settings): the cues shown in this browser, the help modal, and the timing
+    const debugMode = isFetchedAfterMount && settings.debug_mode;
+    const [cuesShown,     setCuesShown    ] = useState(true);
+    const [showDebugHelp, setShowDebugHelp] = useState(false);
+    const { timings, noteReplyTiming, noteLatency } = useChatTimings();
+
     // --------------------------------------------------------------------------------
     // Live Chat
     // --------------------------------------------------------------------------------
@@ -126,7 +149,10 @@ export function Chat(): ReactElement {
     // Avatar picked for this chat, else the participant's settings (`UserSettings.modelChoice`); null until this visit's settings arrive
     const model = isFetchedAfterMount ? (avatarPick ?? settings.modelChoice) : null;
 
-    const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining } = useLiveChat({
+    // A shared feature that couldn't be switched says why
+    const onCommandAck = (ack: CommandAck): void => { if ((ack.name === "set_feature") && !ack.ok) toast.error(`Couldn't switch that feature: ${ack.message}`); };
+
+    const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
         onScores          : () => {},
@@ -137,10 +163,18 @@ export function Chat(): ReactElement {
         onChatResumed     : () => { setRecording(true ); },
         onRecordingStatus : (enabled: boolean) => { setAdminRecording(enabled); },
         wsPath            : CHAT_PATH,
-        extraQuery        : chatModeQuery(mode, variant, cues),
+        extraQuery        : chatModeQuery(mode, variant, debugMode || cues),
         avatarRef,
         avatarModel       : model,
+        onCommandAck,
+        onReplyTiming     : noteReplyTiming,
+        onLatency         : noteLatency,
+        pingMs            : debugMode ? CHAT_PING_MS : null,
+        hideCues          : debugMode && !cuesShown,
     });
+
+    // Debug mode's switches for the chat type's shared features
+    const { switches, toggle } = useFeatureSwitches(debugMode ? mode.features : [], controlState, sendCommand);
 
     // Start or resume, pause, and end (ending asks first)
     const startChat = (): void => { start(); setRecording(true); setStarted(true); };
@@ -203,10 +237,13 @@ export function Chat(): ReactElement {
                             {/* The choices this chat runs with */}
                             <div className="flex flex-wrap gap-2">
                                 {(variantLabel !== undefined) ? <ChoiceChip icon={mode.icon}>{variantLabel}</ChoiceChip> : null}
-                                {mode.hasCues ? <ChoiceChip icon={BsLightningCharge}>Cues {cues ? "on" : "off"}</ChoiceChip> : null}
+                                {mode.hasCues ? <ChoiceChip icon={BsLightningCharge}>Cues {(debugMode ? cuesShown : cues) ? "on" : "off"}</ChoiceChip> : null}
                                 <ChoiceChip icon={BsBadgeCc}>Subtitles {subtitles ? "on" : "off"}</ChoiceChip>
                                 <ChoiceChip icon={BsRobot}>{avatarEntry.label}</ChoiceChip>
                             </div>
+
+                            {/* Debug mode: the round trip and each reply's stages */}
+                            {debugMode ? <TimingPills timings={timings} /> : null}
                         </div>
 
                         {/* Opens the setup modal, until the chat starts */}
@@ -240,11 +277,28 @@ export function Chat(): ReactElement {
                         recording      = {recording}
                         started        = {started}
                     />
+
+                    {/* -------------------------------------------------------------------------------- */}
+                    {/* Debug Panel */}
+                    {/* -------------------------------------------------------------------------------- */}
+                    {debugMode ? (
+                        <DebugPanel
+                            cuesShown   = {cuesShown}
+                            hasCues     = {mode.hasCues}
+                            onCues      = {setCuesShown}
+                            onFeature   = {toggle}
+                            onHelp      = {() => setShowDebugHelp(true)}
+                            onSubtitles = {(on: boolean) => setConfig({...config, subtitles: on})}
+                            subtitles   = {subtitles}
+                            switches    = {switches}
+                        />
+                    ) : null}
                 </div>
             </div>
 
-            {/* Chat choices, before the chat starts */}
-            <ChatConfigModal show={showConfig} config={modalConfig} onClose={() => setShowConfig(false)} onSave={saveConfig} />
+            {/* Chat choices, before the chat starts, and what the debug panel's switches and numbers mean */}
+            <ChatConfigModal show={showConfig} config={modalConfig} debugMode={debugMode} onClose={() => setShowConfig(false)} onSave={saveConfig} />
+            <DebugHelpModal  show={showDebugHelp} onClose={() => setShowDebugHelp(false)} />
 
             {/* Asks before ending the chat */}
             <SaveChatModal show={showModal} onClose={() => setShowModal(false)} saveChat={saveChat} />

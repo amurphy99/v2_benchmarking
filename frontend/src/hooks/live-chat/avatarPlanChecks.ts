@@ -47,7 +47,7 @@ const PLAN_BLINK_MS_RANGE     = [80,   1_000] as const;
 const PLAN_SCAN_MAX_RADIUS = {map: 1, other: 2};
 
 // Waiting steps are dropped this long after their plan arrives, unless the plan says otherwise
-const PLAN_DEFAULT_EXPIRE_MS = 15_000;
+export const PLAN_DEFAULT_EXPIRE_MS = 15_000;
 
 // Fields each object may hold
 const PLAN_KEYS   = ["id", "turn", "feedback", "expire_ms", "steps"] as const;

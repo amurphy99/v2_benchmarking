@@ -24,9 +24,10 @@ from django.db                               import transaction
 # Profiles and Profile-related Data
 # ================================================================================
 class UserSettingsSerializer(serializers.ModelSerializer):
+    debug_mode = serializers.BooleanField(source="profile.debug_mode", read_only=True)  # The chat page opens in debug mode (only staff and caregivers set it)
     class Meta:
         model  = UserSettings
-        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice")
+        fields = ("patientViewOverall", "patientCanSchedule", "taskType", "taskSubtype", "modelChoice", "debug_mode")
         
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,8 +70,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     goal      = GoalSerializer        (read_only=True)
     class Meta:
         model  = Profile
-        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "debug_mode", "settings", "goal")
-        read_only_fields = ("id", "save_audio_by_default", "debug_mode")
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "settings", "goal")
+        read_only_fields = ("id", "save_audio_by_default")
 
 
 # --------------------------------------------------------------------------------

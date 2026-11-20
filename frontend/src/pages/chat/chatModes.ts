@@ -8,7 +8,9 @@ values copy the backend's chat type names and conditions
 (`backend/chat_app/websocket/harnesses/registry.py`, and each harness's
 `CONDITIONS`). A mode with cues sends `condition=cues` or `condition=no_cues`
 from the configure-chat toggle; a mode with task content lists its variants,
-copied from the harness with the name the picker shows (the default first).
+copied from the harness with the name the picker shows (the default first). A
+mode also lists the shared features its harness uses, which debug mode's panel
+can switch partway through a chat (`set_feature`).
 
 */
 import type { IconType                                        } from "react-icons";
@@ -29,6 +31,7 @@ export type ChatMode = {
     hasCues     : boolean;         // The chat type has `cues` and `no_cues` conditions
     variants    : ChatVariant[];   // The chat type's task content to pick from, the default first (empty for none)
     panel       : ChatPanel;       // What shows beside the avatar
+    features    : string[];        // Shared features debug mode can switch, copied from the harness (empty for none)
 };
 
 // The chat page's socket route
@@ -63,6 +66,10 @@ const ELICITATION_VARIANTS: ChatVariant[] = [
     {value: "retirement_spot",      label: "Where to retire"          },
 ];
 
+// The shared features every task chat type uses, as each task harness names them in `self.features`
+// (`harnesses/map_task/harness.py`, `cooperative_planning/harness.py`, `speech_elicitation/harness.py`)
+const TASK_FEATURES = ["backchannels", "turn_end", "misheard"];
+
 // Every mode the picker offers, the default first
 export const CHAT_MODES: ChatMode[] = [
     {
@@ -73,6 +80,7 @@ export const CHAT_MODES: ChatMode[] = [
         hasCues     : false,
         variants    : [],
         panel       : "none",
+        features    : [],
     },
     {
         label       : "Cooperative planning",
@@ -82,6 +90,7 @@ export const CHAT_MODES: ChatMode[] = [
         hasCues     : true,
         variants    : PLANNING_VARIANTS,
         panel       : "card",
+        features    : TASK_FEATURES,
     },
     {
         label       : "Map Task",
@@ -91,6 +100,7 @@ export const CHAT_MODES: ChatMode[] = [
         hasCues     : true,
         variants    : MAP_TASK_VARIANTS,
         panel       : "map",
+        features    : TASK_FEATURES,
     },
     {
         label       : "Speech elicitation",
@@ -100,6 +110,7 @@ export const CHAT_MODES: ChatMode[] = [
         hasCues     : true,
         variants    : ELICITATION_VARIANTS,
         panel       : "none",
+        features    : TASK_FEATURES,
     },
 ];
 
