@@ -212,10 +212,13 @@ class PlanRuleTests(unittest.TestCase):
         self.assertEqual(after, state)
         self.assertEqual([result.refused for result in results], ["a side can't agree to its own idea", "the other side turned it down"])
 
-    # A yes to an idea never noted still counts, credited to the other side (calls can miss one)
-    def test_a_yes_to_an_idea_never_noted_still_counts(self) -> None:
-        agreed, _ = apply_changes(initial_state(SCENARIO), [("user", user_change(op="agree", item="dessert", choice="tiramisu"))])
-        self.assertEqual((agreed.items["dessert"].agreed, agreed.items["dessert"].put_forward), ("tiramisu", (Suggestion("tiramisu", "avatar"),)))
+    # A yes to an idea nobody put forward still counts, credited to the user, who brought it up
+    # (the avatar's yes to it, or the user's own "let's have tiramisu" noted as their yes)
+    def test_a_yes_to_an_idea_nobody_put_forward_credits_the_user(self) -> None:
+        for side, change in (("avatar", avatar_change(op="agree", item="dessert", choice="tiramisu")), ("user", user_change(op="agree", item="dessert", choice="tiramisu"))):
+            with self.subTest(side):
+                agreed, _ = apply_changes(initial_state(SCENARIO), [(side, change)])
+                self.assertEqual((agreed.items["dessert"].agreed, agreed.items["dessert"].put_forward), ("tiramisu", (Suggestion("tiramisu", "user"),)))
 
     # A yes to a new idea changes an agreed item, and ends the final check
     def test_a_new_yes_changes_an_agreed_item_and_ends_the_final_check(self) -> None:

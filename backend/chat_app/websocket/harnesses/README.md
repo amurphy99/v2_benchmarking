@@ -534,6 +534,10 @@ task ended (`ended`: `reached_finish`, `giver_confirmed`, or null). Planning
 snapshots include the scenario, both sides' constraints, agreements (with the side that first
 suggested each), suggestions, refusals (with who suggested each), every
 choice either side put forward, the avatar's constraints it mentioned, and the approval stage.
+A choice agreed before anyone had put it forward is credited to the user, since it came up
+in their message: the avatar's yes is to their idea, and a user's own "let's do X" is often
+noted as their yes. Snapshots saved before 2026-11-20 credited the avatar when the user's yes
+was the first time a choice came up.
 Both also carry the intro's record (`intro`, null for a chat without one): whether the
 participant said they had done one before, whether they heard how it works, how many
 questions about it they asked, and whether the intro finished.

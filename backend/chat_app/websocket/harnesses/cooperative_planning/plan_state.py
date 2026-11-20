@@ -19,7 +19,9 @@ and `apply_changes` makes only the ones these rules allow:
 A change the rules don't allow is kept with the reason it was refused, for the
 turn's log and the notebook view. Choices match ignoring case and extra spaces.
 Every choice either side puts forward is also kept, with the side that did so
-first, so the completed-session history can say who suggested what.
+first, so the completed-session history can say who suggested what. A choice
+agreed before anyone had put it forward is credited to the user: it came up in
+their message, and a user's own "let's do X" is often noted as their yes.
 
 The participant's card shows their own brief and constraints, and the agreed
 choices. It goes out as a `task_card` frame (`HARNESS_PROTOCOL.md` §13) whenever
@@ -156,11 +158,14 @@ def _apply(state: PlanningState, by: Side, change: Change) -> tuple[PlanningStat
         if _same(item.agreed, change.choice):                                                 return state, "already agreed"
         if any(_same(s.choice, change.choice) and (s.by == by) for s in item.suggestions):    return state, "a side can't agree to its own idea"
         if any(_same(r.choice, change.choice) and (r.by != by) for r in item.refused):        return state, "the other side turned it down"
+
+        # An idea nobody had put forward came up in the user's message: the avatar's yes is to their idea,
+        # and their own "let's do X" is often noted as their yes rather than as a suggestion
         changed = _with_item(state, change.item, replace(item,
             agreed      = change.choice,
             suggestions = _without_suggestion(item.suggestions, change.choice),
             refused     = _without_refusal(item.refused, change.choice),
-            put_forward = _with_idea(item.put_forward, change.choice, _other(by)),  # An idea agreed to came from the other side
+            put_forward = _with_idea(item.put_forward, change.choice, "user"),
         ))
         return (_end_final_check(changed) if (item.agreed is not None) else changed), ""
 
@@ -192,10 +197,6 @@ def _same(first: str | None, second: str) -> bool:
 # The plan with one item replaced
 def _with_item(state: PlanningState, item_id: str, item: ItemState) -> PlanningState:
     return replace(state, items={**state.items, item_id: item})
-
-# The side that isn't this one
-def _other(side: Side) -> Side:
-    return "avatar" if (side == "user") else "user"
 
 # The plan out of its final check (an item changed, or is open again)
 def _end_final_check(state: PlanningState) -> PlanningState:
