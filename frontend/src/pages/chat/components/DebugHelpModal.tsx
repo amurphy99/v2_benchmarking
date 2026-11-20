@@ -13,8 +13,8 @@ import      { useCallback                              } from "react";
 import      { BsXLg                                    } from "react-icons/bs";
 
 // From this project
-import type { DebugLabel                                                 } from "../debugLabels";
-import      { CUES_LABEL, FEATURE_LABELS, SUBTITLES_LABEL, TIMING_LABELS } from "../debugLabels";
+import type { DebugLabel                                                 } from "@/pages/common/debug/debugLabels";
+import      { CUES_LABEL, FEATURE_LABELS, SUBTITLES_LABEL, TIMING_LABELS } from "@/pages/common/debug/debugLabels";
 
 
 // ================================================================================
@@ -69,7 +69,7 @@ function HelpDialog({onClose}: {onClose: () => void}): ReactElement {
                 {/* The switches, then the numbers */}
                 <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-6 sm:px-7">
                     <HelpSection entries={[SUBTITLES_LABEL, CUES_LABEL, ...Object.values(FEATURE_LABELS)]} title="Switches" />
-                    <HelpSection entries={Object.values(TIMING_LABELS)} intro="Each number shows the latest value, then the average for this chat." title="Timing" />
+                    <HelpSection entries={Object.values(TIMING_LABELS)} intro="Each number shows the latest value, then the average for this chat. Click Delay for the latest reply's breakdown." title="Timing" />
                 </div>
             </div>
         </dialog>

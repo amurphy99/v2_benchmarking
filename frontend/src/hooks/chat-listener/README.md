@@ -57,12 +57,12 @@ its segment count is not a count of conversation turns:
 
 Reply Timing (how long each reply took, stage by stage: sent when the reply is saved, and again
 once the participant's page reports its audio started, which replaces the first; the fields are
-in `backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md` §3.9). Not handled by the admin
-pages yet:
+in `backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md` §3.9). The live chat page shows
+them in its Timing tab, and the latest delay as a header pill:
 ```JSON
 { "type": "reply_timing", "data": { "response_id": 4471, "stt_ms": 640, "generate_ms": 1980, "calls": [ { "label": "reply", "at_ms": 3, "ms": 1340 } ], "hold_ms": null, "tts_ms": 420, "delay_ms": 3100, "features": { "backchannels": true, "turn_end": true, "misheard": true } } }
 ```
 
 The control state in `command_ack` and `control_state` frames also carries `features`: the chat
 type's shared features by name, each on or off (`{}` for none). A `set_feature` command switches
-one (`{"feature": "backchannels", "on": false}`).
+one (`{"feature": "backchannels", "on": false}`); the live chat page's Shared Features group sends it.

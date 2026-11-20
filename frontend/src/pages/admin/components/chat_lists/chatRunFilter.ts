@@ -14,9 +14,10 @@ import      { chatRunLabel, chatTypePresentation } from "./chatTypePresentation"
 
 // What one chat ran (a REST session and the listener's `session_info` both carry these)
 export type ChatRun = {
-    chat_type : string;   // Harness that ran ("cooperative_planning")
-    condition : string;   // Its cue set ("cues"; "" for none)
-    variant   : string;   // Its task content ("dinner_party"; "" for none)
+    chat_type  : string;    // Harness that ran ("cooperative_planning")
+    condition  : string;    // Its cue set ("cues"; "" for none)
+    variant    : string;    // Its task content ("dinner_party"; "" for none)
+    debug_mode : boolean;   // Started in debug mode (its features may have been switched partway through)
 };
 
 // The fields a filter can match, in the order they narrow (a condition belongs to a chat type)

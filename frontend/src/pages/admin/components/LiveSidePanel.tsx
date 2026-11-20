@@ -1,13 +1,14 @@
-/* Side column of the live chat page: avatar actions, the task, and biomarkers, as tabs.
+/* Side column of the live chat page: avatar actions, the task, timing, and biomarkers.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/components/LiveSidePanel`
 
 The column scrolls on its own, so a long action list (the Smiley avatar's named
 faces) never pushes the transcript off the page. A chat type that sends a task
-view (the Map Task's maps) gets a tab for it, and the Biomarkers tab shows only
-for a chat that runs biomarkers (or already has scores). Every tab stays mounted
-while hidden, so the biomarker chart keeps its selected score when you switch
-back, and the Biomarkers tab shows how many scores have arrived.
+view (the Map Task's maps) gets a tab for it, every chat gets a Timing tab (each
+reply's stages, `LiveTimingPanel`), and the Biomarkers tab shows only for a chat
+that runs biomarkers (or already has scores). Every tab stays mounted while
+hidden, so the biomarker chart keeps its selected score when you switch back,
+and the Biomarkers tab shows how many scores have arrived.
 
 */
 import type { ReactElement } from "react";
@@ -20,7 +21,7 @@ import      { BiomarkerPanel       } from "./common/BiomarkerPanel";
 import        AvatarActionsGroup     from "./controlGroups/AvatarActionsGroup";
 
 // One tab of the side column
-type LiveSideTab = "avatar" | "task" | "biomarkers";
+type LiveSideTab = "avatar" | "task" | "timing" | "biomarkers";
 
 // A chat type's own tab: its label, and what it shows
 export type TaskTab = {label: string; panel: ReactElement};
@@ -30,7 +31,7 @@ export type TaskTab = {label: string; panel: ReactElement};
 // Live Side Panel
 // ================================================================================
 // Tab switcher over a scrolling area that shows the avatar's actions, the chat type's task, or the biomarker scores
-export function LiveSidePanel({connected, capabilities, pendingEmotion, pendingAnimation, onEmotion, onAnimation, taskTab, showBiomarkers, series}: {
+export function LiveSidePanel({connected, capabilities, pendingEmotion, pendingAnimation, onEmotion, onAnimation, taskTab, timingPanel, showBiomarkers, series}: {
     // Avatar actions
     connected        : boolean;                       // Connection with the backend
     capabilities     : CapabilityProfile;             // Actions the monitored frontend can perform
@@ -39,8 +40,9 @@ export function LiveSidePanel({connected, capabilities, pendingEmotion, pendingA
     onEmotion        : (emotion: string) => void;     // Send an emotion
     onAnimation      : (animation: string) => void;   // Send an animation
 
-    // The chat type's task (null for a chat type without a view)
-    taskTab : TaskTab | null;
+    // The chat type's task (null for a chat type without a view), and each reply's timing
+    taskTab     : TaskTab | null;
+    timingPanel : ReactElement;
 
     // Biomarkers
     showBiomarkers : boolean;                // The chat runs biomarkers (or already has scores)
@@ -51,6 +53,7 @@ export function LiveSidePanel({connected, capabilities, pendingEmotion, pendingA
     const scored              = series.points.length;
     const tabs: {id: LiveSideTab; label: string}[] = [{id: "avatar", label: "Avatar"}];
     if (taskTab !== null) tabs.push({id: "task",       label: taskTab.label                                      });
+    tabs.push(                      {id: "timing",     label: "Timing"                                           });
     if (showBiomarkers)   tabs.push({id: "biomarkers", label: (scored > 0) ? `Biomarkers (${scored})` : "Biomarkers"});
     const tab = tabs.some(({id}) => id === picked) ? picked : "avatar";
 
@@ -79,6 +82,7 @@ export function LiveSidePanel({connected, capabilities, pendingEmotion, pendingA
                     />
                 </div>
                 {(taskTab !== null) ? <div role="tabpanel" hidden={tab !== "task"}>{taskTab.panel}</div> : null}
+                <div role="tabpanel" hidden={tab !== "timing"}>{timingPanel}</div>
                 {showBiomarkers ? (
                     <div role="tabpanel" hidden={tab !== "biomarkers"} className="rounded-xl border border-admin-border bg-admin-panel shadow-sm overflow-hidden">
                         <BiomarkerPanel series={series} windowSeconds="all" />

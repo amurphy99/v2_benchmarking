@@ -14,7 +14,7 @@ import type { ReactElement } from "react";
 import      { BsInfoCircle } from "react-icons/bs";
 
 // From this project
-import      { CUES_LABEL, FEATURE_LABELS, SUBTITLES_LABEL } from "../debugLabels";
+import      { CUES_LABEL, FEATURE_LABELS, SUBTITLES_LABEL } from "@/pages/common/debug/debugLabels";
 import type { FeatureSwitch                               } from "../useFeatureSwitches";
 
 

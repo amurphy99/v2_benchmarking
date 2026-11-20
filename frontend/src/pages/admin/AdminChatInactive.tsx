@@ -10,7 +10,9 @@ showing values each of the biomarkers as the chat went on. Additionally, they
 can view the automatically generated analysis for the chat, including a list of
 topics, short summary of the chat, and an analysis of any potential risk factors
 identified from the users speech. This page also has a button that takes them to
-the secondary analysis page, "TranscriptPlayback.tsx".
+the secondary analysis page, "TranscriptPlayback.tsx". Under it all, the Response
+timing card shows how long each reply took (`ResponseTimingCard`), and the header
+marks a session started in debug mode.
 
 */
 import { useNavigate, useParams } from "react-router-dom";
@@ -21,6 +23,7 @@ import   CompletedTaskHistory   from "./components/CompletedTaskHistory";
 import { SessionHeader        } from "./components/admin_header/SessionHeader";
 import { SessionHistory       } from "./components/common/SessionHistory";
 import { AnalysisPanel        } from "./components/analysis/AnalysisPanel";
+import { ResponseTimingCard   } from "./components/ResponseTimingCard";
 import { AdminPage            } from "./components/ui/AdminPage";
 import { AdminButton          } from "./components/ui/AdminButton";
 
@@ -79,6 +82,7 @@ export function AdminChatInactive() {
             {/* Page Body */}
             <div className="px-4 md:px-6 pt-4 pb-6 flex flex-col gap-6">
                 {isTask ? <CompletedTaskHistory session={session} /> : <><AnalysisPanel session={session} /><SessionHistory session={session} /></>}
+                <ResponseTimingCard session={session} />
             </div>
         </AdminPage>
     );

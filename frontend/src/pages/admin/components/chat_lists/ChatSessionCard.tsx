@@ -82,9 +82,10 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             {/* -------------------------------------------------------------------------------- */}
             {/* Variant, Condition, and Stats */}
             {/* -------------------------------------------------------------------------------- */}
-            {(runTags.length > 0) ? (
+            {((runTags.length > 0) || session.debug_mode) ? (
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-admin-subtext">
                     {runTags.map((value: string) => <span key={value} className="rounded-md bg-admin-muted px-2 py-1">{chatRunLabel(value)}</span>)}
+                    {session.debug_mode ? <span className="rounded-md bg-admin-accentSoft px-2 py-1 font-medium text-admin-accent2" title="Started in debug mode: its features may have been switched partway through">Debug session</span> : null}
                 </div>
             ) : null}
             <div className="flex gap-2 flex-wrap mt-2">

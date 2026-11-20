@@ -40,10 +40,10 @@ import        useLiveChat                           from "@/hooks/useLiveChat";
 import      { Avatar                              } from "@/pages/common/avatar/Avatar";
 import type { AvatarHandle, RobotAction           } from "@/pages/common/avatar/avatarRegistry";
 import      { getAvatarEntry                      } from "@/pages/common/avatar/avatarRegistry";
+import      { useChatTimings                      } from "@/pages/common/debug/useChatTimings";
 import type { ChatPanel                           } from "./chatModes";
 import      { CHAT_MODES, CHAT_PATH, chatModeQuery } from "./chatModes";
 import      { useChatAvatar                       } from "./useChatAvatar";
-import      { useChatTimings                      } from "./useChatTimings";
 import      { useFeatureSwitches                  } from "./useFeatureSwitches";
 
 // Components

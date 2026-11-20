@@ -1,10 +1,12 @@
-/* Chat controls row on the live chat page: listening, responses, and recording.
+/* Chat controls row on the live chat page: listening, responses, recording, features.
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/components/AdminControlsPanel`
 
 Every button sends a command through the page's `useCommandAcks` hook, which
 tracks which buttons are waiting on a backend acknowledgement. The avatar's
-action buttons live in the page's side column instead (`LiveSidePanel`).
+action buttons live in the page's side column instead (`LiveSidePanel`). A chat
+type with shared features gets their switches under the recording toggle, so the
+row keeps its height.
 
 */
 import type { ReactElement } from "react";
@@ -16,6 +18,7 @@ import type { useCommandAcks } from "@/hooks/chat-listener/chat-controls/useComm
 // Button Groups
 import    DevSamplesGroup       from "./controlGroups/DevSamplesGroup";
 import    ChatControlsGroup     from "./controlGroups/ChatControlsGroup";
+import    FeatureControlGroup   from "./controlGroups/FeatureControlGroup";
 import    ResponseControlGroup  from "./controlGroups/ResponseControlGroup";
 import    RecordingControlGroup from "./controlGroups/RecordingControlGroup";
 
@@ -29,7 +32,7 @@ type CommandAcks = ReturnType<typeof useCommandAcks>;
 export function AdminControlsPanel({connected, controlState, pending, actions, onAddSampleMessage, onAddSampleBiomarker}: {
     // Command state
     connected    : boolean;                  // Connection with the backend
-    controlState : ControlState;             // Listening, response mode, and recording, as the backend last confirmed
+    controlState : ControlState;             // Listening, response mode, recording, and features, as the backend last confirmed
     pending      : CommandAcks["pending"];   // Buttons waiting on a backend acknowledgement
     actions      : CommandAcks["actions"];   // Commands the buttons send
 
@@ -74,13 +77,23 @@ export function AdminControlsPanel({connected, controlState, pending, actions, o
                 suggestedDraft     = {null                    }
             />
 
-            {/* Recording Toggle */}
-            <RecordingControlGroup
-                connected        = {connected}
-                recordingEnabled = {controlState.recording_enabled}
-                pending          = {pending.set_recording}
-                onToggleRecording= {actions.toggleRecording}
-            />
+            {/* Recording Toggle, and the chat type's shared features (when it has any) */}
+            <div className="flex flex-col gap-4">
+                <RecordingControlGroup
+                    connected        = {connected}
+                    recordingEnabled = {controlState.recording_enabled}
+                    pending          = {pending.set_recording}
+                    onToggleRecording= {actions.toggleRecording}
+                />
+                {(Object.keys(controlState.features).length > 0) ? (
+                    <FeatureControlGroup
+                        connected    = {connected}
+                        features     = {controlState.features}
+                        pending      = {pending.set_feature}
+                        onSetFeature = {actions.setFeature}
+                    />
+                ) : null}
+            </div>
 
         </div>
     );

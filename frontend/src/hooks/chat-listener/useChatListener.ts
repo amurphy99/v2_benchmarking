@@ -35,6 +35,7 @@ export default function useChatListener({
     onStreamStatus    = noopAny, // Relay stream status changes ("active" | "paused" | "ended")
     onRecordingStatus = noopAny, // Relay recording toggle changes from the primary consumer
     onTaskMonitor     = noopAny, // The chat type's task panel view (as we join, and after each change)
+    onReplyTiming     = noopAny, // One reply's timing (when it is saved, and again once its audio started)
 }) {
     // --------------------------------------------------------------------------------
     // Timing (header UI)
@@ -68,9 +69,9 @@ export default function useChatListener({
     }, [setSessionInfo, setHistMessages, setHistBiomarkers, addNewMessage, addNewBiomarkers]);
 
     // Acks (command success/failure confirmation communications with the backend)
-    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor });
-    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor };
-    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor ]);
+    const controlHandlersRef = useRef(            { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor, onReplyTiming });
+    useEffect(() => {controlHandlersRef.current = { onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor, onReplyTiming };
+    },                                            [ onCommandAck, onControlState, onStreamStatus, onRecordingStatus, onTaskMonitor, onReplyTiming ]);
 
     // --------------------------------------------------------------------------------
     // Message Handling
@@ -86,6 +87,7 @@ export default function useChatListener({
             onStreamStatus    : (st ) => controlHandlersRef.current.onStreamStatus   (st ),
             onRecordingStatus : (st ) => controlHandlersRef.current.onRecordingStatus(st ),
             onTaskMonitor     : (vw ) => controlHandlersRef.current.onTaskMonitor    (vw ),
+            onReplyTiming     : (tm ) => controlHandlersRef.current.onReplyTiming    (tm ),
         });
     }, []);
 

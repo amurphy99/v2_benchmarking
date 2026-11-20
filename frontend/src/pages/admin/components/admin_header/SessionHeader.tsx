@@ -36,8 +36,9 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
     const { title, sessionId, username, source, mode, chatRun, rightActions } = props;
     const show_session_id = sessionId ? `#${sessionId}` : "#--";
 
-    // What the chat ran, in one line (null until known, or when nothing was recorded)
-    const task = ((chatRun === undefined) || (chatRun === null)) ? null : chatRunText(chatRun);
+    // What the chat ran, in one line (null until known, or when nothing was recorded), and whether it was a debug session
+    const task  = ((chatRun === undefined) || (chatRun === null)) ? null : chatRunText(chatRun);
+    const debug = (chatRun !== undefined) && (chatRun !== null) && chatRun.debug_mode;
 
     // UI Component
     return (
@@ -69,6 +70,7 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
                             {source    && <> · Source: <span className="text-admin-text/80">{source}</span></>}
                             {mode      && <> · Mode: <span className="text-admin-text/80">{mode}</span></>}
                             {task      && <> · Task: <span className="text-admin-text/80">{task}</span></>}
+                            {debug     && <> · <span className="font-medium text-admin-accent2" title="Started in debug mode: its features may have been switched partway through">Debug session</span></>}
                         </div>
                     </div>
                 </div>

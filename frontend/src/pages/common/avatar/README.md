@@ -582,13 +582,15 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   │   └── render_2d/                # Its renderer: head, screen, eyes, mouth, colors (the shape math is the Smiley's)
      │   └── GltfRobotAvatar.tsx           # The 3D QT and Buddy avatars (with GltfRobotScene, QTModel, BuddyModel)
      │
+     ├── common/debug/                     # What the chat page's debug mode and the admin pages share
+     │   ├── useChatTimings.ts             # Each reply's timing and the round trips, the averages, and the breakdown helpers
+     │   └── debugLabels.ts                # What each switch and timing number is called, and one line on each
+     │
      ├── chat/
      │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
      │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`, `variant`)
      │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
-     │   ├── useChatTimings.ts             # Debug mode: each reply's timing and the round trips, as the pills show them
      │   ├── useFeatureSwitches.ts         # Debug mode: the shared feature switches, before and during the chat
-     │   ├── debugLabels.ts                # Debug mode: what each switch and timing number is called, and one line on each
      │   └── components/                   # The configure-chat modal, the reply caption, the controls, the planning card, the Map Task map, and debug mode's panel, help, and timing pills
      │
      ├── avatar_demo/

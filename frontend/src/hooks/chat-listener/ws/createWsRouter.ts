@@ -1,3 +1,5 @@
+import type { ReplyTimingFrame } from "@/hooks/live-chat/debugFrames";
+import      { parseReplyTiming } from "@/hooks/live-chat/debugFrames";
 import type { TaskMonitor      } from "../data_utils/taskMonitor";
 import      { parseTaskMonitor } from "../data_utils/taskMonitor";
 import type { WsEnvelope       } from "./types";
@@ -17,6 +19,7 @@ export function createWsRouter({
     onStreamStatus,
     onRecordingStatus,
     onTaskMonitor,
+    onReplyTiming,
 }: {
     setLastEventAt : (d: Date         ) => void;
     setLatencyMs   : (n: number | null) => void;
@@ -33,7 +36,8 @@ export function createWsRouter({
     onControlState    : (state   : any) => void;
     onStreamStatus    : (status  : any) => void;
     onRecordingStatus : (status  : any) => void;
-    onTaskMonitor     : (view    : TaskMonitor) => void;   // The chat type's task panel view (checked first)
+    onTaskMonitor     : (view    : TaskMonitor     ) => void;   // The chat type's task panel view (checked first)
+    onReplyTiming     : (timing  : ReplyTimingFrame) => void;   // One reply's timing (checked first; again once its audio started)
 }) {
     return function onMessage(event: MessageEvent) {
         // Parse the initial event
@@ -77,6 +81,13 @@ export function createWsRouter({
             const view = parseTaskMonitor(data);
             if (view !== null) onTaskMonitor(view);
             else               console.warn("Dropped a task_monitor frame this page can't show");
+        }
+
+        // One reply's timing (`CLIENT_PROTOCOL.md` §3.9), dropped whole when it doesn't match
+        else if (type === "reply_timing") {
+            const timing = parseReplyTiming(data);
+            if (timing !== null) onReplyTiming(timing);
+            else                 console.warn("Dropped a malformed reply_timing frame");
         }
 
         // Unhandled events

@@ -13,7 +13,8 @@ The transcript fills the main area and scrolls on its own. Under it sit the
 chat controls: pausing automatic responses (to allow more user messages to
 build up before the assistant responds), sending commands for it to respond
 immediately, a text box for admin users to have the bot say whatever they want,
-and the recording toggle.
+the recording toggle, and (for a chat type that has them) switches for its
+shared features, which hold for the rest of the chat.
 
 The side column has tabs. "Avatar" holds the buttons for the avatar or robot
 actions, which change based on the "source" attribute of the ChatSession we are
@@ -21,8 +22,10 @@ listening in on (the web interface with a virtual avatar, or either of the two
 robots we also have configured to work with our system), such as expressions
 (e.g. happy, sad, thinking) or movements (e.g. nodding yes or no). A chat type
 that sends a task view gets its own tab ("Map" for the Map Task: both maps and
-where the avatar has been). "Biomarkers" holds the live biomarker scores, and
-shows only when the participant's chats run biomarkers.
+where the avatar has been). "Timing" shows each reply's stages and the waits
+the participant heard (the latest one's delay is also a header pill), from the
+backend's `reply_timing` frames. "Biomarkers" holds the live biomarker scores,
+and shows only when the participant's chats run biomarkers.
 
 On a wide screen the page fits the window and only the panels scroll; on a
 narrow one everything stacks and the page itself scrolls.
@@ -43,17 +46,20 @@ import type { StreamStatus } from "./components/admin_header/StatusComponents";
 import { getCapabilityProfile } from "./capabilities/profiles";
 
 // Data received from the backend
-import      { SessionInfo         } from "@/hooks/chat-listener/data_utils/sessionData";
-import      { useLocalChatSession } from "@/hooks/live-chat";
-import      { useLocalBiomarkers  } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
-import type { TaskMonitor         } from "@/hooks/chat-listener/data_utils/taskMonitor";
+import      { SessionInfo              } from "@/hooks/chat-listener/data_utils/sessionData";
+import      { useLocalChatSession      } from "@/hooks/live-chat";
+import      { useLocalBiomarkers       } from "@/hooks/chat-listener/data_utils/useLocalBiomarkers";
+import type { TaskMonitor              } from "@/hooks/chat-listener/data_utils/taskMonitor";
+import      { formatMs, useChatTimings } from "@/pages/common/debug/useChatTimings";
 
 // Components
 import { SessionHeader       } from "./components/admin_header/SessionHeader";
 import { ChatMessages        } from "./components/common/ChatMessages";
 import { AdminControlsPanel  } from "./components/AdminControlsPanel";
 import { LiveSidePanel       } from "./components/LiveSidePanel";
+import { LiveTimingPanel     } from "./components/LiveTimingPanel";
 import { MapTaskMonitorPanel } from "./components/MapTaskMonitorPanel";
+import { Pill                } from "./components/ui/Pill";
 import { AdminButton         } from "./components/ui/AdminButton";  // Experimental Buddy media (Robot view link)
 
 // Misc. Helpers
@@ -75,6 +81,9 @@ export function AdminChat() {
 
     // The chat type's task view (the Map Task's maps), null until one arrives
     const [taskMonitor, setTaskMonitor] = useState<TaskMonitor | null>(null);
+
+    // Each reply's timing, and the numbers worked out from it
+    const { timings, replies, noteReplyTiming } = useChatTimings();
 
     // --------------------------------------------------------------------------------
     // WebSocket Setup
@@ -107,6 +116,7 @@ export function AdminChat() {
             setControlState((s) => ({...s, recording_enabled: st?.enabled ?? s.recording_enabled}));
         },
         onTaskMonitor     : setTaskMonitor,
+        onReplyTiming     : noteReplyTiming,
     });
 
     // [DEBUGGING] Sample Data Methods
@@ -147,6 +157,9 @@ export function AdminChat() {
     const navigate        = useNavigate();
     const robotViewButton = (sessionInfo?.source === "buddyrobot") ? <AdminButton size="sm" variant="outline" onClick={() => navigate(`/admin/chat/${id}/robot`)}>Robot view</AdminButton> : null;
 
+    // The participant's latest wait for a reply, and the chat's average (once a reply's audio has started)
+    const delayPill = (timings.delay.last !== null) ? <Pill label="Reply delay" value={`${formatMs(timings.delay.last)} · avg ${formatMs(timings.delay.average)}`} /> : null;
+
     // ================================================================================
     // UI Components
     // ================================================================================
@@ -167,7 +180,7 @@ export function AdminChat() {
                 messageCount  = {session.messages.length}
                 streamStatus  = {streamStatus}
                 inactive_chat = {false}
-                rightActions  = {robotViewButton}
+                rightActions  = {<>{delayPill}{robotViewButton}</>}
             />
 
             {/* -------------------------------------------------------------------------------- */}
@@ -200,6 +213,7 @@ export function AdminChat() {
                     onEmotion        = {actions.robotEmotion}
                     onAnimation      = {actions.robotAnimation}
                     taskTab          = {taskTab}
+                    timingPanel      = {<LiveTimingPanel replies={replies} timings={timings} />}
                     showBiomarkers   = {showBiomarkers}
                     series           = {series}
                 />

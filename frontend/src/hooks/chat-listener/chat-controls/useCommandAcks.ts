@@ -45,7 +45,7 @@ export function useCommandAcks({
         // Save the audio recording on chat completion
         set_recording      : false,
 
-        // Switch a shared feature on or off (the admin page's switches aren't built yet)
+        // Switch one of the chat type's shared features on or off (one flag for all of them)
         set_feature        : false,
     });
     const pendingByIdRef = useRef<Map<string, { key: PendingKey; timeout: number }>>(new Map());
@@ -136,6 +136,9 @@ export function useCommandAcks({
 
         // Toggle session audio recording on/off
         toggleRecording  : (enabled: boolean) => {sendCommand("set_recording", "set_recording", { enabled })},
+
+        // Switch one of the chat type's shared features on or off for the rest of the chat
+        setFeature       : (feature: string, on: boolean) => {sendCommand("set_feature", "set_feature", { feature, on })},
     };
 
     return { pending, sendCommand, actions };
