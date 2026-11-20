@@ -198,7 +198,7 @@ The actual recording. Copied into Django media storage at `media/recordings/<fil
 
 Pre-generated biomarker scores from your offline analysis. Auto-discovered - drop in as many `biomarker_*.csv` files as you want.
 
-**Filename convention** — the `<type>` part of the filename must be one of the valid biomarker keys defined in [`chat_app/models.py`](../models.py) `ChatBiomarkerScore.BIOMARKER_CHOICES`:
+**Filename convention** — the `<type>` part of the filename must be one of the valid biomarker keys defined in [`chat_app/models/chat.py`](../models/chat.py) `ChatBiomarkerScore.BIOMARKER_CHOICES`:
 
 | Filename                       | `score_type` recorded |
 |--------------------------------|----------------------|

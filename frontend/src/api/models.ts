@@ -20,12 +20,12 @@ export interface UserSettings {
   debug_mode        : boolean;   // The chat page opens in debug mode (read-only here; staff and caregivers switch it on the admin page)
 }
 
-// Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models.py`)
+// Avatars a participant can be shown in the web app, in picker order (`UserSettings.MODEL_CHOICES` in `backend/chat_app/models/accounts.py`)
 // Pickers list only the ones with an entry in `avatarRegistry.tsx` (`talkinghead` and `temp1`-`temp3` are reserved)
 export const AVATAR_MODEL_CHOICES = ["smiley", "robot", "qt", "buddy", "talkinghead", "temp1", "temp2", "temp3"] as const;
 export type  AvatarModelChoice    = (typeof AVATAR_MODEL_CHOICES)[number];
 
-// Chat languages as BCP-47 tags (`Profile.LANGUAGE_CHOICES` in `backend/chat_app/models.py`)
+// Chat languages as BCP-47 tags (`Profile.LANGUAGE_CHOICES` in `backend/chat_app/models/accounts.py`)
 export const LANGUAGE_CHOICES = [
     "en-US", "en-GB", "de-DE", "el-GR", "es-ES", "es-MX", "fr-FR", "it-IT", "nl-NL", "pl-PL",
     "pt-PT", "pt-BR", "tr-TR", "ru-RU", "ar-SA", "hi-IN", "ja-JP", "ko-KR", "zh-CN", "zh-TW",
