@@ -319,6 +319,7 @@ class PromptTests(unittest.TestCase):
                 self.assertNotIn(scenario.participant.brief, system)
 
     # The participant's card carries their own brief and constraints, and nothing of the avatar's
+    # (each line holds just the item, its label, and the agreed choice)
     def test_the_card_carries_the_participants_brief_and_none_of_the_avatars_materials(self) -> None:
         for variant, scenario in PLANNING_SCENARIOS.items():
             with self.subTest(variant):
@@ -326,6 +327,7 @@ class PromptTests(unittest.TestCase):
                 self.assertEqual(card["brief"], scenario.participant.brief)
                 self.assertNotIn(scenario.avatar.brief, json.dumps(card))
                 for constraint in scenario.avatar.constraints: self.assertNotIn(constraint.text, json.dumps(card))
+                for line in card["items"]: self.assertEqual(set(line), {"id", "label", "value"})
 
     # The instructions put a yes on the card at once, and read a slip against the ideas on the table
     def test_the_instructions_settle_on_a_yes_and_read_slips_against_the_ideas(self) -> None:

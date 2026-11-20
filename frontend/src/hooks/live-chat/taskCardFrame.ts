@@ -15,10 +15,9 @@ import      { parseGiverMap   } from "@/components/map_task/mapTaskViews";
 
 // One item's line on a planning card
 export type PlanningCardItem = {
-    id      : string;          // Item id ("starter")
-    label   : string;          // What the line is labeled ("Starter")
-    value   : string | null;   // The agreed choice, written on the line (null while open)
-    pending : string | null;   // A choice one side asked to settle on, waiting for the other side's yes
+    id    : string;          // Item id ("starter")
+    label : string;          // What the line is labeled ("Starter")
+    value : string | null;   // The agreed choice, written on the line (null while open)
 };
 
 // A cooperative planning card: the participant's brief and constraints, then a line per item
@@ -69,9 +68,9 @@ function parsePlanningCard(data: Record<string, unknown>): PlanningCard | null {
 // One item's line (null when malformed)
 function readItem(value: unknown): PlanningCardItem | null {
     if (!isRecord(value)) return null;
-    const {id, label, value: choice, pending} = value;
-    if ((typeof id !== "string") || (typeof label !== "string") || !isTextOrNull(choice) || !isTextOrNull(pending)) return null;
-    return {id, label, value: choice, pending};
+    const {id, label, value: choice} = value;
+    if ((typeof id !== "string") || (typeof label !== "string") || !isTextOrNull(choice)) return null;
+    return {id, label, value: choice};
 }
 
 // A plain JSON object

@@ -23,10 +23,9 @@ first, so the completed-session history can say who suggested what.
 
 The participant's card shows their own brief and constraints, and the agreed
 choices. It goes out as a `task_card` frame (`HARNESS_PROTOCOL.md` §13) whenever
-a saved reply changes it. Its lines still carry `pending`, always null now that
-nothing waits for a yes, for clients that read it. Once the chat
-ends, their client is shown the avatar's side too: its brief and constraints,
-marking the ones it mentioned (`task_reveal`, §14).
+a saved reply changes it. Once the chat ends, their client is shown the avatar's
+side too: its brief and constraints, marking the ones it mentioned
+(`task_reveal`, §14).
 
 """
 from __future__  import annotations
@@ -233,9 +232,9 @@ def card_frame(scenario: Scenario, state: PlanningState) -> dict[str, object]:
         "complete"    : state.stage == "approved",
     }}
 
-# One item's line: its label and agreed choice (`pending` stays null: nothing waits for a yes)
+# One item's line: its label and agreed choice
 def _card_line(item_id: str, label: str, item: ItemState) -> dict[str, object]:
-    return {"id": item_id, "label": label, "value": item.agreed, "pending": None}
+    return {"id": item_id, "label": label, "value": item.agreed}
 
 # Send the participant's card to the primary client
 async def send_task_card(consumer: ChatConsumer, scenario: Scenario, state: PlanningState) -> None:

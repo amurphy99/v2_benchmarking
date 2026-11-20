@@ -4,9 +4,8 @@
 
 Shown beside the avatar in the cooperative planning task, from the backend's
 `task_card` frames. The participant's brief (who they are and the situation) and
-their constraints are at the top (only they know them). Below, each item's line is written in, in handwriting, the moment both
-sides agree on a choice; a choice one side asked to settle on shows faintly with
-a question mark until the other side says yes.
+their constraints are at the top (only they know them). Below, each item's line
+is written in, in handwriting, the moment both sides agree on a choice.
 
 */
 import type { ReactElement      } from "react";
@@ -41,15 +40,14 @@ export default function PlanningCardPanel({card}: {
                 ))}
             </ul>
 
-            {/* A line per item: the agreed choice written in, a choice waiting for a yes, or blank */}
+            {/* A line per item: the agreed choice written in, or blank */}
             <div className="mt-6 space-y-4 border-t border-dashed border-chat-border pt-5!">
                 {card.items.map((item: PlanningCardItem) => (
                     <div key={item.id}>
                         <div className="text-sm font-semibold uppercase tracking-wide text-chat-subtext">{item.label}</div>
                         <div className="mt-1 flex min-h-[2.75rem] items-end border-b-2 border-chat-border pb-1">
-                            {(item.value !== null)   ? <span key={item.value} className="animate-chat-write font-hand text-2xl text-chat-ink">{item.value}</span> :
-                             (item.pending !== null) ? <span className="font-hand text-xl italic text-chat-pending opacity-70">{item.pending}?</span>              :
-                                                       <span className="sr-only">Not decided yet</span>}
+                            {(item.value !== null) ? <span key={item.value} className="animate-chat-write font-hand text-2xl text-chat-ink">{item.value}</span> :
+                                                     <span className="sr-only">Not decided yet</span>}
                         </div>
                     </div>
                 ))}
