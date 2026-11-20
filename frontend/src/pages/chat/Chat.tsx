@@ -7,7 +7,11 @@ it. For the tasks, the panel beside it holds what the participant works from,
 from the backend's `task_card` frames: their planning card, filled in live, or
 their Map Task map with its route (which gets the wider column). Before the chat
 starts, the configure-chat modal picks the chat type, its cues and task version
-(`chatModes.ts`), subtitles, and the avatar; starting the chat locks them.
+(`chatModes.ts`), subtitles (off unless picked), and the avatar; starting the
+chat locks them. The title row names the chat type, with the button that opens
+the modal (locked once the chat starts) beside it, and the task version and cues
+at the row's end (the avatar shows itself, and the debug panel has the subtitles'
+switch).
 
 The page stays put when the chat ends, however it ends. The controls give way
 to an end bar with the chat's length and numbers (`useChatStats`) and a button
@@ -30,11 +34,11 @@ type's shared features (`useFeatureSwitches`). The pills show the round trip to
 the backend and each reply's stages (`useChatTimings`).
 
 */
-import type { ReactElement, ReactNode    } from "react";
+import type { ReactElement, ReactNode     } from "react";
 import      { useEffect, useRef, useState } from "react";
-import        toast                        from "react-hot-toast";
-import type { IconType                   } from "react-icons";
-import      { BsBadgeCc, BsLightningCharge, BsLockFill, BsRobot, BsSliders } from "react-icons/bs";
+import        toast                         from "react-hot-toast";
+import type { IconType                    } from "react-icons";
+import      { BsLockFill, BsSliders       } from "react-icons/bs";
 
 // From this project
 import        SaveChatModal                         from "@/components/modals/SaveChatModal";
@@ -46,6 +50,7 @@ import        useLiveChat                           from "@/hooks/useLiveChat";
 import      { Avatar                              } from "@/pages/common/avatar/Avatar";
 import type { AvatarHandle, RobotAction           } from "@/pages/common/avatar/avatarRegistry";
 import      { getAvatarEntry                      } from "@/pages/common/avatar/avatarRegistry";
+import      { CUES_LABEL                          } from "@/pages/common/debug/debugLabels";
 import      { useChatTimings                      } from "@/pages/common/debug/useChatTimings";
 import type { ChatPanel                           } from "./chatModes";
 import      { CHAT_MODES, CHAT_PATH, chatModeQuery } from "./chatModes";
@@ -74,7 +79,7 @@ const CHAT_PING_MS = 3_000;
 const CHAT_CONFIG_BUTTON_CLASS = "flex items-center gap-2 rounded-full! border-2! border-chat-accent! bg-chat-panel px-5! py-2.5 text-lg font-semibold text-chat-accent shadow-sm hover:bg-chat-accentSoft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-accent disabled:border-chat-border! disabled:text-chat-subtext disabled:shadow-none disabled:hover:bg-chat-panel";
 
 // The page's choices before the participant changes any (the avatar comes from their settings)
-const CHAT_DEFAULT_CONFIG: Omit<ChatConfig, "avatar"> = {mode: CHAT_MODES[0], variant: CHAT_MODES[0].variants[0]?.value ?? null, cues: true, subtitles: true};
+const CHAT_DEFAULT_CONFIG: Omit<ChatConfig, "avatar"> = {mode: CHAT_MODES[0], variant: CHAT_MODES[0].variants[0]?.value ?? null, cues: true, subtitles: false};
 
 // How wide the page is, and how its two columns split, by what sits beside the avatar (a map needs the most room;
 // with nothing beside it, the page is as wide as with a card, so the controls and the debug pills have room)
@@ -84,11 +89,11 @@ const CHAT_PANEL_LAYOUT: Record<ChatPanel, {page: string; columns: string}> = {
     map  : {page: "max-w-7xl", columns: "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"},
 };
 
-// One of the chat's choices, shown under the title
+// One choice the chat runs with, at the title row's end (colored like the "Plan complete" banner)
 function ChoiceChip({icon: Icon, children}: {icon: IconType; children: ReactNode}): ReactElement {
     return (
-        <span className="flex items-center gap-1.5 rounded-full border border-chat-border! bg-chat-panel px-3! py-1 text-sm font-medium text-chat-subtext">
-            <Icon aria-hidden="true" className="text-chat-accent" /> {children}
+        <span className="flex items-center gap-1.5 rounded-full border border-chat-accent/20! bg-chat-accentSoft px-3! py-1 text-sm font-medium text-chat-accent">
+            <Icon aria-hidden="true" /> {children}
         </span>
     );
 }
@@ -213,7 +218,7 @@ export function Chat(): ReactElement {
     const layout = CHAT_PANEL_LAYOUT[panel];
     const zoom   = (window.isMobile && (panel === "none")) ? "head" : "body";
 
-    // The chat's choices, for the chips under the title and for the modal to start from
+    // The chat's choices, for the chips in the title row and for the modal to start from
     const avatarEntry  = getAvatarEntry(model);
     const variantLabel = mode.variants.find((option) => option.value === variant)?.label;
     const modalConfig  = {...config, avatar: avatarEntry.id};
@@ -225,27 +230,28 @@ export function Chat(): ReactElement {
                     {/* -------------------------------------------------------------------------------- */}
                     {/* Chat Type and Configure */}
                     {/* -------------------------------------------------------------------------------- */}
-                    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4! pl-14">
-                        <div className="flex min-w-0 flex-col gap-2">
-                            <div className="text-xs font-semibold uppercase tracking-widest text-chat-subtext">Chat</div>
-                            <h1 className="m-0! text-2xl! font-semibold! leading-tight! text-chat-text md:text-4xl!">{mode.label}</h1>
+                    <header className="flex flex-col gap-3! pl-14">
+                        {/* Title row: the chips sit at its end, or on a line of their own */}
+                        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3!">
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2!">
+                                {/* Chat type, raised to sit level with the pills */}
+                                <h1 className="m-0! -translate-y-0.5 text-2xl! font-semibold! leading-tight! text-chat-text md:-translate-y-1 md:text-4xl!">{mode.label}</h1>
 
-                            {/* The choices this chat runs with */}
-                            <div className="flex flex-wrap gap-2">
-                                {(variantLabel !== undefined) ? <ChoiceChip icon={mode.icon}>{variantLabel}</ChoiceChip> : null}
-                                {mode.hasCues ? <ChoiceChip icon={BsLightningCharge}>Cues {(debugMode ? cuesShown : cues) ? "on" : "off"}</ChoiceChip> : null}
-                                <ChoiceChip icon={BsBadgeCc}>Subtitles {subtitles ? "on" : "off"}</ChoiceChip>
-                                <ChoiceChip icon={BsRobot}>{avatarEntry.label}</ChoiceChip>
+                                {/* Opens the setup modal, until the chat starts */}
+                                <button className={CHAT_CONFIG_BUTTON_CLASS} disabled={started} onClick={() => setShowConfig(true)} title={started ? "Settings are fixed once the chat starts" : undefined} type="button">
+                                    {started ? <><BsLockFill aria-hidden="true" /> Locked in</> : <><BsSliders aria-hidden="true" /> Set up chat</>}
+                                </button>
                             </div>
 
-                            {/* Debug mode: the round trip and each reply's stages */}
-                            {debugMode ? <TimingPills timings={timings} /> : null}
+                            {/* The choices this chat runs with that can't be seen on the page */}
+                            <div className="flex flex-wrap gap-2">
+                                {(variantLabel !== undefined) ? <ChoiceChip icon={mode.icon}>{variantLabel}</ChoiceChip> : null}
+                                {mode.hasCues ? <ChoiceChip icon={CUES_LABEL.icon}>Cues {(debugMode ? cuesShown : cues) ? "on" : "off"}</ChoiceChip> : null}
+                            </div>
                         </div>
 
-                        {/* Opens the setup modal, until the chat starts */}
-                        <button className={CHAT_CONFIG_BUTTON_CLASS} disabled={started} onClick={() => setShowConfig(true)} title={started ? "Settings are fixed once the chat starts" : undefined} type="button">
-                            {started ? <><BsLockFill aria-hidden="true" /> Locked in</> : <><BsSliders aria-hidden="true" /> Set up chat</>}
-                        </button>
+                        {/* Debug mode: the round trip and each reply's stages */}
+                        {debugMode ? <TimingPills timings={timings} /> : null}
                     </header>
 
                     {/* -------------------------------------------------------------------------------- */}

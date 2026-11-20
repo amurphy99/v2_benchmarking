@@ -2,10 +2,11 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/chat/components/DebugPanel`
 
-A strip of switches, each a pill with a light that shows whether it is on: the
-subtitles and the cues (both handled in this browser), then the chat type's
-shared features (switched on the backend with `set_feature`; a light pulses
-while a change waits for the backend). The (i) button opens what each switch and
+A strip of switches, each a pill with a light that shows whether it is on and an
+icon beside its name (`debugLabels.ts`): the subtitles and the cues (both
+handled in this browser), then the chat type's shared features (switched on the
+backend with `set_feature`; a light pulses while a change waits for the
+backend). The (i) button opens what each switch and
 timing number means (`DebugHelpModal`). Only an account with debug mode on sees
 this panel.
 
@@ -14,6 +15,7 @@ import type { ReactElement } from "react";
 import      { BsInfoCircle } from "react-icons/bs";
 
 // From this project
+import type { SwitchLabel                                 } from "@/pages/common/debug/debugLabels";
 import      { CUES_LABEL, FEATURE_LABELS, SUBTITLES_LABEL } from "@/pages/common/debug/debugLabels";
 import type { FeatureSwitch                               } from "../useFeatureSwitches";
 
@@ -21,15 +23,16 @@ import type { FeatureSwitch                               } from "../useFeatureS
 // --------------------------------------------------------------------------------
 // Debug Switch
 // --------------------------------------------------------------------------------
-// One switch: a pill with a light (Bootstrap's border and spacing classes outrank Tailwind's, hence the `!`)
-function DebugSwitch({label, on, pending = false, disabled = false, note, onFlip}: {
-    label     : string;                // What the switch is called
+// One switch: a pill with its light, icon, and name (`!`: Bootstrap's classes outrank Tailwind's)
+function DebugSwitch({name, on, pending = false, disabled = false, note, onFlip}: {
+    name      : SwitchLabel;           // What the switch is called, and its icon
     on        : boolean;               // Its state
     pending?  : boolean;               // A change is waiting for the backend
     disabled? : boolean;               // It can't be switched in this chat
     note?     : string;                // Shown on hover (why it can't be switched)
     onFlip    : () => void;            // Flip it
 }): ReactElement {
+    const Icon  = name.icon;
     const light = pending ? "animate-pulse bg-chat-pending" : on ? "bg-chat-accent" : "bg-chat-border";
     return (
         <button
@@ -42,7 +45,8 @@ function DebugSwitch({label, on, pending = false, disabled = false, note, onFlip
             type         = "button"
         >
             <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${light}`} />
-            {label}
+            <Icon aria-hidden="true" className={on ? "text-chat-accent" : "text-chat-subtext"} />
+            {name.label}
         </button>
     );
 }
@@ -83,10 +87,10 @@ export default function DebugPanel({subtitles, cuesShown, hasCues, switches, onS
 
             {/* The page's own switches, then the chat type's shared features */}
             <div className="flex flex-wrap gap-2!">
-                <DebugSwitch label={SUBTITLES_LABEL.label} on={subtitles} onFlip={() => onSubtitles(!subtitles)} />
-                <DebugSwitch disabled={!hasCues} label={CUES_LABEL.label} note={hasCues ? undefined : "This chat type has no cues"} on={hasCues && cuesShown} onFlip={() => onCues(!cuesShown)} />
+                <DebugSwitch name={SUBTITLES_LABEL} on={subtitles} onFlip={() => onSubtitles(!subtitles)} />
+                <DebugSwitch disabled={!hasCues} name={CUES_LABEL} note={hasCues ? undefined : "This chat type has no cues"} on={hasCues && cuesShown} onFlip={() => onCues(!cuesShown)} />
                 {switches.map((feature: FeatureSwitch) => (
-                    <DebugSwitch key={feature.name} label={FEATURE_LABELS[feature.name].label} on={feature.on} onFlip={() => onFeature(feature.name)} pending={feature.pending} />
+                    <DebugSwitch key={feature.name} name={FEATURE_LABELS[feature.name]} on={feature.on} onFlip={() => onFeature(feature.name)} pending={feature.pending} />
                 ))}
             </div>
         </section>
