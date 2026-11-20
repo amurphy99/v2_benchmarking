@@ -64,12 +64,13 @@ from    .response_models             import NO_MOVE, FollowerReply
 from    .understanding               import TurnReading, read_turn
 
 if TYPE_CHECKING:
-    from ...consumers.consumers import ChatConsumer
-    from  ..base                import MonitorView, RevealView
-    from  ..features.intro.flow import IntroState, IntroTurn
-    from   .finish              import MapTaskEnd
-    from   .response_models     import FollowerAct, Move
-    from   .understanding       import Route
+    from ...consumers.consumers                 import ChatConsumer
+    from  ..base                                import MonitorView, RevealView
+    from  ..features.intro.flow                 import IntroState, IntroTurn
+    from  ..features.reply_gate.response_models import Clarify
+    from   .finish                              import MapTaskEnd
+    from   .response_models                     import FollowerAct, Move
+    from   .understanding                       import Route
 
 # Maps a client can pick with `variant` (each one is `maps/<variant>.json`; the HCRC ones are the corpus's maps 1-4)
 MAP_TASK_VARIANTS = ("demo", "hcrc_1", "hcrc_2", "hcrc_3", "hcrc_4")
@@ -183,9 +184,9 @@ class MapTaskHarness(ChatHarness):
         _log_turn(reading, pipeline.__name__, reply, position, time.monotonic() - started)
         return self._outcome(reading, reply, path, intro)
 
-    # Ask about a name the check thinks was misheard (the avatar and the intro stay where they are)
-    def _clarify(self, reading: TurnReading, message: str) -> ResponseOutcome:
-        return self._outcome(reading, FollowerReply(message=message, act="clarify", move=NO_MOVE, reaction="none", basis="The reply check heard a likely misheard word."), (), self.state.intro)
+    # Ask the check's question about a misheard name (the avatar and the intro stay where they are)
+    async def _clarify(self, reading: TurnReading, verdict: Clarify) -> ResponseOutcome:
+        return self._outcome(reading, FollowerReply(message=verdict.message, act="clarify", move=NO_MOVE, reaction="none", basis="The reply check heard a likely misheard word."), (), self.state.intro)
 
     # Propose the full path (loops included), the reply added to the record, and the task's end
     def _outcome(self, reading: TurnReading, reply: FollowerReply, path: tuple[Point, ...], intro: IntroState | None) -> ResponseOutcome:

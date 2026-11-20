@@ -53,11 +53,12 @@ from    .prompts                     import ELICITATION_TURN_END_NOTES, directiv
 from    .topics                      import ELICITATION_TOPICS, ELICITATION_VARIANTS
 
 if TYPE_CHECKING:
-    from ...consumers.consumers import ChatConsumer
-    from  ..base                import RevealView
-    from   .prompts             import Directive
-    from   .response_models     import Behavior, ElicitationTurn, ReplyMove
-    from   .topics              import Topic
+    from ...consumers.consumers                 import ChatConsumer
+    from  ..base                                import RevealView
+    from  ..features.reply_gate.response_models import Clarify
+    from   .prompts                             import Directive
+    from   .response_models                     import Behavior, ElicitationTurn, ReplyMove
+    from   .topics                              import Topic
 
 # What the avatar says when no reply could be made (it still hands the turn back with a question)
 MSG_SAY_MORE = "Sorry, I lost my train of thought for a second. Could you tell me a little more about that?"
@@ -167,9 +168,9 @@ class SpeechElicitationHarness(ChatHarness):
         _log_turn(turn, directive, angles, time.monotonic() - started)
         return self._outcome(turn.message, turn.behavior, _next_state(self.state, directive, turn.move, turn.message))
 
-    # Ask about a word the reply check thinks was misheard (the thread stays where it was)
-    def _clarify(self, message: str) -> ElicitationOutcome:
-        return self._outcome(message, "curious", replace(self.state, clarifications=self.state.clarifications + 1))
+    # Ask the reply check's question about a word it thinks was misheard (the thread stays where it was)
+    async def _clarify(self, verdict: Clarify) -> ElicitationOutcome:
+        return self._outcome(verdict.message, "curious", replace(self.state, clarifications=self.state.clarifications + 1))
 
     # The outcome for a reply: the state it leaves (saved with it), and its avatar plan (with cues)
     def _outcome(self, message: str, behavior: Behavior, state: ElicitationState) -> ElicitationOutcome:

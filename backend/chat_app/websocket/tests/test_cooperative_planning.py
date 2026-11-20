@@ -26,8 +26,8 @@ from chat_app.websocket.harnesses.cooperative_planning.harness         import MS
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
 from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, Suggestion, apply_changes, card_frame, initial_state, planning_history, planning_reveal
 from chat_app.websocket.harnesses.cooperative_planning.planning_api    import PlanningAPIError
-from chat_app.websocket.harnesses.cooperative_planning.prompts         import BEHAVIOR_FIELD, COMBINED_TASK, PLANNING_REACTION_WHEN, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, misheard_notes, plan_block, recap_line
-from chat_app.websocket.harnesses.cooperative_planning.response_models import Behavior, CardBehavior, PlanningReaction, models_for_scenario
+from chat_app.websocket.harnesses.cooperative_planning.prompts         import BEHAVIOR_FIELD, CLARIFY_TASK, COMBINED_TASK, PLANNING_REACTION_WHEN, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, misheard_notes, plan_block, recap_line
+from chat_app.websocket.harnesses.cooperative_planning.response_models import Behavior, CardBehavior, ClarifyingQuestion, PlanningReaction, models_for_scenario
 from chat_app.websocket.harnesses.cooperative_planning.scenarios       import PLANNING_SCENARIOS_DIR, load_scenario
 from chat_app.websocket.harnesses.features.intro.flow                  import IntroState
 from chat_app.websocket.harnesses.features.intro.intro_api             import IntroReading
@@ -47,9 +47,8 @@ HARNESS = "chat_app.websocket.harnesses.cooperative_planning.harness"
 SYNTHESIZE_SOUNDS = "chat_app.websocket.harnesses.features.backchannels.cue.synthesize_sounds"
 SOUNDS            = {"mm_hm": {"audio": "AAA=", "sample_rate": 24_000}}
 
-# Where the reply gate looks its check client up, and the logger it writes each verdict to
+# Where the reply gate looks its check client up
 GET_REPLY_CHECK = "chat_app.websocket.harnesses.features.reply_gate.gate.get_reply_check_api"
-GATE_LOGGER     = "chat_app.websocket.harnesses.features.reply_gate.gate"
 
 # The intro's switch (patched to `()` where a test is about the planning itself), and its call
 INTRO_SWITCH = "chat_app.websocket.harnesses.features.intro.flow.FEATURE_INTRO_CONDITIONS"
@@ -60,6 +59,15 @@ HARNESSES_LOGGER = "chat_app.websocket.harnesses"
 
 # A check that finds the user done, so every reply goes out as usual
 CHECK_DONE = CheckResult(basis="done", verdict=Reply(next_step="reply"))
+
+# A check that thinks "tear a misu" was misheard, and the question it would ask
+CHECK_QUESTION = "Sorry, did you say tiramisu?"
+CHECK_MISHEARD = check_model(tuple(PLANNING_SOUNDS), PlanningBackchannels.GESTURES, turn_end=True, misheard=True).model_validate(
+    {"basis": "b", "verdict": {"next_step": "clarify", "misheard": "tear a misu", "message": CHECK_QUESTION}}
+)
+
+# The clarifying question task, as a call about that slip would get it
+CLARIFY_TIRAMISU = CLARIFY_TASK.format(misheard="tear a misu", check_question=CHECK_QUESTION)
 
 
 # --------------------------------------------------------------------------------
@@ -125,6 +133,7 @@ class StubPlanningAPI:
     async def combined      (self, turn: PlanningTurn, directive: str                     ) -> object: return self._answer("combined",       directive)
     async def quick_reply   (self, turn: PlanningTurn, directive: str                     ) -> object: return self._answer("quick_reply",    directive)
     async def track_exchange(self, turn: PlanningTurn, reply: str                         ) -> object: return self._answer("track_exchange", reply)
+    async def clarify       (self, turn: PlanningTurn, misheard: str, check_question: str ) -> object: return self._answer("clarify",        (misheard, check_question))
 
     # Record one call, then return (or raise) its response
     def _answer(self, name: str, seen: object) -> object:
@@ -304,7 +313,7 @@ class HistoryTests(unittest.TestCase):
 class PromptTests(unittest.TestCase):
     # The avatar learns the participant's constraints only from the conversation, never from a prompt
     def test_no_prompt_ever_shows_the_participants_constraints(self) -> None:
-        for task in (TRACK_TASK, REPLY_TASK, COMBINED_TASK, QUICK_REPLY_TASK, TRACK_EXCHANGE_TASK):
+        for task in (TRACK_TASK, REPLY_TASK, COMBINED_TASK, QUICK_REPLY_TASK, TRACK_EXCHANGE_TASK, CLARIFY_TIRAMISU):
             for directive in (None, "nudge"):
                 system = build_messages(task, SCENARIO, starter_settled(), [], directive)[0]["content"]
                 for constraint in SCENARIO.participant.constraints:
@@ -329,11 +338,22 @@ class PromptTests(unittest.TestCase):
                 for constraint in scenario.avatar.constraints: self.assertNotIn(constraint.text, json.dumps(card))
                 for line in card["items"]: self.assertEqual(set(line), {"id", "label", "value"})
 
-    # The instructions put a yes on the card at once, and read a slip against the ideas on the table
+    # The instructions settle a yes at once, say a user's idea works for the avatar too, and read a slip
+    # against the ideas on the table
     def test_the_instructions_settle_on_a_yes_and_read_slips_against_the_ideas(self) -> None:
         system = build_messages(COMBINED_TASK, SCENARIO, initial_state(SCENARIO), [], None)[0]["content"]
-        for text in ("it goes on the card right away, so never ask them to confirm it", "words that sound like one of those ideas"): self.assertIn(text, system)
+        for text in ("it goes on the card right away, so never ask them to confirm it", "That works for me too, awesome!", "words that sound like one of those ideas"): self.assertIn(text, system)
         self.assertNotIn("ask_to_settle", system)
+
+    # The question about misheard words sees the flagged words and the check's own question, describes
+    # both fields it fills in, and gets the plan like every other call
+    def test_the_clarifying_question_sees_the_flagged_words_and_the_checks_question(self) -> None:
+        system = build_messages(CLARIFY_TIRAMISU, SCENARIO, starter_settled(), [], None)[0]["content"]
+        for shown in ('"tear a misu"', f'"{CHECK_QUESTION}"', "- understood:", "- message:", "Never ask about the word alone", "Starter [id: starter]: agreed: breadsticks."): self.assertIn(shown, system)
+
+    # The question hands the turn back, so it must be one
+    def test_the_clarifying_question_must_be_a_question(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must end with a question"): ClarifyingQuestion(understood="They want tiramisu.", message="You want tiramisu.")
 
     # The plan block shows the avatar's own constraints, what is agreed, the ideas, and the refusals
     def test_the_plan_block_shows_each_items_state(self) -> None:
@@ -466,16 +486,22 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(consumer.send_json.await_args_list[1].args[0]["data"]["steps"][0]["prop"], {"hold": "card"})
         consumer.request_harness_turn.assert_called_once()
 
-    # A likely misheard word gets the reply check's question instead, with a pondering look, and the plan stays as it was
-    # (the reply worked out beside the check is dropped, with the change it proposed)
-    async def test_a_misheard_word_gets_a_question_instead(self) -> None:
-        harness, _, _ = self.make(track=plan_update({"op": "suggest", "item": "dessert", "choice": "tear a misu"}), reply=spoken_turn("Tear a misu? Sounds tasty."))
-        question = "Sorry, did you say tiramisu?"
-        verdict  = {"next_step": "clarify", "misheard": "tear a misu", "message": question}
-        result   = check_model(tuple(PLANNING_SOUNDS), PlanningBackchannels.GESTURES, turn_end=True, misheard=True).model_validate({"basis": "b", "verdict": verdict})
-        with patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=result)))):
-            with self.assertLogs(GATE_LOGGER, level="INFO"): outcome = await harness.generate(make_attempt("Let's have tear a misu for dessert."))
-        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (question, "curious", harness.state, ()))
+    # A likely misheard word gets the planner's own question, saying back what the user seems to mean
+    # (curious look; the plan stays as it was, and the reply worked out beside the check is dropped)
+    async def test_a_misheard_word_gets_the_planners_own_question(self) -> None:
+        asked = ClarifyingQuestion(understood="They want tiramisu for dessert.", message="Sorry, did you say you'd like tiramisu for dessert?")
+        harness, _, api = self.make(track=plan_update({"op": "suggest", "item": "dessert", "choice": "tear a misu"}), reply=spoken_turn("Tear a misu? Sounds tasty."), clarify=asked)
+        with patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_MISHEARD)))):
+            with self.assertLogs(HARNESSES_LOGGER, level="INFO"): outcome = await harness.generate(make_attempt("Let's have tear a misu for dessert."))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (asked.message, "curious", harness.state, ()))
+        self.assertEqual(api.calls[-1], ("clarify", ("tear a misu", CHECK_QUESTION)))
+
+    # When the planner's question fails, the avatar asks the check's own (the plan stays as it was)
+    async def test_a_failed_clarifying_question_asks_the_checks_own(self) -> None:
+        harness, _, _ = self.make(track=plan_update(), reply=spoken_turn("Sounds tasty."), clarify=PlanningAPIError("down"))
+        with patch(GET_REPLY_CHECK, Mock(return_value=SimpleNamespace(check=AsyncMock(return_value=CHECK_MISHEARD)))):
+            with self.assertLogs(HARNESSES_LOGGER, level="ERROR"): outcome = await harness.generate(make_attempt("Let's have tear a misu for dessert."))
+        self.assertEqual((outcome.message, outcome.behavior, outcome.state, outcome.results), (CHECK_QUESTION, "curious", harness.state, ()))
 
     # Both checks run with cues, the misheard one knowing what is being planned; neither runs without cues
     async def test_the_reply_gate_checks_only_with_cues(self) -> None:

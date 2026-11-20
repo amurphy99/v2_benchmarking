@@ -150,8 +150,8 @@ offers the reactions with a hand. Each turn's pick is logged, not saved, and wit
  │   │   ├── camping_trip.json    # Three campsites, and the one left changes what dinner can be
  │   │   └── flight_rebooking.json # A traveler and an airline agent who holds the three flights
  │   ├── plan_state.py            # The plan, the rules for changing it, and the participant's card frame
- │   ├── response_models.py       # The proposed changes, each call's response, and the per-scenario schemas
- │   ├── prompts.py               # How to plan together, each call's task, the plan block, the directives, and its notes for the reply check
+ │   ├── response_models.py       # The proposed changes, each call's response, the per-scenario schemas, and the clarifying question
+ │   ├── prompts.py               # How to plan together, each call's task (the clarifying question's too), the plan block, the directives, and its notes for the reply check
  │   ├── pipelines.py             # track_then_reply, single_call, reply_then_track
  │   ├── planning_api.py          # PlanningAPI: one method per call, on the shared StructuredAPI
  │   ├── behaviors.py             # The avatar's setup, its card, the plan for each named behavior, and its signs of listening
@@ -343,7 +343,7 @@ happens:
 |---|---|
 | `reply` | The reply goes out as usual. When the check read through an obvious slip ("watching the dishes"), it logs the words the user most likely said (`likely_said`) |
 | `wait` | The user seems mid-thought. The avatar gives the sign the check picked (one of the chat type's sounds, and a gesture), and the reply is held for the chat type's hold. Newer speech cancels the attempt, as it cancels any automatic reply, and the staged words are answered with the rest of the turn. If the user stays quiet, the reply (worked on meanwhile) goes out when the hold ends |
-| `clarify` | A likely misheard word hides what the user meant. The reply is dropped, and the avatar asks the check's question instead ("Sorry, did you say 'tad person'?") |
+| `clarify` | A likely misheard word hides what the user meant. The reply is dropped, and the avatar asks about it instead. The chat type gets the whole verdict (the words that seem wrong, and the check's own question) and asks the check's question ("Sorry, did you say 'tad person'?"), or one it writes itself: `cooperative_planning` does (below) |
 
 The reply's own plans (its thinking look) wait for the verdict, so the avatar
 keeps listening while the check runs. The verdict is a union told apart by
@@ -365,6 +365,15 @@ chat's state can be a function instead, called each time the check runs
 | `map_task` | 2.0 s | A direction that breaks off before where it stops isn't finished. The misheard check gets every landmark name on either map, asks about a near-miss name even when it is easy to guess (the turn is read in code, which only knows exact names), and never treats a name the avatar's map lacks as misheard |
 | `cooperative_planning` | 2.0 s | A list of options or a proposal that breaks off isn't finished. The misheard check gets what is being planned, its items, and the ideas on the table as each check runs, so a slip that sounds like one of them is read as that idea, and a question about a word names the idea it likely was |
 
+`cooperative_planning` writes its own question about misheard words, with one more
+planning call (`planning_api.clarify`, about half a second). The question says back
+what the user seems to mean, with the flagged words read as the check guessed ("Sorry,
+did you say you'd rather not take the exit row?"), so their yes or no settles what
+they meant, not just the word. A question about the word alone ("did you mean Oak
+Avenue?") let a "yes" that only confirmed the name be taken as agreeing to that idea,
+even when the user had just turned it down. If the call fails, the avatar asks the
+check's own question instead (a specified fallback; the failure is logged once).
+
 Verdicts are only logged for now; the research event log will record them once
 it exists. The check's call and any hold show in the reply's timing
 (`ChatMessage.timing`, `services/reply_timing.py`).
@@ -377,7 +386,8 @@ self.cues         = [QuietPrompt(self), self.backchannels]
 self.reply_gate   = ReplyGate(self, checks=(TurnEndCheck(self, ELICITATION_TURN_END_NOTES), MisheardCheck(self)), backchannels=self.backchannels, hold_sec=ELICITATION_HOLD_SEC)
 self.features     = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
 
-# In generate, after any scripted turns (`_reply` is the chat type's own reply, `_clarify` its outcome for a question)
+# In generate, after any scripted turns (`_reply` is the chat type's own reply; `_clarify` is awaited with the
+# check's verdict, and returns the outcome for its question about the misheard words)
 return await self.reply_gate.run(attempt, self._reply, self._clarify)
 ```
 

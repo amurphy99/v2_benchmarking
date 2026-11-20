@@ -3,9 +3,11 @@ Structured LLM client for the cooperative planning calls.
 --------------------------------------------------------------------------------
 `backend.chat_app.websocket.harnesses.cooperative_planning.planning_api`
 
-Each method is one call a pipeline makes (`pipelines.py`). One client is shared
-by every planning chat (`get_planning_api`), and building it does not contact the
-endpoint. Each call's temperature and thinking switch are in `config.py`.
+Each method is one call a pipeline makes (`pipelines.py`), or the question the
+harness asks instead of a reply about words the reply check thinks were misheard
+(`clarify`). One client is shared by every planning chat (`get_planning_api`),
+and building it does not contact the endpoint. Each call's temperature and
+thinking switch are in `config.py`.
 
 """
 from __future__ import annotations
@@ -15,10 +17,11 @@ from typing     import TYPE_CHECKING
 from ....services.llm.structured_api import StructuredAPI
 from    .config                      import (
     PLANNING_TIMEOUT_SEC, PLANNING_MAX_RETRIES, PLANNING_RETRY_DELAY_SEC,
-    PLANNING_TRACK_TEMP, PLANNING_REPLY_TEMP, PLANNING_COMBINED_TEMP,
-    PLANNING_TRACK_THINKING, PLANNING_REPLY_THINKING, PLANNING_COMBINED_THINKING,
+    PLANNING_TRACK_TEMP, PLANNING_REPLY_TEMP, PLANNING_COMBINED_TEMP, PLANNING_CLARIFY_TEMP,
+    PLANNING_TRACK_THINKING, PLANNING_REPLY_THINKING, PLANNING_COMBINED_THINKING, PLANNING_CLARIFY_THINKING,
 )
-from    .prompts                     import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages
+from    .prompts                     import CLARIFY_TASK, COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages
+from    .response_models             import ClarifyingQuestion
 
 if TYPE_CHECKING:
     from .pipelines       import PlanningTurn
@@ -99,6 +102,21 @@ class PlanningAPI(StructuredAPI):
             messages       = build_messages(TRACK_EXCHANGE_TASK, turn.scenario, turn.state, [*turn.history, {"role": "assistant", "content": reply}], None),
             temperature    = PLANNING_TRACK_TEMP,
             thinking       = PLANNING_TRACK_THINKING,
+        )
+
+    # Ask about words the reply check thinks were misheard, saying back what the user seems to mean
+    async def clarify(
+        self,
+        turn           : PlanningTurn,  # The turn the check flagged (its history ends with the user's message)
+        misheard       : str,           # The words the check thinks were misheard
+        check_question : str,           # The question the check would have asked
+    ) -> ClarifyingQuestion:
+        return await self._request(
+            label          = "clarify",
+            response_model = ClarifyingQuestion,
+            messages       = build_messages(CLARIFY_TASK.format(misheard=misheard, check_question=check_question), turn.scenario, turn.state, turn.history, None),
+            temperature    = PLANNING_CLARIFY_TEMP,
+            thinking       = PLANNING_CLARIFY_THINKING,
         )
 
 

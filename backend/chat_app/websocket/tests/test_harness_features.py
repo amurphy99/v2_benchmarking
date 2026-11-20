@@ -100,9 +100,9 @@ class StubReply:
             self.cancelled = True
             raise
 
-# The chat type's outcome for a clarifying question
-def clarify(message: str) -> ResponseOutcome:
-    return ResponseOutcome(message=message)
+# The chat type's question about misheard words (here, the check's own)
+async def clarify(verdict: Clarify) -> ResponseOutcome:
+    return ResponseOutcome(message=verdict.message)
 
 # A chat in one condition, on a connection that records what it is sent
 def make_harness(condition: str = "cues") -> SimpleNamespace:

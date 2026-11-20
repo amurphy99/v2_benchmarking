@@ -23,7 +23,10 @@ scenario's closing line.
 Every reply to finished speech goes through the reply gate
 (`features/reply_gate/`), which holds it while the user seems mid-thought, or
 asks about a likely misheard word instead, in the conditions those checks run
-in.
+in. A planning call of its own writes that question (`planning_api.clarify`):
+it says back what the user seems to mean, with the flagged words read as the
+avatar guesses, so their yes or no settles what they meant, not just the word.
+If that call fails, the check's own question goes out instead.
 
 With the `cues` condition the avatar holds its own card, reads it over while it
 works out each reply, every reply carries an avatar plan for the behavior it
@@ -68,11 +71,12 @@ from    .response_models             import models_for_scenario
 from    .scenarios                   import load_scenario
 
 if TYPE_CHECKING:
-    from ...consumers.consumers import ChatConsumer
-    from  ..base                import RevealView
-    from  ..features.intro.flow import IntroState
-    from   .pipelines           import PlanningReply, ProposedChanges
-    from   .response_models     import Behavior
+    from ...consumers.consumers                 import ChatConsumer
+    from  ..base                                import RevealView
+    from  ..features.intro.flow                 import IntroState
+    from  ..features.reply_gate.response_models import Clarify
+    from   .pipelines                           import PlanningReply, ProposedChanges
+    from   .response_models                     import Behavior, ClarifyingQuestion
 
 # Scenarios a client can pick with `variant` (each one is `scenarios/<variant>.json`)
 PLANNING_VARIANTS = ("dinner_party", "day_trip", "birthday_party", "movie_night", "hotel_room", "weekend_activity", "club_event", "house_party", "apartment_hunt", "camping_trip", "flight_rebooking")
@@ -166,7 +170,7 @@ class CooperativePlanningHarness(ChatHarness):
         if (not attempt.user_text) and self.state.all_agreed: return self._read_back()
 
         # The reply waits while the user seems mid-thought, or gives way to a question about a misheard word
-        return await self.reply_gate.run(attempt, partial(self._reply, intro=intro), self._clarify)
+        return await self.reply_gate.run(attempt, partial(self._reply, intro=intro), partial(self._clarify, attempt))
 
     # Answer through the pipeline and propose the plan it leaves (the intro over, if it handed on)
     async def _reply(self, attempt: TurnAttempt, intro: IntroState | None) -> PlanningOutcome:
@@ -200,9 +204,18 @@ class CooperativePlanningHarness(ChatHarness):
     def _read_back(self) -> PlanningOutcome:
         return self._outcome(recap_line(self.scenario, self.state), "glance_at_card", None, replace(self.state, stage="final_check"), ())
 
-    # Ask about a word the reply check thinks was misheard, head tilted (the plan stays as it was)
-    def _clarify(self, message: str) -> PlanningOutcome:
-        return self._outcome(message, "curious", None, self.state, ())
+    # Ask about words the reply check thinks were misheard, saying back what the user seems to mean
+    # (head tilted; the plan stays as it was, and a failed call asks the check's own question)
+    async def _clarify(self, attempt: TurnAttempt, verdict: Clarify) -> PlanningOutcome:
+        started = time.monotonic()
+        turn    = PlanningTurn(self.scenario, self.models, self.state, prepare_LLM_messages(attempt.context), nudge=False)
+        try: question = await get_planning_api().clarify(turn, verdict.misheard, verdict.message)
+        except PlanningAPIError:
+            logger.exception(f"{LLM_MAIN}[Planning] The clarifying question failed; asking the reply check's own question.{RESET}")
+            return self._outcome(verdict.message, "curious", None, self.state, ())
+
+        _log_clarify(question, time.monotonic() - started)
+        return self._outcome(question.message, "curious", None, self.state, ())
 
     # The outcome for a reply: the plan it proposes, its avatar plan (with cues), and the chat's end once approved
     def _outcome(
@@ -279,6 +292,13 @@ def _log_turn(reply: PlanningReply, results: tuple[ChangeResult, ...], state: Pl
         f"    {LLM_MAIN}{BOLD}Behavior: {UNBOLD}{reply.behavior} (about: {reply.about}){RESET}\n"
         f"{_changes_lines(results)}"
         f"    {LLM_MAIN}{BOLD}Card:     {UNBOLD}{_card_line(state)}{RESET}"
+    )
+
+# Log what the avatar took the user to mean when it asked about misheard words, and the call's time
+def _log_clarify(question: ClarifyingQuestion, elapsed_sec: float) -> None:
+    logger.info(
+        f"{LLM_MAIN}[Planning] Clarifying question written in ({BOLD}{elapsed_sec:.2f}s{UNBOLD}):{RESET}\n"
+        f"    {LLM_MAIN}{BOLD}Understood: {UNBOLD}{question.understood}{RESET}"
     )
 
 # Log the changes worked out after a reply went out (reply_then_track)

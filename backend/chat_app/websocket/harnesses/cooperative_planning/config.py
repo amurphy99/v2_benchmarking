@@ -13,12 +13,14 @@ PLANNING_RETRY_DELAY_SEC = 0.50     # Delay between planning request attempts
 PLANNING_TRACK_TEMP      = 0.10     # Temperature for working out how a turn changes the plan
 PLANNING_REPLY_TEMP      = 0.60     # Temperature for the spoken reply
 PLANNING_COMBINED_TEMP   = 0.40     # Temperature for the single call that does both
+PLANNING_CLARIFY_TEMP    = 0.40     # Temperature for the question about words the reply check thinks were misheard
 PLANNING_HOLD_SEC        = 2.00     # How long a reply waits while the user seems mid-thought (`features/reply_gate/`)
 
 # Which planning calls let the model think first (slower)
 PLANNING_TRACK_THINKING    = False  # Working out how a turn changes the plan
 PLANNING_REPLY_THINKING    = False  # The spoken reply
 PLANNING_COMBINED_THINKING = False  # The single call that does both
+PLANNING_CLARIFY_THINKING  = False  # The question about words the reply check thinks were misheard
 
 # How each turn is answered: "track_then_reply", "single_call", or "reply_then_track" (`pipelines.py`)
 PLANNING_PIPELINE = "single_call"

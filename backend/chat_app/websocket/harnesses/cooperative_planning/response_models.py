@@ -12,7 +12,9 @@ reveals its own constraints.
 
 The responses are built once per scenario (`models_for_scenario`), with every
 item and constraint limited to that scenario's ids, so the schema the endpoint
-decodes against only allows names the plan has.
+decodes against only allows names the plan has. The question asked about words
+the reply check thinks were misheard (`ClarifyingQuestion`) changes nothing on
+the plan, so it is the same for every scenario.
 
 NOTE: In instructor's JSON_SCHEMA mode the model never sees the field
       descriptions; the schema only constrains its output. The prompts
@@ -21,11 +23,11 @@ NOTE: In instructor's JSON_SCHEMA mode the model never sees the field
 """
 from __future__  import annotations
 from dataclasses import dataclass
-from typing      import Annotated, Literal, Union
+from typing      import Annotated, Literal, Self, Union
 
 import functools
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 # What the avatar does with its card while it says a reply (`behaviors.py`)
 CardBehavior = Literal["glance_at_card", "check_card"]
@@ -138,6 +140,18 @@ class CombinedTurn(_Response):
     behavior       : Behavior
     about          : str | None
     message        : Message
+
+# The question asked instead of a reply about words the reply check thinks were misheard
+# (what the avatar takes the user to mean comes first, so the question can say it back)
+class ClarifyingQuestion(_Response):
+    understood : Basis    # What the user seems to mean, with the flagged words read as the avatar guesses
+    message    : Message  # The question that says it back to them
+
+    # It hands the turn back, so it must be a question
+    @model_validator(mode="after")
+    def asks_a_question(self) -> Self:
+        if not self.message.endswith("?"): raise ValueError("the message must end with a question")
+        return self
 
 
 # ================================================================================

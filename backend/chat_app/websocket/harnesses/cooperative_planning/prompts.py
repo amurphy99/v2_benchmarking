@@ -15,7 +15,9 @@ planning's own words where the catalog's don't fit (`harnesses/reactions.py`),
 or one of the avatar's two looks at its card. A reply can also carry a directive
 from code: nudge a participant who has gone quiet. Once every item is agreed,
 code reads the plan back itself, with a fixed recap question (`recap_line`)
-after the reply's own words.
+after the reply's own words. When the reply check thinks words were misheard,
+the avatar's question about them says back what the user seems to mean
+(`CLARIFY_TASK`), so their yes or no settles what they meant, not just a word.
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
 whether the user is done, and, as each check runs, what is being planned and the
@@ -183,6 +185,20 @@ then your reply to it (the last message). Fill in:
 {CHANGES_FIELD}
 {USER_ONLY_FIELD}
 {AVATAR_ONLY_FIELD}
+""".strip()
+
+# The question asked instead of a reply when the reply check thinks words were misheard
+# (`misheard` is the words it flagged, `check_question` the question it would have asked)
+CLARIFY_TASK = """
+Don't reply to the user's latest message yet. A quick check thinks the speech recognizer misheard
+part of it, the words "{misheard}", and would have asked: "{check_question}". Ask them yourself
+instead, so that their answer settles what they meant, not just the word. Fill in:
+- understood: what you take their latest message to tell you, in a few words, with those words
+  read as you think they meant them.
+- message: one short, friendly question that says that back to them, so a yes or a no answers it
+  ("Sorry, did you say you'd rather skip the picnic because of the rain?", "Sorry, did you say
+  the pizza place works for you?"). Never ask about the word alone, and never blame them or the
+  recognizer.
 """.strip()
 
 # What each directive asks of the reply (`label` is the first open item's)

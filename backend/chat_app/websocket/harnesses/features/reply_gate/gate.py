@@ -18,7 +18,9 @@ long silence. The verdict decides what happens:
   the user stays quiet, the reply (which kept working meanwhile) goes out when
   the hold ends, and the hold shows in its timing (`services/step_timing.py`).
 * `clarify`: a likely misheard word hides what the user meant. The reply is
-  dropped, and the avatar asks the check's short question instead.
+  dropped, and the avatar asks about it instead: the chat type gets the whole
+  verdict (the words that seem wrong, and the check's own short question), and
+  either asks the check's question or writes one of its own.
 
 Plans the reply makes before the verdict (its thinking look) are held back until
 it may go out, so the avatar keeps listening while the check runs. A `reply_now`
@@ -102,7 +104,7 @@ class ReplyGate:
         self,
         attempt : TurnAttempt,                                          # The reply attempt
         reply   : Callable[[TurnAttempt], Awaitable[ResponseOutcome]],  # The chat type's own reply to the turn
-        clarify : Callable[[str], ResponseOutcome],                     # The chat type's outcome for a clarifying question
+        clarify : Callable[[Clarify], Awaitable[ResponseOutcome]],      # The chat type's question about the misheard words
     ) -> ResponseOutcome:
         # Only a reply to finished speech is checked
         checks = tuple(check for check in self.checks if check.on)
@@ -118,7 +120,7 @@ class ReplyGate:
             # A likely misheard word: drop the reply, and ask about it instead
             if verdict.next_step == "clarify":
                 replying.cancel()
-                return clarify(verdict.message)
+                return await clarify(verdict)
 
             # Mid-thought: a sign of listening, then the hold (newer speech cancels the whole attempt here)
             if verdict.next_step == "wait":
