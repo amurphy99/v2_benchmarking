@@ -69,9 +69,10 @@ const CHAT_CONFIG_BUTTON_CLASS = "flex items-center gap-2 rounded-full! border-2
 // The page's choices before the participant changes any (the avatar comes from their settings)
 const CHAT_DEFAULT_CONFIG: Omit<ChatConfig, "avatar"> = {mode: CHAT_MODES[0], variant: CHAT_MODES[0].variants[0]?.value ?? null, cues: true, subtitles: true};
 
-// How wide the page is, and how its two columns split, by what sits beside the avatar (a map needs the most room)
+// How wide the page is, and how its two columns split, by what sits beside the avatar (a map needs the most room;
+// with nothing beside it, the page is as wide as with a card, so the controls and the debug pills have room)
 const CHAT_PANEL_LAYOUT: Record<ChatPanel, {page: string; columns: string}> = {
-    none : {page: "max-w-3xl", columns: ""                                            },
+    none : {page: "max-w-6xl", columns: ""                                            },
     card : {page: "max-w-6xl", columns: "lg:grid-cols-[minmax(0,1fr)_24rem]"          },
     map  : {page: "max-w-7xl", columns: "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"},
 };
