@@ -16,16 +16,16 @@ import      { getAvatarEntry, hasAvatarEntry                  } from "@/pages/co
 import      { AdminSwitch                                     } from "../ui/AdminSwitch";
 
 // The settings a participant card edits, as the backend names them
-export type ParticipantDraft = Pick<AdminProfile, "save_audio_by_default" | "run_biomarkers" | "placeholder_flag" | "language" | "modelChoice">;
+export type ParticipantDraft = Pick<AdminProfile, "save_audio_by_default" | "run_biomarkers" | "debug_mode" | "language" | "modelChoice">;
 
 // One yes/no setting: the draft field its switch changes, and the text beside the switch
-type ParticipantSwitch = {key: "save_audio_by_default" | "run_biomarkers" | "placeholder_flag"; label: string; hint: string};
+type ParticipantSwitch = {key: "save_audio_by_default" | "run_biomarkers" | "debug_mode"; label: string; hint: string};
 
 // Yes/no settings, in the order the card shows them
 const PARTICIPANT_SWITCHES: ParticipantSwitch[] = [
     {key: "save_audio_by_default", label: "Save chat audio automatically", hint: "Each new chat starts with this. You can still change it during a live chat."},
     {key: "run_biomarkers",        label: "Run biomarker analysis",        hint: "Scores their speech for biomarkers during each chat. Applies to chats that start after you save."},
-    {key: "placeholder_flag",      label: "Placeholder setting",           hint: "Not connected to anything yet. Kept free for testing a new setting."},
+    {key: "debug_mode",            label: "Debug mode",                    hint: "Their chat page shows the debug panel and live timing, and their chats are marked as debug sessions. Applies to chats that start after you save."},
 ];
 
 // Avatars that can be picked (reserved choices stay hidden until their avatar is built)

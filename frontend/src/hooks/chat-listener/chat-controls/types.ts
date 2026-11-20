@@ -10,6 +10,7 @@ export type ControlState = {
     listening         : ListeningState;
     response_mode     : ResponseMode;
     recording_enabled : boolean;
+    features          : Record<string, boolean>;   // The chat type's shared features by name, on or off ({} for none; `set_feature` switches one)
 };
 
 // Process backend "ack" responses
@@ -32,7 +33,8 @@ export type PendingKey =
     | "resume_and_respond"
     | "repeat_last"
     | "send_custom"
-    | "set_recording";
+    | "set_recording"
+    | "set_feature";
 
 
 // For passing methods between files

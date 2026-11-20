@@ -42,9 +42,9 @@ export function ParticipantCard({participant}: {
     const lastChat = (participant.last_chat_at === null) ? null : new Date(participant.last_chat_at);
 
     // On/off settings shown as pills
-    const recordOn      = participant.save_audio_by_default;
-    const biomarkersOn  = participant.run_biomarkers;
-    const placeholderOn = participant.placeholder_flag;
+    const recordOn     = participant.save_audio_by_default;
+    const biomarkersOn = participant.run_biomarkers;
+    const debugOn      = participant.debug_mode;
 
     // --------------------------------------------------------------------------------
     // Draft
@@ -59,7 +59,7 @@ export function ParticipantCard({participant}: {
     const changed =
         (draft.save_audio_by_default !== saved.save_audio_by_default) ||
         (draft.run_biomarkers        !== saved.run_biomarkers)        ||
-        (draft.placeholder_flag      !== saved.placeholder_flag)      ||
+        (draft.debug_mode            !== saved.debug_mode)            ||
         (draft.language              !== saved.language)              ||
         (draft.modelChoice           !== saved.modelChoice)           ||
         (password                    !== "");
@@ -107,11 +107,11 @@ export function ParticipantCard({participant}: {
 
                     {/* Current settings */}
                     <div className="flex gap-2 flex-wrap">
-                        <Pill label="Avatar"      value={getAvatarEntry(participant.modelChoice).label} />
-                        <Pill label="Language"    value={languageLabel(participant.language)} />
-                        <Pill label="Recording"   value={recordOn      ? "On" : "Off"} variant={recordOn      ? "accent" : "offline"} dot />
-                        <Pill label="Biomarkers"  value={biomarkersOn  ? "On" : "Off"} variant={biomarkersOn  ? "accent" : "offline"} dot />
-                        <Pill label="Placeholder" value={placeholderOn ? "On" : "Off"} variant={placeholderOn ? "accent" : "offline"} dot />
+                        <Pill label="Avatar"     value={getAvatarEntry(participant.modelChoice).label} />
+                        <Pill label="Language"   value={languageLabel(participant.language)} />
+                        <Pill label="Recording"  value={recordOn     ? "On" : "Off"} variant={recordOn     ? "accent" : "offline"} dot />
+                        <Pill label="Biomarkers" value={biomarkersOn ? "On" : "Off"} variant={biomarkersOn ? "accent" : "offline"} dot />
+                        <Pill label="Debug mode" value={debugOn      ? "On" : "Off"} variant={debugOn      ? "accent" : "offline"} dot />
                     </div>
                 </>
             )}
@@ -125,7 +125,7 @@ function savedSettings(participant: AdminProfile): ParticipantDraft {
     return {
         save_audio_by_default : participant.save_audio_by_default,
         run_biomarkers        : participant.run_biomarkers,
-        placeholder_flag      : participant.placeholder_flag,
+        debug_mode            : participant.debug_mode,
         language              : participant.language,
         modelChoice           : participant.modelChoice,
     };

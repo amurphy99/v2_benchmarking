@@ -29,3 +29,7 @@ when `USE_LLM=false`.
 a set number of times before raising its subclass's own error type. A request can also ask the
 endpoint to skip the model's thinking (`thinking=False`). The `active_listening` and `map_task`
 API clients subclass it.
+
+Both `StructuredAPI._request` and `get_LLM_response` time each call, retries included, under
+its label (`services/step_timing.py`). Inside a reply attempt the call becomes a step of that
+reply's timing (`websocket/services/reply_timing.py`); outside one, nothing is kept.

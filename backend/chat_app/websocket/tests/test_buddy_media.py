@@ -194,7 +194,7 @@ class InputModeTests(BuddyChatTestCase):
         await self.close_all(primary)
 
         self.assertEqual(set(ack),          {"id", "name", "ok", "message", "state"})
-        self.assertEqual(set(ack["state"]), {"listening", "response_mode", "recording_enabled"})
+        self.assertEqual(set(ack["state"]), {"listening", "response_mode", "recording_enabled", "features"})
 
     # A stale revision changes nothing; a change increments; asking for the current mode keeps the revision
     async def test_revision_rules(self) -> None:

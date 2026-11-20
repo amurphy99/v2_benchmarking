@@ -61,7 +61,7 @@ class Profile(models.Model):
     # Configurable fields that change how the system works for users
     save_audio_by_default = models.BooleanField(default=False)  # Toggle automatic audio saving
     run_biomarkers        = models.BooleanField(default=False)  # Toggle speech biomarker analysis for chats
-    placeholder_flag      = models.BooleanField(default=False)  # Placeholder switch/flag that can be used for testing
+    debug_mode            = models.BooleanField(default=False)  # Toggle the chat page's debug mode (its chats are marked as debug sessions)
     language = models.CharField(max_length=16, choices=LANGUAGE_CHOICES, default="en-US")  # TODO: Select the chat's STT, LLM, and TTS language
 
 
@@ -140,6 +140,10 @@ class ChatSession(models.Model):
     chat_type = models.CharField(max_length=32, blank=True, default="")
     condition = models.CharField(max_length=32, blank=True, default="")
     variant   = models.CharField(max_length=32, blank=True, default="")
+
+    # Started in debug mode, from the profile's switch (its features can be switched partway
+    # through, so what ran may differ from its condition; each reply's timing says what was on)
+    debug_mode = models.BooleanField(default=False)
 
     # Private task materials and the last committed task state (admin history only)
     task_snapshot = models.JSONField(null=True, blank=True, default=None)
@@ -258,6 +262,10 @@ class ChatMessage(models.Model):
     # Utterance start and end timestamps (see docstring for more)
     start_ts = models.DateTimeField(**init_args)
     end_ts   = models.DateTimeField(**init_args)
+
+    # How long an assistant reply took, stage by stage, and the features switched on for it
+    # (`websocket/services/reply_timing.py`; null for user messages and supplied replies)
+    timing = models.JSONField(null=True, blank=True, default=None)
 
     class Meta:
         ordering = ["ts", "id"]

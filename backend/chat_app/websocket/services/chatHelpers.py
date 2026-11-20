@@ -34,12 +34,14 @@ logger = logging.getLogger(__name__)
 from ...services                      import logging_utils as lu
 from ...services.db_services          import ChatService
 from ...services.logging_utils        import RESET, BOLD, UNBOLD, ORANGE
+from ...services.step_timing          import collect_steps
 from  ..biomarkers.callbacks          import process_audio_biomarkers, process_text_biomarkers
 from  ..consumers.processing.messages import commit_chat_exchange, commit_chat_message
 from  ..consumers.processing.stream   import set_streaming_active
 from  ..harnesses.avatar              import send_avatar_plan, send_mood
 from  ..harnesses.base                import TurnAttempt
 from   .bg_helpers                    import fire_and_log, trace_await
+from   .reply_timing                  import start_reply_timing, track_reply_timing
 from   .speech.stt.audio_queue        import AudioBarrier
 from   .speech.tts.tts_streaming      import synthesize_and_stream_tts
 
@@ -50,6 +52,7 @@ if TYPE_CHECKING:
     from  ..consumers.consumers import ChatConsumer
     from  ..harnesses.avatar    import AvatarPlan, ResponseMood
     from  ..harnesses.base      import ResponseOutcome, ResponseTrigger
+    from   .reply_timing        import ReplyTiming
 
 # Configuration constants
 REPLY_BARRIER_TIMEOUT_SEC = 2.0  # Maximum wait for Google to return (and stage) final results for the audio before `reply_now`
@@ -312,6 +315,9 @@ class ChatHandler:
         # Only a harness turn replies with nothing staged (a re-prompt, or an opening line)
         if (not combined_text.strip()) and (trigger != "harness"): return
 
+        # Time the attempt from here (its reply is saved with the record, `reply_timing.py`)
+        timing = start_reply_timing(consumer, combined_words)
+
         # Build LLM context with staged message -- without modifying 'context_buffer' yet
         temp_context = list(consumer.context_buffer)
         if staged_snapshot: temp_context.append(("user", combined_text, combined_ts))
@@ -333,11 +339,12 @@ class ChatHandler:
             # --------------------------------------------------------------------------------
             # 2) Get the reply from the chat type's harness (this is the primary cancellation window)
             # --------------------------------------------------------------------------------
-            # The harness proposes text and effects without changing the consumer
-            response_outcome = await consumer.harness.generate(attempt)
-            system_resp      = response_outcome.message
-            close_after      = response_outcome.close_after
-            system_ts        = now_ts()
+            # The harness proposes text and effects without changing the consumer (the steps it times are collected)
+            with collect_steps() as steps: response_outcome = await consumer.harness.generate(attempt)
+            timing.generated(steps)
+            system_resp = response_outcome.message
+            close_after = response_outcome.close_after
+            system_ts   = now_ts()
 
             # Once commit starts, finish it even if later speech cancels this response task
             commit_task = asyncio.create_task(
@@ -350,6 +357,7 @@ class ChatHandler:
                     system_resp,
                     system_ts,
                     response_outcome,
+                    timing,
                 ),
                 name="chat::commit_response",
             )
@@ -363,9 +371,9 @@ class ChatHandler:
             # --------------------------------------------------------------------------------
             if consumer.use_backend_TTS:
 
-                # Update the consumer state & start streaming TTS
+                # Update the consumer state & start streaming TTS (its first sentence's time joins the reply's timing)
                 consumer._tts_streaming = True
-                try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id)
+                try: await synthesize_and_stream_tts(system_resp, consumer.send, assistant_message.id, on_first_audio=timing.note_tts)
 
                 # Send "cancel_audio" to frontend if interrupted mid TTS stream
                 # TODO: I don't know if we want this to work (idea is frontend cancels speaking)
@@ -437,12 +445,13 @@ class ChatHandler:
         system_resp      : str,                      # Final assistant text selected for this response
         system_ts        : float,                    # Timestamp assigned to the assistant response
         response_outcome : ResponseOutcome,          # Harness reply, with the effects to apply once it is saved
+        timing           : ReplyTiming,              # How long the reply has taken so far (saved with it, then sent)
     ) -> ChatMessage:
         # Save the matching turn atomically, then publish it before consuming its staged prefix
         # (a harness turn with nothing staged saves only its reply)
         task_snapshot = response_outcome.task_snapshot
-        if staged_snapshot: user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts, task_snapshot=task_snapshot)
-        else:               user_msg, assistant_msg = None, await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts, task_snapshot=task_snapshot)
+        if staged_snapshot: user_msg, assistant_msg = await commit_chat_exchange(consumer, combined_text, combined_ts, system_resp, system_ts, task_snapshot=task_snapshot, timing=timing.record())
+        else:               user_msg, assistant_msg = None, await commit_chat_message(consumer, role="assistant", text=system_resp, timestamp=system_ts, task_snapshot=task_snapshot, timing=timing.record())
         consumer._staged_utterances.consume(staged_snapshot)
         consumer.last_response = system_resp
 
@@ -453,6 +462,9 @@ class ChatHandler:
         # (a plan made for this reply goes first, so its reply moments mean this reply)
         if response_outcome.avatar_plan is not None: await send_avatar_plan(consumer, response_outcome.avatar_plan)
         await consumer.send(json.dumps({"type": "llm_response", "data": system_resp, "time": system_ts, "responseId": assistant_msg.id}))
+
+        # Send the reply's timing, and keep it for the client's report that its audio started (none has gone yet)
+        track_reply_timing(consumer, assistant_msg.id, timing)
 
         # Apply the reversible stream effect after publishing its acknowledgement message
         if response_outcome.pause_listening:

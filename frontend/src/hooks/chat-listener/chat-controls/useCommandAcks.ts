@@ -69,6 +69,7 @@ export function useCommandAcks({
                     listening         : ack.state.listening         ?? s.listening,
                     response_mode     : ack.state.response_mode     ?? s.response_mode,
                     recording_enabled : ack.state.recording_enabled ?? s.recording_enabled,
+                    features          : ack.state.features          ?? s.features,
                 }));
             }
         });

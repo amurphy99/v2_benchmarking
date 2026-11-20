@@ -70,10 +70,10 @@ ELICITATION_SIGNS: tuple[dict[str, object], ...] = (
 # --------------------------------------------------------------------------------
 # Plans
 # --------------------------------------------------------------------------------
-# Session settings for the chat's condition, with the signs' sounds when they are on (None: no sounds)
-def setup_for(with_cues: bool, sounds: AvatarSounds | None) -> AvatarSetup:
+# Session settings for the chat's condition, with the signs' sounds in either (each setup replaces the last)
+def setup_for(with_cues: bool, sounds: AvatarSounds) -> AvatarSetup:
     setup = ELICITATION_SETUP_CUES if with_cues else ELICITATION_SETUP_NO_CUES
-    return setup if (sounds is None) else {**setup, "sounds": sounds}
+    return {**setup, "sounds": sounds}
 
 # Listen as the chat starts
 def start_plan() -> AvatarPlan:

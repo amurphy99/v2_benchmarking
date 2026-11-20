@@ -137,14 +137,16 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(harness.stop)
         return harness, consumer, api
 
-    # With cues the setup carries the listening sounds and the avatar starts listening; either way it asks for its own opening turn
+    # The setup carries the listening sounds either way (the signs can be switched on later), with cues the avatar
+    # starts listening, and either way it asks for its own opening turn
     async def test_start_sets_the_avatar_up_and_opens_the_chat(self) -> None:
-        for condition, frames, sounds in (("cues", ["avatar_setup", "avatar_plan"], SOUNDS), ("no_cues", ["avatar_setup"], None)):
+        for condition, frames in (("cues", ["avatar_setup", "avatar_plan"]), ("no_cues", ["avatar_setup"])):
             with self.subTest(condition):
                 harness, consumer, _ = self.make(condition)
                 await harness.start()
                 self.assertEqual([call.args[0]["type"] for call in consumer.send_json.await_args_list], frames)
-                self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"].get("sounds"), sounds)
+                self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
+                self.assertEqual({name: feature.on for name, feature in harness.features.items()}, dict.fromkeys(("backchannels", "turn_end", "misheard"), condition == "cues"))
                 consumer.request_harness_turn.assert_called_once()
 
     # Every sound a sign of listening plays at a pause is one the setup carries

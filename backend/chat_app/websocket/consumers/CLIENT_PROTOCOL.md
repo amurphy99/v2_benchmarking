@@ -7,8 +7,8 @@ actually produces today.
 
 The companion `README.md` in this directory explains the *internal* backend architecture.
 This file covers the primary-client wire format and the command/acknowledgement contract shared
-with the admin listener. Listener-only initialization, history, biomarker, and ping/pong frames
-are intentionally outside its scope. If the documentation and implementation ever disagree,
+with the admin listener. Listener-only initialization, history, and biomarker frames are
+intentionally outside its scope. If the documentation and implementation ever disagree,
 the implementation is authoritative.
 
 > **Scope note for the Buddy robot:** Buddy is a *text-only* client right now. It sends
@@ -185,7 +185,8 @@ participant through `Access`.
 ## 2. Messages the client SENDS (client -> backend)
 
 Every message is a JSON object with a top-level `"type"`. Routing lives in
-`handlers/ws_events.py:47-55`. Unknown types are logged and ignored -- no error is returned.
+`handle_receive_json` (`handlers/ws_events.py`). Unknown types are logged and ignored -- no
+error is returned.
 
 | `type` | Buddy uses it? | Purpose |
 |---|---|---|
@@ -196,6 +197,7 @@ Every message is a JSON object with a top-level `"type"`. Routing lives in
 | `audio_data`        | No      | Stream raw PCM for backend STT |
 | `overlapped_speech` | No      | Notify that the user talked over the assistant |
 | `avatar_feedback`   | No      | What happened to an avatar plan (harness chat types only, `HARNESS_PROTOCOL.md` §6) |
+| `ping`              | Optional | Time the round trip to the backend (section 2.7) |
 
 ### 2.1 `transcription` -- the main one
 
@@ -255,8 +257,8 @@ the same socket. See section 3.6.
 
 ### 2.3 Command vocabulary
 
-The full table is `COMMAND_HANDLERS` in `processing/commands.py`. All ten names are accepted
-from a primary client (the robot), not just from the admin page.
+The full table is `COMMAND_HANDLERS` in `processing/commands.py`. All eleven names are
+accepted from a primary client (the robot), not just from the admin page.
 
 | `name` | `data` body | Effect |
 |---|---|---|
@@ -269,6 +271,7 @@ from a primary client (the robot), not just from the admin page.
 | `pause_and_listen` | *(none)* | Shortcut: enters manual mode **and** cancels any response in progress. |
 | `resume_and_respond` | *(none)* | Shortcut: restores automatic mode **and** immediately replies. |
 | `set_recording` | `{"enabled": true}` | Sets whether the session audio recording is kept at the end of the chat. |
+| `set_feature` | `{"feature": "backchannels"\|"turn_end"\|"misheard", "on": false}` | Switches one of the chat type's shared features on or off for the rest of the chat (`websocket/harnesses/features/`). The features a chat type has are the keys of `state.features` (section 3.6); any other name, or a chat type with none, is rejected. |
 | `get_control_state` | *(none)* | No-op that just returns current state in the ack. Useful as a "where am I?" probe after reconnecting. |
 
 **Every state-setting command requires an explicit value.** There is no "omit the body to
@@ -346,6 +349,21 @@ sends `data` still works -- but only if it really is 16 kHz mono s16le.
 `overlapped_speech` (`{"type": "overlapped_speech"}`) just increments a counter and is not
 currently used for anything.
 
+### 2.7 `ping` (optional)
+
+Times the round trip to the backend. Send a timestamp from your own clock; the backend echoes
+it straight back in a `pong`, with its own Unix time in seconds:
+
+```json
+{"type": "ping", "client_ts": 1789500000123}
+{"type": "pong", "client_ts": 1789500000123, "server_ts": 1789500000.157}
+```
+
+The round trip is the time from sending a ping to receiving its `pong`, on your own clock
+(`server_ts` comes from a clock yours doesn't share). A ping without a numeric `client_ts` is
+dropped with a warning and gets no reply. The admin listener sends the same frame on its own
+socket.
+
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Messages you receive                                                             -->
 <!-- -------------------------------------------------------------------------------- -->
@@ -364,6 +382,8 @@ currently used for anything.
 | `audio_chunk`      | No (webapp only) | Streamed TTS audio |
 | `cancel_audio`     | No (webapp only) | Discard buffered TTS audio |
 | `avatar_setup`, `avatar_plan`, `task_card` | No (harness chat types only) | Drive a capable avatar, and show the participant's task card (`HARNESS_PROTOCOL.md`) |
+| `pong`             | Only if you ping | Echo of your `ping` (section 2.7) |
+| `reply_timing`, `control_state` | No (debug mode only) | How long each reply took, and control state an admin's command changed (section 3.9) |
 
 ### 3.1 `robot_action` -- emotions and animations
 
@@ -513,7 +533,8 @@ Every command you send produces exactly one of these, on the same socket
     "state"  : {
       "listening"        : "active",
       "response_mode"    : "automatic",
-      "recording_enabled": false
+      "recording_enabled": false,
+      "features"         : {"backchannels": true, "turn_end": true, "misheard": true}
     }
   }
 }
@@ -528,14 +549,15 @@ Every command you send produces exactly one of these, on the same socket
 | `state` | object | The **complete** control state after the command, always present -- even on failure |
 
 The `state` object is the authoritative source for control state, and it is the only place a
-primary client can read it -- `control_state` broadcasts go to admin listeners only. Its three
-fields:
+primary client can read it -- `control_state` broadcasts go to admin listeners only (and to a
+client in debug mode, section 3.9). Its four fields:
 
 | Field | Values | Meaning |
 |---|---|---|
 | `listening` | `"active"` \| `"paused"` | Whether backend STT is consuming audio. Always matches the most recent `stream_status`. |
 | `response_mode` | `"automatic"` \| `"manual"` | Whether a finalized utterance triggers a reply on its own |
 | `recording_enabled` | boolean | Whether the session recording will be kept at the end of the chat |
+| `features` | object of booleans | The chat type's shared features by name, each on or off (`{}` for a chat type without any). `set_feature` switches one |
 
 Since there is no toggle-on-omit, this is what you read before sending a state-setting command
 if you want to flip something. Send `get_control_state` to resynchronize after a reconnect.
@@ -620,6 +642,57 @@ Play each chunk as it arrives, right after the audio already queued. `sequence` 
 the whole response, and only the response's final chunk has `"last": true`. `sentence` is the
 1-based piece of the response the chunk's audio came from (a sentence shorter than 24
 characters joins the next one); avatar plans time steps to it, and other clients can ignore it.
+
+### 3.9 Debug-mode messages
+
+A participant whose profile has debug mode on (`Profile.debug_mode`, switched on the admin
+Participants page) gets two more messages, so the chat page can show what the backend is
+doing. Each session that starts in debug mode is marked (`ChatSession.debug_mode`): its
+features can be switched partway through, so what ran may differ from its `condition`.
+
+`reply_timing` says how long one reply took, stage by stage. It is sent once the reply is
+saved, and again once the client reports that the reply's audio started (`tts_playback`),
+now with `tts_ms` and `delay_ms`; the later one replaces the earlier. Admin listeners get the
+same frames for every session, and the record is saved with the reply (`ChatMessage.timing`).
+
+```json
+{
+  "type": "reply_timing",
+  "data": {
+    "response_id" : 4471,
+    "stt_ms"      : 640,
+    "generate_ms" : 1980,
+    "calls"       : [{"label": "check", "at_ms": 2, "ms": 612}, {"label": "reply", "at_ms": 3, "ms": 1340}],
+    "hold_ms"     : null,
+    "tts_ms"      : 420,
+    "delay_ms"    : 3100,
+    "features"    : {"backchannels": true, "turn_end": true, "misheard": true}
+  }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `response_id` | integer | The reply's `responseId` (`llm_response`) |
+| `stt_ms` | integer or null | The user's last word ended -> the reply started, mostly Google finishing the transcript (null without word timings: a text client, or a turn the avatar started itself) |
+| `generate_ms` | integer | The chat type worked the reply out, any hold included |
+| `calls` | array | Each model call: its `label` (`check` is the reply check), when it started (`at_ms`, from the reply's start), and how long it took (`ms`). Calls can overlap, since the reply check runs beside the reply |
+| `hold_ms` | integer or null | The reply gate held the reply this long while the user seemed mid-thought (null when it didn't) |
+| `tts_ms` | integer or null | The first sentence's speech synthesized (null until then, and when the backend doesn't speak) |
+| `delay_ms` | integer or null | The user's last word ended -> the client reported the reply's audio started (null until then, and without word timings) |
+| `features` | object of booleans | The chat type's shared features, as switched for this reply |
+
+All times are milliseconds on the backend's clock. `delay_ms` is close to the silence the user
+heard: the word times count from when the audio reached the backend, and the report reaches the
+backend a network trip after the audio started, so the two one-way trips roughly cancel.
+
+`control_state` is the complete control state (section 3.6), sent when an admin's command
+changes it, so a page showing the state stays current. The client's own commands still get
+their state back in their acks.
+
+```json
+{"type": "control_state", "data": {"listening": "active", "response_mode": "automatic", "recording_enabled": false, "features": {"backchannels": false, "turn_end": true, "misheard": true}}}
+```
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Minimal client                                                                   -->
@@ -814,6 +887,10 @@ Things most likely to trip up a new client:
 | `tts_playback` validation | `consumers/processing/playback.py` |
 | `audio_data` validation | `consumers/processing/audio.py` |
 | `audio_chunk` | `websocket/services/speech/tts/tts_streaming.py` |
+| `ping` and `pong` | `consumers/handlers/ws_events.py` |
+| `set_feature` and the shared features (`features` in the control state) | `consumers/processing/commands.py`, `websocket/harnesses/features/` |
+| `reply_timing` | `websocket/services/reply_timing.py` (model calls and holds: `chat_app/services/step_timing.py`) |
+| Debug mode (`control_state` to the client, the session's mark) | `consumers/handlers/ch_events.py`, `chat_app/services/db_services.py` |
 | Mood vocabulary (`ResponseMood`) and mood send | `websocket/harnesses/avatar.py` |
 | End/pause intent phrases | `websocket/harnesses/unguided/intents.py` |
 | Admin action buttons per frontend | `frontend/src/pages/admin/FRONTEND_CAPABILITIES.md` |

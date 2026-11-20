@@ -64,13 +64,15 @@ class Backchannels(SilenceWatcher):
     (a short answer gets a reply instead) and for a gap since the last sign.
 
     The feature runs in the conditions `FEATURE_BACKCHANNELS_CONDITIONS` lists
-    (`features/config.py`). Switched off, it gives no signs and the setup carries
-    no sounds.
+    (`features/config.py`). Switched off, it gives no signs. The setup carries its
+    sounds either way, so the `set_feature` command can switch it back on partway
+    through a chat.
 
     NOTE: How often a pause is caught depends on the speech recognizer, which ends
           an utterance by its own rules. If it usually ends one before
           `THRESHOLDS_SEC` has passed, the signs at pauses will be rare.
     """
+    NAME           : str                           = "backchannels"              # Its name in `set_feature` and the control state
     SOUNDS         : dict[str, str]                = {}                          # Name a sign plays -> the words the avatar's voice says
     SIGNS          : tuple[dict[str, object], ...] = ()                          # Signs at pauses, in the order they take turns (some silent)
     GESTURES       : tuple[str, ...]               = tuple(BACKCHANNEL_GESTURES) # Gestures the reply check may pick for its sign
@@ -86,9 +88,9 @@ class Backchannels(SilenceWatcher):
         self._signs     = 0                                                       # Signs given (in each plan's id, and picking the next pause sign)
         self._last_sign : float | None = None                                     # When the last sign was given, on the monotonic clock
 
-    # The setup's sounds in the avatar's own voice (None while switched off, so the setup carries none)
-    async def sounds(self) -> AvatarSounds | None:
-        return (await synthesize_sounds(self.SOUNDS)) if self.on else None
+    # The setup's sounds in the avatar's own voice (made even while switched off, ready for a switch back on)
+    async def sounds(self) -> AvatarSounds:
+        return await synthesize_sounds(self.SOUNDS)
 
     # --------------------------------------------------------------------------------
     # Pauses in the User's Speech

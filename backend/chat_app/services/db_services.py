@@ -53,7 +53,10 @@ class ChatService:
         condition : str,   # Cue set ("" when the chat type has none)
         variant   : str,   # Task content ("" when the chat type has none)
     ) -> ChatSession:
-        """ Returns the single active ChatSession for the user or creates one if needed. """
+        """
+        Returns the single active ChatSession for the user or creates one if needed. A new
+        session starts in debug mode when the profile's switch is on.
+        """
         profile = get_profile(user)
         session, created = ChatSession.objects.select_for_update().get_or_create(
             profile   = profile,
@@ -62,6 +65,7 @@ class ChatService:
             condition = condition,
             variant   = variant,
             is_active = True,
+            defaults  = {"debug_mode": profile.debug_mode},
         )
         return session
 
@@ -214,6 +218,11 @@ class ChatService:
 
         return True
 
+    # Replace an assistant reply's timing record (once the client reports its audio started)
+    @staticmethod
+    def save_reply_timing(session_id: int, message_id: int, timing: dict[str, object]) -> None:
+        ChatMessage.objects.filter(id=message_id, session_id=session_id, role="assistant").update(timing=timing)
+
     # --------------------------------------------------------------------------------
     # Set post-chat analysis fields for the session (summary, topics, sentiment)
     # --------------------------------------------------------------------------------
@@ -308,9 +317,10 @@ class ChatService:
         start_ts      : datetime | None = None,  # Optional speech boundary
         end_ts        : datetime | None = None,  # Optional speech boundary
         task_snapshot : dict | None     = None,  # Private task state for this reply
+        timing        : dict | None     = None,  # How long this reply took (`reply_timing.py`)
     ) -> ChatMessage:
         session = ChatSession.objects.get(id=session_id)
-        message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts)
+        message = ChatMessage.objects.create(session=session, role=role, content=text, start_ts=start_ts, end_ts=end_ts, timing=timing)
         if task_snapshot is not None: ChatService.save_task_snapshot(session_id, task_snapshot)
         return message
 
@@ -323,10 +333,11 @@ class ChatService:
         assistant_text : str,                # Generated reply
         *,
         task_snapshot  : dict | None = None,  # Private task state saved with this exchange
+        timing         : dict | None = None,  # How long the reply took (`reply_timing.py`)
     ) -> tuple[ChatMessage, ChatMessage]:
         session       = ChatSession.objects.get   (id=session_id)
-        user_message  = ChatMessage.objects.create(session=session, role="user",      content=user_text     )
-        assistant_msg = ChatMessage.objects.create(session=session, role="assistant", content=assistant_text)
+        user_message  = ChatMessage.objects.create(session=session, role="user",      content=user_text                    )
+        assistant_msg = ChatMessage.objects.create(session=session, role="assistant", content=assistant_text, timing=timing)
         if task_snapshot is not None: ChatService.save_task_snapshot(session_id, task_snapshot)
         return user_message, assistant_msg
     

@@ -89,10 +89,10 @@ PLANNING_SIGNS: tuple[dict[str, object], ...] = (
 # ================================================================================
 # Setup and Standing Plans
 # ================================================================================
-# Session settings for the chat's condition, with the signs' sound when they are on (each setup replaces the last)
-def setup_for(with_cues: bool, sounds: AvatarSounds | None) -> AvatarSetup:
+# Session settings for the chat's condition, with the signs' sound in either (each setup replaces the last)
+def setup_for(with_cues: bool, sounds: AvatarSounds) -> AvatarSetup:
     setup = PLANNING_SETUP_CUES if with_cues else PLANNING_SETUP_NO_CUES
-    return setup if (sounds is None) else {**setup, "sounds": sounds}
+    return {**setup, "sounds": sounds}
 
 # Pick the card up as the chat starts, and listen
 def start_plan() -> AvatarPlan:

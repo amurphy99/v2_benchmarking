@@ -4,7 +4,7 @@ Access and validation tests for the admin participant settings endpoint.
 `backend.chat_app.tests.test_admin_profiles`
 
 Staff and caregivers change a participant's recording default, biomarker switch,
-language, and web avatar through `/api/admin/profiles/`. These tests check that staff reach every
+debug mode, language, and web avatar through `/api/admin/profiles/`. These tests check that staff reach every
 participant, a caregiver reaches only the participants linked to them, and a
 patient reaches none. They also check that a change is what the participant's
 next chat and chat page actually read, and that values outside the model
@@ -85,21 +85,28 @@ class AdminProfileSettingsTests(TestCase):
     # A staff change is what the participant's next chat and chat page read
     def test_staff_change_reaches_the_participant(self) -> None:
         self.api.force_authenticate(user=self.staff)
-        response = self.api.patch(self.detail_url, {"save_audio_by_default": True, "run_biomarkers": True, "placeholder_flag": True, "modelChoice": "talkinghead", "language": "de-DE"}, format="json")
+        response = self.api.patch(self.detail_url, {"save_audio_by_default": True, "run_biomarkers": True, "debug_mode": True, "modelChoice": "talkinghead", "language": "de-DE"}, format="json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["modelChoice"], "talkinghead")
         self.assertEqual(response.data["language"   ], "de-DE")
         self.assertTrue (response.data["save_audio_by_default"])
-        self.assertTrue (response.data["placeholder_flag"])
+        self.assertTrue (response.data["debug_mode"])
 
-        # The next chat starts with its audio set to be saved and its biomarkers running
-        next_chat = ChatSession.objects.create(profile=self.profile, source="webapp")
+        # The next chat starts with its audio set to be saved, its biomarkers running, and marked as a debug session
+        next_chat = ChatService.get_or_create_active_session(self.patient, source="webapp", chat_type="unguided", condition="", variant="")
         self.assertTrue(ChatService.get_audio_recording_default(next_chat.id))
         self.assertTrue(ChatService.get_run_biomarkers         (next_chat.id))
+        self.assertTrue(next_chat.debug_mode)
 
         # The participant's own settings (what the chat page loads) show the new avatar
         self.api.force_authenticate(user=self.patient)
         self.assertEqual(self.api.get(reverse("settings")).data["modelChoice"], "talkinghead")
+
+        # Their own profile shows debug mode, which only staff and caregivers can change
+        self.assertTrue(self.api.get(reverse("profile")).data["debug_mode"])
+        self.api.patch(reverse("profile"), {"debug_mode": False}, format="json")
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.debug_mode)
 
     # Refuse an avatar or language outside the model choices and change nothing
     def test_unknown_avatar_or_language_is_refused(self) -> None:

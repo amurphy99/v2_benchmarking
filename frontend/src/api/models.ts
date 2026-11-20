@@ -104,6 +104,7 @@ export interface Profile {
   birthDate             : string;
   locationStatus        : string;
   save_audio_by_default : boolean;
+  debug_mode            : boolean;   // Their chat page opens in debug mode (staff switch it on the admin page)
   settings              : UserSettings;
   goal                  : Goal;
 }
@@ -114,7 +115,7 @@ export interface AdminProfile {
     user                  : User;
     save_audio_by_default : boolean;             // Whether each new chat starts with its audio set to be saved
     run_biomarkers        : boolean;             // Whether their chats are scored for biomarkers (read as each chat starts)
-    placeholder_flag      : boolean;             // Spare switch that nothing reads yet
+    debug_mode            : boolean;             // Their chat page opens in debug mode, and their chats are marked as debug sessions
     language              : LanguageChoice;      // Language their chats will use (not read by the backend yet)
     modelChoice           : AvatarModelChoice;   // Avatar their web chat page shows
     chat_count            : number;              // Chats so far (demo sessions left out)
@@ -123,7 +124,7 @@ export interface AdminProfile {
 }
 
 // Settings staff and caregivers can change for one participant (any of them may be sent alone; a password only by staff)
-export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "run_biomarkers" | "placeholder_flag" | "language" | "modelChoice">> & {password?: string};
+export type UpdateAdminProfilePayload = Partial<Pick<AdminProfile, "save_audio_by_default" | "run_biomarkers" | "debug_mode" | "language" | "modelChoice">> & {password?: string};
 
 // --------------------------------------------------------------------------------
 // Admin Accounts
@@ -177,6 +178,18 @@ export interface ChatWord {
   confidence?: number | null;
 }
 
+// How long one assistant reply took, stage by stage (`ChatMessage.timing`, and the body of the live `reply_timing` frame)
+// Mirrors `ReplyTiming.record()` in backend/chat_app/websocket/services/reply_timing.py
+export interface ReplyTiming {
+  stt_ms      : number | null;                                 // The user's last word ended -> the reply started (mostly Google finishing the transcript; null without word times)
+  generate_ms : number;                                        // The chat type worked the reply out (its whole `generate`, holds included)
+  calls       : {label: string; at_ms: number; ms: number}[];  // Each model call: its label ("check" is the reply check), when it started in the reply, and how long it took
+  hold_ms     : number | null;                                 // The reply gate held the reply this long (null when it didn't)
+  tts_ms      : number | null;                                 // The first sentence's speech synthesized (null until then, and when the backend doesn't speak)
+  delay_ms    : number | null;                                 // The user's last word ended -> the client reported the reply's audio started (null until then)
+  features    : Record<string, boolean>;                       // The chat type's shared features, as switched for this reply
+}
+
 export interface ChatMessage {
   id         : number;
   role       : ChatRole;
@@ -184,6 +197,7 @@ export interface ChatMessage {
   ts         : string;
   start_ts ? : string | null;
   end_ts   ? : string | null;
+  timing   ? : ReplyTiming | null;   // Assistant replies only (null for supplied replies and before timing was saved)
   words    ? : ChatWord[];
 }
 
@@ -257,6 +271,7 @@ export interface ChatSession {
   chat_type     : string;          // Harness that ran ("" on sessions from before chat types were recorded)
   condition     : string;          // Its cue set ("" for none)
   variant       : string;          // Its task content ("" for none)
+  debug_mode    : boolean;         // Started in debug mode (its features may have been switched partway through)
 
   messages        : ChatMessage[];
   biomarkers      : ChatBiomarkerScore[];

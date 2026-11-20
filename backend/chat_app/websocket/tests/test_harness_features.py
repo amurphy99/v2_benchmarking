@@ -18,6 +18,7 @@ import asyncio, unittest
 from pydantic import ValidationError
 
 # From this project
+from chat_app.services.step_timing                                    import collect_steps
 from chat_app.websocket.harnesses.base                                import FinalUtterance, InterimSpeech, ResponseOutcome, TurnAttempt
 from chat_app.websocket.harnesses.features.backchannels.config        import BACKCHANNEL_MIN_WORDS, BACKCHANNEL_PAUSE_SEC
 from chat_app.websocket.harnesses.features.backchannels.cue           import BACKCHANNEL_NOD, BACKCHANNEL_TILT, Backchannels, listening_sound
@@ -160,13 +161,13 @@ class BackchannelTests(unittest.IsolatedAsyncioTestCase):
         consumer.send_json.assert_not_awaited()
         self.assertIsNone(signs.chosen_sign("mm_hm", "nod"))
 
-    # Switched off (no cues), it gives no signs and the setup gets no sounds; switched on partway through, it gives them
-    async def test_the_switch_turns_the_signs_and_sounds_off(self) -> None:
+    # Switched off (no cues), it gives no signs, though the setup still gets its sounds; switched on partway through, it gives them
+    async def test_the_switch_turns_the_signs_off_but_keeps_the_sounds(self) -> None:
         signs, consumer = self.make("no_cues")
         signs.on_interim(interim(LONG_ENOUGH))
         signs.on_silence(BACKCHANNEL_PAUSE_SEC)
-        with patch(f"{BACKCHANNELS}.synthesize_sounds", AsyncMock()) as synthesize: self.assertIsNone(await signs.sounds())
-        synthesize.assert_not_awaited()
+        with patch(f"{BACKCHANNELS}.synthesize_sounds", AsyncMock(return_value={"mm_hm": "clip"})) as synthesize: self.assertEqual(await signs.sounds(), {"mm_hm": "clip"})
+        synthesize.assert_awaited_once_with(SOUNDS)
         self.assertIsNone(signs.chosen_sign("mm_hm", "nod"))
         await asyncio.sleep(0)
         consumer.send_json.assert_not_awaited()
@@ -204,9 +205,13 @@ class ReplyGateTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_mid_thought_turn_gets_a_sign_then_the_reply_after_the_hold(self) -> None:
         gate, _ = self.make(MID_SOUND, hold_sec=0.05)
         attempt = make_attempt()
-        with self.assertLogs(GATE, level="INFO"): self.assertIs(await gate.run(attempt, StubReply(), clarify), REPLY)
+        with self.assertLogs(GATE, level="INFO"), collect_steps() as steps: self.assertIs(await gate.run(attempt, StubReply(), clarify), REPLY)
         plans = [call.args[0]["steps"] for call in attempt.publish_plan.await_args_list]
         self.assertEqual(plans, [[{"move": BACKCHANNEL_NOD, "sound": listening_sound("mm_hm")}], THINKING["steps"]])
+
+        # The hold is a step of the reply's timing
+        self.assertEqual([(step.label, step.kind) for step in steps], [("hold", "hold")])
+        self.assertGreaterEqual(steps[0].ended - steps[0].started, 0.05)
 
     # Newer speech during the hold cancels the attempt, and the reply working beside it, before its plans go out
     async def test_newer_speech_during_the_hold_cancels_the_reply(self) -> None:

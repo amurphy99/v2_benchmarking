@@ -14,7 +14,7 @@ its verdict decides what happens:
   cancels the attempt during the hold, just as it cancels any automatic reply,
   and the staged words are answered later along with the rest of the turn. If
   the user stays quiet, the reply (which kept working meanwhile) goes out when
-  the hold ends.
+  the hold ends, and the hold shows in its timing (`services/step_timing.py`).
 * `clarify`: a likely misheard word hides what the user meant. The reply is
   dropped, and the avatar asks the check's short question instead.
 
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # From this project
 from .....services.llm.chat_utilities import prepare_LLM_messages
 from .....services.logging_utils      import RESET, BOLD, UNBOLD, LLM_MAIN, ROBO_MSG, USER_MSG
+from .....services.step_timing        import timed_step
 from   ..config                       import FEATURE_MISHEARD_CONDITIONS, FEATURE_TURN_END_CONDITIONS
 from    .prompts                      import build_check_messages
 from    .reply_check_api              import ReplyCheckAPIError, get_reply_check_api
@@ -113,7 +114,7 @@ class ReplyGate:
             # Mid-thought: a sign of listening, then the hold (newer speech cancels the whole attempt here)
             if verdict.next_step == "wait":
                 await self._give_sign(attempt, verdict)
-                await asyncio.sleep(self.hold_sec)
+                with timed_step("hold", "hold"): await asyncio.sleep(self.hold_sec)
                 logger.info(f"{LLM_MAIN}[Reply check] The hold ended without more speech, so the reply goes out.{RESET}")
 
             # The reply goes out, after the plans it made meanwhile

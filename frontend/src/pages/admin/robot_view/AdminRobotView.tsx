@@ -59,7 +59,7 @@ export function AdminRobotView(): ReactElement {
     // Chat control state, and the input mode the robot's chat socket reports
     const [streamStatus, setStreamStatus] = useState<StreamStatus>("active");
     const [inputMode,    setInputMode   ] = useState<InputModeState | null>(null);
-    const [controlState, setControlState] = useState<ControlState>({listening: "active", response_mode: "automatic", recording_enabled: false});
+    const [controlState, setControlState] = useState<ControlState>({listening: "active", response_mode: "automatic", recording_enabled: false, features: {}});
 
     // Ack routing (useCommandAcks registers a handler; useChatListener calls it)
     const ackHandlerRef      = useRef<(ack: CommandAck) => void>((): void => {});
@@ -83,7 +83,7 @@ export function AdminRobotView(): ReactElement {
         onStreamStatus    : (st ) => { setStreamStatus(st.status); },
         onRecordingStatus : (st ) => { setControlState((s: ControlState): ControlState => ({...s, recording_enabled: st.enabled})); },
         onControlState    : (st ) => {
-            setControlState({listening: st.listening, response_mode: st.response_mode, recording_enabled: st.recording_enabled});
+            setControlState({listening: st.listening, response_mode: st.response_mode, recording_enabled: st.recording_enabled, features: st.features});
 
             // Only the robot's own commands carry the input mode (after its capability probe)
             if ((typeof st.input_mode === "string") && (typeof st.input_mode_revision === "number")) setInputMode({mode: st.input_mode, revision: st.input_mode_revision});

@@ -46,7 +46,10 @@ async def handle_ws_command(consumer: ChatConsumer, event: dict) -> None:
     else: logger.warning(f"{CC_MAIN} Command has no reply channel: {CC_H}{payload}{CC_R}.{RESET}")
 
     # Update **ALL** involved parties about the new control state (if it was changed by the command)
-    if ack["ok"]: await consumer._broadcast_control_state(ack["state"])
+    # (a client in debug mode shows the state too, so it hears about a listener's change)
+    if ack["ok"]:
+        await consumer._broadcast_control_state(ack["state"])
+        if consumer.debug_mode: await consumer.send_json({"type": "control_state", "data": ack["state"]})
 
 
 # --------------------------------------------------------------------------------

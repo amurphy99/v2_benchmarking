@@ -10,6 +10,7 @@ keyword and silence cues chat types build on.
 """
 from datetime      import datetime, timezone
 from types         import SimpleNamespace
+from typing        import Callable
 from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, json, re, unittest
@@ -83,7 +84,11 @@ def make_consumer(gate: asyncio.Event | None = None) -> SimpleNamespace:
         last_response             = None,
         streaming_active          = True,
         run_biomarkers            = True,
+        debug_mode                = False,
         send                      = AsyncMock(),
+        send_json                 = AsyncMock(),
+        _broadcast_monitor        = AsyncMock(),
+        _reply_timings            = {},
         _close_scheduled          = False,
         _staged_utterances        = StagedUtteranceBuffer(),
         _stt_progress_revision    = 0,
@@ -227,7 +232,7 @@ class ReplyLifecycleTests(PipelineTestCase):
         speaking = asyncio.Event()
 
         # Stand in for TTS that is still streaming when newer speech arrives
-        async def slow_tts(text: str, send: AsyncMock, response_id: int) -> None:
+        async def slow_tts(text: str, send: AsyncMock, response_id: int, on_first_audio: Callable[[float], None]) -> None:
             speaking.set()
             await asyncio.Event().wait()
 

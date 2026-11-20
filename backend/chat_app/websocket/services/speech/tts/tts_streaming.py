@@ -55,11 +55,19 @@ SendCallback = Callable[[str], Awaitable[object]]
 # ================================================================================
 # Stream a TTS audio response to the frontend in base64 chunks
 # ================================================================================
-async def synthesize_and_stream_tts(system_resp: str, send_callback: SendCallback, response_id: int) -> None:
+async def synthesize_and_stream_tts(
+    system_resp    : str,                                    # Response text to speak
+    send_callback  : SendCallback,                           # Active frontend WebSocket sender
+    response_id    : int,                                    # Assistant message the audio belongs to
+    on_first_audio : Callable[[float], None] | None = None,  # Told the first sentence's synthesis time once its audio starts going out
+) -> None:
     """
     1) Split the response into sentences (short ones join the next)
     2) Synthesize each one (run sync TTS off the event loop) and send its audio as
        soon as it is ready, with format and response metadata
+
+    `on_first_audio` gives a reply's timing how long its first sentence took
+    (`services/reply_timing.py`); supplied replies leave it out.
 
     NOTE: We include the `response_id` here when we send the data to the frontend
           so that they have the option to respond with control messages letting
@@ -78,7 +86,11 @@ async def synthesize_and_stream_tts(system_resp: str, send_callback: SendCallbac
     for index, piece in enumerate(pieces):
         audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(piece)
         await sender.add(audio_bytes, sr, ch, bps, sentence=index + 1)
-        if index == 0: first_at = now_ts() - t0
+
+        # The first sentence's audio has started going out
+        if index == 0:
+            first_at = now_ts() - t0
+            if on_first_audio is not None: on_first_audio(first_at)
 
     # The response's final chunk goes out last, marked as such
     await sender.finish()

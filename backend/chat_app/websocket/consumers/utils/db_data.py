@@ -75,6 +75,7 @@ async def send_initial_data(session_data, consumer):
         "condition"      : session.condition,
         "variant"        : session.variant,
         "run_biomarkers" : session_data["profile"].run_biomarkers,  # The participant's biomarker switch (off: the page hides the Biomarkers tab)
+        "debug_mode"     : session.debug_mode,                      # Started in debug mode (features may be switched partway through)
     }
     await consumer.send_json({"type": "session_info", "data": session_info})
 

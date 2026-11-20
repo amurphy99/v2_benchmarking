@@ -88,7 +88,7 @@ class SpeechElicitationHarness(ChatHarness):
     # Every chat starts with the user still talking (each saved reply replaces this)
     state : ElicitationState = ElicitationState()
 
-    # Load this connection's topic, and build its cues and its reply gate
+    # Load this connection's topic, and build its cues, its reply gate, and their switches
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
         self.topic        = ELICITATION_TOPICS[variant]
@@ -105,7 +105,10 @@ class SpeechElicitationHarness(ChatHarness):
             hold_sec     = ELICITATION_HOLD_SEC,
         )
 
-    # The connection is ready: set the avatar up (with the signs' sounds when they are on), and open the chat
+        # The shared features a command can switch partway through the chat, by name
+        self.features = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
+
+    # The connection is ready: set the avatar up (with the signs' sounds, even while they are off), and open the chat
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())

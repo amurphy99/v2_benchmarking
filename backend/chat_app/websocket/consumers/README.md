@@ -79,6 +79,9 @@ Related code outside this directory:
 - `services/chatHelpers.py` coordinates staged utterances, cancellation, LLM responses,
   response commits, and TTS.
 - `services/chat_state.py` keeps staged transcript text and word timestamps together.
+- `services/reply_timing.py` times each reply's stages (with the model calls and holds
+  `chat_app/services/step_timing.py` collects), saves the record with the reply, and sends
+  it to listeners and debug-mode clients.
 - `services/speech/stt/` owns the ordered audio queue, Google stream, audio barriers,
   and interim-progress tracking.
 - `services/speech/tts/` synthesizes and streams assistant speech.
@@ -100,7 +103,8 @@ Related code outside this directory:
    unknown name with `4005`.
 4. Select source-dependent STT, TTS, and automatic-response settings.
 5. Close stale active sessions, then create the new active `ChatSession`, recording its chat
-   type, condition, and variant.
+   type, condition, and variant, and whether the profile's `debug_mode` switch is on (a
+   debug-mode client also gets each reply's timing, and control state an admin changes).
 6. Build the bounded in-memory `context_buffer` used for LLM calls.
 7. Join the session room and control Channels groups.
 8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer,
@@ -130,8 +134,9 @@ Frontend JSON
 | `audio_data` | `processing.audio.ingest_audio_payload` | Ingest one small PCM audio chunk |
 | `transcription` | `processing.speech.handle_final`, then `ChatHandler.stage_and_schedule` | Let the harness hear direct frontend text, then stage it |
 | `command` | `processing.commands.dispatch_command` | Execute a canonical control command |
-| `tts_playback` | `processing.playback.handle_playback_event` | Store optional assistant playback timing |
+| `tts_playback` | `processing.playback.handle_playback_event` | Store optional assistant playback timing (a "started" report completes the reply's timing) |
 | `overlapped_speech` | `ws_events.handle_overlap` | Track a frontend overlap notification |
+| `ping` | `ws_events.handle_ping` | Echo the client's timestamp in a `pong`, so it can time the round trip |
 | `end_chat` | `ChatConsumer.close` | Close the primary socket and session |
 
 The router handles transport validation. Downstream processing functions receive
@@ -198,7 +203,9 @@ optionally report actual playback boundaries back with a `tts_playback` message 
 Missing playback events are valid, which keeps text-only robot frontends compatible. Accepted
 events fill the assistant message's normal `start_ts` and `end_ts` audible interval. For
 messages with word timing, those same fields are derived from the earliest and latest
-associated `ChatWord` rows.
+associated `ChatWord` rows. A "started" event also adds the delay the user heard to the
+reply's timing record (`ChatMessage.timing`, `services/reply_timing.py`), which is saved
+and sent again (`reply_timing`, `CLIENT_PROTOCOL.md` §3.9).
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Staged Text and Automatic Responses                                              -->

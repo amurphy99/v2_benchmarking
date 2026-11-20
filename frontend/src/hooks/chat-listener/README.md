@@ -32,9 +32,10 @@ Live Biomarker Scores:
 { "type": "biomarker_scores", "data": { "prosody": 0.71, "grammar": 0.42 } }
 ```
 
-Session Info (sent first; `run_biomarkers` off hides the Biomarkers tab):
+Session Info (sent first; `run_biomarkers` off hides the Biomarkers tab; `debug_mode` marks a
+session started in debug mode, whose features may be switched partway through):
 ```JSON
-{ "type": "session_info", "data": { "sessionId": 12, "username": "…", "source": "webapp", "chat_type": "map_task", "condition": "cues", "variant": "demo", "run_biomarkers": false, "…": "…" } }
+{ "type": "session_info", "data": { "sessionId": 12, "username": "…", "source": "webapp", "chat_type": "map_task", "condition": "cues", "variant": "demo", "run_biomarkers": false, "debug_mode": false, "…": "…" } }
 ```
 
 Task View (chat types with one, as the listener joins and after each saved change; the Map Task's
@@ -53,3 +54,15 @@ its segment count is not a count of conversation turns:
     }
 }
 ```
+
+Reply Timing (how long each reply took, stage by stage: sent when the reply is saved, and again
+once the participant's page reports its audio started, which replaces the first; the fields are
+in `backend/chat_app/websocket/consumers/CLIENT_PROTOCOL.md` §3.9). Not handled by the admin
+pages yet:
+```JSON
+{ "type": "reply_timing", "data": { "response_id": 4471, "stt_ms": 640, "generate_ms": 1980, "calls": [ { "label": "reply", "at_ms": 3, "ms": 1340 } ], "hold_ms": null, "tts_ms": 420, "delay_ms": 3100, "features": { "backchannels": true, "turn_end": true, "misheard": true } } }
+```
+
+The control state in `command_ack` and `control_state` frames also carries `features`: the chat
+type's shared features by name, each on or off (`{}` for none). A `set_feature` command switches
+one (`{"feature": "backchannels", "on": false}`).

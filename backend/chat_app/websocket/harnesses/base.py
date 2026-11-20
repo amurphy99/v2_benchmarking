@@ -25,7 +25,7 @@ from __future__  import annotations
 from abc         import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime    import datetime
-from typing      import Awaitable, Callable, Literal, TYPE_CHECKING
+from typing      import Awaitable, Callable, Literal, Protocol, TYPE_CHECKING
 
 import logging
 logger = logging.getLogger(__name__)
@@ -55,6 +55,11 @@ PlanPublisher = Callable[[AvatarPlan], Awaitable[None]]
 
 # What the admin listener's task panel shows about a chat, in the wire format (`task_monitor`)
 MonitorView = dict[str, object]
+
+# A shared feature a chat type uses (`features/`), switched on or off for each connection
+class Feature(Protocol):
+    NAME : str   # Its name in the `set_feature` command and the control state
+    on   : bool  # Runs (the command can flip it partway through a chat)
 
 
 # --------------------------------------------------------------------------------
@@ -122,13 +127,14 @@ class ChatHarness(ABC):
     # Unspoken assistant line the LLM context starts with (None starts it empty)
     CONTEXT_OPENER : str | None = "How can I help you today?"
 
-    # Keep the connection this harness serves, the options it was picked with, and its cues
+    # Keep the connection this harness serves, the options it was picked with, its cues, and its shared features
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
-        self.consumer        = consumer
-        self.condition       = condition
-        self.variant         = variant
-        self.cues: list[Cue] = []
-        self.turn_number     = 0   # Reply attempts so far (avatar plans carry it as their `turn`)
+        self.consumer                      = consumer
+        self.condition                     = condition
+        self.variant                       = variant
+        self.cues     : list[Cue]          = []
+        self.features : dict[str, Feature] = {}  # Shared features this chat type uses, by name (`set_feature` switches them)
+        self.turn_number                   = 0   # Reply attempts so far (avatar plans carry it as their `turn`)
 
     # --------------------------------------------------------------------------------
     # Replies

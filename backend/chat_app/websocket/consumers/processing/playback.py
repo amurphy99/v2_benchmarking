@@ -26,7 +26,8 @@ NOTE: You don't need to send a timestamp with the message -- all timestamps are
       fill the assistant ChatMessage's normal `start_ts` and `end_ts` fields.
 
 Each accepted event is also passed to the chat type's harness, whose cues can time
-the user's silence from the end of the reply.
+the user's silence from the end of the reply. A reply's "started" event also adds
+the delay the user heard to its timing (`services/reply_timing.py`).
 
 """
 from __future__  import annotations
@@ -39,6 +40,8 @@ logger = logging.getLogger(__name__)
 # From this project
 from ....services.db_services   import ChatService
 from ....services.logging_utils import RESET, CC_MAIN
+from  ...services.bg_helpers    import fire_and_log
+from  ...services.reply_timing  import finish_reply_timing
 
 if TYPE_CHECKING: from ..consumers import ChatConsumer
 
@@ -73,3 +76,6 @@ async def handle_playback_event(consumer: ChatConsumer, data: dict[str, object])
 
     # 5) Let the chat type's harness hear that the reply's audio started or finished
     consumer.harness.on_playback(response_id, state)
+
+    # 6) Audio that started completes the reply's timing (saved and sent off the receive loop)
+    if state == "started": fire_and_log(finish_reply_timing(consumer, response_id), name="playback::reply_timing")

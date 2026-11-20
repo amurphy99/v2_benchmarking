@@ -18,6 +18,7 @@ type SessionInfo = {
     condition     : string;                   // Its cue set ("" for none)
     variant       : string;                   // Its task content ("" for none)
     run_biomarkers: boolean;                  // The participant's biomarker switch (off: no biomarker scores are coming)
+    debug_mode    : boolean;                  // Started in debug mode (its features may be switched partway through)
 };
 
 export { SessionInfo }

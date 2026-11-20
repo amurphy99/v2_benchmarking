@@ -102,7 +102,7 @@ class CooperativePlanningHarness(ChatHarness):
     state : PlanningState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's scenario, its responses, its cues, and its reply gate
+    # Load this connection's scenario, its responses, its cues, its reply gate, and their switches
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
@@ -124,7 +124,10 @@ class CooperativePlanningHarness(ChatHarness):
             hold_sec     = PLANNING_HOLD_SEC,
         )
 
-    # The connection is ready: set the avatar up (with the signs' sound when they are on), show the participant's card, and open the chat
+        # The shared features a command can switch partway through the chat, by name
+        self.features = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
+
+    # The connection is ready: set the avatar up (with the signs' sound, even while they are off), show the participant's card, and open the chat
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())

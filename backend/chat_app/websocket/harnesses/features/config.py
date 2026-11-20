@@ -5,10 +5,11 @@ Which conditions each shared harness feature runs in.
 
 A feature runs only in the chat types that use it, and there only in the
 conditions its switch lists, so one switch turns a feature off (or on) for every
-chat type at once. Each connection copies its switch into the feature's `on`, so
-something can flip a feature partway through one chat. A feature's other
-settings live in its own folder's `config.py`, and a chat type sets its own
-sounds, signs, prompt notes, and hold length.
+chat type at once. Each connection copies its switch into the feature's `on`,
+which the `set_feature` command can flip partway through one chat
+(`consumers/processing/commands.py`). A feature's other settings live in its own
+folder's `config.py`, and a chat type sets its own sounds, signs, prompt notes,
+and hold length.
 
 """
 # Conditions each feature runs in (`()` turns it off in every chat type)

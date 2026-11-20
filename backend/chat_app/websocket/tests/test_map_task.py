@@ -446,14 +446,15 @@ class MapTaskHarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([check.on for check in plain.reply_gate.checks], [False, False])
         for name in DEMO_MAP.lexicon: self.assertIn(name, self.harness.reply_gate.checks[1].notes)
 
-    # Without cues the participant still gets their map, but the avatar holds none, has no sounds, and is sent no plans
+    # Without cues the participant still gets their map, but the avatar holds none and is sent no plans
+    # (the setup still carries the sound, and every shared feature is there, switched off, for a command to switch on)
     async def test_no_cues_sends_only_the_participants_map(self) -> None:
         harness = build_harness(self.consumer, "map_task", "no_cues", None)
         await harness.start()
         self.assertEqual([call.args[0]["type"] for call in self.consumer.send_json.await_args_list], ["avatar_setup", "task_card"])
-        self.assertNotIn("sounds", self.consumer.send_json.await_args_list[0].args[0]["data"])
+        self.assertEqual(self.consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
         self.assertEqual([type(cue) for cue in harness.cues], [MapTaskBackchannels])
-        self.assertFalse(harness.backchannels.on)
+        self.assertEqual({name: feature.on for name, feature in harness.features.items()}, {"backchannels": False, "turn_end": False, "misheard": False})
 
         self.api.follow.return_value = FollowerTurn(basis="Go left of the bus.", act="acknowledge", move=LEFT_OF_BUS, message="Okay.")
         attempt = self.attempt("Go to the left of the bus")

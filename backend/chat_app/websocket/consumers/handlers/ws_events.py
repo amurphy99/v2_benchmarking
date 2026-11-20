@@ -4,7 +4,8 @@ Route messages received from the primary chat WebSocket client.
 `backend.chat_app.websocket.consumers.handlers.ws_events`
 
 This is the transport boundary for audio payloads, direct transcriptions,
-canonical commands, overlap notifications, avatar feedback, and end-chat requests.
+canonical commands, overlap notifications, avatar feedback, latency pings, and
+end-chat requests.
 
 NOTE: Serves as a passthrough routing all incoming message types that the main
       consumer receives to the proper handling endpoints. 
@@ -56,6 +57,7 @@ async def handle_receive_json(consumer: ChatConsumer, data: object) -> None:
     elif msg_type == "command"           : await handle_client_command       (consumer, data)
     elif msg_type == "tts_playback"      : await handle_playback_event       (consumer, data)
     elif msg_type == "avatar_feedback"   : await handle_avatar_feedback      (consumer, data)
+    elif msg_type == "ping"              : await handle_ping                 (consumer, data)
     elif msg_type == "end_chat"          : await consumer.close(code=1000)
 
     # Unknown JSON
@@ -109,3 +111,13 @@ async def handle_client_command(consumer: ChatConsumer, data: dict[str, object])
     # Send an acknowledgement back through the same socket & broadcast the confirmed control state
     await consumer.send_json({"type": "command_ack", "data": ack})
     if ack["ok"]: await consumer._broadcast_control_state(ack["state"])
+
+# --------------------------------------------------------------------------------
+# [LATENCY] Echo a ping's client timestamp, so the client can time the round trip
+# --------------------------------------------------------------------------------
+async def handle_ping(consumer: ChatConsumer, data: dict[str, object]) -> None:
+    client_ts = data.get("client_ts")
+    if isinstance(client_ts, bool) or (not isinstance(client_ts, (int, float))):
+        logger.warning(f"{CC_MAIN} Ignoring a ping without a numeric client_ts.{RESET}")
+        return
+    await consumer.send_json({"type": "pong", "client_ts": client_ts, "server_ts": time.time()})

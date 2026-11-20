@@ -69,8 +69,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     goal      = GoalSerializer        (read_only=True)
     class Meta:
         model  = Profile
-        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "settings", "goal")
-        read_only_fields = ("id", "save_audio_by_default")
+        fields = ("id", "account", "zipcode", "birthDate", "locationStatus", "save_audio_by_default", "debug_mode", "settings", "goal")
+        read_only_fields = ("id", "save_audio_by_default", "debug_mode")
 
 
 # --------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ class AdminProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model            = Profile
-        fields           = ("id", "user", "save_audio_by_default", "run_biomarkers", "placeholder_flag", "language", "modelChoice", "chat_count", "last_chat_at", "password", "password_from_env")
+        fields           = ("id", "user", "save_audio_by_default", "run_biomarkers", "debug_mode", "language", "modelChoice", "chat_count", "last_chat_at", "password", "password_from_env")
         read_only_fields = ("id",)
 
     # Whether the server's .env controls this participant's password
@@ -245,7 +245,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     words = ChatWordSerializer(many=True, read_only=True)
     class Meta:
         model  = ChatMessage
-        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "words")
+        fields = ("id", "role", "content", "ts", "start_ts", "end_ts", "timing", "words")
         read_only_fields = fields
 
 class SessionAudioSerializer(serializers.ModelSerializer):
@@ -274,7 +274,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         model  = ChatSession
         fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio", "duration", "topics",
                   "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
-                  "image", "risk_level", "risk_quotes", "risk_reason", "chat_type", "condition", "variant")
+                  "image", "risk_level", "risk_quotes", "risk_reason", "chat_type", "condition", "variant", "debug_mode")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts

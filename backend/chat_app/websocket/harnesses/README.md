@@ -158,6 +158,7 @@ A harness subclasses `ChatHarness` (`base.py`):
 | `CONDITIONS`, `VARIANTS` | The names a client may send. The first is the default; `()` means none |
 | `state` | The chat type's dialogue state. The class value is where every chat starts |
 | `cues` | This connection's cues, built in the subclass's `__init__` from its condition |
+| `features` | The shared features this chat type uses, by name (`{}` for none); the `set_feature` command switches each one's `on` (Shared features, below) |
 | `generate(attempt)` | Required. Returns one `ResponseOutcome` for the staged user turn |
 | `on_reply_saved(outcome)` | Called once that reply's exchange is saved. Enters `outcome.state`, unless it is `None` (then sends the listeners the new `monitor_view`), and tells the cues |
 | `start()`, `stop()` | The connection is ready, or closing (`stop` stops every cue). A plan-driven harness sends its `avatar_setup` from `start()` |
@@ -172,6 +173,12 @@ a `reply_now` one is cancelled at whatever `await` it has reached, and the stage
 turn waits for the next attempt along with the new speech. So `generate` changes
 nothing itself. It returns its effects in the outcome, and `ChatHandler` applies
 them once the exchange is saved, so a cancelled reply leaves no trace.
+
+`ChatHandler` times every attempt (`services/reply_timing.py`). Each model call made
+through the shared LLM clients, and the reply gate's hold, is timed as a step of the
+reply wherever it runs (`chat_app/services/step_timing.py`), so a chat type gets its
+calls into the reply's timing without doing anything. Code that makes a slow step of
+its own can time it the same way, with `timed_step(label)`.
 
 `TurnAttempt` carries `context` (the conversation, ending with the staged user turn),
 `user_text`, `trigger` (`"automatic"`, `"reply_now"`, or `"harness"`), and two
@@ -277,8 +284,11 @@ own in `features/`, with its settings in that folder's `config.py`, and each cha
 type that wants it opts in with its own sounds, prompt notes, or timings. A
 feature runs only in the conditions its switch in `features/config.py` lists
 (`cues` for now), so one switch turns it off (or on) for every chat type at once.
-Each connection copies its switch into the feature's `on`, which something can
-flip partway through a chat.
+Each connection copies its switch into the feature's `on`. A chat type lists the
+features it uses by name in `self.features`, and the `set_feature` command (from
+the chat page in debug mode, or the admin page) flips one partway through a chat;
+the control state reports them all (`CLIENT_PROTOCOL.md` §2.3 and §3.6), and each
+reply's timing records which were on.
 
 | Feature | Switch | Used by |
 |---|---|---|
@@ -290,8 +300,9 @@ flip partway through a chat.
 nod or a tilt of the head, often with a short sound in the avatar's own voice)
 when the user pauses partway through an utterance of a few words, at most one
 every few seconds. A chat type subclasses it with its `SOUNDS`, which its setup
-carries (`sounds()`), its `SIGNS`, which take turns, and the `GESTURES` the reply
-check may pair with a sound. `map_task` and `cooperative_planning` keep theirs
+carries in either condition (`sounds()`, so the signs can be switched on partway
+through), its `SIGNS`, which take turns, and the `GESTURES` the reply check may
+pair with a sound. `map_task` and `cooperative_planning` keep theirs
 neutral (nods, a tilt, and "mm-hm", with no smile), since "yeah", "right", or a
 smile there could sound like an answer.
 
@@ -321,8 +332,9 @@ in its `prompts.py`) and sets its own hold (in its `config.py`):
 | `map_task` | 2.0 s | A direction that breaks off before where it stops isn't finished. The misheard check gets every landmark name on either map, asks about a near-miss name even when it is easy to guess (the turn is read in code, which only knows exact names), and never treats a name the avatar's map lacks as misheard |
 | `cooperative_planning` | 2.0 s | A list of options or a proposal that breaks off isn't finished. The misheard check gets what is being planned and its items |
 
-Verdicts and holds are only logged for now; the research event log will record
-them once it exists.
+Verdicts are only logged for now; the research event log will record them once
+it exists. The check's call and any hold show in the reply's timing
+(`ChatMessage.timing`, `services/reply_timing.py`).
 
 A chat type opts in much as it builds its cues:
 
@@ -330,6 +342,7 @@ A chat type opts in much as it builds its cues:
 self.backchannels = ElicitationBackchannels(self)
 self.cues         = [QuietPrompt(self), self.backchannels]
 self.reply_gate   = ReplyGate(self, checks=(TurnEndCheck(self, ELICITATION_TURN_END_NOTES), MisheardCheck(self)), backchannels=self.backchannels, hold_sec=ELICITATION_HOLD_SEC)
+self.features     = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
 
 # In generate, after any scripted turns (`_reply` is the chat type's own reply, `_clarify` its outcome for a question)
 return await self.reply_gate.run(attempt, self._reply, self._clarify)

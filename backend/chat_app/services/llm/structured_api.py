@@ -6,7 +6,8 @@ Shared structured-generation client for the chat types' LLM calls, with retries.
 A chat type's API class subclasses `StructuredAPI`, names its own error type
 (`ERROR`) so its callers can catch exactly that, and sends each call through
 `_request`. Building one does not contact the endpoint; only an awaited request
-does.
+does. Each request is timed under its label as a step of the reply attempt it
+serves (`services/step_timing.py`), so a reply's timing lists its model calls.
 
 NOTE: A response that fails its schema's validation counts as a failed attempt.
       Instructor is left at its default of one try, so it never re-asks the
@@ -26,6 +27,7 @@ from pydantic import BaseModel
 
 # From this project
 from ..logging_utils import RESET, BOLD, UNBOLD, LLM_MAIN
+from ..step_timing   import timed_step
 from  .endpoint      import LLM_URL, API_KEY, MODEL_NAME
 
 # Structured model returned by one request
@@ -79,21 +81,23 @@ class StructuredAPI:
         last_error : Exception | None = None
 
         # Attempt to get a response from the backend a set number of times
-        for attempt in range(self.max_retries + 1):
-            try:
-                return await self.client.chat.completions.create(
-                    model          = self.model,
-                    response_model = response_model,
-                    messages       = messages,
-                    temperature    = temperature,
-                    extra_body     = None if thinking else NO_THINKING,
-                )
+        # (the whole wait, retries included, is timed as one step of the reply it serves)
+        with timed_step(label):
+            for attempt in range(self.max_retries + 1):
+                try:
+                    return await self.client.chat.completions.create(
+                        model          = self.model,
+                        response_model = response_model,
+                        messages       = messages,
+                        temperature    = temperature,
+                        extra_body     = None if thinking else NO_THINKING,
+                    )
 
-            # Handle retry logic
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"{LLM_MAIN}[LLM] {self.NAME} {label} failed (attempt {attempt + 1}/{self.max_retries + 1}): {exc!r}{RESET}")
-                if attempt < self.max_retries: await asyncio.sleep(self.retry_delay_sec)
+                # Handle retry logic
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning(f"{LLM_MAIN}[LLM] {self.NAME} {label} failed (attempt {attempt + 1}/{self.max_retries + 1}): {exc!r}{RESET}")
+                    if attempt < self.max_retries: await asyncio.sleep(self.retry_delay_sec)
 
         # If we exhausted all retries, raise this client's own error
         raise self.ERROR(f"{self.NAME} {label} failed after all attempts") from last_error

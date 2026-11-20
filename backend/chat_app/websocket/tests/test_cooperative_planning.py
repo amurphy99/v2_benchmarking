@@ -382,14 +382,15 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([check.on for check in plain.reply_gate.checks], [False, False])
         for word in (SCENARIO.event, *(item.label.lower() for item in SCENARIO.items)): self.assertIn(word, cued.reply_gate.checks[1].notes)
 
-    # Without cues: the avatar only idles, so no plan or sound goes out, but the participant still gets their card
+    # Without cues: the avatar only idles, so no plan goes out, but the participant still gets their card
+    # (the setup still carries the sound, and every shared feature is there, switched off, for a command to switch on)
     async def test_without_cues_only_the_setup_and_the_card_go_out(self) -> None:
         harness, consumer, _ = self.make(condition="no_cues")
         await harness.start()
         self.assertEqual(sent_types(consumer), ["avatar_setup", "task_card"])
-        self.assertNotIn("sounds", consumer.send_json.await_args_list[0].args[0]["data"])
+        self.assertEqual(consumer.send_json.await_args_list[0].args[0]["data"]["sounds"], SOUNDS)
         self.assertEqual([type(cue) for cue in harness.cues], [PlanningBackchannels])
-        self.assertFalse(harness.backchannels.on)
+        self.assertEqual({name: feature.on for name, feature in harness.features.items()}, {"backchannels": False, "turn_end": False, "misheard": False})
 
     # The avatar's first turn says the scenario's opening line, with no LLM call
     async def test_the_opening_turn_says_the_scenarios_line(self) -> None:

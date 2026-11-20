@@ -45,6 +45,7 @@ def get_control_state(consumer: ChatConsumer) -> dict[str, object]:
         "listening"         : "active" if getattr(consumer, "streaming_active", False) else "paused",
         "response_mode"     : getattr(consumer, "response_mode", "automatic"),
         "recording_enabled" : getattr(consumer, "save_audio",    False      ),
+        "features"          : {name: feature.on for name, feature in consumer.harness.features.items()},  # The chat type's shared features ({} for none)
     }
 
 # Pull one required value out of a command body and check it against its vocabulary
@@ -148,6 +149,21 @@ async def _set_recording(consumer: ChatConsumer, payload: dict[str, object]) -> 
     try: await consumer.send_json({"type": "recording_status", "data": {"enabled": consumer.save_audio}})
     except Exception: pass
 
+# Switch one of the chat type's shared features on or off for the rest of the chat (`harnesses/features/`)
+async def _set_feature(consumer: ChatConsumer, payload: dict[str, object]) -> None:
+    value    = payload.get("data")
+    features = consumer.harness.features
+    if not features:                raise CommandRejected("This chat type has no shared features to switch")
+    if not isinstance(value, dict): raise CommandRejected("A 'feature' and an 'on' value are required")
+
+    # The feature by name, and the state asked for
+    name = value.get("feature")
+    if (not isinstance(name, str)) or (name not in features): raise CommandRejected(f"'feature' must be one of: {', '.join(features)}")
+    if not isinstance(value.get("on"), bool):                 raise CommandRejected("'on' must be true or false")
+
+    features[name].on = value["on"]
+    logger.info(f"{lu.CC_MAIN} Shared feature {lu.CC_H}{name}{lu.CC_R} switched {'on' if value['on'] else 'off'}.{lu.RESET}")
+
 # --------------------------------------------------------------------------------
 # Map the given command name to it's designated "handler" function defined above
 # --------------------------------------------------------------------------------
@@ -168,6 +184,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     # Misc. command types
     "robot_action"       : _robot_action,
     "set_recording"      : _set_recording,
+    "set_feature"        : _set_feature,
     "get_control_state"  : _get_control_state,
 }
 

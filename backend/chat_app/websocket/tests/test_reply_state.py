@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, Mock, patch
 # From this project
 from chat_app.websocket.consumers.consumers                   import ChatConsumer
 from chat_app.websocket.consumers.handlers.ch_events          import handle_ws_command
+from chat_app.websocket.consumers.handlers.ws_events          import handle_ping
 from chat_app.websocket.consumers.processing.commands        import dispatch_command
 from chat_app.websocket.consumers.processing.messages        import _publish_chat_message
 from chat_app.websocket.consumers.processing.stream          import set_streaming_active
@@ -25,6 +26,9 @@ from chat_app.websocket.services.chat_state                 import StagedUtteran
 from chat_app.websocket.services.speech.stt.audio_queue     import AudioBarrier, AudioChunk, AudioInputQueue
 from chat_app.websocket.services.speech.stt.speechProvider  import SpeechToTextProvider
 from chat_app.websocket.services.speech.stt.stream_state    import InterimProgressTracker
+
+# A chat type without shared features, for consumers whose commands don't touch any
+NO_FEATURES = SimpleNamespace(features={})
 
 
 # ================================================================================
@@ -347,6 +351,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             stt_provider             = SimpleNamespace(start=Mock(), stop=Mock()),
             audio_recorder           = SimpleNamespace(resume=Mock(), pause=Mock()),
             send                     = AsyncMock(),
+            harness                  = NO_FEATURES,
             _broadcast_stream_status = AsyncMock(),
         )
 
@@ -357,11 +362,11 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ack["id"   ], "request-1")
         self.assertEqual(ack["name" ], "set_listening")
         self.assertTrue (ack["ok"   ])
-        self.assertEqual(ack["state"], {"listening": "paused", "response_mode": "automatic", "recording_enabled": False})
+        self.assertEqual(ack["state"], {"listening": "paused", "response_mode": "automatic", "recording_enabled": False, "features": {}})
 
     # Reject an out-of-vocabulary value without changing state, and say why
     async def test_rejected_command_explains_itself_and_changes_nothing(self) -> None:
-        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=NO_FEATURES)
 
         ack = await dispatch_command(consumer, {"id": "request-2", "name": "set_response_mode", "data": {"mode": "sometimes"}})
 
@@ -372,7 +377,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     # Keep malformed caller data from escaping the documented acknowledgement schema
     async def test_invalid_command_id_is_rejected_with_safe_ack_shape(self) -> None:
-        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=NO_FEATURES)
 
         ack = await dispatch_command(consumer, {"id": 123, "name": "get_control_state"})
 
@@ -394,6 +399,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             _pending_response_task=None,
             _manual_response_task=None,
             _reply_now_task=None,
+            harness=NO_FEATURES,
         )
 
         reply_ack  = await dispatch_command(consumer, {"id": "reply",  "name": "reply_now"})
@@ -413,6 +419,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             save_audio=False,
             _broadcast_recording_state=AsyncMock(),
             send_json=AsyncMock(),
+            harness=NO_FEATURES,
         )
 
         rejected = await dispatch_command(consumer, {"id": "bad", "name": "set_recording", "data": {"enabled": 1}})
@@ -440,6 +447,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             _pending_response_task=pending,
             _manual_response_task=manual,
             _reply_now_task=forced,
+            harness=NO_FEATURES,
         )
 
         paused = await dispatch_command(consumer, {"id": "pause", "name": "pause_and_listen"})
@@ -454,7 +462,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     # Validate the robot-action command before handing its asynchronous relay to the task helper
     async def test_robot_action_command_accepts_only_canonical_kind_and_value(self) -> None:
-        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False)
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=NO_FEATURES)
 
         with patch("chat_app.websocket.consumers.processing.commands.fire_and_log") as fire_and_log:
             accepted = await dispatch_command(
@@ -475,7 +483,7 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     # The state probe is a real public command and must return a complete no-op acknowledgement
     async def test_get_control_state_is_a_no_op_with_complete_state(self) -> None:
-        consumer = SimpleNamespace(response_mode="manual", streaming_active=False, save_audio=True)
+        consumer = SimpleNamespace(response_mode="manual", streaming_active=False, save_audio=True, harness=NO_FEATURES)
 
         ack = await dispatch_command(consumer, {"id": "state", "name": "get_control_state"})
 
@@ -485,7 +493,36 @@ class CommandDispatchTests(unittest.IsolatedAsyncioTestCase):
             "listening": "paused",
             "response_mode": "manual",
             "recording_enabled": True,
+            "features": {},
         })
+
+    # A shared feature switches by name for the rest of the chat, and the state reports every feature
+    async def test_set_feature_switches_one_feature_and_reports_them_all(self) -> None:
+        signs    = SimpleNamespace(on=True)
+        turn_end = SimpleNamespace(on=True)
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=SimpleNamespace(features={"backchannels": signs, "turn_end": turn_end}))
+
+        ack = await dispatch_command(consumer, {"id": "quiet", "name": "set_feature", "data": {"feature": "backchannels", "on": False}})
+
+        self.assertTrue (ack["ok"])
+        self.assertFalse(signs.on)
+        self.assertEqual(ack["state"]["features"], {"backchannels": False, "turn_end": True})
+
+    # An unknown feature, an `on` that isn't a boolean, or a chat type without features is refused, and nothing changes
+    async def test_set_feature_refuses_what_it_cannot_switch(self) -> None:
+        signs    = SimpleNamespace(on=True)
+        consumer = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=SimpleNamespace(features={"backchannels": signs}))
+        bare     = SimpleNamespace(response_mode="automatic", streaming_active=True, save_audio=False, harness=NO_FEATURES)
+
+        unknown     = await dispatch_command(consumer, {"id": "a", "name": "set_feature", "data": {"feature": "misheard",       "on": False}})
+        not_boolean = await dispatch_command(consumer, {"id": "b", "name": "set_feature", "data": {"feature": "backchannels",   "on": "off"}})
+        not_a_name  = await dispatch_command(consumer, {"id": "c", "name": "set_feature", "data": {"feature": ["backchannels"], "on": False}})
+        no_features = await dispatch_command(bare,     {"id": "d", "name": "set_feature", "data": {"feature": "backchannels",   "on": False}})
+
+        self.assertFalse(any(ack["ok"] for ack in (unknown, not_boolean, not_a_name, no_features)))
+        self.assertIn("backchannels",       unknown    ["message"])
+        self.assertIn("no shared features", no_features["message"])
+        self.assertTrue(signs.on)
 
 
 # ================================================================================
@@ -537,6 +574,7 @@ class ClientProtocolFrameTests(unittest.IsolatedAsyncioTestCase):
     async def test_listener_command_passes_server_owned_origin_metadata(self) -> None:
         consumer = SimpleNamespace(
             channel_layer=SimpleNamespace(send=AsyncMock()),
+            debug_mode=False,
             _broadcast_control_state=AsyncMock(),
         )
         event = {
@@ -558,6 +596,32 @@ class ClientProtocolFrameTests(unittest.IsolatedAsyncioTestCase):
             "requested_by_id" : 42,
             "received_at"     : 1_789_500_000.25,
         })
+
+    # A client in debug mode hears the control state a listener's command changed (its own commands come back as acks)
+    async def test_debug_client_hears_a_listeners_state_change(self) -> None:
+        ack = {"ok": True, "state": {"response_mode": "manual"}}
+        for debug_mode in (True, False):
+            consumer = SimpleNamespace(channel_layer=SimpleNamespace(send=AsyncMock()), debug_mode=debug_mode, send_json=AsyncMock(), _broadcast_control_state=AsyncMock())
+            with patch("chat_app.websocket.consumers.handlers.ch_events.dispatch_command", new=AsyncMock(return_value=ack)):
+                await handle_ws_command(consumer, {"payload": {"id": "listener-mode", "name": "set_response_mode"}, "reply_channel": "listener-channel"})
+
+            consumer._broadcast_control_state.assert_awaited_once_with(ack["state"])
+            if debug_mode: consumer.send_json.assert_awaited_once_with({"type": "control_state", "data": ack["state"]})
+            else:          consumer.send_json.assert_not_awaited()
+
+    # A ping gets its client timestamp back with the server's, and one without a numeric timestamp is dropped
+    async def test_ping_echoes_its_client_timestamp(self) -> None:
+        consumer = SimpleNamespace(send_json=AsyncMock())
+
+        await handle_ping(consumer, {"type": "ping", "client_ts": 1_789_500_000_123})
+        for bad in ("now", True, None):
+            with self.assertLogs("chat_app.websocket.consumers.handlers.ws_events", level="WARNING"):
+                await handle_ping(consumer, {"type": "ping", "client_ts": bad})
+
+        consumer.send_json.assert_awaited_once()
+        pong = consumer.send_json.await_args.args[0]
+        self.assertEqual((pong["type"], pong["client_ts"]), ("pong", 1_789_500_000_123))
+        self.assertIsInstance(pong["server_ts"], float)
 
     # Register only after notifying older channels so a connection cannot replace itself
     async def test_primary_connection_claim_notifies_then_registers(self) -> None:

@@ -88,7 +88,7 @@ class MapTaskHarness(ChatHarness):
     state : MapTaskState
 
     # --------------------------------------------------------------------------------
-    # Load this connection's map, put the avatar at its start, and build its cues and its reply gate
+    # Load this connection's map, put the avatar at its start, and build its cues, its reply gate, and their switches
     # --------------------------------------------------------------------------------
     def __init__(self, consumer: ChatConsumer, *, condition: str, variant: str) -> None:
         super().__init__(consumer, condition=condition, variant=variant)
@@ -107,7 +107,10 @@ class MapTaskHarness(ChatHarness):
             hold_sec     = MAP_TASK_HOLD_SEC,
         )
 
-    # The connection is ready: set the avatar up (with the signs' sound when they are on), and show the participant their map
+        # The shared features a command can switch partway through the chat, by name
+        self.features = {feature.NAME: feature for feature in (self.backchannels, *self.reply_gate.checks)}
+
+    # The connection is ready: set the avatar up (with the signs' sound, even while they are off), and show the participant their map
     async def start(self) -> None:
         await send_avatar_setup(self.consumer, setup_for(self.with_cues, await self.backchannels.sounds()))
         if self.with_cues: await send_avatar_plan(self.consumer, start_plan())

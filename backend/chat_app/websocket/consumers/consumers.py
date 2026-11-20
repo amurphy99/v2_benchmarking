@@ -110,6 +110,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
         self.session_id = self.session.id
 
+        # Debug mode (the profile's switch when the session was created) also sends this client
+        # each reply's timing, and the control state a listener's command changes
+        self.debug_mode = self.session.debug_mode
+
         # Load existing messages
         # TODO: This behavior is for resuming existing chats; doesn't do anything here yet
         recent = await db_s2a(lambda: list(self.session.messages.all().order_by("-ts")[: self.MAX_CONTEXT - 1])[::-1])()
@@ -160,7 +164,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         log.log_connect_done(self.user, self.session.id,
                              config={"chat_type": self.harness.NAME, "condition": self.harness.condition, "variant": self.harness.variant,
                                      "backend_STT": self.use_backend_STT, "backend_TTS": self.use_backend_TTS, "response_mode": self.response_mode,
-                                     "biomarkers": self.run_biomarkers})
+                                     "biomarkers": self.run_biomarkers, "debug_mode": self.debug_mode})
     
     # ================================================================================
     # Disconnect
@@ -386,6 +390,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self._stt_progress_revision    = 0                          # Meaningful interim/final progress (lets a response drop a stale mood update)
         self._stage_lock               = asyncio.Lock()             # Serializes final-transcript scheduling decisions
         self._response_lock            = asyncio.Lock()             # Gives one response task ownership of staged text
+        self._reply_timings            = {}                         # Saved replies' timing, by response ID, until the client reports their audio started
 
         # Chat status tracking (not always used)
         self.streaming_active = False  # True while STT stream is active (paused state)

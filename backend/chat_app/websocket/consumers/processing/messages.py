@@ -40,13 +40,15 @@ async def commit_chat_message(
     text          : str,                 # Final message text to persist and publish
     timestamp     : float,               # Timestamp used by the context and listener broadcast
     task_snapshot : dict | None = None,  # Private task history saved in the same transaction
+    timing        : dict | None = None,  # How long an assistant reply took (`services/reply_timing.py`)
 ) -> ChatMessage:
     """
     Persist one standalone message before adding it to the local context and
     publishing it. This path is used for unanswered user speech flushed during
-    disconnect and for manually supplied assistant responses.
+    disconnect, for manually supplied assistant responses, and for a harness turn
+    with no user speech.
     """
-    message = await db_s2a(ChatService.add_message)(consumer.session_id, role, text, task_snapshot=task_snapshot)
+    message = await db_s2a(ChatService.add_message)(consumer.session_id, role, text, task_snapshot=task_snapshot, timing=timing)
     await _publish_chat_message(consumer, role, text, timestamp)
     return message
 
@@ -60,13 +62,14 @@ async def commit_chat_exchange(
     assistant_text      : str,                 # Completed assistant response
     assistant_timestamp : float,               # Assistant timestamp used by context and listeners
     task_snapshot       : dict | None = None,  # Private task history saved with the exchange
+    timing              : dict | None = None,  # How long the reply took (`services/reply_timing.py`)
 ) -> tuple[ChatMessage, ChatMessage]:
     """
     Persist a matching user/assistant exchange in one database transaction, then
     publish both messages in their original order. Normal cancellable responses use
     this path only after response generation succeeds.
     """
-    user_message, assistant_message = await db_s2a(ChatService.add_exchange)(consumer.session_id, user_text, assistant_text, task_snapshot=task_snapshot)
+    user_message, assistant_message = await db_s2a(ChatService.add_exchange)(consumer.session_id, user_text, assistant_text, task_snapshot=task_snapshot, timing=timing)
     await _publish_chat_message(consumer, "user",           user_text,      user_timestamp)
     await _publish_chat_message(consumer, "assistant", assistant_text, assistant_timestamp)
     return user_message, assistant_message

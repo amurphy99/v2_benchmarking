@@ -100,6 +100,7 @@ export function AdminChat() {
                 listening         : st?.listening         ?? s.listening,
                 response_mode     : st?.response_mode     ?? s.response_mode,
                 recording_enabled : st?.recording_enabled ?? s.recording_enabled,
+                features          : st?.features          ?? s.features,
             }));
         },
         onRecordingStatus : (st)   => {
@@ -124,6 +125,7 @@ export function AdminChat() {
         listening         : "active",
         response_mode     : "automatic",
         recording_enabled : false,
+        features          : {},
     });
 
     // Ack routing (useCommandAcks registers a handler; useChatListener calls it)
