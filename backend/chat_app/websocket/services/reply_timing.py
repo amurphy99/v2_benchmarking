@@ -17,7 +17,8 @@ NOTE: The delay runs from the end of the user's last word to the client's report
       both on the backend's clock. The word times count from when the audio
       reached the backend, and the report reaches it one network trip after the
       audio started, so the two one-way trips roughly cancel and the delay is
-      close to the silence the user heard.
+      close to the silence the user heard. The report's time is when it arrived,
+      taken before anything waits for the database.
 
 """
 from __future__  import annotations
@@ -99,13 +100,13 @@ def track_reply_timing(consumer: ChatConsumer, response_id: int, timing: ReplyTi
     fire_and_log(_send_reply_timing(consumer, response_id, timing.record()), name="chat::reply_timing")
 
 # The client reported a reply's audio started: add the delay the user heard, then save and send the record again
-async def finish_reply_timing(consumer: ChatConsumer, response_id: int) -> None:
+async def finish_reply_timing(consumer: ChatConsumer, response_id: int, reported_at: datetime) -> None:
     # A supplied reply was never timed, and a reply's second report finds its timing gone
     timing = consumer._reply_timings.pop(response_id, None)
     if timing is None: return
 
     # The delay counts only after speech (a harness turn with nothing staged has none)
-    if timing.speech_end is not None: timing.delay_ms = _ms((datetime.now(timezone.utc) - timing.speech_end).total_seconds())
+    if timing.speech_end is not None: timing.delay_ms = _ms((reported_at - timing.speech_end).total_seconds())
     record = timing.record()
     await db_s2a(ChatService.save_reply_timing)(consumer.session_id, response_id, record)
     await _send_reply_timing(consumer, response_id, record)

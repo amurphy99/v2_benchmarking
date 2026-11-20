@@ -7,30 +7,32 @@ A reply attempt collects the steps timed inside it (model calls and holds), from
 whichever task they run in, and its record counts every stage from the
 attempt's start. The pipeline saves the record with the reply and sends it to
 the listeners, and to a client in debug mode. The client's report that the
-reply's audio started adds the delay the user heard, and the record is saved and
-sent again.
+reply's audio started adds the delay the user heard, timed to when the report
+arrived, and the record is saved and sent again.
 
 """
 from datetime      import datetime, timedelta, timezone
 from types         import SimpleNamespace
 from typing        import Callable
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import asyncio, unittest
 
 from pydantic import BaseModel
 
 # From this project
-from chat_app.services.llm.structured_api      import StructuredAPI
-from chat_app.services.step_timing             import TimedStep, collect_steps, timed_step
-from chat_app.websocket.harnesses.base         import ChatHarness, ResponseOutcome, TurnAttempt
-from chat_app.websocket.services.chatHelpers   import ChatHandler
-from chat_app.websocket.services.chat_state    import StagedUtteranceBuffer
-from chat_app.websocket.services.reply_timing  import REPLY_TIMING_KEEP, ReplyTiming, finish_reply_timing, track_reply_timing
+from chat_app.services.llm.structured_api               import StructuredAPI
+from chat_app.services.step_timing                      import TimedStep, collect_steps, timed_step
+from chat_app.websocket.consumers.processing.playback   import handle_playback_event
+from chat_app.websocket.harnesses.base                  import ChatHarness, ResponseOutcome, TurnAttempt
+from chat_app.websocket.services.chatHelpers            import ChatHandler
+from chat_app.websocket.services.chat_state             import StagedUtteranceBuffer
+from chat_app.websocket.services.reply_timing           import REPLY_TIMING_KEEP, ReplyTiming, finish_reply_timing, track_reply_timing
 
-# Where the pipeline and the timing look up what these tests replace
-HELPERS = "chat_app.websocket.services.chatHelpers"
-TIMING  = "chat_app.websocket.services.reply_timing"
+# Where the pipeline, the playback reports, and the timing look up what these tests replace
+HELPERS  = "chat_app.websocket.services.chatHelpers"
+PLAYBACK = "chat_app.websocket.consumers.processing.playback"
+TIMING   = "chat_app.websocket.services.reply_timing"
 
 # The IDs the stand-in commit gives the user's turn and the reply
 USER_ID, REPLY_ID = 1, 2
@@ -220,8 +222,8 @@ class ReplyTimingPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         save = AsyncMock()
         with patch(f"{TIMING}.db_s2a", new=lambda function: save):
-            await finish_reply_timing(consumer, REPLY_ID)
-            await finish_reply_timing(consumer, REPLY_ID)
+            await finish_reply_timing(consumer, REPLY_ID, datetime.now(timezone.utc))
+            await finish_reply_timing(consumer, REPLY_ID, datetime.now(timezone.utc))
 
         first, done = timing_frames(consumer.send_json)
         self.assertEqual((first["data"]["tts_ms"], first["data"]["delay_ms"]), (None, None))
@@ -229,6 +231,24 @@ class ReplyTimingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(done["data"]["delay_ms"], 1_000)
         save.assert_awaited_once_with(9, REPLY_ID, {key: value for key, value in done["data"].items() if key != "response_id"})
         self.assertEqual(timing_frames(consumer._broadcast_monitor), [first, done])
+
+    # The client's report is timed when it arrives, so a save that waits for the database
+    # makes neither the message's start nor the delay late
+    async def test_a_playback_report_is_timed_when_it_arrives(self) -> None:
+        consumer = make_consumer(debug_mode=True)
+        stage_turn(consumer)
+        await ChatHandler._execute_response(consumer)
+        await settle()
+
+        # The report arrives three seconds after the user's last word
+        arrived = consumer._reply_timings[REPLY_ID].speech_end + timedelta(seconds=3)
+        save    = AsyncMock(return_value=True)
+        with patch(f"{PLAYBACK}.datetime", new=Mock(now=Mock(return_value=arrived))), patch(f"{PLAYBACK}.db_s2a", new=lambda function: save), patch(f"{TIMING}.db_s2a", new=lambda function: AsyncMock()):
+            await handle_playback_event(consumer, {"type": "tts_playback", "data": {"responseId": REPLY_ID, "state": "started"}})
+            await settle()
+
+        save.assert_awaited_once_with(9, REPLY_ID, "started", arrived)
+        self.assertEqual(timing_frames(consumer.send_json)[-1]["data"]["delay_ms"], 3_000)
 
     # Only the latest few replies wait for their report (a reply never heard drops out), and a supplied reply has none
     async def test_only_the_latest_replies_wait_for_their_audio(self) -> None:
@@ -238,5 +258,5 @@ class ReplyTimingPipelineTests(unittest.IsolatedAsyncioTestCase):
                 track_reply_timing(consumer, response_id, ReplyTiming(started=0.0, started_at=datetime.now(timezone.utc), speech_end=None, features={}))
 
         self.assertEqual(list(consumer._reply_timings), list(range(1, REPLY_TIMING_KEEP + 1)))
-        await finish_reply_timing(consumer, 0)
+        await finish_reply_timing(consumer, 0, datetime.now(timezone.utc))
         consumer._broadcast_monitor.assert_not_awaited()

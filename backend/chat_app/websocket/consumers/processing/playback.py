@@ -27,10 +27,13 @@ NOTE: You don't need to send a timestamp with the message -- all timestamps are
 
 Each accepted event is also passed to the chat type's harness, whose cues can time
 the user's silence from the end of the reply. A reply's "started" event also adds
-the delay the user heard to its timing (`services/reply_timing.py`).
+the delay the user heard to its timing (`services/reply_timing.py`). Both the
+message's timestamp and that delay use the moment the event arrived, so a save that
+waits for the database never makes them late.
 
 """
 from __future__  import annotations
+from datetime    import datetime, timezone
 from typing      import TYPE_CHECKING
 from channels.db import database_sync_to_async as db_s2a
 
@@ -53,29 +56,32 @@ PLAYBACK_STATES = {"started", "finished"}
 # Validate one best-effort playback timestamp update from a frontend
 # ================================================================================
 async def handle_playback_event(consumer: ChatConsumer, data: dict[str, object]) -> None:
-    # 1) Extract the inner event dictionary from the incoming payload
+    # 1) When the event arrived is the moment it reports (the save below can wait for the database)
+    received_at = datetime.now(timezone.utc)
+
+    # 2) Extract the inner event dictionary from the incoming payload
     payload = data.get("data", {})
     if not isinstance(payload, dict): return
 
-    # 2) Validate that the response ID is a valid integer and the state is recognized
+    # 3) Validate that the response ID is a valid integer and the state is recognized
     response_id = payload.get("responseId")
     state       = payload.get("state"     )
     if (isinstance(response_id, bool)) or (not isinstance(response_id, int)) or (state not in PLAYBACK_STATES):
         logger.warning(f"{CC_MAIN} Ignoring invalid assistant playback event.{RESET}")
         return
 
-    # 3) Persist the playback transition in the database for this active session
+    # 4) Persist the playback transition in the database for this active session
     updated = await db_s2a(ChatService.mark_assistant_playback)(
-        consumer.session_id, response_id, state,
+        consumer.session_id, response_id, state, received_at,
     )
 
-    # 4) Log a warning if the response ID did not match any entry for this session
+    # 5) Log a warning if the response ID did not match any entry for this session
     if not updated:
         logger.warning(f"{CC_MAIN} Ignoring playback event for an unrelated assistant response.{RESET}")
         return
 
-    # 5) Let the chat type's harness hear that the reply's audio started or finished
+    # 6) Let the chat type's harness hear that the reply's audio started or finished
     consumer.harness.on_playback(response_id, state)
 
-    # 6) Audio that started completes the reply's timing (saved and sent off the receive loop)
-    if state == "started": fire_and_log(finish_reply_timing(consumer, response_id), name="playback::reply_timing")
+    # 7) Audio that started completes the reply's timing (saved and sent off the receive loop)
+    if state == "started": fire_and_log(finish_reply_timing(consumer, response_id, received_at), name="playback::reply_timing")

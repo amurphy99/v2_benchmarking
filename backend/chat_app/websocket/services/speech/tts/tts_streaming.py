@@ -63,8 +63,9 @@ async def synthesize_and_stream_tts(
 ) -> None:
     """
     1) Split the response into sentences (short ones join the next)
-    2) Synthesize each one (run sync TTS off the event loop) and send its audio as
-       soon as it is ready, with format and response metadata
+    2) Synthesize each one (run sync TTS off the event loop, on a worker thread
+       rather than Django's one shared thread) and send its audio as soon as it is
+       ready, with format and response metadata
 
     `on_first_audio` gives a reply's timing how long its first sentence took
     (`services/reply_timing.py`); supplied replies leave it out.
@@ -84,7 +85,8 @@ async def synthesize_and_stream_tts(
     # NOTE: This is a synchronous network call, so we run it in a thread
     tts_provider = TextToSpeechProvider()
     for index, piece in enumerate(pieces):
-        audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech)(piece)
+        # Not Django's one shared thread: every chat's database calls would wait out the synthesis there
+        audio_bytes, sr, ch, bps = await sync_to_async(tts_provider.synthesize_speech, thread_sensitive=False)(piece)
         await sender.add(audio_bytes, sr, ch, bps, sentence=index + 1)
 
         # The first sentence's audio has started going out

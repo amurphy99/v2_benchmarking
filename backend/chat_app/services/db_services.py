@@ -205,12 +205,18 @@ class ChatService:
     # --------------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
-    def mark_assistant_playback(session_id: int, message_id: int, state: str) -> bool:
+    def mark_assistant_playback(
+        session_id : int,       # Session the reply belongs to
+        message_id : int,       # The assistant message the client reported on
+        state      : str,       # "started" or "finished"
+        at         : datetime,  # When the client's report reached the backend (the moment it records)
+    ) -> bool:
         """
         We can't actually track when TTS playback starts or ends on any of the frontend
         clients from the backend, but they have the option of sending us messages to
         inform us when playback has started and/or ended. When we get those messages,
-        we add the timestamp to the associated assistant ChatMessage entry in the DB.
+        we add the time each one arrived to the associated assistant ChatMessage entry
+        in the DB (not the time of this save, which can wait for the database).
         """
         # Grab the associated ChatMessage object (we are supplied with the ID)
         message = (ChatMessage.objects.select_for_update()
@@ -219,12 +225,12 @@ class ChatService:
 
         # Add a timestamp for the `start_ts` field
         if (state == "started") and (message.start_ts is None):
-            message.start_ts = timezone.now()
+            message.start_ts = at
             message.save(update_fields=["start_ts"])
 
         # Add a timestamp for the `end_ts` field
         elif (state == "finished") and (message.end_ts is None):
-            message.end_ts = timezone.now()
+            message.end_ts = at
             message.save(update_fields=["end_ts"])
 
         return True

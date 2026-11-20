@@ -206,7 +206,8 @@ events fill the assistant message's normal `start_ts` and `end_ts` audible inter
 messages with word timing, those same fields are derived from the earliest and latest
 associated `ChatWord` rows. A "started" event also adds the delay the user heard to the
 reply's timing record (`ChatMessage.timing`, `services/reply_timing.py`), which is saved
-and sent again (`reply_timing`, `CLIENT_PROTOCOL.md` §3.9).
+and sent again (`reply_timing`, `CLIENT_PROTOCOL.md` §3.9). Both use the moment the event
+arrived, taken before its database save, which can wait.
 
 <!-- -------------------------------------------------------------------------------- -->
 <!-- Staged Text and Automatic Responses                                              -->

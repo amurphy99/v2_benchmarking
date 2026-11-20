@@ -8,7 +8,6 @@ message was spoken or played.
 
 """
 from datetime import timedelta
-from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test         import TestCase
@@ -55,19 +54,16 @@ class ChatMessageTimestampTests(TestCase):
         self.assertEqual(message.start_ts, base_ts)
         self.assertEqual(message.end_ts,   base_ts + timedelta(seconds=3))
 
-    # Store frontend playback reports in the assistant message's normal interval
+    # Store playback reports in the assistant message's normal interval, at the times they arrived
     def test_assistant_playback_sets_idempotent_message_bounds(self) -> None:
         message  = ChatMessage.objects.create(session=self.session, role="assistant", content="Hello")
         start_ts = timezone.now()
         end_ts   = start_ts + timedelta(seconds=2)
-
-        with mock.patch("chat_app.services.db_services.timezone.now", return_value=start_ts):
-            self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "started"))
+        self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "started", start_ts))
 
         # A repeated start event must not replace the first accepted boundary
-        with mock.patch("chat_app.services.db_services.timezone.now", return_value=end_ts):
-            self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "started"))
-            self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "finished"))
+        self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "started",  end_ts))
+        self.assertTrue(ChatService.mark_assistant_playback(self.session.id, message.id, "finished", end_ts))
 
         message.refresh_from_db()
         self.assertEqual(message.start_ts, start_ts)
@@ -77,7 +73,7 @@ class ChatMessageTimestampTests(TestCase):
     def test_assistant_playback_rejects_user_message(self) -> None:
         message = ChatMessage.objects.create(session=self.session, role="user", content="Hello")
 
-        updated = ChatService.mark_assistant_playback(self.session.id, message.id, "started")
+        updated = ChatService.mark_assistant_playback(self.session.id, message.id, "started", timezone.now())
 
         self.assertFalse(updated)
         message.refresh_from_db()
