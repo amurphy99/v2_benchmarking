@@ -288,19 +288,27 @@ class ChatSessionSummarySerializer(serializers.ModelSerializer):
     def get_condition(self, obj: ChatSession) -> str: return "" if (obj.run_or_none is None) else obj.run.condition
     def get_variant  (self, obj: ChatSession) -> str: return "" if (obj.run_or_none is None) else obj.run.variant
 
-# One chat in full: its summary, plus its transcript (with each word), scores, and recording
+# One chat in full: its summary, its starting setup, and its transcript, scores, and recording
 class ChatSessionSerializer(ChatSessionSummarySerializer):
     messages      = ChatMessageSerializer (many=True, read_only=True)
     biomarkers    = BiomarkerSerializer   (many=True, read_only=True, source="biomarker_scores")
     audio         = SessionAudioSerializer(read_only=True)
     message_count = serializers.SerializerMethodField()
+    avatar        = serializers.SerializerMethodField()
+    subtitles     = serializers.SerializerMethodField()
+    language      = serializers.SerializerMethodField()
 
     class Meta(ChatSessionSummarySerializer.Meta):
-        fields           = (*ChatSessionSummarySerializer.Meta.fields, "audio", "messages", "biomarkers")
+        fields           = (*ChatSessionSummarySerializer.Meta.fields, "avatar", "subtitles", "language", "audio", "messages", "biomarkers")
         read_only_fields = fields
 
     # Counted from the messages loaded for its transcript (single-chat queries prefetch them)
     def get_message_count(self, obj: ChatSession) -> int: return len(obj.messages.all())
+
+    # A task chat's starting setup, from its run ("" or None when it has none, or didn't record it)
+    def get_avatar   (self, obj: ChatSession) -> str:         return "" if (obj.run_or_none is None) else obj.run.avatar
+    def get_subtitles(self, obj: ChatSession) -> bool | None: return None if (obj.run_or_none is None) else obj.run.subtitles
+    def get_language (self, obj: ChatSession) -> str:         return "" if (obj.run_or_none is None) else obj.run.language
 
 # ================================================================================
 # Other Data

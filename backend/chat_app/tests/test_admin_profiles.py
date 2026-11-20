@@ -93,7 +93,7 @@ class AdminProfileSettingsTests(TestCase):
         self.assertTrue (response.data["debug_mode"])
 
         # The next chat starts with its audio set to be saved, its biomarkers running, and marked as a debug session
-        next_chat = ChatService.get_or_create_active_session(self.patient, source="webapp", chat_type="unguided", condition="", variant="")
+        next_chat = ChatService.get_or_create_active_session(self.patient, source="webapp", chat_type="unguided", condition="", variant="", avatar="", subtitles=None)
         self.assertTrue(ChatService.get_audio_recording_default(next_chat.id))
         self.assertTrue(ChatService.get_run_biomarkers         (next_chat.id))
         self.assertTrue(next_chat.debug_mode)

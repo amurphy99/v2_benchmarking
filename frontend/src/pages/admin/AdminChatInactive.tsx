@@ -81,6 +81,7 @@ export function AdminChatInactive() {
                 username      = {session?.profile.account.user.username ?? "sample_username"}
                 source        = {session?.source ?? "unknown"}
                 chatRun       = {session}
+                chatSetup     = {session}
                 mode          = {"history"}
                 wsState       = {"offline"}
                 messageCount  = {session?.messages.length ?? 0}

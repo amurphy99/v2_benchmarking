@@ -176,6 +176,27 @@ have is refused. Values are exact (they are not lowercased the way `source` is).
 type, condition, and variant are saved with the session. The list lives in
 `websocket/harnesses/registry.py`; `websocket/harnesses/README.md` explains the chat types.
 
+### Step 5 (optional): Report how the chat starts
+
+Two more optional query parameters say how the client presents the chat when it starts. A
+task chat (`map_task`, `cooperative_planning`, or `speech_elicitation`) saves them on its run,
+together with the account's language (`Profile.language`) at that moment. Other chat types
+check them but save nothing.
+
+```text
+wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=map_task&avatar=robot&subtitles=off
+```
+
+| Parameter | Values | Left out |
+|---|---|---|
+| `avatar`    | The avatar the client shows: `smiley` \| `smiley-brows` \| `robot` \| `qt` \| `buddy` | Saved as not recorded |
+| `subtitles` | `on` \| `off`: whether the client shows the conversation as text when the chat starts | Saved as not recorded |
+
+Values are exact, and any other value is refused with `4005`. They describe the start only:
+a change partway through the chat (the web app's debug mode can switch subtitles) is not
+reported. The avatars are `ChatRun.AVATAR_CHOICES` (`chat_app/models/runs/run.py`). The web
+app's chat page sends both.
+
 ### Close codes
 
 | Code | Meaning |
@@ -184,7 +205,7 @@ type, condition, and variant are saved with the session. The list lives in
 | `4001` | Not authenticated -- token missing, expired, or invalid |
 | `4002` | Unrecognized `source` query parameter |
 | `4004` | This primary connection was replaced by a newer connection for the same user |
-| `4005` | Unrecognized `chat_type`, or a `condition` or `variant` the chat type doesn't have |
+| `4005` | Unrecognized `chat_type`, a `condition` or `variant` the chat type doesn't have, or an unrecognized `avatar` or `subtitles` |
 
 `4003` / `4404` only apply to the admin listener endpoint, not to the primary chat socket.
 The listener closes with `4404` when the session does not exist, and with `4003` when the

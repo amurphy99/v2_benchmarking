@@ -28,11 +28,11 @@ class ChatMessageInline(admin.TabularInline):
     def has_add_permission(self, request, obj=None):
         return False
 
-# A task chat's run: the condition and variant it ran with
+# A task chat's run: the condition and variant it ran with, and the setup it started with
 class ChatRunInline(admin.StackedInline):
     model           = ChatRun
     extra           = 0
-    readonly_fields = ("condition", "variant")
+    readonly_fields = ("condition", "variant", "avatar", "subtitles", "language")
     can_delete      = False
 
     def has_add_permission(self, request, obj=None):

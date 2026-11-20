@@ -3,8 +3,9 @@ Private task history access and atomic persistence with a committed exchange.
 --------------------------------------------------------------------------------
 `backend.chat_app.tests.test_session_task_history`
 
-A task chat records its run (condition and variant) as its session starts, and
-its task snapshot on that run; any other chat records neither.
+A task chat records its run (condition, variant, and starting setup) as its
+session starts, and its task snapshot on that run; any other chat records
+neither.
 
 """
 from types         import SimpleNamespace
@@ -133,21 +134,22 @@ class SessionTaskHistoryTests(TestCase):
 # Recording a Run
 # ================================================================================
 class ChatRunRecordingTests(TestCase):
-    # A participant with no chats yet
+    # A participant with no chats yet, whose profile's language isn't the default
     def setUp(self) -> None:
         self.user = get_user_model().objects.create_user(username="run_owner")
-        Profile.objects.create(account=Account.objects.create(user=self.user, role="patient"))
+        Profile.objects.create(account=Account.objects.create(user=self.user, role="patient"), language="es-MX")
 
-    # A task chat records its run as its session starts, and finds the same session again
+    # A task chat records its run and starting setup as it starts, and finds the same session again
     def test_a_task_chat_records_its_run(self) -> None:
-        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo")
-        self.assertEqual((session.run.condition, session.run.variant), ("cues", "demo"))
+        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo", avatar="robot", subtitles=False)
+        self.assertEqual((session.run.condition, session.run.variant),                      ("cues", "demo"))
+        self.assertEqual((session.run.avatar, session.run.subtitles, session.run.language), ("robot", False, "es-MX"))
 
-        again = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo")
+        again = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo", avatar="robot", subtitles=False)
         self.assertEqual((again.id, ChatRun.objects.count()), (session.id, 1))
 
     # A chat with no condition or variant (open conversation) records no run
     def test_another_chat_records_none(self) -> None:
-        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="unguided", condition="", variant="")
+        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="unguided", condition="", variant="", avatar="smiley", subtitles=True)
         self.assertIsNone(session.run_or_none)
         self.assertEqual(ChatRun.objects.count(), 0)

@@ -95,7 +95,7 @@ class BuddyChatTestCase(TransactionTestCase):
     # Open the robot's primary chat socket
     async def open_primary(self, source: str = "buddyrobot") -> WebsocketCommunicator:
         primary = WebsocketCommunicator(URLRouter(websocket_urlpatterns), "/ws/chat/")
-        primary.scope.update({"user": self.robot_user, "source": source, "chat_type": None, "condition": None, "variant": None})
+        primary.scope.update({"user": self.robot_user, "source": source, "chat_type": None, "condition": None, "variant": None, "avatar": "", "subtitles": ""})
         accepted, _ = await primary.connect(timeout=SOCKET_TIMEOUT_SEC)
         self.assertTrue(accepted)
         return primary

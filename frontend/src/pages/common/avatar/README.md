@@ -27,8 +27,10 @@ against what the client actually does.
 
 `avatarRegistry.tsx` lists them. A page renders `<Avatar model zoom ref />`
 (`Avatar.tsx`) and drives the avatar through its `AvatarHandle`. The chat page
-shows the participant's `UserSettings.modelChoice`; an id with no entry shows
-the Smiley.
+shows the participant's `UserSettings.modelChoice`, unless the chat's setup
+picked another one for that chat; an id with no entry shows the Smiley. When
+the chat starts, the page sends the avatar it shows (`avatar` on the socket),
+and a task chat's run saves it.
 
 | id | What it is | `robot_action` | Plans | Page-driven features |
 |---|---|---|---|---|
@@ -47,8 +49,12 @@ the Smiley.
   it too. `smiley/README.md` covers what the two share and where the Robot is
   tuned.
 * `smiley` and `robot` are `UserSettings.modelChoice` values, so a participant
-  can be given either. `smiley-brows` is not, so it shows on the avatar demo
-  page only.
+  can be given either. `smiley-brows` is not, so it can only be picked for one
+  chat in the chat page's setup, or on the avatar demo page.
+* Every id here is also in `ChatRun.AVATAR_CHOICES`
+  (`backend/chat_app/models/runs/run.py`), the avatars a chat's socket may name.
+  A new avatar goes in both, or the backend refuses chats that show it (close
+  code `4005`).
 * The physical QT and Buddy robots are separate clients with their own code.
   They only get `robot_action`.
 

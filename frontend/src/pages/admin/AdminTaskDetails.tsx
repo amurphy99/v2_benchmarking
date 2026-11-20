@@ -69,6 +69,7 @@ export function AdminTaskDetails(): ReactElement {
                 username      = {session.profile.account.user.username}
                 source        = {session.source}
                 chatRun       = {session}
+                chatSetup     = {session}
                 mode          = {"history"}
                 wsState       = {"offline"}
                 messageCount  = {session.messages.length}

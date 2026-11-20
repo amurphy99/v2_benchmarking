@@ -46,18 +46,25 @@ class ChatService:
     @staticmethod
     @transaction.atomic
     def get_or_create_active_session(
-        user,              # Account opening the chat
+        user,  # Account opening the chat
         *,
-        source    : str,   # Client that opened it (`ALLOWED_SOURCES`)
-        chat_type : str,   # Chat type its harness runs
-        condition : str,   # Cue set ("" when the chat type has none)
-        variant   : str,   # Task content ("" when the chat type has none)
+
+        # What runs
+        source    : str,  # Client that opened it (`ALLOWED_SOURCES`)
+        chat_type : str,  # Chat type its harness runs
+        condition : str,  # Cue set ("" when the chat type has none)
+        variant   : str,  # Task content ("" when the chat type has none)
+
+        # How the client started it
+        avatar    : str,          # Avatar it showed ("" when the client left it out)
+        subtitles : bool | None,  # Subtitles on at the start (None when the client left it out)
     ) -> ChatSession:
         """
         Returns the single active ChatSession for the user or creates one if needed. A new
         session starts in debug mode when the profile's switch is on. A chat that runs a
-        condition or a variant (a task chat) records them on its `ChatRun`; other chats
-        have none.
+        condition or a variant (a task chat) records them on its `ChatRun`, with its
+        starting setup and the profile's language; other chats have none. A reused session
+        keeps the setup it started with.
         """
         # The active session that ran exactly this, if there is one (only the session row is
         # locked: Postgres can't lock the missing run of a chat without one)
@@ -70,7 +77,7 @@ class ChatService:
 
         # A new session, and a task chat's run with it
         session = ChatSession.objects.create(profile=profile, source=source, chat_type=chat_type, debug_mode=profile.debug_mode)
-        if task_run: ChatRun.objects.create(session=session, condition=condition, variant=variant)
+        if task_run: ChatRun.objects.create(session=session, condition=condition, variant=variant, avatar=avatar, subtitles=subtitles, language=profile.language)
         return session
 
     # Load the patient's initial recording preference for a newly connected session

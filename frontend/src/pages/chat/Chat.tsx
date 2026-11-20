@@ -33,6 +33,11 @@ this browser only, so its chats always run `condition=cues`), and the chat
 type's shared features (`useFeatureSwitches`). The pills show the round trip to
 the backend and each reply's stages (`useChatTimings`).
 
+The first start fixes the setup the socket sends (the avatar, and whether
+subtitles are on), which a task chat's run saves as the chat's setup. The debug
+panel's subtitles switch never changes it: the socket reopens whenever its URL
+changes, so its query must stay as it was while the chat runs.
+
 */
 import type { ReactElement, ReactNode     } from "react";
 import      { useEffect, useRef, useState } from "react";
@@ -52,7 +57,7 @@ import type { AvatarHandle, RobotAction           } from "@/pages/common/avatar/
 import      { getAvatarEntry                      } from "@/pages/common/avatar/avatarRegistry";
 import      { CUES_LABEL                          } from "@/pages/common/debug/debugLabels";
 import      { useChatTimings                      } from "@/pages/common/debug/useChatTimings";
-import type { ChatPanel                           } from "./chatModes";
+import type { ChatPanel, ChatStartSetup           } from "./chatModes";
 import      { CHAT_MODES, CHAT_PATH, chatModeQuery } from "./chatModes";
 import      { useChatAvatar                       } from "./useChatAvatar";
 import      { useChatStats                        } from "./useChatStats";
@@ -113,6 +118,9 @@ export function Chat(): ReactElement {
     const [showConfig, setShowConfig] = useState(false);
     const { mode, variant, cues, subtitles } = config;
 
+    // The avatar and subtitles as the chat first started (null until then), which the socket sends
+    const [startSetup, setStartSetup] = useState<ChatStartSetup | null>(null);
+
     // What the participant sees: their last words, the latest reply, their task card, and what the task revealed as it ended
     const [heard,         setHeard        ] = useState<string     | null>(null);
     const [reply,         setReply        ] = useState<string     | null>(null);
@@ -166,7 +174,7 @@ export function Chat(): ReactElement {
         onChatResumed      : () => { setRecording(true ); },
         onRecordingStatus  : (enabled: boolean) => { setAdminRecording(enabled); },
         wsPath             : CHAT_PATH,
-        extraQuery         : chatModeQuery(mode, variant, debugMode || cues),
+        extraQuery         : chatModeQuery(mode, variant, debugMode || cues, startSetup),
         avatarRef,
         avatarModel        : model,
         onCommandAck,
@@ -179,8 +187,9 @@ export function Chat(): ReactElement {
     // Debug mode's switches for the chat type's shared features
     const { switches, toggle } = useFeatureSwitches(debugMode ? mode.features : [], controlState, sendCommand);
 
-    // Start or resume, pause, and end (ending asks first; the page stays put, and the end bar comes once the socket closes)
-    const startChat = (): void => { start(); setRecording(true); setStarted(true); noteStart(); };
+    // Start or resume (the first start fixes the setup the socket sends), pause, and end
+    // (ending asks first; the page stays put, and the end bar comes once the socket closes)
+    const startChat = (avatar: string): void => { if (!started) setStartSetup({avatar, subtitles}); start(); setRecording(true); setStarted(true); noteStart(); };
     const pauseChat = (): void => { stop (); setRecording(false); };
     const saveChat  = (): void => { save (); setShowModal(false); };
     const askToEnd  = (): void => { setShowModal(true); if (recording) pauseChat(); };
@@ -278,7 +287,7 @@ export function Chat(): ReactElement {
                             chatEnding     = {chatEnding}
                             onEnd          = {askToEnd}
                             onPause        = {pauseChat}
-                            onStart        = {startChat}
+                            onStart        = {() => startChat(avatarEntry.id)}
                             recording      = {recording}
                             started        = {started}
                         />

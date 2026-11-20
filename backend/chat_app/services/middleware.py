@@ -1,12 +1,14 @@
 """
-Read a WebSocket connection's token, source, and chat selection into its scope.
+Read a connection's token, source, chat selection, and setup into its scope.
 --------------------------------------------------------------------------------
 `backend.chat_app.services.middleware`
 
 `token` becomes `scope["user"]` (an `AnonymousUser` when it is missing or
 invalid), and an unrecognized `source` becomes "unknown". The optional chat
 selection (`chat_type`, `condition`, `variant`) is copied as sent; the chat
-consumer checks it against the chat types when it connects.
+consumer checks it against the chat types when it connects. The optional
+starting setup (`avatar`, `subtitles`) is copied as sent too, as "" when left
+out, and the chat consumer checks it as well.
 
 """
 from urllib.parse                    import parse_qs
@@ -45,6 +47,7 @@ class QueryAuthMiddleware(BaseMiddleware):
         * token/user -> authentication for the user making the request/having the conversation
         * source     -> identify the source of the request (i.e. the web app, robot, etc.)
         * chat_type, condition, variant -> optional chat selection (None when left out)
+        * avatar, subtitles             -> optional starting setup ("" when left out)
     """
     async def __call__(self, scope, receive, send):
         query = parse_qs(scope.get("query_string", b"").decode())
@@ -55,13 +58,17 @@ class QueryAuthMiddleware(BaseMiddleware):
         chat_type = query.get("chat_type", [None     ])[0]
         condition = query.get("condition", [None     ])[0]
         variant   = query.get("variant",   [None     ])[0]
+        avatar    = query.get("avatar",    [""       ])[0]
+        subtitles = query.get("subtitles", [""       ])[0]
 
-        # Add to the scope (the chat consumer checks the chat selection when it connects)
+        # Add to the scope (the chat consumer checks the chat selection and setup when it connects)
         scope["user"     ] = await _get_user(token_key)
         scope["source"   ] = source if source in ALLOWED_SOURCES else "unknown"
         scope["chat_type"] = chat_type
         scope["condition"] = condition
         scope["variant"  ] = variant
+        scope["avatar"   ] = avatar
+        scope["subtitles"] = subtitles
 
         return await super().__call__(scope, receive, send)
 

@@ -99,12 +99,13 @@ Related code outside this directory:
 
 1. Initialize response, task, and connection state before accepting the socket.
 2. Authenticate the user and identify the frontend source.
-3. Build the harness for the requested `chat_type`, `condition`, and `variant`, refusing an
-   unknown name with `4005`.
+3. Check the client's starting setup (`avatar` and `subtitles`), then build the harness for
+   the requested `chat_type`, `condition`, and `variant`, refusing an unknown value with `4005`.
 4. Select source-dependent STT, TTS, and automatic-response settings.
 5. Close stale active sessions, then create the new active `ChatSession`, recording its chat
    type, condition, and variant, and whether the profile's `debug_mode` switch is on (a
-   debug-mode client also gets each reply's timing, and control state an admin changes).
+   debug-mode client also gets each reply's timing, and control state an admin changes). A
+   task chat's `ChatRun` also records the starting setup and the profile's language.
 6. Build the bounded in-memory `context_buffer` used for LLM calls.
 7. Join the session room and control Channels groups.
 8. Create the `SpeechToTextProvider`, incremental recorder, and rolling biomarker buffer,

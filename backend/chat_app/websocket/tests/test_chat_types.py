@@ -4,8 +4,9 @@ Chat-type selection, and when a reply's effects apply.
 `backend.chat_app.websocket.tests.test_chat_types`
 
 Covers the boundary that turns `chat_type`, `condition`, and `variant` into a
-harness, the unguided chat's scripted end-chat and pause replies, and the rule
-that a reply changes chat state only once its exchange is saved.
+harness (and refuses an unrecognized `avatar` or `subtitles` with them), the
+unguided chat's scripted end-chat and pause replies, and the rule that a reply
+changes chat state only once its exchange is saved.
 
 """
 from types         import SimpleNamespace
@@ -92,21 +93,29 @@ class ChatTypeSelectionTests(unittest.TestCase):
 # --------------------------------------------------------------------------------
 # Connection Refusal
 # --------------------------------------------------------------------------------
-# An unknown chat type closes the socket before it is accepted or a session exists
+# An unknown chat type or setup closes the socket before it is accepted or a session exists
 class ChatTypeRefusalTests(TransactionTestCase):
     # A participant whose connection gets as far as the chat-type check
     def setUp(self) -> None:
         self.user = get_user_model().objects.create_user(username="chat_type_refused")
 
-    # The documented close code comes back, and no session row is created
-    async def test_unknown_chat_type_closes_with_4005(self) -> None:
+    # Connect with these choices (filled in as the middleware would); return (accepted, close code)
+    async def _connect(self, chat_type: str | None, avatar: str, subtitles: str) -> tuple[bool, object]:
         communicator = WebsocketCommunicator(URLRouter(websocket_urlpatterns), "/ws/chat/")
-        communicator.scope.update({"user": self.user, "source": "webapp", "chat_type": "nope", "condition": None, "variant": None})
+        communicator.scope.update({"user": self.user, "source": "webapp", "chat_type": chat_type, "condition": None, "variant": None, "avatar": avatar, "subtitles": subtitles})
         accepted, close_code = await communicator.connect(timeout=CONNECT_TIMEOUT_SEC)
         await communicator.disconnect(timeout=CONNECT_TIMEOUT_SEC)
+        return accepted, close_code
 
-        self.assertFalse(accepted)
-        self.assertEqual(close_code, 4005)
+    # The documented close code comes back, and no session row is created
+    async def test_unknown_chat_type_closes_with_4005(self) -> None:
+        self.assertEqual(await self._connect("nope", "", ""), (False, 4005))
+        self.assertFalse(await db_s2a(ChatSession.objects.exists)())
+
+    # An avatar or subtitles setting off the protocol's lists is refused the same way
+    async def test_unknown_setup_closes_with_4005(self) -> None:
+        self.assertEqual(await self._connect(None, "nope",   "on"   ), (False, 4005))
+        self.assertEqual(await self._connect(None, "smiley", "maybe"), (False, 4005))
         self.assertFalse(await db_s2a(ChatSession.objects.exists)())
 
 

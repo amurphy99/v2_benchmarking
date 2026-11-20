@@ -6,7 +6,8 @@ The session list: each chat's summary, and its filters on what ran.
 The Monitor page and researchers read which chat type, cue condition, and task
 variant each session ran from `/api/chatsessions/`, and can narrow the list to
 one of them with query parameters. The list carries each chat's summary, and a
-chat's transcript, scores, and recording come only with that one chat.
+chat's starting setup, transcript, scores, and recording come only with that one
+chat.
 
 """
 from django.contrib.auth import get_user_model
@@ -58,6 +59,22 @@ class ChatSessionRunFilterTests(TestCase):
         full = self.api.get(reverse("chatsession", kwargs={"sessionid": session.id})).data
         self.assertEqual((full["message_count"], [message["content"] for message in full["messages"]]), (2, ["Hi", "Hello!"]))
         for kept in ("biomarkers", "audio"): self.assertIn(kept, full)
+
+    # One chat carries the setup its run recorded (nothing without a run); the list leaves it out
+    def test_one_chat_carries_its_starting_setup(self) -> None:
+        planning = ChatSession.objects.get(run__condition="cues")
+        ChatRun.objects.filter(session=planning).update(avatar="robot", subtitles=False, language="en-GB")
+
+        self.assertEqual(self._setup(planning),                                      ("robot", False, "en-GB"))
+        self.assertEqual(self._setup(ChatSession.objects.get(chat_type="unguided")), ("",      None,  ""     ))
+
+        listed = self.api.get(reverse("chatsession-list", kwargs={"active": 0, "demo": 0})).data
+        for left_out in ("avatar", "subtitles", "language"): self.assertNotIn(left_out, listed[0])
+
+    # One chat's starting setup, from its own endpoint
+    def _setup(self, session: ChatSession) -> tuple[object, object, object]:
+        full = self.api.get(reverse("chatsession", kwargs={"sessionid": session.id})).data
+        return (full["avatar"], full["subtitles"], full["language"])
 
     # Each filter is an exact match, and they combine
     def test_filters_narrow_the_list(self) -> None:

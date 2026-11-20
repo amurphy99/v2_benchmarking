@@ -153,6 +153,7 @@ const ROBOT_AVATAR: AvatarEntry = {
 };
 
 // Every avatar, in picker order
+// (the ids copy `ChatRun.AVATAR_CHOICES` in `backend/chat_app/models/runs/run.py`)
 export const AVATARS: AvatarEntry[] = [SMILEY_AVATAR, SMILEY_BROWS_AVATAR, ROBOT_AVATAR, QT_AVATAR, BUDDY_AVATAR];
 
 // Find an avatar by id (a model choice with no entry shows Smiley, the backend's default model)

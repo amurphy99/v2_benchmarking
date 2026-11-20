@@ -10,7 +10,9 @@ values copy the backend's chat type names and conditions
 from the configure-chat toggle; a mode with task content lists its variants,
 copied from the harness with the name the picker shows (the default first). A
 mode also lists the shared features its harness uses, which debug mode's panel
-can switch partway through a chat (`set_feature`).
+can switch partway through a chat (`set_feature`). Once the chat starts, the
+query also carries the avatar and whether subtitles are on (`avatar`, and
+`subtitles` as `on` or `off`; Step 5), which a task chat's run saves.
 
 */
 import type { IconType                                        } from "react-icons";
@@ -114,10 +116,18 @@ export const CHAT_MODES: ChatMode[] = [
     },
 ];
 
-// The socket query for a mode, its variant (null for none), and whether its cues are on
-export function chatModeQuery(mode: ChatMode, variant: string | null, cues: boolean): string {
+// The setup a chat started with, sent once with its socket (a task chat's run saves it)
+export type ChatStartSetup = {
+    avatar    : string;    // Avatar shown (an `AVATARS` id)
+    subtitles : boolean;   // Subtitles on at the start
+};
+
+// The socket query for a mode, its variant (null for none), whether its cues are on, and its setup
+// (the avatar and subtitles it started with, null before it starts)
+export function chatModeQuery(mode: ChatMode, variant: string | null, cues: boolean, setup: ChatStartSetup | null): string {
     const query: Record<string, string> = {chat_type: mode.chatType};
     if (mode.hasCues)     query.condition = cues ? "cues" : "no_cues";
     if (variant !== null) query.variant   = variant;
+    if (setup   !== null) { query.avatar = setup.avatar; query.subtitles = setup.subtitles ? "on" : "off"; }
     return new URLSearchParams(query).toString();
 }

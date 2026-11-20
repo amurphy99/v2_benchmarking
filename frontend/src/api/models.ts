@@ -277,9 +277,12 @@ export interface ChatSessionSummary {
   average_scores  : Record<string, number>;   // Its mean score for each biomarker it has scores for
 }
 
-// One chat in full: its summary, plus its transcript (with each word), scores, and recording
+// One chat in full: its summary, its starting setup, and its transcript, scores, and recording
 // (`ChatSessionSerializer`)
 export interface ChatSession extends ChatSessionSummary {
+  avatar     : string;               // Avatar it started with (`ChatRun.AVATAR_CHOICES`; "" when not recorded)
+  subtitles  : boolean | null;       // Subtitles on at the start (null when not recorded)
+  language   : LanguageChoice | "";  // The account's language at the start ("" when not recorded)
   audio      : SessionAudio | null;
   messages   : ChatMessage[];
   biomarkers : ChatBiomarkerScore[];

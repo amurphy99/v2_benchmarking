@@ -66,7 +66,7 @@ User (django.contrib.auth)
          ├─ Reminder                many
          ├─ Access                  many   the caregivers linked to this participant
          └─ ChatSession             many   one chat; at most one active per profile
-             ├─ ChatRun             1:1    task chats only: the condition and variant (runs/)
+             ├─ ChatRun             1:1    task chats only: the condition, variant, and starting setup (runs/)
              │   └─ TaskSnapshot    1:1    the task's private materials and last committed state
              ├─ ChatMessage         many   one utterance or reply (a reply keeps its stage `timing`)
              │   └─ ChatWord        many   the utterance's word-level STT timestamps
@@ -177,6 +177,7 @@ Activity
    | `Profile.LANGUAGE_CHOICES` | `LANGUAGE_CHOICES` in `frontend/src/api/models.ts` |
    | `ChatBiomarkerScore.BIOMARKER_CHOICES` | `BiomarkerType` in `frontend/src/api/models.ts`, and `frontend/src/pages/admin/components/biomarkers/biomarkerInfo.ts` |
    | `ChatSession.SOURCE_CHOICES` (the live ones) | `ALLOWED_SOURCES` in `services/middleware.py`, and `websocket/consumers/CLIENT_PROTOCOL.md` |
+   | `ChatRun.AVATAR_CHOICES` | `AVATARS` in `frontend/src/pages/common/avatar/avatarRegistry.tsx`, and `websocket/consumers/CLIENT_PROTOCOL.md` |
 
 5. **Test it**: REST and database tests in `chat_app/tests/`, consumer and harness tests in
    `chat_app/websocket/tests/`. Run both labels together

@@ -15,6 +15,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db                import database_sync_to_async as db_s2a
 
 # From this project
+from ...models                             import ChatRun
 from ...services                           import logging_utils as lu
 from ...services.db_services               import ChatService
 from  ..harnesses.registry                 import ChatTypeRejected, build_harness
@@ -32,8 +33,12 @@ from .utils   .groups       import claim_primary_connection, join_chat_consumer_
 from .handlers.ch_events    import handle_ws_command, forward_payload_to_client
 from .handlers.ws_events    import handle_receive_json
 
-# Close code for an unknown `chat_type`, `condition`, or `variant` (`CLIENT_PROTOCOL.md` §1)
+# Close code for an unrecognized chat selection or starting setup (`CLIENT_PROTOCOL.md` §1)
 CHAT_TYPE_REJECTED_CLOSE_CODE = 4005
+
+# The starting setup's query values, as a task chat's run saves them ("": left out)
+CHAT_RUN_AVATARS   = frozenset({""} | {value for value, _label in ChatRun.AVATAR_CHOICES})
+CHAT_RUN_SUBTITLES = {"": None, "on": True, "off": False}
 
 
 # ================================================================================
@@ -68,6 +73,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if self.source == "unknown":
             await self.close(code=4002); return
 
+        # The avatar and subtitles the client started with (a task chat's run saves them)
+        avatar, subtitles = self.scope["avatar"], self.scope["subtitles"]
+        if (avatar not in CHAT_RUN_AVATARS) or (subtitles not in CHAT_RUN_SUBTITLES):
+            logger.warning(f"{lu.CC_MAIN} Refused a chat connection: unrecognized setup (avatar {avatar!r}, subtitles {subtitles!r}).{lu.RESET}")
+            await self.close(code=CHAT_TYPE_REJECTED_CLOSE_CODE); return
+
         # Build the requested chat type's harness (the `ws/chat/activity/` route fixes the type)
         chat_type = self.scope["url_route"]["kwargs"].get("chat_type", self.scope["chat_type"])
         try: self.harness = build_harness(self, chat_type, self.scope["condition"], self.scope["variant"])
@@ -100,13 +111,15 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 name=f"connect::close-stale-session-{closed['id']}",
             )
 
-        # Load the most recent active session for this user (it records which chat type runs)
+        # Load the most recent active session for this user (it records what runs, and how it started)
         self.session = await db_s2a(ChatService.get_or_create_active_session)(
             self.user,
             source    = self.source,
             chat_type = self.harness.NAME,
             condition = self.harness.condition,
             variant   = self.harness.variant,
+            avatar    = avatar,
+            subtitles = CHAT_RUN_SUBTITLES[subtitles],
         )
         self.session_id = self.session.id
 

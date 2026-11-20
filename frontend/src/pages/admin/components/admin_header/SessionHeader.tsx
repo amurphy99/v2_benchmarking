@@ -1,21 +1,42 @@
-/* SessionHeader.tsx
+/* The admin chat pages' header: the chat's title, what it ran, and its status.
 --------------------------------------------------------------------------------
-Header component for the Admin ChatSession views. Shared by both the active chat
-page (AdminChat.tsx) and the inactive chat page (AdminChatInactive.tsx).
+`@frontend/src/pages/admin/components/admin_header/SessionHeader`
+
+Shared by the live chat page (`AdminChat`), the robot view (`AdminRobotView`),
+the completed chat page (`AdminChatInactive`), and the task details page
+(`AdminTaskDetails`). The left side has the back button, the title, and a line
+naming the account, the source, the mode, and what the chat ran. A completed
+task chat's two pages add pills under it for the setup it started with: its
+avatar, whether subtitles were on, and its language (each one only once
+recorded). The right side holds the page's buttons and the status pills.
 
 */
 import { useNavigate    } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { LuArrowLeft } from "react-icons/lu";
 
-import      { HeaderPills        } from "./HeaderPills";
-import      { AdminButton        } from "../ui/AdminButton";
-import type { SessionHeaderProps } from "./StatusComponents";
-import      { chatRunText        } from "../chat_lists/chatRunFilter";
+// From this project
+import type { ChatSession                    } from "@/api";
+import      { getAvatarEntry, hasAvatarEntry } from "@/pages/common/avatar/avatarRegistry";
+import      { chatRunText                    } from "../chat_lists/chatRunFilter";
+import      { languageLabel                  } from "../participants/ParticipantSettingsFields";
+import      { AdminButton                    } from "../ui/AdminButton";
+import      { Pill                           } from "../ui/Pill";
+import      { HeaderPills                    } from "./HeaderPills";
+import type { SessionHeaderProps             } from "./StatusComponents";
 
-// Optional props for added navigation buttons (to secondary analysis pages)
+// The setup a completed chat started with, from a task chat's run ("" or null: not recorded)
+type ChatSetup = Pick<ChatSession, "avatar" | "subtitles" | "language">;
+
+// Optional props: buttons to secondary analysis pages, and a completed chat's setup
 interface ExtendedProps extends SessionHeaderProps {
-    rightActions?: React.ReactNode;
+    rightActions? : React.ReactNode;
+    chatSetup?    : ChatSetup;         // Shown as pills under the meta line (the completed chat pages pass it)
+}
+
+// An avatar's name as the pickers show it (its recorded ID when this page no longer has it)
+function avatarName(id: string): string {
+    return hasAvatarEntry(id) ? getAvatarEntry(id).label : id;
 }
 
 // ================================================================================
@@ -33,12 +54,15 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
     };
 
     // ChatSession information
-    const { title, sessionId, username, source, mode, chatRun, rightActions } = props;
+    const { title, sessionId, username, source, mode, chatRun, rightActions, chatSetup } = props;
     const show_session_id = sessionId ? `#${sessionId}` : "#--";
 
     // What the chat ran, in one line (null until known, or when nothing was recorded), and whether it was a debug session
     const task  = ((chatRun === undefined) || (chatRun === null)) ? null : chatRunText(chatRun);
     const debug = (chatRun !== undefined) && (chatRun !== null) && chatRun.debug_mode;
+
+    // The setup it started with (null hides its pills: not given, or nothing recorded)
+    const setup = ((chatSetup === undefined) || ((chatSetup.avatar === "") && (chatSetup.subtitles === null) && (chatSetup.language === ""))) ? null : chatSetup;
 
     // UI Component
     return (
@@ -72,6 +96,15 @@ export const SessionHeader: React.FC<ExtendedProps> = (props) => {
                             {task      && <> · Task: <span className="text-admin-text/80">{task}</span></>}
                             {debug     && <> · <span className="font-medium text-admin-accent2" title="Started in debug mode: its features may have been switched partway through">Debug session</span></>}
                         </div>
+
+                        {/* The setup it started with */}
+                        {(setup !== null) ? (
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                                {(setup.avatar    !== ""  ) ? <Pill label="Avatar"    value={avatarName(setup.avatar)} />                                                       : null}
+                                {(setup.subtitles !== null) ? <Pill label="Subtitles" value={setup.subtitles ? "On" : "Off"} variant={setup.subtitles ? "accent" : "offline"} dot /> : null}
+                                {(setup.language  !== ""  ) ? <Pill label="Language"  value={languageLabel(setup.language)} />                                                  : null}
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
