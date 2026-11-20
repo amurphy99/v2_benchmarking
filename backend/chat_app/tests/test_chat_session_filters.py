@@ -16,7 +16,7 @@ from django.urls         import reverse
 from rest_framework.test import APIClient
 
 # From this project
-from chat_app.models import Account, ChatMessage, ChatSession, Profile
+from chat_app.models import Account, ChatMessage, ChatRun, ChatSession, Profile
 
 
 # ================================================================================
@@ -24,13 +24,14 @@ from chat_app.models import Account, ChatMessage, ChatSession, Profile
 # ================================================================================
 # A staff member's view of one participant's three finished chats of different types
 class ChatSessionRunFilterTests(TestCase):
-    # An open conversation (no condition or variant), and two planning chats in different conditions
+    # An open conversation with no run, and two planning chats with runs in different conditions
     def setUp(self) -> None:
         User    = get_user_model()
         account = Account.objects.create(user=User.objects.create_user(username="filter_participant"), role="patient")
         profile = Profile.objects.create(account=account)
         for chat_type, condition, variant in (("unguided", "", ""), ("cooperative_planning", "cues", "dinner_party"), ("cooperative_planning", "no_cues", "dinner_party")):
-            ChatSession.objects.create(profile=profile, source="webapp", is_active=False, chat_type=chat_type, condition=condition, variant=variant)
+            session = ChatSession.objects.create(profile=profile, source="webapp", is_active=False, chat_type=chat_type)
+            if condition: ChatRun.objects.create(session=session, condition=condition, variant=variant)
 
         self.api = APIClient()
         self.api.force_authenticate(user=User.objects.create_user(username="filter_staff", is_staff=True))

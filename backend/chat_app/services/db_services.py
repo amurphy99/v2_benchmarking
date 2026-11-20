@@ -21,7 +21,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # From this project
-from ..models         import ChatSession, SessionAudio, ChatMessage, ReplyNowEvent, ChatBiomarkerScore, ChatWord, UserSettings, LLMTurnLog
+from ..models         import ChatSession, SessionAudio, ChatMessage, ReplyNowEvent, ChatBiomarkerScore, ChatWord, UserSettings, LLMTurnLog, ChatRun, TaskSnapshot
 from ..api.mixins     import get_profile
 from  .               import logging_utils as lu
 from  .logging_utils  import RESET, BOLD, UNBOLD, RED
@@ -55,18 +55,22 @@ class ChatService:
     ) -> ChatSession:
         """
         Returns the single active ChatSession for the user or creates one if needed. A new
-        session starts in debug mode when the profile's switch is on.
+        session starts in debug mode when the profile's switch is on. A chat that runs a
+        condition or a variant (a task chat) records them on its `ChatRun`; other chats
+        have none.
         """
-        profile = get_profile(user)
-        session, created = ChatSession.objects.select_for_update().get_or_create(
-            profile   = profile,
-            source    = source,
-            chat_type = chat_type,
-            condition = condition,
-            variant   = variant,
-            is_active = True,
-            defaults  = {"debug_mode": profile.debug_mode},
-        )
+        # The active session that ran exactly this, if there is one (only the session row is
+        # locked: Postgres can't lock the missing run of a chat without one)
+        profile  = get_profile(user)
+        task_run = bool(condition or variant)
+        ran      = {"run__condition": condition, "run__variant": variant} if task_run else {"run__isnull": True}
+        session  = (ChatSession.objects.select_for_update(of=("self",))
+                    .filter(profile=profile, source=source, chat_type=chat_type, is_active=True, **ran).first())
+        if session is not None: return session
+
+        # A new session, and a task chat's run with it
+        session = ChatSession.objects.create(profile=profile, source=source, chat_type=chat_type, debug_mode=profile.debug_mode)
+        if task_run: ChatRun.objects.create(session=session, condition=condition, variant=variant)
         return session
 
     # Load the patient's initial recording preference for a newly connected session
@@ -341,12 +345,10 @@ class ChatService:
         if task_snapshot is not None: ChatService.save_task_snapshot(session_id, task_snapshot)
         return user_message, assistant_msg
     
-    # Store private task history without exposing it in the participant session serializer
+    # Store private task history on the task chat's run (only task harnesses send one)
     @staticmethod
     def save_task_snapshot(session_id: int, snapshot: dict) -> None:
-        session = ChatSession.objects.get(id=session_id)
-        session.task_snapshot = snapshot
-        session.save(update_fields=["task_snapshot"])
+        TaskSnapshot.objects.update_or_create(run=ChatRun.objects.get(session_id=session_id), defaults={"data": snapshot})
 
     # Biomarker Scores (might need to make a separate version if we decide to call this from anywhere else)
     # It is fine to pass the session here because we get the session from `add_biomarker_spans_bulk`
@@ -412,10 +414,11 @@ class ChatService:
     # ================================================================================
     @staticmethod
     def get_session_info(session_id):
-        # Pull session + profile + account + user + settings in one DB query
+        # Pull session + profile + account + user + settings + run in one DB query
+        # (`session_info` reads the run in async code, where an unloaded relation can't be fetched)
         session = (
             ChatSession.objects
-                .select_related("profile", "profile__account", "profile__account__user", "profile__settings_user")
+                .select_related("profile", "profile__account", "profile__account__user", "profile__settings_user", "run")
                 .get(id=session_id)
         )
 

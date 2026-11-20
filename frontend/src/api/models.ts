@@ -269,8 +269,8 @@ export interface ChatSessionSummary {
   taskSubtype   : string | null;
 
   chat_type     : string;          // Harness that ran ("" on sessions from before chat types were recorded)
-  condition     : string;          // Its cue set ("" for none)
-  variant       : string;          // Its task content ("" for none)
+  condition     : string;          // Its cue set, from a task chat's run ("" for a chat without one)
+  variant       : string;          // Its task content, from a task chat's run ("" for a chat without one)
   debug_mode    : boolean;         // Started in debug mode (its features may have been switched partway through)
 
   message_count   : number;                   // How many messages it has

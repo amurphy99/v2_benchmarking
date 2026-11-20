@@ -370,6 +370,7 @@ are constants at the top of `geometry.py`.
   measures (how far from the finish it stopped, and its path's length against the route), not
   a score.
 - **A per-turn research event log.** Both maps, the accumulated path, and each reply's route,
-  act, and waypoints are saved in `ChatSession.task_snapshot` with each committed reply and
-  shown in completed-session history. A timeline of cues and plans is not saved yet.
+  act, and waypoints are saved in the chat's task snapshot (`TaskSnapshot`, on its `ChatRun`)
+  with each committed reply and shown in completed-session history. A timeline of cues and
+  plans is not saved yet.
 - **HCRC maps 5 to 16.** Maps 1 to 4 are in; the rest of the corpus's 16 can be traced the same way.

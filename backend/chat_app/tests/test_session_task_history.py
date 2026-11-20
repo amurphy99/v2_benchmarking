@@ -3,6 +3,9 @@ Private task history access and atomic persistence with a committed exchange.
 --------------------------------------------------------------------------------
 `backend.chat_app.tests.test_session_task_history`
 
+A task chat records its run (condition and variant) as its session starts, and
+its task snapshot on that run; any other chat records neither.
+
 """
 from types         import SimpleNamespace
 from unittest.mock import patch
@@ -14,7 +17,7 @@ from django.urls         import reverse
 from rest_framework.test import APIClient
 
 # From this project
-from chat_app.models                                             import Access, Account, ChatSession, Profile
+from chat_app.models                                             import Access, Account, ChatRun, ChatSession, Profile, TaskSnapshot
 from chat_app.services.db_services                               import ChatService
 from chat_app.websocket.harnesses.cooperative_planning.harness    import PLANNING_SCENARIOS
 from chat_app.websocket.harnesses.cooperative_planning.plan_state import initial_state, planning_history
@@ -41,8 +44,10 @@ class SessionTaskHistoryTests(TestCase):
         Account.objects.create(user=self.outsider, role="caregiver")
         Access.objects.create(account=caregiver, profile=profile, permissions="view")
 
-        # One completed Map Task session and its history URL
-        self.session = ChatSession.objects.create(profile=profile, chat_type="map_task", variant="demo", is_active=False)
+        # One completed Map Task session, its run, and its history URL
+        self.profile = profile
+        self.session = ChatSession.objects.create(profile=profile, chat_type="map_task", is_active=False)
+        self.run     = ChatRun.objects.create(session=self.session, condition="cues", variant="demo")
         self.client  = APIClient()
         self.url     = reverse("session_task_history", kwargs={"sessionid": self.session.id})
 
@@ -68,8 +73,9 @@ class SessionTaskHistoryTests(TestCase):
 
         # Cooperative Planning: current scenario, no stage or decisions
         self.session.chat_type = "cooperative_planning"
-        self.session.variant   = "dinner_party"
+        self.run.variant       = "dinner_party"
         self.session.save()
+        self.run.save()
         view = self.client.get(self.url).data["view"]
         self.assertIsNone(view["stage"])
         self.assertTrue(all(item["state"] is None for item in view["items"]))
@@ -77,8 +83,9 @@ class SessionTaskHistoryTests(TestCase):
 
         # Speech elicitation: the current topic, no threads
         self.session.chat_type = "speech_elicitation"
-        self.session.variant   = "pet_person"
+        self.run.variant       = "pet_person"
         self.session.save()
+        self.run.save()
         view = self.client.get(self.url).data["view"]
         self.assertEqual((view["kind"], view["opening"], view["threads"]), ("speech_elicitation", ELICITATION_TOPICS["pet_person"].opening, None))
 
@@ -89,8 +96,7 @@ class SessionTaskHistoryTests(TestCase):
         path     = (harness.state.position, (0.4, 0.5), (0.6, 0.5))
         snapshot = harness.history_view(MapTaskState(position=path[-1], path=path))
         ChatService.add_exchange(self.session.id, "Go right", "Okay", task_snapshot=snapshot)
-        self.session.refresh_from_db()
-        self.assertEqual(self.session.task_snapshot, snapshot)
+        self.assertEqual(TaskSnapshot.objects.get(run=self.run).data, snapshot)
 
         # The endpoint returns the saved maps even after the map files are gone
         self.client.force_authenticate(user=self.staff)
@@ -109,9 +115,39 @@ class SessionTaskHistoryTests(TestCase):
         scenario = PLANNING_SCENARIOS["dinner_party"]
         snapshot = planning_history(scenario, initial_state(scenario))
         ChatService.add_message(self.session.id, "assistant", "Let's plan dinner", task_snapshot=snapshot)
-        self.session.refresh_from_db()
 
         # Both sides' constraints are kept
-        self.assertEqual(self.session.task_snapshot, snapshot)
+        self.assertEqual(TaskSnapshot.objects.get(run=self.run).data, snapshot)
         self.assertEqual(snapshot["stage"], "planning")
         self.assertTrue(snapshot["avatar_constraints"])
+
+    # A chat without a run (not a task chat) has no task history
+    def test_a_chat_without_a_run_has_no_task_history(self) -> None:
+        other = ChatSession.objects.create(profile=self.profile, chat_type="unguided", is_active=False)
+        self.client.force_authenticate(user=self.staff)
+        response = self.client.get(reverse("session_task_history", kwargs={"sessionid": other.id}))
+        self.assertEqual(response.data, {"recorded": False, "view": None})
+
+
+# ================================================================================
+# Recording a Run
+# ================================================================================
+class ChatRunRecordingTests(TestCase):
+    # A participant with no chats yet
+    def setUp(self) -> None:
+        self.user = get_user_model().objects.create_user(username="run_owner")
+        Profile.objects.create(account=Account.objects.create(user=self.user, role="patient"))
+
+    # A task chat records its run as its session starts, and finds the same session again
+    def test_a_task_chat_records_its_run(self) -> None:
+        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo")
+        self.assertEqual((session.run.condition, session.run.variant), ("cues", "demo"))
+
+        again = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="map_task", condition="cues", variant="demo")
+        self.assertEqual((again.id, ChatRun.objects.count()), (session.id, 1))
+
+    # A chat with no condition or variant (open conversation) records no run
+    def test_another_chat_records_none(self) -> None:
+        session = ChatService.get_or_create_active_session(self.user, source="webapp", chat_type="unguided", condition="", variant="")
+        self.assertIsNone(session.run_or_none)
+        self.assertEqual(ChatRun.objects.count(), 0)

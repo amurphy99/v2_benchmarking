@@ -35,8 +35,9 @@ from ..websocket.harnesses.map_task.harness import MAP_TASK_VARIANTS
 from ..websocket.harnesses.map_task.maps    import map_file_previews
 from rag_vectorstore.services.vdb_services import index_single_instruction, delete_instruction_embeddings
 
-# `ChatSession` fields recording what ran, each an optional exact-match filter on the session list
-SESSION_RUN_FIELDS = ("chat_type", "condition", "variant")
+# What ran, each an optional exact-match filter on the session list, and where it is stored
+# (a task chat's condition and variant are on its `ChatRun`; a chat without one has neither)
+SESSION_RUN_FIELDS = {"chat_type": "chat_type", "condition": "run__condition", "variant": "run__variant"}
 
 # ======================================================================= ===================================
 # Single-object endpoints (no list, one-to-one)
@@ -101,7 +102,7 @@ class ChatSessionView(generics.RetrieveAPIView):
     def get_object(self):
         sessionid = self.kwargs["sessionid"]
         sessions = (accessible_chat_sessions(self.request.user)
-                    .select_related  ("profile", "image", "audio")
+                    .select_related  ("profile", "image", "audio", "run")
                     .prefetch_related("messages__words", "biomarker_scores"))
         return get_object_or_404(sessions, id=sessionid)
 
@@ -222,7 +223,7 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         demo    = self.kwargs["demo"  ]
         
         # Start with the base query (unfiltered by profile), joining the profile each chat nests
-        objs = accessible_chat_sessions(self.request.user).select_related("profile__account__user", "profile__settings_user", "profile__goal", "image")
+        objs = accessible_chat_sessions(self.request.user).select_related("profile__account__user", "profile__settings_user", "profile__goal", "image", "run")
 
         # A list counts each chat's messages (distinct: access rows repeat); one chat loads them
         if self.action == "list": objs = objs.annotate(message_count=Count("messages", distinct=True))
@@ -237,8 +238,12 @@ class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
         elif int(demo) == 1:  objs = objs.filter (source="demo")
 
         # Optional exact matches on what ran (`?chat_type=map_task&variant=demo`; "" matches sessions without one)
-        for field in SESSION_RUN_FIELDS:
-            if field in self.request.query_params: objs = objs.filter(**{field: self.request.query_params[field]})
+        for field, lookup in SESSION_RUN_FIELDS.items():
+            if field not in self.request.query_params: continue
+            value = self.request.query_params[field]
+            match = Q(**{lookup: value})
+            if (value == "") and (field != "chat_type"): match |= Q(run__isnull=True)
+            objs = objs.filter(match)
 
         # Return ChatSessions ordered by creation date
         return objs.order_by("-date")
@@ -254,7 +259,7 @@ class LatestChatSessionView(ProfileMixin, generics.RetrieveAPIView):
         profile = self.get_profile()
         return (ChatSession.objects
                 .filter(profile=profile)
-                .select_related("profile", "image", "audio")
+                .select_related("profile", "image", "audio", "run")
                 .prefetch_related("messages__words", "biomarker_scores")
                 .order_by("-end_ts")
                 .first())

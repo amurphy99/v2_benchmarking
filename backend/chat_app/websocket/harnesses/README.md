@@ -31,9 +31,10 @@ Each chat type hardcodes its own conditions and variants in its folder. The two
 are independent, so a participant could run one map with cues and another without.
 A chat type that has none takes neither parameter, and its sessions store `""`.
 
-An unknown name refuses the connection with close code `4005`. The chat type,
-condition, and variant are saved on the `ChatSession`. The session API returns
-them, and filters on them with query parameters
+An unknown name refuses the connection with close code `4005`. The chat type is
+saved on the `ChatSession`, and a task chat's condition and variant on its
+`ChatRun` (`chat_app/models/runs/`; a chat with neither records no run). The
+session API returns them, and filters on them with query parameters
 (`/api/chatsessions/0/0/?chat_type=map_task&variant=demo`; `""` matches sessions
 without one). The Django admin lists and filters them, the admin listener gets
 them in `session_info`, and the Monitor page shows them on each chat and filters
@@ -509,11 +510,13 @@ from `chat_type`.
 <!-- -------------------------------------------------------------------------------- -->
 ## Completed task history
 
-`ChatSession.task_snapshot` holds the task materials and last committed state. The consumer
-stores `history_view()` before the harness starts, and each task reply carries its proposed
-snapshot in `ResponseOutcome.task_snapshot`. Saving the exchange also saves that snapshot,
-so a failed commit or cancelled generation cannot archive an uncommitted decision or move.
-The planning harness also awaits a snapshot write when `reply_then_track` finishes tracking.
+A task chat's `TaskSnapshot` (on its `ChatRun`, `chat_app/models/runs/`) holds the task
+materials and last committed state, in a table of its own so the chat lists never load it.
+The consumer stores `history_view()` before the harness starts, and each task reply carries
+its proposed snapshot in `ResponseOutcome.task_snapshot`. Saving the exchange also saves
+that snapshot, so a failed commit or cancelled generation cannot archive an uncommitted
+decision or move. The planning harness also awaits a snapshot write when `reply_then_track`
+finishes tracking.
 
 Map Task snapshots include both maps, the follower's full path, each saved reply (the kind
 of turn it answered, `route`; what it did, `act`; and the waypoints it added), and how the

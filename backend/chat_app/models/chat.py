@@ -8,6 +8,9 @@ TODO: Add a field to the ChatMessage model for the "source." This field should
       opening greeting, etc.).
 
 """
+from __future__ import annotations
+from typing     import TYPE_CHECKING
+
 from django.conf                    import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db                      import models
@@ -17,6 +20,8 @@ from django.utils                   import timezone
 # From this project
 from .accounts   import Profile
 from .field_args import init_args
+
+if TYPE_CHECKING: from .runs.run import ChatRun
 
 
 # ================================================================================
@@ -59,18 +64,13 @@ class ChatSession(models.Model):
     source  = models.CharField    (max_length=32, choices=SOURCE_CHOICES, default="webapp")
     date    = models.DateTimeField(auto_now_add=True)
 
-    # Chat type that ran, its cue set, and its task content (names in `websocket/harnesses/`)
-    # ("" when the chat type has none, and on sessions from before chat types were recorded)
+    # Chat type that ran (its name in `websocket/harnesses/`; "" on sessions from before chat types
+    # were recorded). A task chat's condition and variant are on its run (`runs/run.py`)
     chat_type = models.CharField(max_length=32, blank=True, default="")
-    condition = models.CharField(max_length=32, blank=True, default="")
-    variant   = models.CharField(max_length=32, blank=True, default="")
 
     # Started in debug mode, from the profile's switch (its features can be switched partway
     # through, so what ran may differ from its condition; each reply's timing says what was on)
     debug_mode = models.BooleanField(default=False)
-
-    # Private task materials and the last committed task state (admin history only)
-    task_snapshot = models.JSONField(null=True, blank=True, default=None)
 
     # TODO: Future field for what LLM version was used
     llmVersion = models.CharField(max_length=255, default="phi3_finetuned")
@@ -133,6 +133,11 @@ class ChatSession(models.Model):
         """ Returns {'prosody': 0.71, 'pragmatic': 0.42, ...} (missing biomarkers are omitted) """
         qs = (self.biomarker_scores.values("score_type").annotate(avg=Avg("score")))
         return {row["score_type"]: row["avg"] for row in qs}
+
+    # The run this chat recorded, or None for a chat without one (only task chats record a run)
+    @property
+    def run_or_none(self) -> ChatRun | None:
+        return self.run if hasattr(self, "run") else None
     
     class Meta:
         constraints = [UniqueConstraint(fields=["profile"], condition=Q(is_active=True), name="unique_active_session_per_profile",),] # One active session per profile

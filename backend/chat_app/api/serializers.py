@@ -270,6 +270,8 @@ class ChatSessionSummarySerializer(serializers.ModelSerializer):
     duration       = serializers.SerializerMethodField()
     average_scores = serializers.SerializerMethodField()
     message_count  = serializers.IntegerField(read_only=True)
+    condition      = serializers.SerializerMethodField()
+    variant        = serializers.SerializerMethodField()
 
     class Meta:
         model  = ChatSession
@@ -281,6 +283,10 @@ class ChatSessionSummarySerializer(serializers.ModelSerializer):
     def get_start_ts      (self, obj): return obj.start_ts
     def get_duration      (self, obj): return obj.duration
     def get_average_scores(self, obj): return obj.average_scores
+
+    # A task chat's cue set and task content, from its run ("" for a chat without one)
+    def get_condition(self, obj: ChatSession) -> str: return "" if (obj.run_or_none is None) else obj.run.condition
+    def get_variant  (self, obj: ChatSession) -> str: return "" if (obj.run_or_none is None) else obj.run.variant
 
 # One chat in full: its summary, plus its transcript (with each word), scores, and recording
 class ChatSessionSerializer(ChatSessionSummarySerializer):

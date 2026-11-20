@@ -63,6 +63,7 @@ async def send_initial_data(session_data, consumer):
     #       which avatar the user is actually looking at, so it can show that model's real
     #       action names in the control panel. Physical robots ignore it.
     start_dt = await ChatService.get_start_ts(session)
+    run      = session.run_or_none  # A task chat's condition and variant (loaded with the session, `get_session_info`)
     session_info = {
         "sessionId"      : session.id,
         "username"       : getattr(chat_user, "username",    str(chat_user)),
@@ -72,8 +73,8 @@ async def send_initial_data(session_data, consumer):
         "startTs"        : start_dt.timestamp() if start_dt else None,
         "messageCount"   : 0, # TODO: This just needs to be handled on the frontend
         "chat_type"      : session.chat_type,                       # What ran ("" for none, and on sessions from before chat types were recorded)
-        "condition"      : session.condition,
-        "variant"        : session.variant,
+        "condition"      : "" if (run is None) else run.condition,  # Its cue set ("" for a chat without a run)
+        "variant"        : "" if (run is None) else run.variant,    # Its task content ("" for a chat without a run)
         "run_biomarkers" : session_data["profile"].run_biomarkers,  # The participant's biomarker switch (off: the page hides the Biomarkers tab)
         "debug_mode"     : session.debug_mode,                      # Started in debug mode (features may be switched partway through)
     }

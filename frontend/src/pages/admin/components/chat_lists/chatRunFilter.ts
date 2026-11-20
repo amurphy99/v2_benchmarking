@@ -2,11 +2,12 @@
 --------------------------------------------------------------------------------
 `@frontend/src/pages/admin/components/chat_lists/chatRunFilter`
 
-Every session records the chat type its harness ran, its cue condition, and its
-task variant (`ChatSession` in `backend/chat_app/models/chat.py`; "" when it
-had none, and on sessions from before chat types were recorded). The session
-headers show them in one line with readable names, and the Chat History page
-filters its chat lists on them. Field names keep the wire's spelling.
+Every session records the chat type its harness ran, and a task chat also its
+cue condition and task variant (`ChatSession` and its `ChatRun`, in
+`backend/chat_app/models/`; "" when it had none, and on sessions from before
+chat types were recorded). The session headers show them in one line with
+readable names, and the Chat History page filters its chat lists on them. Field
+names keep the wire's spelling.
 
 */
 import type { ChatSessionSummary                 } from "@/api";

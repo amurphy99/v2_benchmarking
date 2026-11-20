@@ -3,7 +3,7 @@ from django.contrib  import admin
 import json
 from django.http import HttpResponse
 
-from .models import Account, Profile, Reminder, UserSettings, Goal, AlbumImage, ChatSession, SessionAudio, ChatMessage, RAGInstructions, Activity, LLMTurnLog
+from .models import Account, Profile, Reminder, UserSettings, Goal, AlbumImage, ChatSession, SessionAudio, ChatMessage, RAGInstructions, Activity, LLMTurnLog, ChatRun
 
 # TODO: Maybe we should add custom admin view and export logic for other models (such as biomarkers) as well to easily export data after collection. 
 
@@ -28,14 +28,36 @@ class ChatMessageInline(admin.TabularInline):
     def has_add_permission(self, request, obj=None):
         return False
 
+# A task chat's run: the condition and variant it ran with
+class ChatRunInline(admin.StackedInline):
+    model           = ChatRun
+    extra           = 0
+    readonly_fields = ("condition", "variant")
+    can_delete      = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
 @admin.register(ChatSession)
 class ChatSessionAdmin(admin.ModelAdmin):
-    list_display    = ("id", "profile", "source", "chat_type", "condition", "variant", "taskType", "is_active", "date", "end_ts")
-    list_filter     = ("is_active", "source", "chat_type", "condition", "variant", "taskType") # filtering based on speific fields
-    search_fields   = ("profile__account__user__username",)
-    readonly_fields = ("date", "end_ts", "start_ts", "duration")
-    inlines         = [ChatMessageInline]
-    actions         = ["export_sessions_as_json"]
+    list_display        = ("id", "profile", "source", "chat_type", "run_condition", "run_variant", "taskType", "is_active", "date", "end_ts")
+    list_filter         = ("is_active", "source", "chat_type", "run__condition", "run__variant", "taskType") # filtering based on speific fields
+    list_select_related = ("profile__account__user", "run")
+    search_fields       = ("profile__account__user__username",)
+    readonly_fields     = ("date", "end_ts", "start_ts", "duration")
+    inlines             = [ChatRunInline, ChatMessageInline]
+    actions             = ["export_sessions_as_json"]
+
+    # A task chat's cue set and task content, from its run (blank for a chat without one)
+    @admin.display(description="Condition", ordering="run__condition")
+    def run_condition(self, obj: ChatSession) -> str | None:
+        run = obj.run_or_none
+        return None if (run is None) else run.condition
+
+    @admin.display(description="Variant", ordering="run__variant")
+    def run_variant(self, obj: ChatSession) -> str | None:
+        run = obj.run_or_none
+        return None if (run is None) else run.variant
 
     def has_add_permission(self, request):
         return False  # sessions can not be manually created via admin

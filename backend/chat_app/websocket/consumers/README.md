@@ -447,7 +447,8 @@ closes the underlying chat session.
   (`../harnesses/`), never in the consumer, `ChatHandler`, or the frame routers.
 
 
-Completed task materials and state are archived privately in `ChatSession.task_snapshot`.
+Completed task materials and state are archived privately in the task chat's `TaskSnapshot`
+(on its `ChatRun`, `chat_app/models/runs/`).
 `processing/messages.py` passes a reply's snapshot to the same database transaction as its
 messages. The consumer saves initial materials before calling `harness.start()`. This adds
 no primary-client frame; the admin task details page uses the scoped REST task-history
