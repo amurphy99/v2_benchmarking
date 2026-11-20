@@ -129,7 +129,7 @@ export default function PlanningDetails({view}: {
                                         {item.state.agreed ?? "No agreed choice"}
                                         {((item.state.agreed !== null) && item.state.suggested_by) ? <span className="ml-2 text-sm font-normal text-admin-subtext">suggested by the {speakerName(item.state.suggested_by)}</span> : null}
                                     </p>
-                                    {(item.state.settling !== null) ? (
+                                    {((item.state.settling !== undefined) && (item.state.settling !== null)) ? (
                                         <p className="mt-2 mb-0 text-sm text-admin-subtext">Pending: {item.state.settling.choice} · proposed by the {speakerName(item.state.settling.by)}</p>
                                     ) : null}
                                     {(item.state.suggestions.length > 0) ? (
@@ -170,11 +170,11 @@ export default function PlanningDetails({view}: {
 // --------------------------------------------------------------------------------
 // Item Labels
 // --------------------------------------------------------------------------------
-// One decision's status: agreed, waiting for a yes, open, or never saved
+// One decision's status: agreed, waiting for a yes (older snapshots only), open, or never saved
 function itemStatus(item: PlanningItemHistory): string {
-    if (item.state === null)           return "Not recorded";
-    if (item.state.agreed !== null)    return "Agreed";
-    if (item.state.settling !== null)  return "Awaiting agreement";
+    if (item.state === null)                                                   return "Not recorded";
+    if (item.state.agreed !== null)                                            return "Agreed";
+    if ((item.state.settling !== undefined) && (item.state.settling !== null)) return "Awaiting agreement";
     return "Open";
 }
 

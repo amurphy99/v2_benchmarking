@@ -5,7 +5,6 @@
     "opening_line"   : "Hi! I'm so glad we're planning the club event together. We need to pick a theme, who does which job, and a way to invite people. Do you have any ideas?",
     "intro"          : "Today we're going to plan an event for our campus club together.",
     "start_line"     : "We need to pick a theme, who does which job, and a way to invite people. Do you have any ideas?",
-    "settle_example" : "So, a trivia night for the theme?",
     "closing_line"   : "That's the whole event planned, then. Thanks for planning this with me, the club is going to love it!",
     "items": [
         {"id": "theme",      "label": "Theme",           "also_called": ["event theme", "kind of event"]},

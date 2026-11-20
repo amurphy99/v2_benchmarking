@@ -337,13 +337,15 @@ is ready: the check usually answers first, and a slow one would otherwise hold a
 finished reply in silence (`features/reply_gate/config.py`).
 
 Each chat type adds its own notes to a check's prompt (`TurnEndCheck(self, notes)`,
-in its `prompts.py`) and sets its own hold (in its `config.py`):
+in its `prompts.py`) and sets its own hold (in its `config.py`). Notes that follow the
+chat's state can be a function instead, called each time the check runs
+(`MisheardCheck(self, lambda: misheard_notes(self.scenario, self.state))`):
 
 | Chat type | Hold | What its notes add |
 |---|---|---|
 | `speech_elicitation` | 2.5 s | A pause partway through a story or an explanation is not its end |
 | `map_task` | 2.0 s | A direction that breaks off before where it stops isn't finished. The misheard check gets every landmark name on either map, asks about a near-miss name even when it is easy to guess (the turn is read in code, which only knows exact names), and never treats a name the avatar's map lacks as misheard |
-| `cooperative_planning` | 2.0 s | A list of options or a proposal that breaks off isn't finished. The misheard check gets what is being planned and its items |
+| `cooperative_planning` | 2.0 s | A list of options or a proposal that breaks off isn't finished. The misheard check gets what is being planned, its items, and the ideas on the table as each check runs, so a slip that sounds like one of them is read as that idea, and a question about a word names the idea it likely was |
 
 Verdicts are only logged for now; the research event log will record them once
 it exists. The check's call and any hold show in the reply's timing
@@ -500,7 +502,7 @@ Map Task snapshots include both maps, the follower's full path, each saved reply
 of turn it answered, `route`; what it did, `act`; and the waypoints it added), and how the
 task ended (`ended`: `reached_finish`, `giver_confirmed`, or null). Planning
 snapshots include the scenario, both sides' constraints, agreements (with the side that first
-suggested each), pending choices, suggestions, refusals (with who suggested each), every
+suggested each), suggestions, refusals (with who suggested each), every
 choice either side put forward, the avatar's constraints it mentioned, and the approval stage.
 Both also carry the intro's record (`intro`, null for a chat without one): whether the
 participant said they had done one before, whether they heard how it works, how many

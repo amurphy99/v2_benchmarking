@@ -21,7 +21,7 @@ PLANNING_REPLY_THINKING    = False  # The spoken reply
 PLANNING_COMBINED_THINKING = False  # The single call that does both
 
 # How each turn is answered: "track_then_reply", "single_call", or "reply_then_track" (`pipelines.py`)
-PLANNING_PIPELINE = "track_then_reply"
+PLANNING_PIPELINE = "single_call"
 
 
 # --------------------------------------------------------------------------------

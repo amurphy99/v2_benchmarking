@@ -6,23 +6,25 @@ The plan the two sides are building, the rules for changing it, and the card.
 The LLM never edits the plan. Its calls propose changes (`response_models.py`),
 and `apply_changes` makes only the ones these rules allow:
 
-* A choice goes on the card only when one side asks to settle on it ("So,
-  breadsticks for the starter?") and the other side says yes. A side can't accept
-  or decline its own request.
+* A choice goes on the card as soon as one side says yes to the other side's
+  idea (`agree`); nothing waits for a confirmation. A side can't agree to its own
+  idea, or to one the other side turned down. Agreeing to a new choice for an
+  item already agreed replaces it.
 * Turning a choice down, or reopening an agreed item, moves that choice to the
   item's turned-down list, with who turned it down and why. A choice suggested
   again comes back off that list.
-* The plan can be approved only during the final check (the avatar has read the
-  whole plan back); reopening any item ends the final check.
+* The plan can be approved only during the final check (the whole plan has been
+  read back); changing or reopening any item ends the final check.
 
 A change the rules don't allow is kept with the reason it was refused, for the
 turn's log and the notebook view. Choices match ignoring case and extra spaces.
 Every choice either side puts forward is also kept, with the side that did so
 first, so the completed-session history can say who suggested what.
 
-The participant's card shows their own brief and constraints, the agreed
-choices, and a choice waiting for a yes. It goes out as a `task_card` frame
-(`HARNESS_PROTOCOL.md` §13) whenever a saved reply changes it. Once the chat
+The participant's card shows their own brief and constraints, and the agreed
+choices. It goes out as a `task_card` frame (`HARNESS_PROTOCOL.md` §13) whenever
+a saved reply changes it. Its lines still carry `pending`, always null now that
+nothing waits for a yes, for clients that read it. Once the chat
 ends, their client is shown the avatar's side too: its brief and constraints,
 marking the ones it mentioned (`task_reveal`, §14).
 
@@ -60,11 +62,10 @@ class Refusal:
     by     : Side
     reason : str
 
-# One item: the choice on the card, a choice waiting for a yes, and the ideas so far
+# One item: the choice on the card, and the ideas so far
 @dataclass(frozen=True, slots=True)
 class ItemState:
     agreed      : str | None             = None  # On the card (None while the item is open)
-    settling    : Suggestion | None      = None  # Asked to settle on, waiting for the other side's yes (`by` asked)
     suggestions : tuple[Suggestion, ...] = ()    # Ideas under discussion
     refused     : tuple[Refusal, ...]    = ()    # Ideas turned down
     put_forward : tuple[Suggestion, ...] = ()    # Every choice either side has put forward, each with the side that did first (never pruned)
@@ -151,47 +152,28 @@ def _apply(state: PlanningState, by: Side, change: Change) -> tuple[PlanningStat
             put_forward = _with_idea(item.put_forward, change.choice, by),
         )), ""
 
-    # Turning an idea down (a choice waiting for a yes, or already agreed, is taken back too)
+    # Saying yes to the other side's idea: on the card at once (in place of a choice agreed before)
+    if change.op == "agree":
+        if _same(item.agreed, change.choice):                                                 return state, "already agreed"
+        if any(_same(s.choice, change.choice) and (s.by == by) for s in item.suggestions):    return state, "a side can't agree to its own idea"
+        if any(_same(r.choice, change.choice) and (r.by != by) for r in item.refused):        return state, "the other side turned it down"
+        changed = _with_item(state, change.item, replace(item,
+            agreed      = change.choice,
+            suggestions = _without_suggestion(item.suggestions, change.choice),
+            refused     = _without_refusal(item.refused, change.choice),
+            put_forward = _with_idea(item.put_forward, change.choice, _other(by)),  # An idea agreed to came from the other side
+        ))
+        return (_end_final_check(changed) if (item.agreed is not None) else changed), ""
+
+    # Turning an idea down (one already agreed comes off the card)
     if change.op == "reject":
         agreed_dropped = _same(item.agreed, change.choice)
         changed = _with_item(state, change.item, replace(item,
             agreed      = None if agreed_dropped else item.agreed,
-            settling    = None if ((item.settling is not None) and _same(item.settling.choice, change.choice)) else item.settling,
             suggestions = _without_suggestion(item.suggestions, change.choice),
             refused     = (*item.refused, Refusal(change.choice, by, change.reason)),
         ))
         return (_end_final_check(changed) if agreed_dropped else changed), ""
-
-    # Asking to make a choice final (it joins the ideas if it wasn't one)
-    if change.op == "ask_to_settle":
-        if _same(item.agreed, change.choice): return state, "already agreed"
-        suggested = any(_same(s.choice, change.choice) for s in item.suggestions)
-        return _with_item(state, change.item, replace(item,
-            settling    = Suggestion(change.choice, by),
-            suggestions = item.suggestions if suggested else (*item.suggestions, Suggestion(change.choice, by)),
-            refused     = _without_refusal(item.refused, change.choice),
-            put_forward = _with_idea(item.put_forward, change.choice, by),
-        )), ""
-
-    # Saying yes to the other side's request: the choice goes on the card
-    if change.op == "accept":
-        if item.settling is None:    return state, "nothing is waiting for a yes"
-        if item.settling.by == by:   return state, "a side can't accept its own request"
-        return _with_item(state, change.item, replace(item,
-            agreed      = item.settling.choice,
-            settling    = None,
-            suggestions = _without_suggestion(item.suggestions, item.settling.choice),
-        )), ""
-
-    # Saying no to the other side's request: the choice is turned down
-    if change.op == "decline":
-        if item.settling is None:    return state, "nothing is waiting for a yes"
-        if item.settling.by == by:   return state, "a side can't decline its own request"
-        return _with_item(state, change.item, replace(item,
-            settling    = None,
-            suggestions = _without_suggestion(item.suggestions, item.settling.choice),
-            refused     = (*item.refused, Refusal(item.settling.choice, by, change.reason)),
-        )), ""
 
     # Changing one's mind about an agreed item: it's open again, and the final check ends
     if item.agreed is None: return state, "nothing is agreed for it yet"
@@ -212,7 +194,11 @@ def _same(first: str | None, second: str) -> bool:
 def _with_item(state: PlanningState, item_id: str, item: ItemState) -> PlanningState:
     return replace(state, items={**state.items, item_id: item})
 
-# The plan out of its final check (an item is open again)
+# The side that isn't this one
+def _other(side: Side) -> Side:
+    return "avatar" if (side == "user") else "user"
+
+# The plan out of its final check (an item changed, or is open again)
 def _end_final_check(state: PlanningState) -> PlanningState:
     return replace(state, stage="planning") if (state.stage == "final_check") else state
 
@@ -247,9 +233,9 @@ def card_frame(scenario: Scenario, state: PlanningState) -> dict[str, object]:
         "complete"    : state.stage == "approved",
     }}
 
-# One item's line: its label, the choice on the card, and a choice waiting for a yes
+# One item's line: its label and agreed choice (`pending` stays null: nothing waits for a yes)
 def _card_line(item_id: str, label: str, item: ItemState) -> dict[str, object]:
-    return {"id": item_id, "label": label, "value": item.agreed, "pending": None if (item.settling is None) else item.settling.choice}
+    return {"id": item_id, "label": label, "value": item.agreed, "pending": None}
 
 # Send the participant's card to the primary client
 async def send_task_card(consumer: ChatConsumer, scenario: Scenario, state: PlanningState) -> None:
@@ -291,7 +277,6 @@ def _item_history(item: ItemState) -> dict[str, object]:
     return {
         "agreed"       : item.agreed,
         "suggested_by" : None if (item.agreed is None) else _first_by(item.put_forward, item.agreed),
-        "settling"     : None if (item.settling is None) else asdict(item.settling),
         "suggestions"  : [asdict(idea) for idea in item.suggestions],
         "refused"      : [{**asdict(idea), "suggested_by": _first_by(item.put_forward, idea.choice)} for idea in item.refused],
         "put_forward"  : [asdict(idea) for idea in item.put_forward],

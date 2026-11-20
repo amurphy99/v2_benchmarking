@@ -10,11 +10,14 @@ they want or must avoid. The instructions open with the scenario's brief for the
 avatar (who it is, and who the user is). The participant's own brief and
 constraints are never in a prompt.
 
-A reply can also carry a directive from code, for a turn that has to do one
-thing: read the finished plan back, or nudge a participant who has gone quiet.
+A reply can also carry a directive from code: nudge a participant who has gone
+quiet. Once every item is agreed, code reads the plan back itself, with a fixed
+recap question (`recap_line`) after the reply's own words.
 
 The reply check (`features/reply_gate/`) gets this chat's own notes on telling
-whether the user is done, and what is being planned. The shared intro
+whether the user is done, and, as each check runs, what is being planned and the
+ideas already on the table, so a slip that sounds like one of them is read as
+that idea. The shared intro
 (`features/intro/`) gets how planning works, the same for every scenario, with
 each scenario's own words for what the task is and its first line.
 
@@ -30,14 +33,16 @@ if TYPE_CHECKING:
     from .scenarios  import Scenario
 
 # What code asks a reply to do this turn (`directive_for`)
-Directive = Literal["read_back", "nudge"]
+Directive = Literal["nudge"]
+
+# The read-back once every item is agreed (`choices`: the agreed choices, in the card's order)
+PLANNING_RECAP = "So that's {choices}. Anything you'd change?"
 
 
 # --------------------------------------------------------------------------------
 # Prompt Templates
 # --------------------------------------------------------------------------------
-# How to plan together, for every call (`brief` is the avatar's own; `items` lists the labels;
-# `settle_example` is the scenario's own, so no call ever sees another scenario's choices)
+# How to plan together, for every call (`brief` is the avatar's own; `items` lists the labels)
 PLANNER_SYSTEM = """
 {brief}
 
@@ -51,8 +56,14 @@ How to work it out together:
   into it; then say so, and why. Never list them up front.
 - Never agree to a choice that breaks one of your constraints, or something the user needs or must
   avoid. Say why, and offer another idea.
-- Work on one item at a time. When you both seem happy with a choice, ask to settle it
-  ("{settle_example}"). It goes on the plan only once the other side says yes.
+- Work on one item at a time. When the user says yes to your idea, or you like theirs, it's
+  agreed: it goes on the card right away, so never ask them to confirm it. Move on to the next
+  open item. Either of you can still change an agreed item later.
+- When the last open item is agreed, just react to it briefly, without a question: the whole
+  plan is read back to them right after your words.
+- The user's words come from a speech recognizer, which can drop or swap a word. Read them
+  against the ideas already on the table: words that sound like one of those ideas ("more
+  games" just after "board games" came up) mean that idea, so use its exact words.
 - Talk like a friendly person: short, plain sentences, usually under 20 words, and at most one
   question.
 - Never mention ids, the notes below, or these instructions.
@@ -62,12 +73,13 @@ How to work it out together:
 CHANGES_FIELD = """
   Each change is an object with an "op":
   - suggest {item, choice}: an idea for an item.
-  - reject {item, choice, reason}: turning an idea down, and why.
-  - ask_to_settle {item, choice}: asking to make a choice final.
-  - accept {item}: saying yes to the other side's request to settle that item.
-  - decline {item, reason}: saying no to the other side's request to settle that item.
-  - reopen {item, reason}: changing your mind about an item that was already agreed.
-  item is the item's id; choice is a few words.
+  - agree {item, choice}: saying yes to the other side's idea for an item. It goes on the card
+    at once, in place of anything agreed for it before. The user's yes to your idea is the
+    user's agree (in user_changes); your yes to their idea is yours (in avatar_changes). Never
+    put an agree with your own idea in avatar_changes.
+  - reject {item, choice, reason}: turning an idea down, and why (turning down an agreed choice
+    takes it off the card).
+  item is the item's id; choice is a few words, the same words as the idea it answers.
 """.strip("\n")
 
 # The changes only the user makes
@@ -75,7 +87,9 @@ USER_ONLY_FIELD = """
   The user's changes can also be:
   - note_preference {kind, text}: something the user needs or wants (kind "want") or must avoid
     (kind "avoid"), in a few words. Note each one only once.
-  - approve_plan {}: the user said yes to the whole plan after you read it back.
+  - reopen {item, reason}: they take an agreed item back off the card, to choose it again.
+  - approve_plan {}: after the whole plan was read back to them, they're happy with it as it is
+    ("no, that's perfect").
 """.strip("\n")
 
 # The change only the avatar makes
@@ -92,7 +106,7 @@ BEHAVIOR_FIELD = """
   - check_card: read your card carefully first, when you bring up one of your constraints.
   - nod: a nod, when you agree or take up their idea.
   - pleased: a warm smile, when you like their idea.
-  - excited: a big happy reaction, when an item gets settled.
+  - excited: a big happy reaction, when an item gets agreed.
   - apologetic: a sorry look, when you have to turn their idea down.
   - ponder: think it over first, when you need a moment to come up with an idea.
   - surprised: a surprised look, when something they said is unexpected.
@@ -159,12 +173,8 @@ then your reply to it (the last message). Fill in:
 
 # What each directive asks of the reply (`label` is the first open item's)
 DIRECTIVES = {
-    "read_back" : "Every item is agreed. Read the whole plan back in one or two short sentences, and ask if they're happy with it.",
-    "nudge"     : "The user has gone quiet. In one short, friendly sentence, invite them to keep going with the {label}.",
+    "nudge" : "The user has gone quiet. In one short, friendly sentence, invite them to keep going with the {label}.",
 }
-
-# Who did something, in the plan block's words
-SIDE_WORDS = {"user": "the user", "avatar": "you"}
 
 # What the reply check should know about this chat when it judges whether the user is done
 PLANNING_TURN_END_NOTES = """
@@ -184,11 +194,16 @@ PLANNING_INTRO_RULES = (
 # What an answer to the intro that already starts the planning holds
 PLANNING_INTRO_STARTS_TASK = "an idea for the plan, or something they need or want"
 
-# What the reply check should know about this chat when it looks for a misheard word (`event` and `items` come from the scenario)
+# What the reply check should know about this chat when it looks for a misheard word
+# (`event` and `items` come from the scenario, `ideas` from the plan as the check runs)
 PLANNING_MISHEARD_NOTES = """
 - The names of foods, places, and activities are easily misheard. Read through a slip when the
   choice it stands for is clear, and choose clarify when you can't tell what they chose.
 - They are planning {event}, choosing: {items}.
+- The ideas on the table so far: {ideas}. Words that sound like one of them ("more games" just
+  after "board games") mean that idea. When you do have to clarify, ask about the idea you
+  think they meant, by name ("Sorry, did you mean board games?"), rather than repeating the
+  misheard words.
 """.strip()
 
 
@@ -204,25 +219,38 @@ def build_messages(
     directive : Directive | None,      # What code asks of a reply this turn (None for nothing)
 ) -> list[dict[str, str]]:
     items  = ", ".join(item.label.lower() for item in scenario.items)
-    system = f"{PLANNER_SYSTEM.format(brief=scenario.avatar.brief, items=items, settle_example=scenario.settle_example)}\n\nYOUR TASK:\n{task}"
+    system = f"{PLANNER_SYSTEM.format(brief=scenario.avatar.brief, items=items)}\n\nYOUR TASK:\n{task}"
     if directive is not None: system += f"\n\nRIGHT NOW: {_directive_text(directive, scenario, state)}"
     return [{"role": "system", "content": f"{system}\n\n{plan_block(scenario, state)}"}, *history]
 
-# What code asks of the reply this turn: read back a finished plan, or nudge a quiet user
+# What code asks of the reply this turn: a nudge for a quiet user, while items are still open
 def directive_for(state: PlanningState, *, nudge: bool) -> Directive | None:
-    if (state.stage == "planning") and state.all_agreed: return "read_back"
-    if nudge and state.open_items:                       return "nudge"
-    return None
+    return "nudge" if (nudge and state.open_items) else None
 
-# A directive in words
+# A directive in words (the nudge names the first open item)
 def _directive_text(directive: Directive, scenario: Scenario, state: PlanningState) -> str:
-    if directive == "read_back": return DIRECTIVES["read_back"]
     label = next(item.label.lower() for item in scenario.items if item.id == state.open_items[0])
-    return DIRECTIVES["nudge"].format(label=label)
+    return DIRECTIVES[directive].format(label=label)
 
-# The reply check's notes on misheard words for one scenario (what is being planned, and its items)
-def misheard_notes(scenario: Scenario) -> str:
-    return PLANNING_MISHEARD_NOTES.format(event=scenario.event, items=", ".join(item.label.lower() for item in scenario.items))
+# The read-back once every item is agreed ("So that's soup and pie. Anything you'd change?")
+def recap_line(scenario: Scenario, state: PlanningState) -> str:
+    choices = [state.items[item.id].agreed for item in scenario.items]
+    spoken  = f"{', '.join(choices[:-1])}, and {choices[-1]}" if (len(choices) > 2) else " and ".join(choices)
+    return PLANNING_RECAP.format(choices=spoken)
+
+# The misheard check's notes as it runs: what is planned, its items, and the ideas on the table
+def misheard_notes(scenario: Scenario, state: PlanningState) -> str:
+    items = ", ".join(item.label.lower() for item in scenario.items)
+    return PLANNING_MISHEARD_NOTES.format(event=scenario.event, items=items, ideas=_ideas_text(scenario, state))
+
+# Every idea on the table by item ("music: lo-fi beats (agreed), jazz"), or "none yet"
+def _ideas_text(scenario: Scenario, state: PlanningState) -> str:
+    parts = []
+    for item in scenario.items:
+        current = state.items[item.id]
+        ideas   = ([f"{current.agreed} (agreed)"] if (current.agreed is not None) else []) + [idea.choice for idea in current.suggestions]
+        if ideas: parts.append(f"{item.label.lower()}: {', '.join(ideas)}")
+    return "; ".join(parts) or "none yet"
 
 # The intro's lines for one scenario: its description and first line, and how planning works
 def intro_script(scenario: Scenario) -> IntroScript:
@@ -243,7 +271,7 @@ def plan_block(scenario: Scenario, state: PlanningState) -> str:
     # Every item, and where the plan stands
     lines += ["", "THE PLAN SO FAR:"]
     lines += [f"- {item.label} [id: {item.id}]: {_item_text(state.items[item.id])}" for item in scenario.items]
-    if state.stage == "final_check": lines.append("You have read the whole plan back and are waiting for the user's yes.")
+    if state.stage == "final_check": lines.append("The whole plan has been read back to the user, and you're waiting to hear whether they'd change anything.")
 
     # What the user has said they need or must avoid
     lines += ["", "WHAT THE USER HAS TOLD YOU:"]
@@ -252,15 +280,12 @@ def plan_block(scenario: Scenario, state: PlanningState) -> str:
     if not (state.user_wants or state.user_avoids): lines.append("- Nothing yet.")
     return "\n".join(lines)
 
-# One item's state in words: agreed, or open with what's waiting for a yes, the ideas, and the turned-down choices
+# One item's state in words: agreed, or open with the ideas and the turned-down choices
 def _item_text(item: ItemState) -> str:
     if item.agreed is not None: return f"agreed: {item.agreed}."
 
     # An open item
     parts = ["open."]
-    if item.settling is not None:
-        waiting = "the user's yes" if (item.settling.by == "avatar") else "your yes"
-        parts.append(f"Waiting for {waiting} on \"{item.settling.choice}\" ({SIDE_WORDS[item.settling.by]} asked to settle on it).")
     if item.suggestions: parts.append(f"Ideas: {', '.join(f'{s.choice} ({_who(s.by)})' for s in item.suggestions)}.")
     else:                parts.append("No ideas yet.")
     if item.refused:     parts.append(f"Turned down: {', '.join(f'{r.choice} (by {_who(r.by)}: {r.reason})' for r in item.refused)}.")

@@ -25,7 +25,7 @@ from chat_app.websocket.harnesses.cooperative_planning.harness         import MS
 from chat_app.websocket.harnesses.cooperative_planning.pipelines       import PlanningTurn, reply_then_track, single_call, track_then_reply
 from chat_app.websocket.harnesses.cooperative_planning.plan_state      import PlanningState, Suggestion, apply_changes, card_frame, initial_state, planning_history, planning_reveal
 from chat_app.websocket.harnesses.cooperative_planning.planning_api    import PlanningAPIError
-from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, plan_block
+from chat_app.websocket.harnesses.cooperative_planning.prompts         import COMBINED_TASK, QUICK_REPLY_TASK, REPLY_TASK, TRACK_EXCHANGE_TASK, TRACK_TASK, build_messages, directive_for, misheard_notes, plan_block, recap_line
 from chat_app.websocket.harnesses.cooperative_planning.response_models import models_for_scenario
 from chat_app.websocket.harnesses.cooperative_planning.scenarios       import PLANNING_SCENARIOS_DIR, load_scenario
 from chat_app.websocket.harnesses.features.intro.flow                  import IntroState
@@ -79,20 +79,24 @@ def plan_update(*changes: dict[str, object]) -> object:
 def spoken_turn(message: str, *changes: dict[str, object], behavior: str = "none", about: str | None = None) -> object:
     return MODELS.spoken_turn.model_validate({"basis": "replied", "avatar_changes": list(changes), "behavior": behavior, "about": about, "message": message})
 
-# The plan with the starter settled on breadsticks (the avatar asked, and the user said yes)
+# A single call's response: the user's changes, the avatar's, and the reply
+def combined_turn(message: str, user: tuple[dict[str, object], ...] = (), avatar: tuple[dict[str, object], ...] = (), behavior: str = "none") -> object:
+    return MODELS.combined_turn.model_validate({"basis": "both", "user_changes": list(user), "avatar_changes": list(avatar), "behavior": behavior, "about": None, "message": message})
+
+# The plan with each listed item agreed: the avatar's idea, and the user's yes to it
+def agreed_on(*choices: tuple[str, str], stage: str = "planning") -> PlanningState:
+    state = initial_state(SCENARIO)
+    for item_id, choice in choices:
+        state, _ = apply_changes(state, [("avatar", avatar_change(op="suggest", item=item_id, choice=choice)), ("user", user_change(op="agree", item=item_id, choice=choice))])
+    return replace(state, stage=stage)
+
+# The plan with the starter agreed on breadsticks
 def starter_settled() -> PlanningState:
-    state, _ = apply_changes(initial_state(SCENARIO), [
-        ("avatar", avatar_change(op="ask_to_settle", item="starter", choice="breadsticks")),
-        ("user",   user_change  (op="accept",        item="starter")),
-    ])
-    return state
+    return agreed_on(("starter", "breadsticks"))
 
 # The plan with every item agreed
 def every_item_settled(stage: str = "planning") -> PlanningState:
-    state = initial_state(SCENARIO)
-    for item_id, choice in (("starter", "breadsticks"), ("main", "pasta"), ("dessert", "tiramisu")):
-        state, _ = apply_changes(state, [("avatar", avatar_change(op="ask_to_settle", item=item_id, choice=choice)), ("user", user_change(op="accept", item=item_id))])
-    return replace(state, stage=stage)
+    return agreed_on(("starter", "breadsticks"), ("main", "pasta"), ("dessert", "tiramisu"), stage=stage)
 
 # One reply attempt after the avatar's opening line
 def make_attempt(text: str, trigger: str = "automatic") -> TurnAttempt:
@@ -179,31 +183,45 @@ class PlanRuleTests(unittest.TestCase):
     """
     The model only proposes changes; code decides which ones the task allows.
     """
-    # A choice waits for the other side's yes, then goes on the card
-    def test_a_choice_goes_on_the_card_only_when_the_other_side_says_yes(self) -> None:
-        asked, _ = apply_changes(initial_state(SCENARIO), [("avatar", avatar_change(op="ask_to_settle", item="starter", choice="breadsticks"))])
-        self.assertIsNone(asked.items["starter"].agreed)
-        self.assertEqual(asked.items["starter"].settling.choice, "breadsticks")
-
-        settled, results = apply_changes(asked, [("user", user_change(op="accept", item="starter"))])
-        self.assertEqual(settled.items["starter"].agreed, "breadsticks")
-        self.assertIsNone(settled.items["starter"].settling)
+    # A yes to the other side's idea puts it on the card at once, credited to the side that had it
+    def test_a_yes_to_the_other_sides_idea_puts_it_on_the_card(self) -> None:
+        suggested, _    = apply_changes(initial_state(SCENARIO), [("avatar", avatar_change(op="suggest", item="starter", choice="breadsticks"))])
+        agreed, results = apply_changes(suggested, [("user", user_change(op="agree", item="starter", choice="breadsticks"))])
+        item = agreed.items["starter"]
+        self.assertEqual((item.agreed, item.suggestions, item.put_forward), ("breadsticks", (), (Suggestion("breadsticks", "avatar"),)))
         self.assertEqual(results[0].refused, "")
 
-    # Neither side can settle its own request, and nothing can be accepted with nothing waiting
-    def test_a_side_cannot_accept_its_own_request(self) -> None:
-        asked, _       = apply_changes(initial_state(SCENARIO), [("user", user_change(op="ask_to_settle", item="main", choice="pasta"))])
-        after, results = apply_changes(asked, [("user", user_change(op="accept", item="main")), ("avatar", avatar_change(op="accept", item="dessert"))])
-        self.assertEqual(after, asked)
-        self.assertEqual([result.refused for result in results], ["a side can't accept its own request", "nothing is waiting for a yes"])
+    # A side can't agree to its own idea, or to one the other side turned down
+    def test_a_side_cannot_agree_to_its_own_idea_or_one_turned_down(self) -> None:
+        state, _ = apply_changes(initial_state(SCENARIO), [
+            ("user",   user_change  (op="suggest", item="main",    choice="pasta")),
+            ("avatar", avatar_change(op="reject",  item="dessert", choice="ice cream", reason="it has to be made ahead")),
+        ])
+        after, results = apply_changes(state, [("user", user_change(op="agree", item="main", choice="pasta")), ("user", user_change(op="agree", item="dessert", choice="ice cream"))])
+        self.assertEqual(after, state)
+        self.assertEqual([result.refused for result in results], ["a side can't agree to its own idea", "the other side turned it down"])
 
-    # Saying no to a request turns that choice down, with who said no and why
-    def test_declining_turns_the_choice_down_with_the_reason(self) -> None:
-        asked, _    = apply_changes(initial_state(SCENARIO), [("avatar", avatar_change(op="ask_to_settle", item="main", choice="roast lamb"))])
-        declined, _ = apply_changes(asked, [("user", user_change(op="decline", item="main", reason="a guest is vegetarian"))])
-        item = declined.items["main"]
-        self.assertIsNone(item.settling)
-        self.assertEqual((item.refused[0].choice, item.refused[0].by, item.refused[0].reason), ("roast lamb", "user", "a guest is vegetarian"))
+    # A yes to an idea never noted still counts, credited to the other side (calls can miss one)
+    def test_a_yes_to_an_idea_never_noted_still_counts(self) -> None:
+        agreed, _ = apply_changes(initial_state(SCENARIO), [("user", user_change(op="agree", item="dessert", choice="tiramisu"))])
+        self.assertEqual((agreed.items["dessert"].agreed, agreed.items["dessert"].put_forward), ("tiramisu", (Suggestion("tiramisu", "avatar"),)))
+
+    # A yes to a new idea changes an agreed item, and ends the final check
+    def test_a_new_yes_changes_an_agreed_item_and_ends_the_final_check(self) -> None:
+        changed, _ = apply_changes(every_item_settled("final_check"), [
+            ("user",   user_change  (op="suggest", item="main", choice="risotto")),
+            ("avatar", avatar_change(op="agree",   item="main", choice="risotto")),
+        ])
+        self.assertEqual((changed.items["main"].agreed, changed.stage, changed.all_agreed), ("risotto", "planning", True))
+
+    # Turning an idea down keeps who turned it down and why
+    def test_turning_an_idea_down_keeps_who_and_why(self) -> None:
+        state, _ = apply_changes(initial_state(SCENARIO), [
+            ("avatar", avatar_change(op="suggest", item="main", choice="roast lamb")),
+            ("user",   user_change  (op="reject",  item="main", choice="roast lamb", reason="a guest is vegetarian")),
+        ])
+        refusal = state.items["main"].refused[0]
+        self.assertEqual((refusal.choice, refusal.by, refusal.reason, state.items["main"].suggestions), ("roast lamb", "user", "a guest is vegetarian", ()))
 
     # A choice turned down and then suggested again comes back off the turned-down list
     def test_suggesting_a_turned_down_choice_again_brings_it_back(self) -> None:
@@ -249,18 +267,18 @@ class HistoryTests(unittest.TestCase):
     # The side that first put a choice forward is kept once it is agreed or turned down
     def test_the_history_says_who_suggested_each_choice(self) -> None:
         state, _ = apply_changes(initial_state(SCENARIO), [
-            ("avatar", avatar_change(op="suggest",       item="starter", choice="Breadsticks")),
-            ("user",   user_change  (op="ask_to_settle", item="starter", choice="breadsticks")),
-            ("avatar", avatar_change(op="accept",        item="starter")),
-            ("user",   user_change  (op="suggest",       item="main",    choice="salmon")),
-            ("avatar", avatar_change(op="reject",        item="main",    choice="salmon", reason="the oven is broken")),
-            ("avatar", avatar_change(op="reject",        item="main",    choice="roast",  reason="too much work")),
+            ("avatar", avatar_change(op="suggest", item="starter", choice="Breadsticks")),
+            ("user",   user_change  (op="agree",   item="starter", choice="breadsticks")),
+            ("user",   user_change  (op="suggest", item="main",    choice="salmon")),
+            ("avatar", avatar_change(op="reject",  item="main",    choice="salmon", reason="the oven is broken")),
+            ("avatar", avatar_change(op="reject",  item="main",    choice="roast",  reason="too much work")),
         ])
         self.assertEqual(state.items["starter"].put_forward, (Suggestion("Breadsticks", "avatar"),))
 
         # A choice turned down before either side suggested it has no suggester
         items = {item["id"]: item["state"] for item in planning_history(SCENARIO, state)["items"]}
         self.assertEqual((items["starter"]["agreed"], items["starter"]["suggested_by"]), ("breadsticks", "avatar"))
+        self.assertNotIn("settling", items["starter"])  # Nothing waits for a yes any more
         self.assertEqual(items["main"]["put_forward"], [{"choice": "salmon", "by": "user"}])
         self.assertEqual(items["main"]["refused"], [
             {"choice": "salmon", "by": "avatar", "reason": "the oven is broken", "suggested_by": "user"},
@@ -285,7 +303,7 @@ class PromptTests(unittest.TestCase):
     # The avatar learns the participant's constraints only from the conversation, never from a prompt
     def test_no_prompt_ever_shows_the_participants_constraints(self) -> None:
         for task in (TRACK_TASK, REPLY_TASK, COMBINED_TASK, QUICK_REPLY_TASK, TRACK_EXCHANGE_TASK):
-            for directive in (None, "read_back", "nudge"):
+            for directive in (None, "nudge"):
                 system = build_messages(task, SCENARIO, starter_settled(), [], directive)[0]["content"]
                 for constraint in SCENARIO.participant.constraints:
                     with self.subTest(task=task[:20], directive=directive, constraint=constraint.id): self.assertNotIn(constraint.text, system)
@@ -307,35 +325,43 @@ class PromptTests(unittest.TestCase):
                 self.assertNotIn(scenario.avatar.brief, json.dumps(card))
                 for constraint in scenario.avatar.constraints: self.assertNotIn(constraint.text, json.dumps(card))
 
-    # The one worked example is the scenario's own, so no scenario's prompt names another's choices
-    def test_each_scenarios_prompts_carry_only_its_own_example(self) -> None:
-        for variant, scenario in PLANNING_SCENARIOS.items():
-            system = build_messages(COMBINED_TASK, scenario, initial_state(scenario), [], None)[0]["content"]
-            for other in PLANNING_SCENARIOS.values():
-                with self.subTest(variant=variant, example=other.settle_example): self.assertEqual(other.settle_example in system, other is scenario)
+    # The instructions put a yes on the card at once, and read a slip against the ideas on the table
+    def test_the_instructions_settle_on_a_yes_and_read_slips_against_the_ideas(self) -> None:
+        system = build_messages(COMBINED_TASK, SCENARIO, initial_state(SCENARIO), [], None)[0]["content"]
+        for text in ("it goes on the card right away, so never ask them to confirm it", "words that sound like one of those ideas"): self.assertIn(text, system)
+        self.assertNotIn("ask_to_settle", system)
 
-    # The plan block shows the avatar's own constraints, what is agreed, what waits for a yes, the ideas, and the refusals
+    # The plan block shows the avatar's own constraints, what is agreed, the ideas, and the refusals
     def test_the_plan_block_shows_each_items_state(self) -> None:
         state, _ = apply_changes(starter_settled(), [
-            ("avatar", avatar_change(op="reveal",        constraint="broken_oven")),
-            ("user",   user_change  (op="suggest",       item="main", choice="lasagna")),
-            ("avatar", avatar_change(op="reject",        item="main", choice="lasagna", reason="my oven is broken")),
-            ("user",   user_change  (op="ask_to_settle", item="main", choice="stir fry")),
+            ("avatar", avatar_change(op="reveal",  constraint="broken_oven")),
+            ("user",   user_change  (op="suggest", item="main", choice="lasagna")),
+            ("avatar", avatar_change(op="reject",  item="main", choice="lasagna", reason="my oven is broken")),
+            ("user",   user_change  (op="suggest", item="main", choice="stir fry")),
         ])
         block = plan_block(SCENARIO, state)
         self.assertIn("Your oven is broken. [id: broken_oven] (you have mentioned it)", block)
         self.assertIn("- Starter [id: starter]: agreed: breadsticks.", block)
-        self.assertIn('Waiting for your yes on "stir fry" (the user asked to settle on it).', block)
+        self.assertIn("Ideas: stir fry (user).", block)
         self.assertIn("Turned down: lasagna (by you: my oven is broken).", block)
         self.assertIn("- Nothing yet.", block)
 
-    # A finished plan gets read back, and a quiet user gets nudged about the first open item
-    def test_directives_read_back_a_finished_plan_and_nudge_about_the_first_open_item(self) -> None:
-        self.assertEqual(directive_for(every_item_settled(), nudge=False), "read_back")
-        self.assertIsNone(directive_for(every_item_settled("final_check"), nudge=True))
+    # A quiet user gets nudged about the first open item (a finished plan is read back by code instead)
+    def test_a_quiet_user_is_nudged_about_the_first_open_item(self) -> None:
+        self.assertIsNone(directive_for(every_item_settled(), nudge=True))
         self.assertIsNone(directive_for(starter_settled(), nudge=False))
         system = build_messages(REPLY_TASK, SCENARIO, starter_settled(), [], directive_for(starter_settled(), nudge=True))[0]["content"]
         self.assertIn("invite them to keep going with the main course", system)
+
+    # The read-back lists the agreed choices in the card's order, and asks if they'd change anything
+    def test_the_recap_reads_the_plan_back(self) -> None:
+        self.assertEqual(recap_line(SCENARIO, every_item_settled()), "So that's breadsticks, pasta, and tiramisu. Anything you'd change?")
+
+    # The reply check's notes name every idea on the table so far, the agreed ones marked
+    def test_the_misheard_notes_list_the_ideas_on_the_table(self) -> None:
+        self.assertIn("The ideas on the table so far: none yet.", misheard_notes(SCENARIO, initial_state(SCENARIO)))
+        state, _ = apply_changes(starter_settled(), [("user", user_change(op="suggest", item="dessert", choice="ice cream"))])
+        self.assertIn("The ideas on the table so far: starter: breadsticks (agreed); dessert: ice cream.", misheard_notes(SCENARIO, state))
 
 
 # ================================================================================
@@ -348,14 +374,14 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
 
     # The reply sees the plan with the user's changes already in it, and both sides' changes come back in order
     async def test_track_then_reply_replies_from_the_plan_the_users_changes_leave(self) -> None:
-        api   = StubPlanningAPI(track=plan_update({"op": "ask_to_settle", "item": "main", "choice": "pasta"}),
-                                reply=spoken_turn("Pasta sounds great!", {"op": "accept", "item": "main"}, behavior="pleased"))
+        api   = StubPlanningAPI(track=plan_update({"op": "suggest", "item": "main", "choice": "pasta"}),
+                                reply=spoken_turn("Pasta sounds great!", {"op": "agree", "item": "main", "choice": "pasta"}, behavior="pleased"))
         reply = await track_then_reply(api, self.turn)
 
         seen_state, directive = api.calls[1][1]
-        self.assertEqual(seen_state.items["main"].settling.choice, "pasta")
+        self.assertEqual([idea.choice for idea in seen_state.items["main"].suggestions], ["pasta"])
         self.assertIsNone(directive)
-        self.assertEqual([(by, change.op) for by, change in reply.changes], [("user", "ask_to_settle"), ("avatar", "accept")])
+        self.assertEqual([(by, change.op) for by, change in reply.changes], [("user", "suggest"), ("avatar", "agree")])
         self.assertEqual((reply.message, reply.behavior, reply.follow_up), ("Pasta sounds great!", "pleased", None))
 
     # The user's yes to the read-back plan needs no reply call: the closing line ends the chat
@@ -368,12 +394,12 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
     # One call proposes the user's changes, then the avatar's
     async def test_single_call_proposes_both_sides_changes_in_order(self) -> None:
         combined = MODELS.combined_turn.model_validate({
-            "basis": "b", "behavior": "nod", "about": "main", "message": "Pasta it is?",
+            "basis": "b", "behavior": "nod", "about": "main", "message": "Pasta it is!",
             "user_changes"   : [{"op": "suggest", "item": "main", "choice": "pasta"}],
-            "avatar_changes" : [{"op": "ask_to_settle", "item": "main", "choice": "pasta"}],
+            "avatar_changes" : [{"op": "agree",   "item": "main", "choice": "pasta"}],
         })
         reply = await single_call(StubPlanningAPI(combined=combined), self.turn)
-        self.assertEqual([(by, change.op) for by, change in reply.changes], [("user", "suggest"), ("avatar", "ask_to_settle")])
+        self.assertEqual([(by, change.op) for by, change in reply.changes], [("user", "suggest"), ("avatar", "agree")])
         self.assertEqual(reply.about, "main")
 
     # The quick reply proposes nothing; the exchange's changes are worked out afterwards, from what it said
@@ -444,6 +470,10 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([check.on for check in plain.reply_gate.checks], [False, False])
         for word in (SCENARIO.event, *(item.label.lower() for item in SCENARIO.items)): self.assertIn(word, cued.reply_gate.checks[1].notes)
 
+        # ...and the ideas on the table as each check runs
+        cued.state = starter_settled()
+        self.assertIn("starter: breadsticks (agreed)", cued.reply_gate.checks[1].notes)
+
     # Without cues: the avatar only idles, so no plan goes out, but the participant still gets their card
     # (the setup still carries the sound, and every shared feature is there, switched off, for a command to switch on)
     async def test_without_cues_only_the_setup_and_the_card_go_out(self) -> None:
@@ -507,9 +537,9 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
 
     # A saved reply that settles an item sends the new card; the plan writes the choice in after the reply
     async def test_a_saved_reply_that_changes_the_plan_sends_the_card(self) -> None:
-        harness, consumer, _ = self.make(track=plan_update({"op": "ask_to_settle", "item": "starter", "choice": "soup"}),
-                                         reply=spoken_turn("Soup it is!", {"op": "accept", "item": "starter"}, behavior="excited"))
-        outcome = await harness.generate(make_attempt("Can we settle on soup?"))
+        harness, consumer, _ = self.make(track=plan_update({"op": "suggest", "item": "starter", "choice": "soup"}),
+                                         reply=spoken_turn("Soup it is!", {"op": "agree", "item": "starter", "choice": "soup"}, behavior="excited"))
+        outcome = await harness.generate(make_attempt("How about soup?"))
         self.assertEqual(harness.state.items["starter"].agreed, None)
         self.assertEqual(outcome.avatar_plan["steps"][-2]["gaze"]["on"], "card")
 
@@ -518,33 +548,36 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(harness.state.items["starter"].agreed, "soup")
         self.assertEqual(consumer.send_json.await_args.args[0]["data"]["items"][0]["value"], "soup")
 
-    # Every item agreed: the reply reads the plan back and the final check starts, and the user's yes ends the chat
-    async def test_the_read_back_starts_the_final_check_and_the_users_yes_ends_the_chat(self) -> None:
-        harness, _, api = self.make(track=plan_update(), reply=spoken_turn("Breadsticks, pasta, and tiramisu. Happy with that?", behavior="glance_at_card"))
-        harness.state = every_item_settled()
-        read_back = await harness.generate(make_attempt("Great!"))
-        self.assertEqual(api.calls[1][1][1], "read_back")
+    # One call (the default): the last yes brings the read-back at once, and a yes to that ends the chat
+    async def test_the_last_yes_reads_the_plan_back_and_the_next_yes_ends_the_chat(self) -> None:
+        last_yes = combined_turn("Tiramisu it is!", user=({"op": "agree", "item": "dessert", "choice": "tiramisu"},), behavior="excited")
+        harness, _, api = self.make(pipeline="single_call", combined=last_yes)
+        harness.state, _ = apply_changes(agreed_on(("starter", "breadsticks"), ("main", "pasta")), [("avatar", avatar_change(op="suggest", item="dessert", choice="tiramisu"))])
+
+        read_back = await harness.generate(make_attempt("Sure, tiramisu."))
+        self.assertEqual(read_back.message, "Tiramisu it is! So that's breadsticks, pasta, and tiramisu. Anything you'd change?")
         self.assertEqual((read_back.state.stage, read_back.close_after), ("final_check", False))
 
         harness.on_reply_saved(read_back)
-        api.responses["track"] = plan_update({"op": "approve_plan"})
-        goodbye = await harness.generate(make_attempt("Yes, perfect!"))
+        api.responses["combined"] = combined_turn("Great!", user=({"op": "approve_plan"},))
+        goodbye = await harness.generate(make_attempt("No, that's perfect!"))
         self.assertEqual((goodbye.message, goodbye.close_after, goodbye.state.stage), (SCENARIO.closing_line, True, "approved"))
 
-    # The avatar's own yes settles the last item: once that reply is heard, it takes one turn to read the plan back
-    async def test_the_avatars_yes_to_the_last_item_asks_for_a_read_back_turn_once(self) -> None:
-        for condition in ("cues", "no_cues"):
-            with self.subTest(condition):
-                harness, consumer, _ = self.make(condition)
-                harness.on_playback(1, "finished")
-                consumer.request_harness_turn.assert_not_called()
+    # A change during the final check reopens it, and the reply reads the changed plan back
+    async def test_a_change_during_the_final_check_reads_the_new_plan_back(self) -> None:
+        change = combined_turn("Risotto works!", user=({"op": "suggest", "item": "main", "choice": "risotto"},), avatar=({"op": "agree", "item": "main", "choice": "risotto"},))
+        harness, _, _ = self.make(pipeline="single_call", combined=change)
+        harness.state = every_item_settled("final_check")
+        outcome = await harness.generate(make_attempt("Could we do risotto instead of pasta?"))
+        self.assertEqual(outcome.message, "Risotto works! So that's breadsticks, risotto, and tiramisu. Anything you'd change?")
+        self.assertEqual(outcome.state.stage, "final_check")
 
-                harness.state = every_item_settled()
-                harness.on_playback(2, "started")
-                harness.on_playback(2, "finished")
-                harness.on_playback(3, "finished")
-                consumer.request_harness_turn.assert_called_once()
-                harness.stop()
+    # The avatar's own turn with the plan finished (a nudge in the final check) reads it back, no call
+    async def test_a_nudge_with_the_plan_finished_reads_it_back(self) -> None:
+        harness, _, api = self.make()
+        harness.state = every_item_settled("final_check")
+        outcome = await harness.generate(make_attempt("", trigger="harness"))
+        self.assertEqual((outcome.message, outcome.state.stage, api.calls), (recap_line(SCENARIO, harness.state), "final_check", []))
 
     # A call that fails every attempt gets the scripted line, and the plan stays as it was
     async def test_a_failed_call_says_it_again_and_keeps_the_plan(self) -> None:
@@ -617,7 +650,7 @@ class CueTests(unittest.IsolatedAsyncioTestCase):
     # While a reply is worked out the avatar reads its card over (published before any call), and listens again when newer speech cancels it
     async def test_the_avatar_reads_its_card_while_thinking_and_listens_again_when_cancelled(self) -> None:
         attempt = make_attempt("Soup?")
-        with patch(f"{HARNESS}.get_planning_api", Mock(return_value=StubPlanningAPI(track=plan_update(), reply=spoken_turn("Soup sounds nice.")))):
+        with patch(f"{HARNESS}.get_planning_api", Mock(return_value=StubPlanningAPI(combined=combined_turn("Soup sounds nice.")))):
             self.harness.on_reply_started(attempt)
             await self.harness.generate(attempt)
         thinking = attempt.publish_plan.await_args.args[0]

@@ -12,13 +12,13 @@ the task is in the scenario's own words, and how planning works for anyone new
 to it, then the scenario's first line; without the intro, the avatar opens with
 the scenario's opening line. An answer to the intro that already offers an idea
 goes straight to the planning. Each turn is answered by the pipeline
-`config.PLANNING_PIPELINE` names
-(`pipelines.py`). The changes it proposes are applied in code (`plan_state.py`),
-and the new plan takes effect only once the reply is saved, so a reply cut off
-by newer speech never writes on the card. Once every item is agreed, the avatar
-reads the plan back, and the user's yes ends the chat with the scenario's
-closing line. When the avatar's own yes settles the last item, it takes a turn
-to read the plan back as soon as that reply has been heard.
+`config.PLANNING_PIPELINE` names (`pipelines.py`). The changes it proposes are
+applied in code (`plan_state.py`): a yes to the other side's idea puts it on the
+card at once, and the new plan takes effect only once the reply is saved, so a
+reply cut off by newer speech never writes on the card. The reply that agrees
+the last open item reads the whole plan back with a fixed recap question
+(`prompts.recap_line`), and the user's yes to it ends the chat with the
+scenario's closing line.
 
 Every reply to finished speech goes through the reply gate
 (`features/reply_gate/`), which holds it while the user seems mid-thought, or
@@ -63,7 +63,7 @@ from    .cues                        import ItemGlance, PlanningBackchannels, Qu
 from    .pipelines                   import PIPELINES, PlanningTurn
 from    .plan_state                  import ChangeResult, PlanningState, apply_changes, initial_state, planning_history, planning_reveal, send_task_card
 from    .planning_api                import PlanningAPIError, get_planning_api
-from    .prompts                     import PLANNING_TURN_END_NOTES, intro_script, misheard_notes
+from    .prompts                     import PLANNING_TURN_END_NOTES, intro_script, misheard_notes, recap_line
 from    .response_models             import models_for_scenario
 from    .scenarios                   import load_scenario
 
@@ -122,14 +122,14 @@ class CooperativePlanningHarness(ChatHarness):
         self.with_cues    = (condition == "cues")
         self.backchannels = PlanningBackchannels(self)
         self._tracking    : asyncio.Task[None] | None = None       # reply_then_track's work on the last saved exchange
-        self._read_back   : PlanningState | None      = None       # The finished plan a read-back turn was last asked for
         self.cues         = [self.backchannels]
         if self.with_cues: self.cues += [BackToListening(self), ItemGlance(self), QuietNudge(self)]
 
-        # Every reply to finished speech is checked first (each check runs in the conditions its switch lists)
+        # Every reply to finished speech is checked first (each check runs in its switch's conditions;
+        # the misheard one reads the ideas on the table as it runs)
         self.reply_gate = ReplyGate(
             self,
-            checks       = (TurnEndCheck(self, PLANNING_TURN_END_NOTES), MisheardCheck(self, misheard_notes(self.scenario))),
+            checks       = (TurnEndCheck(self, PLANNING_TURN_END_NOTES), MisheardCheck(self, lambda: misheard_notes(self.scenario, self.state))),
             backchannels = self.backchannels,
             hold_sec     = PLANNING_HOLD_SEC,
         )
@@ -162,6 +162,9 @@ class CooperativePlanningHarness(ChatHarness):
         if not attempt.context:            return self._outcome(self.scenario.opening_line, "pleased", None, self.state, ())
         if self.state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, self.state, ())
 
+        # A turn of the avatar's own with every item agreed (a nudge, or after tracking) reads the plan back
+        if (not attempt.user_text) and self.state.all_agreed: return self._read_back()
+
         # The reply waits while the user seems mid-thought, or gives way to a question about a misheard word
         return await self.reply_gate.run(attempt, partial(self._reply, intro=intro), self._clarify)
 
@@ -180,15 +183,22 @@ class CooperativePlanningHarness(ChatHarness):
             logger.exception(f"{LLM_MAIN}[Planning] The {PLANNING_PIPELINE} pipeline failed; asking the user to say it again.{RESET}")
             return self._outcome(MSG_SAY_AGAIN, "apologetic", None, replace(self.state, intro=intro), ())
 
-        # Apply the changes, and start the final check once the reply has read the finished plan back
+        # Apply the changes; a plan they complete is read back after the reply, and the final check starts
         state, results = apply_changes(replace(self.state, intro=intro), reply.changes)
-        if (reply.directive == "read_back") and (state.stage == "planning") and state.all_agreed: state = replace(state, stage="final_check")
+        message        = reply.message
+        if (state.stage == "planning") and state.all_agreed:
+            message = f"{message} {recap_line(self.scenario, state)}"
+            state   = replace(state, stage="final_check")
         _log_turn(reply, results, state, time.monotonic() - started)
 
         # An approved plan ends the chat with the scenario's closing line
         if state.stage == "approved": return self._outcome(self.scenario.closing_line, "excited", None, state, results)
         follow_up = None if (reply.follow_up is None) else (lambda: self._track_after_reply(reply.follow_up))
-        return self._outcome(reply.message, reply.behavior, reply.about, state, results, follow_up)
+        return self._outcome(message, reply.behavior, reply.about, state, results, follow_up)
+
+    # The whole plan read back on a turn of the avatar's own (it waits for the user's yes, or a change)
+    def _read_back(self) -> PlanningOutcome:
+        return self._outcome(recap_line(self.scenario, self.state), "glance_at_card", None, replace(self.state, stage="final_check"), ())
 
     # Ask about a word the reply check thinks was misheard (the plan stays as it was)
     def _clarify(self, message: str) -> PlanningOutcome:
@@ -235,18 +245,7 @@ class CooperativePlanningHarness(ChatHarness):
         if replace(self.state, intro=None) != replace(before, intro=None): fire_and_log(send_task_card(self.consumer, self.scenario, self.state), name="cooperative_planning::card")
         if isinstance(outcome, PlanningOutcome) and (outcome.follow_up is not None): self._tracking = fire_and_log(outcome.follow_up(), name="cooperative_planning::tracking")
 
-    # The reply whose yes settled the last item has been heard: take a turn to read the whole plan back
-    def on_playback(self, response_id: int, state: str) -> None:
-        """
-        A read-back otherwise waits for the user's next words, and only the `cues`
-        condition has a nudge to fall back on. Each finished plan is asked for once,
-        so a read-back that failed (the plan stays as it was) is not asked for again.
-        """
-        super().on_playback(response_id, state)
-        waiting = (self.state.stage == "planning") and self.state.all_agreed and (self.state is not self._read_back)
-        if (state == "finished") and waiting and self.request_turn(): self._read_back = self.state
-
-    # Work out the saved exchange's changes (reply_then_track), apply them, and close the chat once approved
+    # Apply the saved exchange's changes once worked out (reply_then_track), then read back or close
     async def _track_after_reply(self, follow_up: Callable[[], Awaitable[ProposedChanges]]) -> None:
         started        = time.monotonic()
         state, results = apply_changes(self.state, await follow_up())
@@ -259,7 +258,9 @@ class CooperativePlanningHarness(ChatHarness):
         self.state = state
         await send_task_card(self.consumer, self.scenario, state)
         if self.with_cues and settled: await send_avatar_plan(self.consumer, writing_plan(self.scenario, self.turn_number, settled))
-        if state.stage == "approved":  self.request_turn()
+
+        # A turn of the avatar's own: the closing line once approved, or the read-back once finished
+        if (state.stage == "approved") or ((state.stage == "planning") and state.all_agreed): self.request_turn()
 
 
 # The items whose choice went on the card between two plans, in order

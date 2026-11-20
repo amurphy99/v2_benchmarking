@@ -5,7 +5,6 @@
     "opening_line"   : "Hi! I'm so glad we're planning this dinner party together. We need to pick a starter, a main course, and a dessert. Do you have any ideas?",
     "intro"          : "Today we're going to plan a dinner party together.",
     "start_line"     : "We need to pick a starter, a main course, and a dessert. Do you have any ideas?",
-    "settle_example" : "So, breadsticks for the starter?",
     "closing_line"   : "That's our whole menu, then. Thanks for planning this with me, it's going to be a lovely party!",
     "items": [
         {"id": "starter", "label": "Starter",     "also_called": ["appetizer", "first course"]},

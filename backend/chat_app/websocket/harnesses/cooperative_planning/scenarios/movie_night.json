@@ -5,7 +5,6 @@
     "opening_line"   : "Hi! I'm so glad we're planning this movie night together. We need to pick a movie, a snack, and a day. Do you have any ideas?",
     "intro"          : "Today we're going to plan a movie night together.",
     "start_line"     : "We need to pick a movie, a snack, and a day. Do you have any ideas?",
-    "settle_example" : "So, Thursday for the day?",
     "closing_line"   : "That's our whole movie night planned, then. Thanks for planning this with me, it's going to be so much fun!",
     "items": [
         {"id": "movie", "label": "Movie", "also_called": ["film"]},

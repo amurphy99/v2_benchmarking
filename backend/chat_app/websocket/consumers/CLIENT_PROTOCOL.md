@@ -147,8 +147,9 @@ wss://<host>/ws/chat/?token=<access token>&source=webapp&chat_type=active_listen
   planning an event, or a hotel guest and the receptionist), agreeing on one choice for each
   item while each side has private constraints. The avatar speaks first, with the same intro as
   `map_task` (what the task is, and how it works for anyone new to it) and then the scenario's
-  first line, and once the user approves the finished plan it says goodbye and the backend sends
-  `chat_ended`.
+  first line. A yes to either side's idea puts it on the card at once. Once every item is agreed,
+  the avatar reads the plan back and asks whether the user would change anything, and once the
+  user approves it the avatar says goodbye and the backend sends `chat_ended`.
   `variant` picks the scenario: `dinner_party` (the default), `day_trip`, `birthday_party`,
   `movie_night`, `hotel_room`, `weekend_activity`, `club_event`, `house_party`,
   `apartment_hunt`, `camping_trip`, or `flight_rebooking`. `condition` is `cues` (the default:

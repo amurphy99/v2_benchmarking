@@ -5,7 +5,6 @@
     "opening_line"   : "Hi! I'm so excited we're going to be roommates. We need to pick an apartment, a move-in date, and how we'll move our things. Which apartment do you like?",
     "intro"          : "Today we're going to choose an apartment to share, since we're about to be roommates.",
     "start_line"     : "We need to pick an apartment, a move-in date, and how we'll move our things. Which apartment do you like?",
-    "settle_example" : "So, Oak Avenue for the apartment?",
     "closing_line"   : "That's everything decided, then. Thanks for sorting this out with me, I can't wait to move in!",
     "items": [
         {"id": "apartment",   "label": "Apartment",    "also_called": ["flat"]},

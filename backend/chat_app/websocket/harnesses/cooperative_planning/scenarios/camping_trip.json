@@ -5,7 +5,6 @@
     "opening_line"   : "Hi! I'm so glad we're going camping together. We need to pick a campsite, where we'll sleep, and what to do about dinner. Which campsite do you like?",
     "intro"          : "Today we're going to plan a camping trip together.",
     "start_line"     : "We need to pick a campsite, where we'll sleep, and what to do about dinner. Which campsite do you like?",
-    "settle_example" : "So, Hilltop for the campsite?",
     "closing_line"   : "That's our whole trip planned, then. Thanks for planning this with me, it's going to be a great night out!",
     "items": [
         {"id": "campsite", "label": "Campsite", "also_called": ["camp site", "where to camp"]},

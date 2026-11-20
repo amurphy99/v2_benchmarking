@@ -372,7 +372,7 @@ export type PlanningItemHistory = {
     state : {
         agreed        : string | null;
         suggested_by? : PlanningSide | null;   // Who first put the agreed choice forward (absent from snapshots saved before it was kept)
-        settling      : {choice: string; by: PlanningSide} | null;
+        settling?     : {choice: string; by: PlanningSide} | null;  // A choice waiting for a yes (only in snapshots saved before a yes settled an item at once)
         suggestions   : {choice: string; by: PlanningSide}[];
         refused       : {choice: string; by: PlanningSide; reason: string; suggested_by?: PlanningSide | null}[];
         put_forward?  : {choice: string; by: PlanningSide}[];  // Every choice either side put forward, with the side that did first

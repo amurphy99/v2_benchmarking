@@ -7,8 +7,8 @@ A call never edits the plan. It proposes changes, each one of a few shapes told
 apart by its `op`, and `plan_state.apply_changes` makes the ones the rules allow.
 The participant's and the avatar's changes come in separate lists, so code knows
 who made each one, and each side's list has only the changes that side can make:
-only the participant approves the plan, and only the avatar reveals its own
-constraints.
+only the participant reopens an item or approves the plan, and only the avatar
+reveals its own constraints.
 
 The responses are built once per scenario (`models_for_scenario`), with every
 item and constraint limited to that scenario's ids, so the schema the endpoint
@@ -60,24 +60,13 @@ class Reject(_Change):
     choice : Choice
     reason : Reason
 
-# Asking to make a choice final ("So, breadsticks for the starter?")
-class AskToSettle(_Change):
-    op     : Literal["ask_to_settle"]
+# Saying yes to the other side's idea for an item (it goes on the card at once)
+class Agree(_Change):
+    op     : Literal["agree"]
     item   : str
     choice : Choice
 
-# Saying yes to the other side's request to settle an item
-class Accept(_Change):
-    op   : Literal["accept"]
-    item : str
-
-# Saying no to the other side's request to settle an item, and why
-class Decline(_Change):
-    op     : Literal["decline"]
-    item   : str
-    reason : Reason
-
-# Changing one's mind about an item already agreed, and why
+# Taking an item already agreed back off the card, and why
 class Reopen(_Change):
     op     : Literal["reopen"]
     item   : str
@@ -89,7 +78,7 @@ class NotePreference(_Change):
     kind : Literal["want", "avoid"]
     text : Choice
 
-# The participant said yes to the whole plan when the avatar read it back
+# The participant is happy with the whole plan, read back to them
 class ApprovePlan(_Change):
     op : Literal["approve_plan"]
 
@@ -99,7 +88,7 @@ class Reveal(_Change):
     constraint : str  # Constraint id (`models_for_scenario` limits it to the avatar's own)
 
 # Any one change
-Change = Suggest | Reject | AskToSettle | Accept | Decline | Reopen | NotePreference | ApprovePlan | Reveal
+Change = Suggest | Agree | Reject | Reopen | NotePreference | ApprovePlan | Reveal
 
 
 # --------------------------------------------------------------------------------
@@ -162,17 +151,15 @@ class PlanningModels:
 def models_for_scenario(item_ids: tuple[str, ...], constraint_ids: tuple[str, ...]) -> PlanningModels:
     # 1) The changes that name an item or a constraint, limited to this scenario's
     item    = (Literal[item_ids], ...)
-    suggest = create_model("Suggest",     __base__=Suggest,     item=item)
-    reject  = create_model("Reject",      __base__=Reject,      item=item)
-    settle  = create_model("AskToSettle", __base__=AskToSettle, item=item)
-    accept  = create_model("Accept",      __base__=Accept,      item=item)
-    decline = create_model("Decline",     __base__=Decline,     item=item)
-    reopen  = create_model("Reopen",      __base__=Reopen,      item=item)
-    reveal  = create_model("Reveal",      __base__=Reveal,      constraint=(Literal[constraint_ids], ...))
+    suggest = create_model("Suggest", __base__=Suggest, item=item)
+    agree   = create_model("Agree",   __base__=Agree,   item=item)
+    reject  = create_model("Reject",  __base__=Reject,  item=item)
+    reopen  = create_model("Reopen",  __base__=Reopen,  item=item)
+    reveal  = create_model("Reveal",  __base__=Reveal,  constraint=(Literal[constraint_ids], ...))
 
-    # 2) Each side's changes (only the participant approves the plan; only the avatar reveals its constraints)
-    user_change    = Annotated[Union[suggest, reject, settle, accept, decline, reopen, NotePreference, ApprovePlan], Field(discriminator="op")]
-    avatar_change  = Annotated[Union[suggest, reject, settle, accept, decline, reveal],                            Field(discriminator="op")]
+    # 2) Each side's changes (only the user reopens or approves; only the avatar reveals constraints)
+    user_change    = Annotated[Union[suggest, agree, reject, reopen, NotePreference, ApprovePlan], Field(discriminator="op")]
+    avatar_change  = Annotated[Union[suggest, agree, reject, reveal],                              Field(discriminator="op")]
     user_changes   = (list[user_change],   Field(max_length=PLANNING_MAX_CHANGES))
     avatar_changes = (list[avatar_change], Field(max_length=PLANNING_MAX_CHANGES))
     about          = (Literal[item_ids] | None, ...)

@@ -5,7 +5,6 @@
     "opening_line"   : "Hello, I'm so sorry your flight was cancelled. Let's get you on a new one.",
     "intro"          : "Today I'll play an airline agent, and you're a traveler whose flight was just cancelled.",
     "start_line"     : "Hello, I'm so sorry your flight was cancelled. Let's get you on a new one.",
-    "settle_example" : "So, the noon flight for the new flight?",
     "closing_line"   : "You're all set, then. Thank you for your patience, and have a good flight!",
     "items": [
         {"id": "flight",  "label": "New flight",     "also_called": ["flight"]},

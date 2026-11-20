@@ -575,7 +575,7 @@ item to agree on.
   "constraints": ["You can't cook fish.", "One of the guests is vegetarian.", "Your budget is limited."],
   "items": [
     {"id": "starter", "label": "Starter",     "value": "breadsticks", "pending": null},
-    {"id": "main",    "label": "Main course", "value": null,          "pending": "pasta"},
+    {"id": "main",    "label": "Main course", "value": null,          "pending": null},
     {"id": "dessert", "label": "Dessert",     "value": null,          "pending": null}
   ],
   "complete": false
@@ -589,7 +589,7 @@ item to agree on.
 | `constraints` | array of strings | The participant's own constraints, in order (the avatar never sees these) |
 | `items[].id`, `items[].label` | string | The item, and how to show it |
 | `items[].value` | string or `null` | The agreed choice, written on the line (`null` while open) |
-| `items[].pending` | string or `null` | A choice one side asked to settle on, waiting for the other side's yes |
+| `items[].pending` | `null` | Always `null`: a yes to either side's idea puts it straight on the card, so nothing waits for a yes. Kept for clients that read it (it once held a choice waiting for the other side's yes) |
 | `complete` | boolean | The participant approved the whole plan (the chat ends next) |
 
 **`map_task`:** the participant's map, sent once as the chat starts: its paper (`shape`:

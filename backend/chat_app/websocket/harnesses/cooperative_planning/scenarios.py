@@ -12,7 +12,6 @@ Each variant is one file, `scenarios/<variant>.json`:
     intro           What the task is, in plain words, for the intro (`features/intro/`):
                     "Today we're going to plan a dinner party together."
     start_line      The avatar's first words of the task itself, once the intro is over
-    settle_example  How the avatar might ask to settle one of the items ("So, breadsticks for the starter?")
     closing_line    Its last words, once the participant approves the whole plan
     items           The things to agree on, in order: {id, label, also_called?}
     participant     {brief, constraints: [{id, text}, ...]}: printed on the participant's card
@@ -30,9 +29,6 @@ run into each other, where constraints alone often never meet.
 The participant's brief and constraints are never put in a prompt: the avatar
 learns them only when the participant says them. `also_called` lists other names the
 participant might use for an item ("entree" for "Main course"), for the cues.
-`settle_example` is the prompts' one worked example, so it belongs to the
-scenario: an example from another scenario would put its choices in the
-avatar's mouth.
 
 The intro speaks out of character, so a role-play scenario's `intro` names both
 roles ("Today I'll play a hotel receptionist, and you're a guest..."), and its
@@ -94,7 +90,6 @@ class Scenario(_ScenarioPart):
     opening_line   : ScenarioText
     intro          : ScenarioText
     start_line     : ScenarioText
-    settle_example : ScenarioText
     closing_line   : ScenarioText
     items          : tuple[PlanItem, ...] = Field(min_length=1)
     participant    : PlanSide

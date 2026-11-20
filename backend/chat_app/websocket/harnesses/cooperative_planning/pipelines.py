@@ -58,7 +58,7 @@ class PlanningReply:
     behavior  : Behavior                                                # How it acts while saying it
     about     : str | None                                              # The item the behavior is about
     changes   : ProposedChanges                                         # The exchange's changes worked out so far
-    directive : Directive | None                                        # What code asked of the reply (a read-back starts the final check)
+    directive : Directive | None                                        # What code asked of the reply (a nudge for a quiet user)
     basis     : str                                                     # Why (for the turn's log)
     follow_up : Callable[[], Awaitable[ProposedChanges]] | None = None  # More changes to work out once the reply has gone out
 

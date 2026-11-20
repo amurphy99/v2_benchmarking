@@ -59,9 +59,14 @@ class GateCheck:
     CONDITIONS : tuple[str, ...]  # Conditions it runs in (`features/config.py`)
 
     # Switch it on where its condition says, with any guidance its chat type adds to the prompt
-    def __init__(self, harness: ChatHarness, notes: str | None = None) -> None:
-        self.on    = (harness.condition in self.CONDITIONS)  # Runs (this connection's switch)
-        self.notes = notes                                   # Extra prompt bullets from the chat type ("- ..." lines)
+    def __init__(self, harness: ChatHarness, notes: str | Callable[[], str] | None = None) -> None:
+        self.on     = (harness.condition in self.CONDITIONS)  # Runs (this connection's switch)
+        self._notes = notes                                   # Extra prompt bullets ("- ..." lines), or what writes them from the chat's state
+
+    # The chat type's notes for this check now (notes from the chat's state are written as it runs)
+    @property
+    def notes(self) -> str | None:
+        return self._notes() if callable(self._notes) else self._notes
 
 # Hold a reply while the user seems to be mid-thought
 class TurnEndCheck(GateCheck):
