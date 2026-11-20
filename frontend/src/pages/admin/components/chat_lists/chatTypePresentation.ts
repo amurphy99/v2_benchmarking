@@ -9,6 +9,9 @@ import      { LuClipboardList, LuEar, LuMap, LuMessagesSquare, LuNotebookPen, Lu
 // One chat type's readable name, icon, and badge colors
 export type ChatTypePresentation = {label: string; icon: IconType; className: string};
 
+// The chat-type pill's shape and type, which its colors (`className`) complete (session cards, and the task details button)
+export const CHAT_TYPE_PILL_CLASS = "inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-semibold";
+
 // Harness names come from backend/chat_app/websocket/harnesses/registry.py
 const CHAT_TYPE_PRESENTATION: Record<string, ChatTypePresentation> = {
     map_task             : {label: "Map Task",             icon: LuMap,            className: "bg-sky-50 text-sky-800 border-sky-200"},
@@ -19,12 +22,12 @@ const CHAT_TYPE_PRESENTATION: Record<string, ChatTypePresentation> = {
     unguided             : {label: "Open Conversation",    icon: LuMessagesSquare, className: "bg-slate-100 text-slate-700 border-slate-200"},
 };
 
-// Chat types whose completed sessions open the task history view instead of post-chat analysis
-const TASK_CHAT_TYPES: readonly string[] = ["map_task", "cooperative_planning"];
+// Chat types whose completed sessions have a task details page (their maps, decisions, or threads, with stats)
+const TASK_DETAIL_CHAT_TYPES: readonly string[] = ["map_task", "cooperative_planning", "speech_elicitation"];
 
-// Whether a session ran a task (it has maps or a scenario to review)
-export function isTaskChatType(chatType: string): boolean {
-    return TASK_CHAT_TYPES.includes(chatType);
+// Whether a completed session has a task details page
+export function hasTaskDetails(chatType: string): boolean {
+    return TASK_DETAIL_CHAT_TYPES.includes(chatType);
 }
 
 // Older sessions have no recorded type; future types still get readable names

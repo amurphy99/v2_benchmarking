@@ -439,7 +439,7 @@ closes the underlying chat session.
 Completed task materials and state are archived privately in `ChatSession.task_snapshot`.
 `processing/messages.py` passes a reply's snapshot to the same database transaction as its
 messages. The consumer saves initial materials before calling `harness.start()`. This adds
-no primary-client frame; the admin history page uses the scoped REST task-history endpoint
-(documented in `harnesses/README.md`). The participant's client gets a smaller view of its
+no primary-client frame; the admin task details page uses the scoped REST task-history
+endpoint (documented in `harnesses/README.md`). The participant's client gets a smaller view of its
 own once the chat ends instead: `ChatConsumer.end_chat` sends the harness's `reveal_view()` as
 a `task_reveal` frame on either normal end, just before the close.

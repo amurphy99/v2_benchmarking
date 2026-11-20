@@ -20,7 +20,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider                                                                     } from "@/context/AuthProvider";
 import { AppLayout, HomeRedirect, IsCaregiver, IsPatient, IsStaff, Protected, Unprotected } from "@/routes";
 import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, AdminCreateAccount     } from "@/pages";
-import { AdminMapTaskMaps, AdminParticipants                                              } from "@/pages";
+import { AdminMapTaskMaps, AdminParticipants, AdminTaskDetails                            } from "@/pages";
 import { AdminRobotView                                                                   } from "@/pages";  // Experimental Buddy media
 import { Alert, Analysis, AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails       } from "@/pages";
 import { Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile            } from "@/pages";
@@ -94,13 +94,14 @@ export default function App() {
                             <Route path="/practice-page" element={<PracticePage />} />
 
                             {/* Monitor pages (the backend shows a caregiver only their linked participants) */}
-                            <Route path="/admin"                   element={<Admin             />} />
-                            <Route path="/admin/chat/:id"          element={<AdminChat         />} />
-                            <Route path="/admin/chat/inactive/:id" element={<AdminChatInactive />} />
-                            <Route path="/admin/participants"      element={<AdminParticipants />} />
+                            <Route path="/admin"                        element={<Admin             />} />
+                            <Route path="/admin/chat/:id"               element={<AdminChat         />} />
+                            <Route path="/admin/chat/inactive/:id"      element={<AdminChatInactive />} />
+                            <Route path="/admin/chat/inactive/:id/task" element={<AdminTaskDetails  />} />
+                            <Route path="/admin/participants"           element={<AdminParticipants />} />
 
                             {/* Experimental Buddy media (see backend/chat_app/websocket/experimental/buddy/README.md) */}
-                            <Route path="/admin/chat/:id/robot"    element={<AdminRobotView    />} />
+                            <Route path="/admin/chat/:id/robot"         element={<AdminRobotView    />} />
                         </Route>
 
                         {/* Patients and caregivers */}

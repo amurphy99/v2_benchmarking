@@ -9,7 +9,8 @@ avatar's), so one that sits somewhere else, or goes by another name, on the
 avatar's map shows up twice, once in each color. A legend under the map says
 what each line and ring means, worded for whoever is looking (`viewer`). Its
 text takes the color of the page around it, so it fits the participant's chat
-page and the admin pages alike.
+page and the admin task details page alike. A session that saved no path (from
+before paths were saved) draws the maps without one.
 
 */
 import type { ReactElement, ReactNode } from "react";
@@ -46,7 +47,7 @@ export default function CombinedMap({giver, follower, path, viewer, maxHeight = 
     // The two maps, and where the avatar went
     giver    : MapTaskGiverMap;      // The participant's map, with the route
     follower : MapTaskFollowerMap;   // The avatar's map
-    path     : MapPoint[];           // Every waypoint the avatar committed, from the start
+    path     : MapPoint[] | null;    // Every waypoint the avatar committed, from the start (null when none was saved)
 
     // How it is shown
     viewer     : MapViewer;          // Who is looking, for the legend's wording
@@ -73,7 +74,7 @@ export default function CombinedMap({giver, follower, path, viewer, maxHeight = 
             {/* What each line and ring means */}
             <div className={`mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 ${words.text}`}>
                 <LegendItem swatch={<LineSwatch hex={MAP_TASK_ROUTE_HEX}    />}>{words.route}</LegendItem>
-                <LegendItem swatch={<LineSwatch hex={MAP_TASK_PATH_HEX}     />}>The avatar's path</LegendItem>
+                {(path !== null) ? <LegendItem swatch={<LineSwatch hex={MAP_TASK_PATH_HEX} />}>The avatar's path</LegendItem> : null}
                 <LegendItem swatch={<RingSwatch hex={MAP_TASK_GIVER_HEX}    />}>{words.onlyGiver}</LegendItem>
                 <LegendItem swatch={<RingSwatch hex={MAP_TASK_FOLLOWER_HEX} />}>Only on the avatar's map</LegendItem>
             </div>

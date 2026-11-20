@@ -6,10 +6,10 @@
 import { memo, useMemo } from "react";
 
 // From this project
-import { ChatSession                                        } from "@/api";
-import { dateFormatLong, formatElapsedTime                  } from "@/utils/styling/numFormatting";
-import { chatRunLabel, chatTypePresentation, isTaskChatType } from "./chatTypePresentation";
-import { formatTimeAgo                                      } from "./timeGrouping";
+import { ChatSession                                              } from "@/api";
+import { dateFormatLong, formatElapsedTime                        } from "@/utils/styling/numFormatting";
+import { CHAT_TYPE_PILL_CLASS, chatRunLabel, chatTypePresentation } from "./chatTypePresentation";
+import { formatTimeAgo                                            } from "./timeGrouping";
 
 // Components
 import { deriveSessionAnalysis } from "../analysis/deriveSessionAnalysis";
@@ -36,7 +36,6 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
     const sessionLabel = `Session #${session.id ?? "—"}`;
     const task         = chatTypePresentation(session.chat_type);
     const TaskIcon     = task.icon;
-    const isTask       = isTaskChatType(session.chat_type);
     const runTags      = [session.variant, session.condition].filter((value: string) => value !== "");
 
     // Active vs completed accent on the left edge.
@@ -52,7 +51,7 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             {/* Chat Type and Session Number */}
             {/* -------------------------------------------------------------------------------- */}
             <div className="mb-3 flex w-full items-center justify-between gap-2">
-                <span className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-semibold ${task.className}`}>
+                <span className={`${CHAT_TYPE_PILL_CLASS} ${task.className}`}>
                     <TaskIcon aria-hidden="true" size={18} />{task.label}
                 </span>
                 <span className="text-xs text-admin-subtext">{sessionLabel}</span>
@@ -97,11 +96,8 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             {/* What the History Page Shows */}
             {/* -------------------------------------------------------------------------------- */}
             <div className="flex-1 flex flex-col">
-                {/* Task chats: what their history page holds */}
-                {isTask ? <p className="mt-3 mb-0 text-sm text-admin-subtext">{(session.chat_type === "map_task") ? "Maps, route, and conversation" : "Scenario, constraints, and decisions"}</p> : null}
-
-                {/* Other completed chats: the post-chat summary and topics */}
-                {!isActive && !isTask && analysis && (
+                {/* Completed chats: the post-chat summary and topics */}
+                {!isActive && analysis && (
                     <>
                         <div className="text-sm text-admin-text/85 line-clamp-3 mt-3 leading-snug">
                             {analysis.summary}
@@ -116,7 +112,7 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
             {/* -------------------------------------------------------------------------------- */}
             {/* Risk | Sentiment | Emotion (only for inactive chats) */}
             {/* -------------------------------------------------------------------------------- */}
-            {!isActive && !isTask && analysis && (
+            {!isActive && analysis && (
                 <div className="mt-3 flex gap-2 flex-wrap">
                     <Pill label="Risk"      value={     riskBadge(analysis.risk_rating )} />
                     <Pill label="Sentiment" value={sentimentBadge(analysis.sentiment   )} />

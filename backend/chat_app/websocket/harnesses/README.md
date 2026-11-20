@@ -467,5 +467,15 @@ Staff and linked caregivers read `/api/chatsession/<id>/task-history/`; particip
 read this private view, and it is not in the ordinary session serializer. The response is
 `{recorded, view}`. When `recorded` is false, an older session may identify the current
 materials for its registered variant, but its results (path and replies, decisions, or
-threads) remain unknown. The admin history page labels these as current materials, never as
-an archived outcome. Fields added to a snapshot later are absent from the ones saved before.
+threads) remain unknown. The admin task details page labels these as current materials, never
+as an archived outcome. Fields added to a snapshot later are absent from the ones saved before.
+
+Staff open a task chat's history from its completed-chat page, through a button styled like its
+chat type, on the task details page (`frontend/src/pages/admin/AdminTaskDetails.tsx`). Each
+chat type has its own view (`frontend/src/pages/admin/components/task_details/`):
+
+| Chat type | What its task details show |
+|---|---|
+| `map_task` | How far from the finish the avatar stopped, its path's length against the route, the turns by kind and the replies by act, both maps as one, and each map with what differs |
+| `cooperative_planning` | The items agreed, each side's ideas and turned-down ones, the avatar's constraints it mentioned, both sides' materials, and each decision with who suggested what |
+| `speech_elicitation` | The threads and follow-ups, the participant's average answer, the held replies (from each reply's saved timing), the replies by kind, each thread, and the topic |

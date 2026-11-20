@@ -276,6 +276,11 @@ else is the same: the same pipelines, the same moves, and the participant's map.
   the page connects and after every saved reply, and shows in the side column's **Map** tab: the
   avatar's map with its path and the participant's route drawn faintly over it, the
   participant's map, and what differs between them.
+- **The admin task details page,** for a completed chat, from its saved task history
+  (`frontend/src/pages/admin/components/task_details/MapTaskDetails.tsx`): how far from the
+  finish the avatar stopped and its path's length against the route (both measured in the
+  paper's real proportions), the turns by kind and the replies by act, both maps as one, and
+  each map with what differs.
 
 <br>
 
@@ -313,7 +318,9 @@ are constants at the top of `geometry.py`.
 <!-- -------------------------------------------------------------------------------- -->
 ## Not built yet
 
-- **Scoring** the avatar's path against the route.
+- **Scoring** the avatar's path against the route. The admin task details page shows simple
+  measures (how far from the finish it stopped, and its path's length against the route), not
+  a score.
 - **A per-turn research event log.** Both maps, the accumulated path, and each reply's route,
   act, and waypoints are saved in `ChatSession.task_snapshot` with each committed reply and
   shown in completed-session history. A timeline of cues and plans is not saved yet.
