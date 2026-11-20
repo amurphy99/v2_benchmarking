@@ -23,7 +23,7 @@ import { Admin, AdminChat, AdminChatActivities, AdminChatInactive, AdminCreateAc
 import { AdminMapTaskMaps, AdminParticipants                                              } from "@/pages";
 import { AdminRobotView                                                                   } from "@/pages";  // Experimental Buddy media
 import { Alert, Analysis, AnalysisFlagged, AvatarDemo, Chat, ChatAlbum, ChatDetails       } from "@/pages";
-import { ChatEnd, Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile   } from "@/pages";
+import { Dashboard, DaySummary, Goal, History, Practice, PracticePage, Profile            } from "@/pages";
 import { ProgressSummary, Settings, Transcript, TranscriptPlayback, WeekSummary           } from "@/pages";
 
 import Login    from "@/pages/Login";
@@ -83,8 +83,7 @@ export default function App() {
                     <Route element={<Protected />}>
                         {/* Patients only */}
                         <Route element={<IsPatient />}>
-                            <Route path="/chat"     element={<Chat    />} />
-                            <Route path="/chat/end" element={<ChatEnd />} />
+                            <Route path="/chat" element={<Chat />} />
                         </Route>
 
                         {/* Caregivers only (staff are caregivers too) */}

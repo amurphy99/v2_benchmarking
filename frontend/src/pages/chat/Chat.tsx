@@ -9,6 +9,13 @@ their Map Task map with its route (which gets the wider column). Before the chat
 starts, the configure-chat modal picks the chat type, its cues and task version
 (`chatModes.ts`), subtitles, and the avatar; starting the chat locks them.
 
+The page stays put when the chat ends, however it ends. The controls give way
+to an end bar with the chat's length and numbers (`useChatStats`) and a button
+that reloads the page for a new chat. The backend's `task_reveal` fills in the
+task's end view (`TaskPanel`): both Map Task maps as one, the avatar's planning
+card, or the threads a speech elicitation chat followed, which get a panel of
+their own beside the avatar.
+
 The avatar dozes until the chat starts and follows the conversation while it
 runs (`useChatAvatar`). A chat type that drives it from the backend sends plans,
 which `useLiveChat` runs on it. The settings are re-read every time the page
@@ -27,14 +34,13 @@ import type { ReactElement, ReactNode    } from "react";
 import      { useEffect, useRef, useState } from "react";
 import        toast                        from "react-hot-toast";
 import type { IconType                   } from "react-icons";
-import      { useNavigate                } from "react-router-dom";
 import      { BsBadgeCc, BsLightningCharge, BsLockFill, BsRobot, BsSliders } from "react-icons/bs";
 
 // From this project
 import        SaveChatModal                         from "@/components/modals/SaveChatModal";
 import type { CommandAck                          } from "@/hooks/chat-listener/chat-controls/types";
-import      { useLocalChatSession                 } from "@/hooks/live-chat";
 import type { TaskCard                            } from "@/hooks/live-chat/taskCardFrame";
+import type { TaskReveal                          } from "@/hooks/live-chat/taskRevealFrame";
 import      { useUserSettings                     } from "@/hooks/queries/useUserSettings";
 import        useLiveChat                           from "@/hooks/useLiveChat";
 import      { Avatar                              } from "@/pages/common/avatar/Avatar";
@@ -44,17 +50,18 @@ import      { useChatTimings                      } from "@/pages/common/debug/u
 import type { ChatPanel                           } from "./chatModes";
 import      { CHAT_MODES, CHAT_PATH, chatModeQuery } from "./chatModes";
 import      { useChatAvatar                       } from "./useChatAvatar";
+import      { useChatStats                        } from "./useChatStats";
 import      { useFeatureSwitches                  } from "./useFeatureSwitches";
 
 // Components
 import type { ChatConfig         } from "./components/ChatConfigModal";
 import        ChatConfigModal      from "./components/ChatConfigModal";
 import        ChatControls         from "./components/ChatControls";
+import        ChatEndBar           from "./components/ChatEndBar";
 import        DebugHelpModal       from "./components/DebugHelpModal";
 import        DebugPanel           from "./components/DebugPanel";
-import        MapTaskMapPanel      from "./components/MapTaskMapPanel";
-import        PlanningCardPanel    from "./components/PlanningCardPanel";
 import        ReplyCaption         from "./components/ReplyCaption";
+import        TaskPanel            from "./components/TaskPanel";
 import        TimingPills          from "./components/TimingPills";
 
 // What the caption says before the avatar's first reply
@@ -77,18 +84,6 @@ const CHAT_PANEL_LAYOUT: Record<ChatPanel, {page: string; columns: string}> = {
     map  : {page: "max-w-7xl", columns: "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"},
 };
 
-// Where the participant's task materials go until the backend sends them (they come once the chat starts)
-function taskWaiting(what: string, Icon: IconType): ReactElement {
-    return (
-        <div className="flex h-full min-h-64 flex-col items-center justify-center gap-4! rounded-3xl border-2 border-dashed border-chat-border bg-chat-panel/50 p-8 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-chat-accentSoft text-3xl text-chat-accent">
-                <Icon aria-hidden="true" />
-            </span>
-            <div className="max-w-xs text-lg text-balance text-chat-subtext">Your {what} appears here when the chat starts.</div>
-        </div>
-    );
-}
-
 // One of the chat's choices, shown under the title
 function ChoiceChip({icon: Icon, children}: {icon: IconType; children: ReactNode}): ReactElement {
     return (
@@ -104,7 +99,6 @@ function ChoiceChip({icon: Icon, children}: {icon: IconType; children: ReactNode
 // ================================================================================
 // The participant's live chat with the avatar
 export function Chat(): ReactElement {
-    const navigate  = useNavigate();
     const avatarRef = useRef<AvatarHandle>(null);
     const { data: settings, isFetchedAfterMount } = useUserSettings();
 
@@ -114,10 +108,11 @@ export function Chat(): ReactElement {
     const [showConfig, setShowConfig] = useState(false);
     const { mode, variant, cues, subtitles } = config;
 
-    // What the participant sees: their last words, the latest reply, and their task card
-    const [heard,         setHeard        ] = useState<string   | null>(null);
-    const [reply,         setReply        ] = useState<string   | null>(null);
-    const [taskCard,      setTaskCard     ] = useState<TaskCard | null>(null);
+    // What the participant sees: their last words, the latest reply, their task card, and what the task revealed as it ended
+    const [heard,         setHeard        ] = useState<string     | null>(null);
+    const [reply,         setReply        ] = useState<string     | null>(null);
+    const [taskCard,      setTaskCard     ] = useState<TaskCard   | null>(null);
+    const [reveal,        setReveal       ] = useState<TaskReveal | null>(null);
     const [awaitingReply, setAwaitingReply] = useState(false);   // From the participant's finished utterance until the reply starts (the avatar's "thinking" look)
 
     // Where the chat is: started once, the microphone on, and an admin keeping the audio
@@ -126,8 +121,8 @@ export function Chat(): ReactElement {
     const [adminRecording, setAdminRecording] = useState(false);
     const [showModal,      setShowModal     ] = useState(false);
 
-    // Local (view-only) record of the conversation
-    const { pushMessage } = useLocalChatSession();
+    // The chat's length and numbers, for the end bar
+    const { stats, noteStart, noteMessage, noteEnd } = useChatStats();
 
     // Debug mode (from this visit's settings): the cues shown in this browser, the help modal, and the timing
     const debugMode = isFetchedAfterMount && settings.debug_mode;
@@ -139,10 +134,10 @@ export function Chat(): ReactElement {
     // Live Chat
     // --------------------------------------------------------------------------------
     // The participant finished an utterance (the backend's transcript): the avatar starts thinking
-    const onUserUtterance = (text: string): void => { pushMessage("user", text); setHeard(text); setAwaitingReply(true); };
+    const onUserUtterance = (text: string): void => { setHeard(text); setAwaitingReply(true); };
 
     // The avatar's reply arrived
-    const onSystemUtterance = (text: string): void => { pushMessage("assistant", text); setReply(text); };
+    const onSystemUtterance = (text: string): void => { setReply(text); };
 
     // Backend `robot_action` frames: {kind: "emotion" | "animation", value, duration_ms} (each avatar acts them out its own way)
     const onRobotAction = (data: RobotAction): void => { avatarRef.current?.performAction(data); };
@@ -153,34 +148,36 @@ export function Chat(): ReactElement {
     // A shared feature that couldn't be switched says why
     const onCommandAck = (ack: CommandAck): void => { if ((ack.name === "set_feature") && !ack.ok) toast.error(`Couldn't switch that feature: ${ack.message}`); };
 
-    const { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand } = useLiveChat({
+    const { start, stop, save, chatEnding, chatOver, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand } = useLiveChat({
         onUserUtterance,
         onSystemUtterance,
-        onScores          : () => {},
+        onScores           : () => {},
         onRobotAction,
-        onTaskCard        : setTaskCard,
-        onChatClosed      : () => { setRecording(false); setShowModal(false); navigate("/chat/end"); },
-        onChatPaused      : () => { setRecording(false); },
-        onChatResumed     : () => { setRecording(true ); },
-        onRecordingStatus : (enabled: boolean) => { setAdminRecording(enabled); },
-        wsPath            : CHAT_PATH,
-        extraQuery        : chatModeQuery(mode, variant, debugMode || cues),
+        onTaskCard         : setTaskCard,
+        onTaskReveal       : setReveal,
+        onCommittedMessage : noteMessage,
+        onChatClosed       : () => { setRecording(false); setShowModal(false); noteEnd(); },
+        onChatPaused       : () => { setRecording(false); },
+        onChatResumed      : () => { setRecording(true ); },
+        onRecordingStatus  : (enabled: boolean) => { setAdminRecording(enabled); },
+        wsPath             : CHAT_PATH,
+        extraQuery         : chatModeQuery(mode, variant, debugMode || cues),
         avatarRef,
-        avatarModel       : model,
+        avatarModel        : model,
         onCommandAck,
-        onReplyTiming     : noteReplyTiming,
-        onLatency         : noteLatency,
-        pingMs            : debugMode ? CHAT_PING_MS : null,
-        hideCues          : debugMode && !cuesShown,
+        onReplyTiming      : noteReplyTiming,
+        onLatency          : noteLatency,
+        pingMs             : debugMode ? CHAT_PING_MS : null,
+        hideCues           : debugMode && !cuesShown,
     });
 
     // Debug mode's switches for the chat type's shared features
     const { switches, toggle } = useFeatureSwitches(debugMode ? mode.features : [], controlState, sendCommand);
 
-    // Start or resume, pause, and end (ending asks first)
-    const startChat = (): void => { start(); setRecording(true); setStarted(true); };
+    // Start or resume, pause, and end (ending asks first; the page stays put, and the end bar comes once the socket closes)
+    const startChat = (): void => { start(); setRecording(true); setStarted(true); noteStart(); };
     const pauseChat = (): void => { stop (); setRecording(false); };
-    const saveChat  = (): void => { save (); setShowModal(false); navigate("/chat/end"); };
+    const saveChat  = (): void => { save (); setShowModal(false); };
     const askToEnd  = (): void => { setShowModal(true); if (recording) pauseChat(); };
 
     // Apply the modal's choices (another chat type starts its task view fresh)
@@ -210,13 +207,11 @@ export function Chat(): ReactElement {
         );
     }
 
-    // The panel beside the avatar (the task's materials), the page's layout for it, and the avatar's framing (a held card or map needs its body)
-    const panel =
-        (mode.panel === "card") ? ((taskCard?.kind === "cooperative_planning") ? <PlanningCardPanel card={taskCard} /> : taskWaiting("card", mode.icon)) :
-        (mode.panel === "map" ) ? ((taskCard?.kind === "map_task")             ? <MapTaskMapPanel   map={taskCard}  /> : taskWaiting("map",  mode.icon)) :
-                                  null;
-    const layout = CHAT_PANEL_LAYOUT[mode.panel];
-    const zoom   = (window.isMobile && (panel === null)) ? "head" : "body";
+    // What goes beside the avatar (a speech elicitation chat's threads get a card's column once it ends), the page's
+    // layout for it, and the avatar's framing (a held card or map needs its body)
+    const panel  = (reveal?.kind === "speech_elicitation") ? "card" : mode.panel;
+    const layout = CHAT_PANEL_LAYOUT[panel];
+    const zoom   = (window.isMobile && (panel === "none")) ? "head" : "body";
 
     // The chat's choices, for the chips under the title and for the modal to start from
     const avatarEntry  = getAvatarEntry(model);
@@ -263,26 +258,30 @@ export function Chat(): ReactElement {
                             </div>
                             {subtitles ? <ReplyCaption heard={heard} reply={reply} awaitingReply={awaitingReply} idleText={CHAT_IDLE_TEXT} /> : null}
                         </section>
-                        {(panel !== null) ? <aside className="min-w-0">{panel}</aside> : null}
+                        {(panel !== "none") ? <aside className="min-w-0"><TaskPanel mode={mode} card={taskCard} reveal={reveal} /></aside> : null}
                     </main>
 
                     {/* -------------------------------------------------------------------------------- */}
-                    {/* Controls */}
+                    {/* Controls, or the End Bar */}
                     {/* -------------------------------------------------------------------------------- */}
-                    <ChatControls
-                        adminRecording = {adminRecording}
-                        chatEnding     = {chatEnding}
-                        onEnd          = {askToEnd}
-                        onPause        = {pauseChat}
-                        onStart        = {startChat}
-                        recording      = {recording}
-                        started        = {started}
-                    />
+                    {chatOver ? (
+                        <ChatEndBar disconnected={!chatEnding} showWords={mode.panel === "none"} stats={stats} />
+                    ) : (
+                        <ChatControls
+                            adminRecording = {adminRecording}
+                            chatEnding     = {chatEnding}
+                            onEnd          = {askToEnd}
+                            onPause        = {pauseChat}
+                            onStart        = {startChat}
+                            recording      = {recording}
+                            started        = {started}
+                        />
+                    )}
 
                     {/* -------------------------------------------------------------------------------- */}
-                    {/* Debug Panel */}
+                    {/* Debug Panel (its switches act on a running chat) */}
                     {/* -------------------------------------------------------------------------------- */}
-                    {debugMode ? (
+                    {(debugMode && !chatOver) ? (
                         <DebugPanel
                             cuesShown   = {cuesShown}
                             hasCues     = {mode.hasCues}

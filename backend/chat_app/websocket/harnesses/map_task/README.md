@@ -267,7 +267,10 @@ else is the same: the same pipelines, the same moves, and the participant's map.
   map goes to the participant's client only once the chat ends.
 - **The participant's reveal,** as a `task_reveal` frame just before the socket closes
   (`reveal_view` in `harness.py`, `consumers/HARNESS_PROTOCOL.md` §14): the avatar's map, and
-  the path it took.
+  the path it took. The chat page's map panel then draws both maps as one: the participant's
+  route and landmarks, the avatar's path, and the landmarks only one map has, ringed in green
+  (the participant's) or purple (the avatar's)
+  (`frontend/src/components/map_task/CombinedMap.tsx`).
 - **The admin live chat page,** a `task_monitor` view (`monitor_view` in `harness.py`): both
   maps, where the avatar is, every committed waypoint, and each saved reply. It arrives as
   the page connects and after every saved reply, and shows in the side column's **Map** tab: the

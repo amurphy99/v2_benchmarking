@@ -4,15 +4,17 @@
 
 The socket opens when the chat starts recording and closes when it stops. Every
 frame type goes to its own callback. The frames only some chat types send
-(`avatar_setup`, `avatar_plan`, `task_card`;
+(`avatar_setup`, `avatar_plan`, `task_card`, `task_reveal`;
 `backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`) are checked here,
 where they arrive: a malformed avatar frame gets one warning and a rejection
-sent back (`onAvatarRejected`), and a task card this page can't show is dropped
-with a warning. Command acks and the debug-mode frames (`control_state`,
-`reply_timing`, `pong`) are checked here too (`debugFrames`), and one that
-doesn't match is dropped with a warning. `extraQuery` adds the chat type's
-parameters (`chat_type`, `condition`, `variant`) to the socket URL. The URL
-carries the access token, so it is never logged.
+sent back (`onAvatarRejected`), and a task card or reveal this page can't show
+is dropped with a warning. Command acks and the debug-mode frames
+(`control_state`, `reply_timing`, `pong`) are checked here too (`debugFrames`),
+and one that doesn't match is dropped with a warning. So is a committed message
+echo (`message`) without a role and text; the page counts the echoes, and plays
+replies from `llm_response`. `extraQuery` adds the chat type's parameters
+(`chat_type`, `condition`, `variant`) to the socket URL. The URL carries the
+access token, so it is never logged.
 
 */
 import { useRef, useEffect, useState, useCallback } from "react";
@@ -27,6 +29,8 @@ import      { parseCommandAck, parseControlState      } from "@/hooks/live-chat/
 import      { parsePong, parseReplyTiming             } from "@/hooks/live-chat/debugFrames";
 import type { TaskCard                                } from "@/hooks/live-chat/taskCardFrame";
 import      { parseTaskCard                           } from "@/hooks/live-chat/taskCardFrame";
+import type { TaskReveal                              } from "@/hooks/live-chat/taskRevealFrame";
+import      { parseTaskReveal                         } from "@/hooks/live-chat/taskRevealFrame";
 
 const MAX_PENDING_MESSAGES =   500; // Maximum messages retained while the socket is connecting
 
@@ -52,6 +56,8 @@ export default function useChatSocket({
     onAvatarPlan       = (plan      : AvatarPlan      ) => {},  // A checked `avatar_plan` arrived
     onAvatarRejected   = (rejection : AvatarFeedback  ) => {},  // An avatar frame failed its checks (send the rejection back)
     onTaskCard         = (card      : TaskCard        ) => {},  // A `task_card` this page can show arrived
+    onTaskReveal       = (reveal    : TaskReveal      ) => {},  // A `task_reveal` this page can show arrived (just before the backend closes the socket)
+    onCommittedMessage = (role      : "user" | "assistant", content: string) => {},  // A message the backend saved (its echo)
     onConnectionClosed = (                            ) => {},  // The socket closed (the chat type's avatar setup no longer applies)
     onCommandAck       = (ack       : CommandAck      ) => {},  // A command's ack arrived, with the complete control state
     onControlState     = (state     : ControlState    ) => {},  // Debug mode: an admin's command changed the control state
@@ -73,10 +79,10 @@ export default function useChatSocket({
     // --------------------------------------------------------------------------------
     // Callback props often receive a new identity on every parent render. Keep the WebSocket
     // message handler stable while still invoking the newest callback implementations.
-    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong});
+    const handlersRef = useRef({onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onTaskReveal, onCommittedMessage, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong});
     useEffect(() => {
-        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong};
-    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong]);
+        handlersRef.current = {onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onTaskReveal, onCommittedMessage, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong};
+    }, [onLLMResponse, onScores, onUserUtt, onAudio, onRobotAction, onStreamStatus, onChatClosed, onRecordingStatus, onCancelAudio, onAvatarSetup, onAvatarPlan, onAvatarRejected, onTaskCard, onTaskReveal, onCommittedMessage, onConnectionClosed, onCommandAck, onControlState, onReplyTiming, onPong]);
 
     const onMessage = useCallback((event: MessageEvent) => {
         // One malformed backend frame should not break handling of later socket messages
@@ -123,8 +129,19 @@ export default function useChatSocket({
             else               { console.warn("Dropped a task card this page can't show"); }
         }
 
-        // Committed transcript echo (this UI renders from user_utt/llm_response instead)
-        else if (type === "message"         ) { /* transcript echo; nothing to do here */ }
+        // What the task kept from the participant, just before the backend closes the socket (a kind this page can't show is dropped)
+        else if (type === "task_reveal"     ) {
+            const reveal = parseTaskReveal(data);
+            if (reveal !== null) { handlers.onTaskReveal(reveal); }
+            else                 { console.warn("Dropped a task reveal this page can't show"); }
+        }
+
+        // Committed transcript echo (counted for the end-of-chat numbers; replies show from llm_response)
+        else if (type === "message"         ) {
+            const committed = ((data?.role === "user") || (data?.role === "assistant")) && (typeof data?.content === "string");
+            if (committed) { handlers.onCommittedMessage(data.role, data.content); }
+            else           { console.warn("Dropped a malformed message echo"); }
+        }
 
         // A command's result, with the complete control state
         else if (type === "command_ack"     ) {

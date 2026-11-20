@@ -456,7 +456,8 @@ listener receives this identical frame.
 | `ts`   | number | Unix epoch seconds (float) |
 
 This is a **transcript feed**, useful if your client wants to display the conversation on a
-screen. It is entirely optional to handle -- the webapp ignores it completely.
+screen. It is entirely optional to handle -- the webapp only counts these, for the numbers it
+shows once a chat ends.
 
 > **Important:** the assistant's response arrives **twice** -- once here as
 > `message`/`role: "assistant"` and once as `llm_response`. **Speak on `llm_response`** and

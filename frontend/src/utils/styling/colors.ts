@@ -11,6 +11,10 @@ export const PATIENT_OKLCH   = "#00a63e";
 export const MAP_TASK_ROUTE_HEX = "#c2410c";
 export const MAP_TASK_PATH_HEX  = "#2563eb";
 
+// Map Task combined maps: the ring on a landmark only one map has, green for the participant's and purple for the avatar's
+export const MAP_TASK_GIVER_HEX    = "#15803d";
+export const MAP_TASK_FOLLOWER_HEX = "#7c3aed";
+
 
 
 // Helper to style navigation links

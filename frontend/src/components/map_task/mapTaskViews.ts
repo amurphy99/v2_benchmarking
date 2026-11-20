@@ -10,7 +10,9 @@ picture for, so a frame's router can drop it whole.
 
 The comparison lists what makes the two maps differ (the landmarks only one of
 them has, and the ones moved or renamed on the avatar's), for the admin view and
-the staff preview to ring and name.
+the staff preview to ring and name. It also merges the two maps into one, for a
+combined map (`CombinedMap`): every landmark they have alike once, and each
+map's own copy of every other.
 
 */
 // From this project
@@ -95,6 +97,21 @@ export function mapDifferences(giver: MapTaskGiverMap, follower: MapTaskFollower
 export function differingIds(differences: MapDifferences): Set<string> {
     const {onlyGiver, onlyFollower, moved, renamed} = differences;
     return new Set([...onlyGiver, ...onlyFollower, ...moved, ...renamed].map((landmark: MapTaskLandmark) => landmark.id));
+}
+
+// Which map a landmark on a combined map is drawn from: the participant's ("giver") or the avatar's ("follower")
+export type MapSide = "giver" | "follower";
+
+// A landmark on a combined map: one both maps have alike (no side), or one map's own copy of one that differs
+export type CombinedLandmark = MapTaskLandmark & {side: MapSide | null};
+
+// The two maps as one: each landmark they have alike once, then each map's own copy of every other
+export function combinedLandmarks(giver: MapTaskGiverMap, follower: MapTaskFollowerMap): CombinedLandmark[] {
+    const differing = differingIds(mapDifferences(giver, follower));
+    return [
+        ...giver   .landmarks                                                                .map((landmark: MapTaskLandmark): CombinedLandmark => ({...landmark, side: differing.has(landmark.id) ? "giver" : null})),
+        ...follower.landmarks.filter((landmark: MapTaskLandmark) => differing.has(landmark.id)).map((landmark: MapTaskLandmark): CombinedLandmark => ({...landmark, side: "follower"})),
+    ];
 }
 
 // Two points in the same place

@@ -6,7 +6,10 @@ The participant's map shows its landmarks and the route from the start to the
 finish; the avatar's map shows its own landmarks and the start. A monitor adds
 where the avatar has been (and the participant's route, faintly, to compare
 against), and the staff preview rings the landmarks that differ between the two
-maps. Points are 0-1 across and down the map, the frame the map files use, drawn
+maps. On a combined map (`CombinedMap`), a landmark drawn from only one map is
+ringed in that map's color and named in it, the avatar's ring a little further
+out, so the two copies of a renamed landmark show both rings and both names.
+Points are 0-1 across and down the map, the frame the map files use, drawn
 on wide or tall paper (`shape`). Landmarks are drawn as large as they reach
 (`radius`, in lengths of the paper's longer side), so a lake is bigger than a
 bus. A tall map can be kept on screen with `maxHeight`; it then narrows to keep
@@ -17,10 +20,12 @@ import type { CSSProperties, ReactElement } from "react";
 import      { useId                       } from "react";
 
 // From this project
-import type { MapPoint, MapShape, MapTaskLandmark    } from "@/api";
-import      { MAP_TASK_PATH_HEX, MAP_TASK_ROUTE_HEX } from "@/utils/styling/colors";
-import      { MAP_TASK_FINISH_ICON, MAP_TASK_ICONS   } from "./mapTaskIcons";
-import      { MAP_TASK_PAPER                         } from "./mapTaskViews";
+import type { MapPoint, MapShape, MapTaskLandmark       } from "@/api";
+import      { MAP_TASK_FOLLOWER_HEX, MAP_TASK_GIVER_HEX } from "@/utils/styling/colors";
+import      { MAP_TASK_PATH_HEX, MAP_TASK_ROUTE_HEX     } from "@/utils/styling/colors";
+import      { MAP_TASK_FINISH_ICON, MAP_TASK_ICONS      } from "./mapTaskIcons";
+import type { MapSide                                   } from "./mapTaskViews";
+import      { MAP_TASK_PAPER                            } from "./mapTaskViews";
 
 // Room left around the paper for labels near its edges, in drawing units
 const MAP_VIEW_MARGIN = 8;
@@ -64,8 +69,19 @@ const MAP_RING_HEX  = "#b45309";
 // How faint the participant's route is when drawn on the avatar's map for comparison
 const MAP_GHOST_OPACITY = 0.45;
 
+// A combined map's ring on a landmark drawn from one map: its color, and how far out it sits (the avatar's further,
+// so the two copies of a renamed landmark, drawn in one spot, show both rings)
+const MAP_SIDE_RINGS: Record<MapSide, {hex: string; gap: number}> = {
+    giver    : {hex: MAP_TASK_GIVER_HEX,    gap: MAP_RING_PADDING      },
+    follower : {hex: MAP_TASK_FOLLOWER_HEX, gap: MAP_RING_PADDING + 2.5},
+};
+const MAP_SIDE_RING_W = 1.6;
+
 // The paper's width and height, in drawing units
 type Paper = [number, number];
+
+// A landmark to draw, and on a combined map, the one map it is drawn from (none for one both maps have alike)
+type DrawnLandmark = MapTaskLandmark & {side?: MapSide | null};
 
 // A label's baseline and wrapped lines, placed to avoid neighboring symbols and names
 type MapLabel = {x: number; y: number; lines: string[]};
@@ -78,7 +94,7 @@ type MapLabel = {x: number; y: number; lines: string[]};
 export default function MapTaskMap({shape, landmarks, label, route = null, start = null, ghostRoute = null, path = null, marked = null, maxHeight = null}: {
     // What is on the map
     shape     : MapShape;            // Its paper: wide or tall
-    landmarks : MapTaskLandmark[];   // Every landmark on this map
+    landmarks : DrawnLandmark[];     // Every landmark on this map (a combined map's carry the map each is drawn from)
     label     : string;              // What the picture shows, for screen readers
     route?    : MapPoint[] | null;   // The route from the start to the finish (the participant's map)
     start?    : MapPoint | null;     // Just the start (the avatar's map, which has no route)
@@ -120,7 +136,7 @@ export default function MapTaskMap({shape, landmarks, label, route = null, start
 
             {/* Footprints use exactly the radius used by the follower's geometry */}
             <g clipPath={`url(#${clipId})`}>
-                {landmarks.map((landmark: MapTaskLandmark) => drawFootprint(landmark, paper))}
+                {landmarks.map((landmark: DrawnLandmark) => drawFootprint(landmark, paper))}
             </g>
 
             {/* The participant's route, faintly, under everything else */}
@@ -137,7 +153,7 @@ export default function MapTaskMap({shape, landmarks, label, route = null, start
             ) : null}
 
             {/* Symbols and labels stay legible over the route */}
-            {landmarks.map((landmark: MapTaskLandmark, index: number) => drawLandmark(landmark, paper, marked?.has(landmark.id) === true, labels[index]))}
+            {landmarks.map((landmark: DrawnLandmark, index: number) => drawLandmark(landmark, paper, marked?.has(landmark.id) === true, labels[index]))}
 
             {/* The start */}
             {(startAt !== null) ? drawStart(startAt, paper) : null}
@@ -153,33 +169,41 @@ export default function MapTaskMap({shape, landmarks, label, route = null, start
 // Map Marks
 // --------------------------------------------------------------------------------
 // Draw the landmark's region at its true radius, without symbol size limits
-function drawFootprint(landmark: MapTaskLandmark, paper: Paper): ReactElement {
+function drawFootprint(landmark: DrawnLandmark, paper: Paper): ReactElement {
     const [x, y] = toView(landmark.at, paper);
     const radius = landmark.radius * Math.max(...paper);
     const colors = MAP_WATER_ICONS.has(landmark.icon) ? MAP_TERRAIN_COLORS.water : (MAP_GREEN_ICONS.has(landmark.icon) ? MAP_TERRAIN_COLORS.green : MAP_TERRAIN_COLORS.land);
-    return <circle key={landmark.id} cx={x} cy={y} r={radius} fill={colors.fill} stroke={colors.edge} strokeWidth={MAP_FOOTPRINT_W} />;
+    return <circle key={landmarkKey(landmark)} cx={x} cy={y} r={radius} fill={colors.fill} stroke={colors.edge} strokeWidth={MAP_FOOTPRINT_W} />;
 }
 
 // Draw a bounded symbol, wrapped name, and a difference ring outside the actual footprint
+// (a combined map's landmark from one map gets that map's ring, and its name in the ring's color)
 function drawLandmark(
-    landmark : MapTaskLandmark,  // The landmark and its radius
-    paper    : Paper,            // Paper dimensions in drawing units
-    ringed   : boolean,          // Whether this landmark differs between maps
-    label    : MapLabel,         // Its placed name
+    landmark : DrawnLandmark,  // The landmark and its radius, and the map it is drawn from on a combined map
+    paper    : Paper,          // Paper dimensions in drawing units
+    ringed   : boolean,        // Whether this landmark differs between maps
+    label    : MapLabel,       // Its placed name
 ): ReactElement {
     const Icon   = MAP_TASK_ICONS[landmark.icon];
     const [x, y] = toView(landmark.at, paper);
     const size   = Math.min(MAP_ICON_MAX, Math.max(MAP_ICON_MIN, landmark.radius * Math.max(...paper) * MAP_ICON_SCALE));
     const radius = landmark.radius * Math.max(...paper);
     const lineH  = MAP_LABEL_SIZE * MAP_LABEL_GAP;
+    const side   = landmark.side ? MAP_SIDE_RINGS[landmark.side] : null;
     return (
-        <g key={landmark.id}>
+        <g key={landmarkKey(landmark)}>
             <title>{`${landmark.label}: shaded area shows its extent`}</title>
             {ringed ? <circle cx={x} cy={y} r={radius + MAP_RING_PADDING} fill="none" stroke={MAP_RING_HEX} strokeWidth={1.2} strokeDasharray="3 2" /> : null}
+            {(side !== null) ? <circle cx={x} cy={y} r={radius + side.gap} fill="none" stroke={side.hex} strokeWidth={MAP_SIDE_RING_W} /> : null}
             <Icon x={x - (size / 2)} y={y - (size / 2)} size={size} color={MAP_INK_HEX} />
-            {label.lines.map((line: string, index: number) => <g key={index}>{drawText(label.x, label.y + (index * lineH), line, MAP_INK_HEX, false)}</g>)}
+            {label.lines.map((line: string, index: number) => <g key={index}>{drawText(label.x, label.y + (index * lineH), line, (side !== null) ? side.hex : MAP_INK_HEX, side !== null)}</g>)}
         </g>
     );
+}
+
+// A landmark's React key (a combined map can draw two copies of one landmark, one from each map)
+function landmarkKey(landmark: DrawnLandmark): string {
+    return `${landmark.side ?? "both"}:${landmark.id}`;
 }
 
 

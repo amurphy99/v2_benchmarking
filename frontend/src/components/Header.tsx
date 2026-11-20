@@ -59,7 +59,7 @@ const TITLES: Record<string, string> = {
     default         : "Cognibot",
 };
 
-const SHOW_HEADER: string[] = ["/chat", "/chat/end", "/album", "/analysis", "/analysis/flagged", "/goal", 
+const SHOW_HEADER: string[] = ["/chat", "/album", "/analysis", "/analysis/flagged", "/goal", 
     "/practice", "/schedule", "/alert", "/settings", "/profile", "/admin"]
 const SIMPLE_HEADER: string[] = ["/history", "/dashboard", "/chatDetails", "/v2", "/progress"]
 

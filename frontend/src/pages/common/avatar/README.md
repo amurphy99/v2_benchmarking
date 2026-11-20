@@ -551,11 +551,12 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
 ```diff
  frontend/src/
  ├── hooks/
- │   ├── useLiveChat.ts                    # The chat page's socket, microphone, TTS player, avatar plans (reports `tts_playback`), commands, and debug mode's pings
+ │   ├── useLiveChat.ts                    # The chat page's socket, microphone, TTS player, avatar plans (reports `tts_playback`), commands, debug mode's pings, and the chat's end
  │   └── live-chat/
- │       ├── useChatSocket.ts              # Routes the chat socket's frames, checking the plan frames, task cards, acks, and debug frames
+ │       ├── useChatSocket.ts              # Routes the chat socket's frames, checking the plan frames, task cards and reveals, acks, and debug frames
  │       ├── debugFrames.ts                # Command acks and the debug-mode frames (`reply_timing`, `control_state`, `pong`), checked on arrival
  │       ├── taskCardFrame.ts              # The `task_card` frame's types, checked on arrival
+ │       ├── taskRevealFrame.ts            # The `task_reveal` frame's types, checked on arrival
  │       ├── avatarPlanFrames.ts           # The plan frames' types and vocabularies, as the client runs them
  │       ├── avatarPlanChecks.ts           # Checks a setup or plan on arrival: the frame, or its rejection
  │       ├── useAudioPlayer.ts             # Schedules TTS chunks: loudness for the mouth, reply timeline and hold for plans
@@ -587,11 +588,12 @@ avatar back to listening with its map down (the shared `BackToListening` cue). S
      │   └── debugLabels.ts                # What each switch and timing number is called, and one line on each
      │
      ├── chat/
-     │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls
+     │   ├── Chat.tsx                      # The participant chat page: the avatar, its reply, the task panel, and controls (an end bar once the chat ends)
      │   ├── chatModes.ts                  # The chat types the page can open (`chat_type`, `condition`, `variant`)
      │   ├── useChatAvatar.ts              # Sleep, the conversation look, and the mouth on the chat page
+ │   ├── useChatStats.ts               # The end bar's numbers: the chat's length, its saved messages, and the participant's words
      │   ├── useFeatureSwitches.ts         # Debug mode: the shared feature switches, before and during the chat
-     │   └── components/                   # The configure-chat modal, the reply caption, the controls, the planning card, the Map Task map, and debug mode's panel, help, and timing pills
+     │   └── components/                   # The configure-chat modal, the reply caption, the controls and the end bar, the task panel (the planning card and the avatar's, the Map Task map, a speech elicitation chat's threads), and debug mode's panel, help, and timing pills
      │
      ├── avatar_demo/
      │   ├── AvatarDemo.tsx                # The demo page

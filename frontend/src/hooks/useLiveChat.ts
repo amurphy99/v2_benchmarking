@@ -8,6 +8,14 @@ the page hears about both through `onChatPaused` and `onChatResumed`. The TTS
 player's `systemSpeaking`, `readSpeechLoudness`, and `readSpeechRemaining`
 pass through for the avatar.
 
+Ending the chat sends `end_chat` and leaves the socket open, so the backend can
+send the task's reveal (`onTaskReveal`) before it closes the socket; one that
+doesn't close it in time is closed from here. The chat is over once the socket
+closes, whichever side closed it, since a primary socket never reconnects
+(`chatOver`, `onChatClosed`). A reply that ends the chat sends `chat_ended`
+just before that close, and its goodbye keeps playing. The committed message
+echoes pass through for the page to count (`onCommittedMessage`).
+
 A chat type that drives the avatar from the backend sends setups and plans
 (`backend/chat_app/websocket/consumers/HARNESS_PROTOCOL.md`). They run here, on
 the page's avatar (`useAvatarPlans`), timed against this player's replies, and
@@ -32,17 +40,22 @@ import type { AvatarFeedback                  } from "@/hooks/live-chat/avatarPl
 import      { avatarFeedbackFrame             } from "@/hooks/live-chat/avatarPlanFrames";
 import type { ReplyTimingFrame                } from "@/hooks/live-chat/debugFrames";
 import type { TaskCard                        } from "@/hooks/live-chat/taskCardFrame";
+import type { TaskReveal                      } from "@/hooks/live-chat/taskRevealFrame";
 import type { AvatarHandle                    } from "@/pages/common/avatar/avatarRegistry";
 import      { useAvatarPlans                  } from "@/pages/common/avatar/plans/useAvatarPlans";
 import      { useCueHiding                    } from "@/pages/common/avatar/plans/useCueHiding";
 import      { useAudioPlayer                  } from "./live-chat/useAudioPlayer";
 
+// How long an ending chat waits for the backend to close the socket before closing it from here
+const CHAT_END_CLOSE_WAIT_MS = 5_000;
+
 // What the hook gives the chat page
 interface LiveChatControls {
     start               : () => void;                                              // Connect if needed, then stream the microphone and play replies
     stop                : () => void;                                              // Pause: stop the microphone and drop buffered speech
-    save                : () => void;                                              // End the chat
-    chatEnding          : boolean;                                                 // The backend ended the chat (the goodbye may still be playing)
+    save                : () => void;                                              // End the chat (the backend sends the task's reveal, then closes the socket)
+    chatEnding          : boolean;                                                 // The chat is ending: the participant ended it, or the backend said `chat_ended`
+    chatOver            : boolean;                                                 // The socket closed: the chat is over (a goodbye may still be playing)
     systemSpeaking      : boolean;                                                 // Reply speech is playing
     readSpeechLoudness  : (fromSec: number, frameCount: number) => Float32Array;   // Vowel-band loudness of the reply heard from `fromSec` from now, per frame
     readSpeechRemaining : () => number | null;                                     // Seconds until the reply's final audio is heard (null while unknown)
@@ -67,6 +80,8 @@ export default function useLiveChat({
     onChatResumed,     // Backend sent message telling us that the chat is listening again
     onRecordingStatus, // Backend updates the recording status (if we are saving the audio on chat end)
     onTaskCard,        // The participant's task card arrived (chat types that show one)
+    onTaskReveal,      // The task's reveal arrived, just before the backend closes the socket (task chat types)
+    onCommittedMessage, // A message the backend saved (its echo), for the page to count
     avatarRef,         // The page's avatar, which runs the backend's plans
     avatarModel,       // The avatar showing (null while the settings load)
     extraQuery = "",   // The chat type's socket parameters, already encoded ("chat_type=map_task")
@@ -87,6 +102,8 @@ export default function useLiveChat({
     onChatResumed     ?: () => void;
     onRecordingStatus ?: (enabled: boolean) => void;
     onTaskCard        ?: (card: TaskCard) => void;
+    onTaskReveal      ?: (reveal: TaskReveal) => void;
+    onCommittedMessage?: (role: "user" | "assistant", content: string) => void;
     avatarRef          : RefObject<AvatarHandle | null>;
     avatarModel        : string | null;
     extraQuery        ?: string;
@@ -115,8 +132,9 @@ export default function useLiveChat({
 	};
 
     // Chat status trackers
-    const [recording,   setRecording  ] = useState(false);  // When we need to pause/unpause
-    const [chatEnding,  setChatEnding ] = useState(false);  // True after backend sends "chat_ended"
+    const [recording,   setRecording  ] = useState(false);  // The socket should be open (it opens on start, and closes once the chat is over)
+    const [chatEnding,  setChatEnding ] = useState(false);  // The participant ended the chat, or the backend sent "chat_ended"
+    const [chatOver,    setChatOver   ] = useState(false);  // The socket closed after the chat started: the chat is over
 
     // The backend's control state, from every command's ack (and in debug mode, from an admin's command)
     const [controlState, setControlState] = useState<ControlState | null>(null);
@@ -171,11 +189,18 @@ export default function useLiveChat({
         // ...
     };
 
-    // Backend signals the chat has ended => wait to do end-of-chat navigation until "goodbye" audio finishes
+    // The backend said `chat_ended`: its close comes next (the goodbye may still be playing)
     const handleChatEnded = () => { setChatEnding(true); };
 
-    // Navigate once chatEnding=true AND the goodbye audio has finished playing
-    useEffect(() => { if (chatEnding && !systemSpeaking) { onChatClosed?.(); } }, [chatEnding, systemSpeaking]);
+    // The socket closed, from either side: the chat is over (the chat type's avatar setup no longer applies)
+    const handleConnectionClosed = () => { cues.clearSetup(); setRecording(false); setChatOver(true); onChatClosed?.(); };
+
+    // An ending chat whose socket the backend hasn't closed in time is closed from here (its reveal never comes)
+    useEffect(() => {
+        if (!chatEnding || chatOver) return;
+        const timer = window.setTimeout(() => setRecording(false), CHAT_END_CLOSE_WAIT_MS);
+        return () => window.clearTimeout(timer);
+    }, [chatEnding, chatOver]);
 
     // --------------------------------------------------------------------------------
     // Chat Socket
@@ -197,7 +222,9 @@ export default function useLiveChat({
         onAvatarPlan       : cues.runPlan,
         onAvatarRejected   : sendAvatarFeedback,
         onTaskCard         : (card: TaskCard) => onTaskCard?.(card),
-        onConnectionClosed : cues.clearSetup,
+        onTaskReveal       : (reveal: TaskReveal) => onTaskReveal?.(reveal),
+        onCommittedMessage : (role: "user" | "assistant", content: string) => onCommittedMessage?.(role, content),
+        onConnectionClosed : handleConnectionClosed,
         onCommandAck       : onAck,
         onControlState     : setControlState,
         onReplyTiming      : (timing: ReplyTimingFrame) => onReplyTiming?.(timing),
@@ -226,10 +253,14 @@ export default function useLiveChat({
 
     const start = () => { prepareConnection(); setRecording(true); startAud(); startPlayer(); setListening("active"); };
 	const stop  = () => {                                           stopAud();  stopPlayer(); setListening("paused"); };
-    const  save = () => {                      setRecording(false);                           send({type: "end_chat", data: Date.now() }); 
-        qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Save invalidates chatSessions queries to force a DB refresh
+
+    // End the chat: the microphone and any reply stop, and the socket stays open for the backend's reveal and its close
+    const save = () => {
+        stopAud(); stopPlayer(); setChatEnding(true);
+        send({type: "end_chat", data: Date.now()});
+        qc.invalidateQueries({ queryKey: ["chatSessions"] }); // Ending invalidates chatSessions queries to force a DB refresh
     };
 
-    // Exposes start, stop, save & chatEnding (true while goodbye audio is playing), the reply speech state for the avatar, and commands
-    return { start, stop, save, chatEnding, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand };
+    // Exposes start, stop, save, where the chat is (ending, over), the reply speech state for the avatar, and commands
+    return { start, stop, save, chatEnding, chatOver, systemSpeaking, readSpeechLoudness, readSpeechRemaining, controlState, sendCommand };
 }
