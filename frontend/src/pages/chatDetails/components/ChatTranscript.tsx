@@ -2,7 +2,8 @@ import { FaUser  } from "react-icons/fa";
 import { BsRobot } from "react-icons/bs";
 import { PATIENT_HEX, CAREGIVER_HEX } from "@/utils/styling/colors";
 
-import { ChatSession, ChatMessage } from "@/api";
+import { ChatSessionSummary, ChatMessage } from "@/api";
+import { useChatSession } from "@/hooks/queries/useChatSessions";
 import { formatElapsed } from "@/utils/styling/numFormatting";
 import { useProfile } from "@/hooks/queries/useProfile";
 
@@ -10,18 +11,24 @@ import { useProfile } from "@/hooks/queries/useProfile";
 // Chat Transcription
 // ====================================================================
 // ToDo: Timestamp should be time from start of the chat in seconds
-export default function ChatTranscript({ chatSession } : { chatSession: ChatSession }) {
+export default function ChatTranscript({ chatSession } : { chatSession: ChatSessionSummary }) {
     // Get the patients name & chat start time
     const { data: profile, isLoading } = useProfile();
 
-    if (isLoading) {
+    // The chat in full, for its messages (a chat list carries only each chat's summary)
+    const { data: fullSession, isLoading: loadingChat, isError } = useChatSession(String(chatSession.id));
+
+    if (isLoading || loadingChat) {
         return <div>Loading...</div>;
+    }
+    if (isError) {
+        return <div>Couldn't load this chat's transcript.</div>;
     }
     const patient_name = `${profile.account.user.first_name} ${profile.account.user.last_name}`;
     const chatStart = new Date(chatSession.start_ts);
 
     // Make a copy and sort from earliest to latest
-    const sortedMessages = [...chatSession.messages].sort(
+    const sortedMessages = [...fullSession.messages].sort(
         (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime()
     );
 

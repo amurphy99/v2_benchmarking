@@ -16,7 +16,7 @@ from django.urls         import reverse
 from rest_framework.test import APIClient
 
 # From this project
-from chat_app.models import Access, Account, ChatSession, Profile
+from chat_app.models import Access, Account, ChatMessage, ChatSession, Profile
 
 
 # ================================================================================
@@ -49,6 +49,18 @@ class CaregiverScopeTests(TestCase):
 
         listed = {session["profile"]["account"]["user"]["username"] for session in response.data}
         self.assertEqual(listed, {"scope_first", "scope_second"})
+
+    # A participant's own list counts each chat's messages once, however many caregivers they have
+    # (the access filter joins one row per caregiver, and every one of them matches the participant)
+    def test_message_counts_hold_with_several_caregivers(self) -> None:
+        second = Account.objects.create(user=get_user_model().objects.create_user(username="scope_second_caregiver"), role="caregiver")
+        Access.objects.create(account=second, profile=self.profiles[0])
+        session = ChatSession.objects.get(profile=self.profiles[0])
+        for role, text in (("user", "Hi"), ("assistant", "Hello!")): ChatMessage.objects.create(session=session, role=role, content=text)
+
+        self.api.force_authenticate(user=self.profiles[0].account.user)
+        response = self.api.get(reverse("chatsession-list", kwargs={"active": 0, "demo": 0}))
+        self.assertEqual([row["message_count"] for row in response.data], [2])
 
     # The caregiver pages show the participant linked first
     def test_profile_is_first_linked_participant(self) -> None:

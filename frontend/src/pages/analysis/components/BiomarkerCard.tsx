@@ -1,4 +1,4 @@
-import { BiomarkerType, ChatSession } from "@/api";
+import { BiomarkerType, ChatSessionSummary } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { getBiomarkerDefinition, getBiomarkerDescription, getBiomarkerName } from "@/utils/misc/descriptions";
 import { blockStyle } from "@/utils/styling/sharedStyles";
@@ -19,15 +19,15 @@ export default function BiomarkerCard({
 } : {
     biomarker   : BiomarkerType, 
     week        : ChatWeek,
-    exemplarDays: ChatSession[],
-    flaggedDays : ChatSession[],
+    exemplarDays: ChatSessionSummary[],
+    flaggedDays : ChatSessionSummary[],
     performance : string
 }) {
     const role = useAuth().account.role;
     const navigate = useNavigate();
     const [example, setExample] = useState<string>("exemplar")
 
-    const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "grid" } } )
+    const toDaySummary = (session: ChatSessionSummary) => navigate("/day", { state: { chatSession: session, albumDisplay: "grid" } } )
 
     return (
         <div className={`${blockStyle} flex flex-col`}>

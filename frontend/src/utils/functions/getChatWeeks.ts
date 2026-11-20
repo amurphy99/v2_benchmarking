@@ -1,4 +1,4 @@
-import { ChatSession, BiomarkerType, ChatMessage, AlbumImage      } from "@/api";
+import { ChatSession, ChatSessionSummary, BiomarkerType, ChatMessage, AlbumImage      } from "@/api";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { matchImage } from "./matchImage";
 import { sortUniqueByFrequency } from "./sortUniqueByFrequency";
@@ -7,7 +7,7 @@ import { sortUniqueByFrequency } from "./sortUniqueByFrequency";
 export interface ChatWeek {
     start      : Date;           // Monday 00:00:00
     end        : Date;           // Sunday 23:59:59.999
-    sessions   : ChatSession[];
+    sessions   : ChatSessionSummary[];
     prevScores : Record<BiomarkerType, number>;
     image      : AlbumImage | null;
 }
@@ -19,13 +19,13 @@ export interface ChatsPerDay {
 
 export interface SessionsOnDay {
     day     : string;
-    sessions: ChatSession[];
+    sessions: ChatSessionSummary[];
 }
 
 // ====================================================================
 // Groups chat-sessions into Monday-to-Sunday buckets
 // ====================================================================
-export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1): ChatWeek[] {
+export function groupSessionsByWeek(sessions: ChatSessionSummary[], weekStartsOn: 0 | 1 = 1): ChatWeek[] {
     if (!sessions.length) return [];
 
     // Sort the chats and get the start of the first week
@@ -39,7 +39,7 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
     // Prepare objects to store the results
     const result : ChatWeek[]    = [];
     let cursor   : Date          = new Date(weekStart);
-    let bucket   : ChatSession[] = [];
+    let bucket   : ChatSessionSummary[] = [];
 
     for (const chat of sorted) {
         const chatDate = new Date(chat.date);
@@ -74,7 +74,7 @@ export function groupSessionsByWeek(sessions: ChatSession[], weekStartsOn: 0 | 1
     return result;
 }
 
-export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1): ChatWeek {
+export function getCurrentWeek(sessions: ChatSessionSummary[], weekStartsOn: 0 | 1 = 1): ChatWeek {
     const weekStart  = startOfWeek(new Date(), weekStartsOn);
     const weekEnd    = endOfWeek(weekStart, weekStartsOn, true);
     if (sessions.length == 0) {
@@ -86,7 +86,7 @@ export function getCurrentWeek(sessions: ChatSession[], weekStartsOn: 0 | 1 = 1)
             image: null
         })
     }
-    let bucket: ChatSession[] = [];
+    let bucket: ChatSessionSummary[] = [];
     const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     for (const chat of sorted) {
@@ -156,10 +156,10 @@ export function getMessages(sessions: ChatSession[]) {
     return messages;
 }
 
-export function getTopics(sessions: ChatSession[]): string[] {
+export function getTopics(sessions: ChatSessionSummary[]): string[] {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
+        var session: ChatSessionSummary = sessions[i];
         var sessionTopics = session.topics;
         if (!sessionTopics) continue;
         for (var j = 0; j < sessionTopics.length; j++) {
@@ -173,10 +173,10 @@ export function getTopics(sessions: ChatSession[]): string[] {
 }
 
 // Get the most common topic
-export function getMainTopic(sessions: ChatSession[]) {
+export function getMainTopic(sessions: ChatSessionSummary[]) {
     var topics: string[] = [];
     for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
+        var session: ChatSessionSummary = sessions[i];
         var sessionTopics = session.topics;
         if (!sessionTopics) continue;
         for (var j = 0; j < sessionTopics.length; j++) {

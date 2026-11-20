@@ -1,4 +1,4 @@
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { useChatSessionDetails, useChatSessions } from "@/hooks/queries/useChatSessions";
 import { ChatWeek, getCurrentWeek } from "@/utils/functions/getChatWeeks";
 import { blockStyle, colStyle } from "@/utils/styling/sharedStyles";
 import WeeklyMoods from "@/components/graphics/WeeklyMoods";
@@ -11,14 +11,16 @@ import { useProfile } from "@/hooks/queries/useProfile";
 export function Alert() {
     const { data: sessions, isLoading } = useChatSessions();
 
-    if (isLoading) { 
+    // This week's chats in full, for the flagged-word check (a list carries only summaries)
+    const week = getCurrentWeek(sessions);
+    const { data: weekChats, isLoading: loadingWeek } = useChatSessionDetails(week.sessions.map((session) => session.id));
+
+    if (isLoading || loadingWeek) { 
         return <p>Loading...</p>; 
     }
 
-    const week = getCurrentWeek(sessions);
-
     const moodAlertDays = getMoodAlert(week.sessions);
-    const wordAlerts = getWordAlert(week.sessions);
+    const wordAlerts = getWordAlert(weekChats);
 
     return (
         <div className={colStyle}>

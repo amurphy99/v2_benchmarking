@@ -11,7 +11,7 @@ import type { ReactElement     } from "react";
 import      { LuRefreshCw, LuX } from "react-icons/lu";
 
 // From this project
-import type { ChatSession                                                    } from "@/api";
+import type { ChatSessionSummary                                             } from "@/api";
 import      { AdminButton                                                    } from "../ui/AdminButton";
 import type { ChatRunField, ChatRunFilter                                    } from "./chatRunFilter";
 import      { CHAT_RUN_ANY, CHAT_RUN_FIELDS, chatRunOptions, setChatRunField } from "./chatRunFilter";
@@ -33,7 +33,7 @@ const CHAT_RUN_ANY_VALUE = "__any__";
 // --------------------------------------------------------------------------------
 // One dropdown per field, and a button that clears them all
 export default function ChatRunFilterBar({sessions, filter, onChange, onRefresh, refreshing}: {
-    sessions   : ChatSession[];                    // Both lists, for the values to offer
+    sessions   : ChatSessionSummary[];                    // Both lists, for the values to offer
     filter     : ChatRunFilter;                    // The filter now
     onChange   : (filter: ChatRunFilter) => void;  // Set the changed filter
     onRefresh  : () => Promise<void>;              // Refresh both lists together

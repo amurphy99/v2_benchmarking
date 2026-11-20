@@ -1,11 +1,12 @@
 """
-The session list's filters on what ran: chat type, condition, and variant.
+The session list: each chat's summary, and its filters on what ran.
 --------------------------------------------------------------------------------
 `backend.chat_app.tests.test_chat_session_filters`
 
 The Monitor page and researchers read which chat type, cue condition, and task
 variant each session ran from `/api/chatsessions/`, and can narrow the list to
-one of them with query parameters.
+one of them with query parameters. The list carries each chat's summary, and a
+chat's transcript, scores, and recording come only with that one chat.
 
 """
 from django.contrib.auth import get_user_model
@@ -15,7 +16,7 @@ from django.urls         import reverse
 from rest_framework.test import APIClient
 
 # From this project
-from chat_app.models import Account, ChatSession, Profile
+from chat_app.models import Account, ChatMessage, ChatSession, Profile
 
 
 # ================================================================================
@@ -43,6 +44,19 @@ class ChatSessionRunFilterTests(TestCase):
     # Every session carries what ran, and no filter lists them all
     def test_sessions_carry_what_ran(self) -> None:
         self.assertEqual(self._listed(), {("unguided", ""), ("cooperative_planning", "cues"), ("cooperative_planning", "no_cues")})
+
+    # A listed chat carries its message count but not its messages; the chat on its own carries both
+    def test_the_list_carries_summaries_and_one_chat_its_transcript(self) -> None:
+        session = ChatSession.objects.get(chat_type="unguided")
+        for role, text in (("user", "Hi"), ("assistant", "Hello!")): ChatMessage.objects.create(session=session, role=role, content=text)
+
+        listed = {row["id"]: row for row in self.api.get(reverse("chatsession-list", kwargs={"active": 0, "demo": 0})).data}
+        self.assertEqual(listed[session.id]["message_count"], 2)
+        for left_out in ("messages", "biomarkers", "audio"): self.assertNotIn(left_out, listed[session.id])
+
+        full = self.api.get(reverse("chatsession", kwargs={"sessionid": session.id})).data
+        self.assertEqual((full["message_count"], [message["content"] for message in full["messages"]]), (2, ["Hi", "Hello!"]))
+        for kept in ("biomarkers", "audio"): self.assertIn(kept, full)
 
     # Each filter is an exact match, and they combine
     def test_filters_narrow_the_list(self) -> None:

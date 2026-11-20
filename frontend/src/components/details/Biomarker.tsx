@@ -1,5 +1,5 @@
 import { cardStyle } from "@/utils/styling/sharedStyles";
-import { BiomarkerType, ChatSession } from "@/api";
+import { BiomarkerType, ChatSessionSummary } from "@/api";
 
 import AnalysisButton from "@/components/details/AnalysisButton";
 
@@ -33,7 +33,7 @@ export default function Biomarker({ name, current, previous, session }: {
     name     : BiomarkerType,
     current  : number,
     previous : number,
-    session  : ChatSession, 
+    session  : ChatSessionSummary, 
 }) {
     // Per-biomarker configuration
     const cardText = `Here would be an overview of the ${name} analysis.`;

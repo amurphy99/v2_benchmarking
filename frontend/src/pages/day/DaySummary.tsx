@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import { dateFormatOptions } from "@/utils/styling/numFormatting";
 import { useAuth } from "@/context/AuthProvider";
@@ -13,7 +13,7 @@ import { getDailyAnalysis } from "@/utils/functions/getAnalysis";
 
 export function DaySummary() {
     const role = useAuth().account.role;
-    const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay: string } };
+    const { state } = useLocation() as { state: { chatSession: ChatSessionSummary, albumDisplay: string } };
     const navigate = useNavigate();
     if (!state?.chatSession) { navigate("/chat"); };
     const chatDate = new Date(state.chatSession.date);

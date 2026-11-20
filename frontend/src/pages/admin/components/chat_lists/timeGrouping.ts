@@ -3,7 +3,7 @@
 - formatTimeAgo : single-unit "X ago" string for the per-card pill
 - groupByRecency: groups sessions by day for the past week, then by week
 */
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 
 // Single-unit ago: "just now", "5m ago", "3h ago", "2d ago", "1w ago", "3mo ago"
 export function formatTimeAgo(d: Date | null | undefined): string {
@@ -33,7 +33,7 @@ export function formatTimeAgo(d: Date | null | undefined): string {
 export interface SessionGroup {
     key      : string;           // unique key
     label    : string;           // displayed header text
-    sessions : ChatSession[];    // sessions in the group, sorted newest-first
+    sessions : ChatSessionSummary[];    // sessions in the group, sorted newest-first
 }
 
 function startOfDay(d: Date): Date {
@@ -62,10 +62,10 @@ function weekRangeLabel(start: Date, end: Date): string {
 // Returns one group per day for the past 7 days that contained at least one
 // session, then one group per week beyond that. Empty groups are omitted.
 // Sessions without start_ts are placed in a trailing "Earlier" group.
-export function groupByRecency(sessions: ChatSession[]): SessionGroup[] {
+export function groupByRecency(sessions: ChatSessionSummary[]): SessionGroup[] {
     const today = startOfDay(new Date());
 
-    interface Bucket { label: string; sessions: ChatSession[]; sortKey: number; }
+    interface Bucket { label: string; sessions: ChatSessionSummary[]; sortKey: number; }
     const byKey = new Map<string, Bucket>();
 
     for (const s of sessions) {

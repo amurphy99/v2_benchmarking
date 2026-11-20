@@ -1,16 +1,16 @@
-import { ChatSession, BiomarkerType } from "@/api";
+import { ChatSessionSummary, BiomarkerType } from "@/api";
 
 export const biomarkerKeys = ["AlteredGrammar", "Anomia", "Pragmatic", "Pronunciation", "Prosody", "Turntaking",] as const;
 
 
 // Get a list of all ChatSessions
-export function getSessionsBefore(sessions: ChatSession[], cutoff: Date): ChatSession[] {
+export function getSessionsBefore(sessions: ChatSessionSummary[], cutoff: Date): ChatSessionSummary[] {
     return sessions.filter((s) => new Date(s.date) < cutoff);
 }
 
 
 // Get "average_scores" from each session and average each; gets the average score of each biomarker across the whole week
-export function averageScore(sessions: ChatSession[]): Record<BiomarkerType, number> {
+export function averageScore(sessions: ChatSessionSummary[]): Record<BiomarkerType, number> {
     const work: Record<string, { sum: number; count: number }> = Object.create(null);
 
     // Get each score
@@ -61,8 +61,8 @@ export function getExemplarBiomarkers(scores: Record<BiomarkerType, number>, thr
 }
 
 
-export function getFlaggedDays(sessions: ChatSession[], biomarker: BiomarkerType) : ChatSession[] {
-    var flagged: ChatSession[] = []
+export function getFlaggedDays(sessions: ChatSessionSummary[], biomarker: BiomarkerType) : ChatSessionSummary[] {
+    var flagged: ChatSessionSummary[] = []
     sessions.forEach((session) => {
         if (session.average_scores[biomarker] <= 0.35) {
             flagged.push(session);
@@ -71,8 +71,8 @@ export function getFlaggedDays(sessions: ChatSession[], biomarker: BiomarkerType
     return flagged;
 }
 
-export function getExemplarDays(sessions: ChatSession[], biomarker: BiomarkerType) : ChatSession[] {
-    var exemplar: ChatSession[] = []
+export function getExemplarDays(sessions: ChatSessionSummary[], biomarker: BiomarkerType) : ChatSessionSummary[] {
+    var exemplar: ChatSessionSummary[] = []
     sessions.forEach((session) => {
         if (session.average_scores[biomarker] >= 0.75) {
             exemplar.push(session);

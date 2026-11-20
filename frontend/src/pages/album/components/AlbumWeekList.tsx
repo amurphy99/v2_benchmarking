@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { ChatWeek } from "@/utils/functions/getChatWeeks"
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
@@ -9,10 +9,10 @@ export default function AlbumWeekList({ week } : { week: ChatWeek }) {
     const role = useAuth().account.role;
     const navigate = useNavigate();
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "list" } } )
-    const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )
+    const toDaySummary = (session: ChatSessionSummary) => navigate("/day", { state: { chatSession: session, albumDisplay: "list" } } )
     const sessions = week.sessions.slice().reverse();
 
-    const SessionCard = ( {session} : {session: ChatSession } ) => {
+    const SessionCard = ( {session} : {session: ChatSessionSummary } ) => {
         const date = new Date(session.date);
         return (
             <div className="flex flex-row gap-2 rounded-md bg-white shadow-[0px_0px_2px_2px_rgba(0,0,0,0.1)] 

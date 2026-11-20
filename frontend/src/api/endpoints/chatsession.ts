@@ -1,9 +1,10 @@
-import { request     } from "../client";
-import { ChatSession } from "../models";
+import      { request                         } from "../client";
+import type { ChatSession, ChatSessionSummary } from "../models";
 
 // GET
 // 0 = inactive/non-demo, 1=active/demo, 2=exclude filter
-export const listChatSessions = (active: number = 0, demo: number = 2) => request<ChatSession[]>(`/chatsessions/${active}/${demo}/`);
+// (each chat's summary only: `getChatSession` has one chat's transcript)
+export const listChatSessions = (active: number = 0, demo: number = 2) => request<ChatSessionSummary[]>(`/chatsessions/${active}/${demo}/`);
 
 export const getChatSession = (id: string) => request<ChatSession>(`/chatsession/${id}/`);
 

@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { useAuth } from "@/context/AuthProvider";
 import { ChatWeek, getChatsInWeek } from "@/utils/functions/getChatWeeks";
 import { useNavigate } from "react-router-dom";
@@ -10,7 +10,7 @@ export default function WeekTrack( {week} : {week: ChatWeek} ) {
 
     const dayTracks = getChatsInWeek(week);
 
-    function toDayChat(sessions: ChatSession[]): void {
+    function toDayChat(sessions: ChatSessionSummary[]): void {
         navigate("/day", { state: { chatSession: sessions[sessions.length - 1], albumDisplay: "grid" } })
     }
 

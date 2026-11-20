@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 
 import ChatBiomarkers from "@/pages/common/biomarkers/BiomarkersSlim";
@@ -14,7 +14,7 @@ import { getCognitiveScore } from "@/utils/functions/getCognitiveScore";
 // ToDo: Add little icons to this
 // * Used from multiple pages
 // * Show: date, duration, topics, sentiment, scores
-export default function ChatSessionCard({ session, sessions } : { session: ChatSession, sessions: ChatSession[] }) {
+export default function ChatSessionCard({ session, sessions } : { session: ChatSessionSummary, sessions: ChatSessionSummary[] }) {
     // Click to view the single chat analysis
     const navigate = useNavigate();
     const toChatDetails = () => { navigate("/chatDetails", { state: { chatSession: session } }) };

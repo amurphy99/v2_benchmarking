@@ -1,8 +1,8 @@
-import { BiomarkerType, ChatSession } from "@/api";
+import { BiomarkerType, ChatSessionSummary } from "@/api";
 import { dateFormatShort } from "@/utils/styling/numFormatting";
 import ReactApexChart from "react-apexcharts";
 
-export default function BiomarkerGraph( {biomarker, sessions} : {biomarker: BiomarkerType, sessions: ChatSession[]} ) {
+export default function BiomarkerGraph( {biomarker, sessions} : {biomarker: BiomarkerType, sessions: ChatSessionSummary[]} ) {
     // Prepare chart data
     const labels = sessions.map((s) => dateFormatShort.format(new Date(s.date)));
      const series = [{

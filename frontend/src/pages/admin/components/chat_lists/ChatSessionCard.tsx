@@ -6,7 +6,7 @@
 import { memo, useMemo } from "react";
 
 // From this project
-import { ChatSession                                              } from "@/api";
+import { ChatSessionSummary                                       } from "@/api";
 import { dateFormatLong, formatElapsedTime                        } from "@/utils/styling/numFormatting";
 import { CHAT_TYPE_PILL_CLASS, chatRunLabel, chatTypePresentation } from "./chatTypePresentation";
 import { formatTimeAgo                                            } from "./timeGrouping";
@@ -20,7 +20,7 @@ import { sentimentBadge, emotionBadge, riskBadge, topicsBadges } from "../analys
 // ================================================================================
 // ChatSessionCard view for the Admin Page
 // ================================================================================
-export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick }: {session: ChatSession; onClick: () => void}) {
+export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick }: {session: ChatSessionSummary; onClick: () => void}) {
     // Load analysis
     const isActive = session.is_active;
     const analysis = useMemo(() => {
@@ -88,7 +88,7 @@ export const ChatSessionCard = memo(function ChatSessionCard({ session, onClick 
                 </div>
             ) : null}
             <div className="flex gap-2 flex-wrap mt-2">
-                <Pill label="Messages" value={session.messages.length ?? "—"     } />
+                <Pill label="Messages" value={session.message_count              } />
                 <Pill label="Duration" value={formatElapsedTime(session.duration)} />
             </div>
 

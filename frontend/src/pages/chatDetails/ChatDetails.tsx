@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { IoIosChatbubbles         } from "react-icons/io";
 
-import { ChatSession                     } from "@/api";
+import { ChatSessionSummary              } from "@/api";
 import { useChatSessions                 } from "@/hooks/queries/useChatSessions";
 import { getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { dateFormatLong                  } from "@/utils/styling/numFormatting";
@@ -16,7 +16,7 @@ import ChatBiomarkers   from "./components/ChatBiomarkers";
 // ====================================================================
 export function ChatDetails () {
     // If the page wasn't loaded with a ChatSession, reroute
-    const { state } = useLocation() as { state?: { chatSession?: ChatSession } };
+    const { state } = useLocation() as { state?: { chatSession?: ChatSessionSummary } };
     if (!state?.chatSession) { useNavigate()("/dashboard"); };
     const chatDate = new Date(state?.chatSession.date);
 

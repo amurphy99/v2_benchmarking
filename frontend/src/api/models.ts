@@ -241,8 +241,9 @@ export interface SessionAudio {
   created_at       : string;
 }
 
-// ChatSessions
-export interface ChatSession {
+// One chat as the chat lists carry it: everything but its transcript, scores, and recording
+// (`ChatSessionSummarySerializer`)
+export interface ChatSessionSummary {
   id        : number;
   profile   : Profile;
   source    : string;
@@ -252,7 +253,6 @@ export interface ChatSession {
   start_ts       : string;
   end_ts         : string | null;
   duration       : number;         // in seconds
-  audio          : SessionAudio | null;
 
   topics    : string[] | null;
   image     : AlbumImage;
@@ -273,9 +273,16 @@ export interface ChatSession {
   variant       : string;          // Its task content ("" for none)
   debug_mode    : boolean;         // Started in debug mode (its features may have been switched partway through)
 
-  messages        : ChatMessage[];
-  biomarkers      : ChatBiomarkerScore[];
-  average_scores  : Record<string, number>;
+  message_count   : number;                   // How many messages it has
+  average_scores  : Record<string, number>;   // Its mean score for each biomarker it has scores for
+}
+
+// One chat in full: its summary, plus its transcript (with each word), scores, and recording
+// (`ChatSessionSerializer`)
+export interface ChatSession extends ChatSessionSummary {
+  audio      : SessionAudio | null;
+  messages   : ChatMessage[];
+  biomarkers : ChatBiomarkerScore[];
 }
 
 // =======================================================================

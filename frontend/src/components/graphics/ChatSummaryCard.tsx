@@ -1,8 +1,8 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 import { useNavigate } from "react-router-dom";
 
-export default function ChatSummaryCard( {role, sessions, type} : {role: string, sessions: ChatSession[], type: string} ) {
+export default function ChatSummaryCard( {role, sessions, type} : {role: string, sessions: ChatSessionSummary[], type: string} ) {
     const navigate = useNavigate();
     
     const toTranscript = () => navigate("/transcript", {state: {chatSession: sessions[0]}});

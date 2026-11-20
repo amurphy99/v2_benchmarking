@@ -1,6 +1,6 @@
 import { Icon } from "@iconify/react";
-import { ChatSession     } from "@/api";
-import { useChatSessions } from "@/hooks/queries/useChatSessions";
+import { ChatSessionSummary } from "@/api";
+import { useChatSessions    } from "@/hooks/queries/useChatSessions";
 import { biomarkerKeys, getSessionsBefore, averageScore } from "@/utils/misc/scores";
 import { h2, cardStyle                   } from "@/utils/styling/sharedStyles";
 import Biomarker   from "@/components/details/Biomarker";
@@ -11,7 +11,7 @@ import Biomarker   from "@/components/details/Biomarker";
 // Detailed Analysis Panel
 // --------------------------------------------------------------------
 // ToDo: Word cloud
-export default function DetailedAnalysis ({ session }: { session: ChatSession }) {
+export default function DetailedAnalysis ({ session }: { session: ChatSessionSummary }) {
     const { data, isLoading } = useChatSessions();
     const prevScores = averageScore(getSessionsBefore(data, new Date(session.date)));
     const thisScores = session.average_scores;

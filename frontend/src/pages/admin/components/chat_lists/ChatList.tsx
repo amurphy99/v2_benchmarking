@@ -17,11 +17,11 @@ import { memo, useMemo, useState } from "react";
 import { useNavigate             } from "react-router-dom";
 
 // From this project
-import { ChatSession     } from "@/api";
-import { ChatSessionCard } from "./ChatSessionCard";
-import { SectionHeader   } from "../ui/SectionHeader";
-import { Pill            } from "../ui/Pill";
-import { groupByRecency  } from "./timeGrouping";
+import { ChatSessionSummary } from "@/api";
+import { ChatSessionCard    } from "./ChatSessionCard";
+import { SectionHeader      } from "../ui/SectionHeader";
+import { Pill               } from "../ui/Pill";
+import { groupByRecency     } from "./timeGrouping";
 
 // ================================================================================
 // List of ChatSessions for the Admin page (either only Active chats, or all chats)
@@ -37,7 +37,7 @@ export const ChatList = memo(function ChatList({
 }: {
     title       : string;
     subtitle  ? : string | null;
-    sessions    : ChatSession[];
+    sessions    : ChatSessionSummary[];
     navigate_to : string;
     variant   ? : "active" | "completed";
     grouped   ? : boolean;
@@ -47,7 +47,7 @@ export const ChatList = memo(function ChatList({
 
     // Newest sessions up to the current page limit
     const [shownCount, setShownCount] = useState<number>(pageSize ?? Infinity);
-    const visible   = useMemo((): ChatSession[] => sessions.slice(0, shownCount), [sessions, shownCount]);
+    const visible   = useMemo((): ChatSessionSummary[] => sessions.slice(0, shownCount), [sessions, shownCount]);
     const remaining = sessions.length - visible.length;
 
     // Cards arranged either as a single grid (active) or grouped by recency
@@ -71,7 +71,7 @@ export const ChatList = memo(function ChatList({
             />
 
             {/* -------------------------------------------------------------------------------- */}
-            {/* List of ChatSession Cards */}
+            {/* List of ChatSessionSummary Cards */}
             {/* -------------------------------------------------------------------------------- */}
             <div className="rounded-xl border border-admin-border bg-admin-panel p-4 shadow-sm">
                 {sessions.length === 0 ? (

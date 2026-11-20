@@ -261,26 +261,40 @@ class BiomarkerSerializer(serializers.ModelSerializer):
         fields = ("id", "score_type", "score", "ts", "message", "start_ts", "end_ts")
         read_only_fields = fields
 
-class ChatSessionSerializer(serializers.ModelSerializer):
-    profile        = ProfileSerializer    (           read_only=True)
-    image          = AlbumImageSerializer (           read_only=True)
-    messages       = ChatMessageSerializer(many=True, read_only=True)
-    biomarkers     = BiomarkerSerializer  (many=True, read_only=True, source="biomarker_scores")
+# One chat as the chat lists carry it: everything but its transcript, scores, and recording
+# (`message_count` is counted by the list's query, `ChatSessionViewSet`)
+class ChatSessionSummarySerializer(serializers.ModelSerializer):
+    profile        = ProfileSerializer   (read_only=True)
+    image          = AlbumImageSerializer(read_only=True)
     start_ts       = serializers.SerializerMethodField()
     duration       = serializers.SerializerMethodField()
     average_scores = serializers.SerializerMethodField()
-    audio          = SessionAudioSerializer(read_only=True)
+    message_count  = serializers.IntegerField(read_only=True)
 
     class Meta:
         model  = ChatSession
-        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "audio", "duration", "topics",
-                  "sentiment", "emotion", "notes", "summary", "messages", "biomarkers", "average_scores", "taskType", "taskSubtype",
+        fields = ("id", "profile", "source", "date", "is_active", "start_ts", "end_ts", "duration", "topics",
+                  "sentiment", "emotion", "notes", "summary", "message_count", "average_scores", "taskType", "taskSubtype",
                   "image", "risk_level", "risk_quotes", "risk_reason", "chat_type", "condition", "variant", "debug_mode")
         read_only_fields = fields # ToDo: "notes" shouldn't be read only...
 
     def get_start_ts      (self, obj): return obj.start_ts
     def get_duration      (self, obj): return obj.duration
     def get_average_scores(self, obj): return obj.average_scores
+
+# One chat in full: its summary, plus its transcript (with each word), scores, and recording
+class ChatSessionSerializer(ChatSessionSummarySerializer):
+    messages      = ChatMessageSerializer (many=True, read_only=True)
+    biomarkers    = BiomarkerSerializer   (many=True, read_only=True, source="biomarker_scores")
+    audio         = SessionAudioSerializer(read_only=True)
+    message_count = serializers.SerializerMethodField()
+
+    class Meta(ChatSessionSummarySerializer.Meta):
+        fields           = (*ChatSessionSummarySerializer.Meta.fields, "audio", "messages", "biomarkers")
+        read_only_fields = fields
+
+    # Counted from the messages loaded for its transcript (single-chat queries prefetch them)
+    def get_message_count(self, obj: ChatSession) -> int: return len(obj.messages.all())
 
 # ================================================================================
 # Other Data

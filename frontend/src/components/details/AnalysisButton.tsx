@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import {  ChatSession } from "@/api";
+import {  ChatSessionSummary } from "@/api";
 
 // Button that sends users to the transcript analysis page
 // ToDo: Try with other colors
-export default function AnalysisButton ({ session, analysis_choice } : { session: ChatSession, analysis_choice: string }) {
+export default function AnalysisButton ({ session, analysis_choice } : { session: ChatSessionSummary, analysis_choice: string }) {
     const navigate = useNavigate();
     const onClick = () => navigate("/analysis", { state: { session, analysis_choice } });
     

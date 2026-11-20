@@ -9,7 +9,7 @@ headers show them in one line with readable names, and the Chat History page
 filters its chat lists on them. Field names keep the wire's spelling.
 
 */
-import type { ChatSession                        } from "@/api";
+import type { ChatSessionSummary                 } from "@/api";
 import      { chatRunLabel, chatTypePresentation } from "./chatTypePresentation";
 
 // What one chat ran (a REST session and the listener's `session_info` both carry these)
@@ -49,20 +49,20 @@ export function chatRunText(run: ChatRun): string | null {
 // Filtering
 // --------------------------------------------------------------------------------
 // Whether a session matches every field the filter sets (only the listed fields are checked)
-function matchesFields(session: ChatSession, filter: ChatRunFilter, fields: readonly ChatRunField[]): boolean {
+function matchesFields(session: ChatSessionSummary, filter: ChatRunFilter, fields: readonly ChatRunField[]): boolean {
     return fields.every((field: ChatRunField) => (filter[field] === null) || (session[field] === filter[field]));
 }
 
 // Whether a session matches the whole filter
-export function matchesChatRun(session: ChatSession, filter: ChatRunFilter): boolean {
+export function matchesChatRun(session: ChatSessionSummary, filter: ChatRunFilter): boolean {
     return matchesFields(session, filter, CHAT_RUN_FIELDS);
 }
 
 // Each field's values among the sessions matching the fields before it (so the conditions offered are the chosen chat type's), sorted
-export function chatRunOptions(sessions: ChatSession[], filter: ChatRunFilter): Record<ChatRunField, string[]> {
+export function chatRunOptions(sessions: ChatSessionSummary[], filter: ChatRunFilter): Record<ChatRunField, string[]> {
     const valuesOf = (field: ChatRunField): string[] => {
         const earlier = CHAT_RUN_FIELDS.slice(0, CHAT_RUN_FIELDS.indexOf(field));
-        const values  = sessions.filter((session: ChatSession) => matchesFields(session, filter, earlier)).map((session: ChatSession) => session[field]);
+        const values  = sessions.filter((session: ChatSessionSummary) => matchesFields(session, filter, earlier)).map((session: ChatSessionSummary) => session[field]);
         return [...new Set(values)].sort();
     };
     return {chat_type: valuesOf("chat_type"), condition: valuesOf("condition"), variant: valuesOf("variant")};

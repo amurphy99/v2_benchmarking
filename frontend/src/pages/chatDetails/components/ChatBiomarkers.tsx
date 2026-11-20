@@ -1,7 +1,7 @@
 import { FaCircle } from "react-icons/fa";
 import { HiMinus, HiOutlineArrowUp, HiOutlineArrowDown } from "react-icons/hi";
 
-import { ChatSession, BiomarkerType } from "@/api";
+import { ChatSessionSummary, BiomarkerType } from "@/api";
 import { biomarkerKeys, biomarkerColors } from "@/utils/styling/options";
 import { h3 } from "@/utils/styling/sharedStyles";
 
@@ -10,7 +10,7 @@ import { h3 } from "@/utils/styling/sharedStyles";
 // Chat Average Biomarker Scores
 // ====================================================================
 // Maybe have a "detailed" and "short" version so one could be used on the chat history page?
-export default function ChatBiomarkers({ chatSession, prevScores } : { chatSession: ChatSession, prevScores: Record<BiomarkerType, number> }) {
+export default function ChatBiomarkers({ chatSession, prevScores } : { chatSession: ChatSessionSummary, prevScores: Record<BiomarkerType, number> }) {
     const averages = chatSession.average_scores;
     return (
     <div className="flex flex-col border rounded p-[1rem] h-100">

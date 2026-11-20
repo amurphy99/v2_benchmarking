@@ -1,6 +1,6 @@
-import { useNavigate } from "react-router-dom";
-import { ChatSession } from "@/api";
-import { dateFormat  } from "@/utils/styling/numFormatting";
+import { useNavigate        } from "react-router-dom";
+import { ChatSessionSummary } from "@/api";
+import { dateFormat         } from "@/utils/styling/numFormatting";
 
 // --------------------------------------------------------------------
 // Overall Condition
@@ -32,7 +32,7 @@ function overallCondition() {
 // ChatSummaryCard
 // ====================================================================
 // "toChatDetails" navigates to the details page but includes the chatSession object
-export default function ChatSummaryCard({ chatSession }: { chatSession: ChatSession }) {
+export default function ChatSummaryCard({ chatSession }: { chatSession: ChatSessionSummary }) {
     const navigate = useNavigate();
     const toChatDetails = () => { navigate("/chatDetails", { state: { chatSession } }) };
 

@@ -25,7 +25,7 @@ from django.shortcuts    import get_object_or_404
 
 # Can I move the serializers.py file into this folder ?
 from ..models      import Account, Profile, Access, Goal, UserSettings, Reminder, ChatSession, RAGInstructions, Activity
-from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, DownloadDataSerializer, RAGInstructionsSerializer
+from  .serializers import AccountSerializer, ProfileSerializer, AccessSerializer, GoalSerializer, UserSettingsSerializer, ReminderSerializer, ChatSessionSerializer, ChatSessionSummarySerializer, DownloadDataSerializer, RAGInstructionsSerializer
 from  .serializers import AdminCaregiverSerializer, AdminCreateAccountSerializer, AdminProfileSerializer
 from  .mixins      import ProfileMixin, accessible_chat_sessions, monitored_profiles
 from ..helpers.downloadHelpers             import get_download_data
@@ -204,20 +204,29 @@ class RAGInstructionsViewSet(viewsets.ModelViewSet):
 # ================================================================================ 
 class ChatSessionViewSet(ProfileMixin, viewsets.ReadOnlyModelViewSet):
     """
+    A list carries each chat's summary: its transcript, scores, and recording stay
+    out, so a page listing many chats loads only what its cards and filters show.
+    One chat (`.../<id>/`) comes in full, like `ChatSessionView`.
+
     TODO: Should this be protected based on what kind of user you are?
     """
-    serializer_class   = ChatSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    # Each chat's summary in a list, or one chat in full
+    def get_serializer_class(self) -> type[ChatSessionSummarySerializer]:
+        return ChatSessionSummarySerializer if (self.action == "list") else ChatSessionSerializer
 
     def get_queryset(self): 
         # Filtering objects  
         active  = self.kwargs["active"]
         demo    = self.kwargs["demo"  ]
         
-        # Start with the base query (unfiltered by profile)
-        objs = (accessible_chat_sessions(self.request.user)
-                .select_related("profile", "image", "audio")
-                .prefetch_related("messages__words", "biomarker_scores"))
+        # Start with the base query (unfiltered by profile), joining the profile each chat nests
+        objs = accessible_chat_sessions(self.request.user).select_related("profile__account__user", "profile__settings_user", "profile__goal", "image")
+
+        # A list counts each chat's messages (distinct: access rows repeat); one chat loads them
+        if self.action == "list": objs = objs.annotate(message_count=Count("messages", distinct=True))
+        else:                     objs = objs.select_related("audio").prefetch_related("messages__words", "biomarker_scores")
 
         # Filter for active / inactive chats
         if   int(active) == 0: objs = objs.filter(is_active=False)

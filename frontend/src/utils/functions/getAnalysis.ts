@@ -1,4 +1,4 @@
-import { BiomarkerType, ChatSession } from "@/api";
+import { BiomarkerType, ChatSessionSummary } from "@/api";
 import { ChatWeek } from "./getChatWeeks";
 import { averageScore } from "../misc/scores";
 
@@ -34,7 +34,7 @@ const speechAnalysis: Record<BiomarkerType, Analysis> = {
     }
 }
 
-export function getDailyAnalysis(session: ChatSession): string[] {
+export function getDailyAnalysis(session: ChatSessionSummary): string[] {
     var analysis: string[] = [];
     for (const [biomarker, score] of Object.entries(session.average_scores)) {
         if (score < 0.35) {

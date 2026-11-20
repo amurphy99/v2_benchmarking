@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { ChatWeek } from "@/utils/functions/getChatWeeks"
 import { defaultImage } from "@/utils/functions/matchImage";
 import { dateFormatOptionsShort } from "@/utils/styling/numFormatting";
@@ -9,7 +9,7 @@ export default function AlbumWeekGrid({ week } : { week: ChatWeek }) {
     const navigate = useNavigate();
 
     const toWeeklySummary = (week: ChatWeek) => navigate("/week", { state: { chatWeek: week, albumDisplay: "grid" } } );
-    const toDaySummary = (session: ChatSession) => navigate("/day", { state: { chatSession: session, albumDisplay: "grid" } } );
+    const toDaySummary = (session: ChatSessionSummary) => navigate("/day", { state: { chatSession: session, albumDisplay: "grid" } } );
     const sessions = week.sessions.slice().reverse();
 
     return (

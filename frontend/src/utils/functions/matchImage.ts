@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 
 export const defaultImage = {
     id: -1,
@@ -14,9 +14,9 @@ export const defaultImage = {
  * @param topic The topic to find the associated image for
  * @returns  The image associated with the topic if it exists, or the default image otherwise
  */
-export function matchImage(sessions: ChatSession[], topic: string) {
+export function matchImage(sessions: ChatSessionSummary[], topic: string) {
     for (var i = 0; i < sessions.length; i++) {
-        var session: ChatSession = sessions[i];
+        var session: ChatSessionSummary = sessions[i];
         var sessionTopics = session.topics;
         if (!sessionTopics) continue;
         if (sessionTopics[0].trim() == topic) {

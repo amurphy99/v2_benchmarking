@@ -26,7 +26,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate                               } from "react-router-dom";
 
 // From this project
-import type { ChatSession                                    } from "@/api";
+import type { ChatSessionSummary                             } from "@/api";
 import      { useAuth                                        } from "@/context/AuthProvider";
 import      { useActiveChatSessions, useInactiveChatSessions } from "@/hooks/queries/useChatSessions";
 import      { NON_DEMO_ONLY                                  } from "@/utils/misc/constants";
@@ -60,9 +60,9 @@ export function Admin() {
 
     // Both lists narrowed to the chat type, condition, and variant picked (the dropdowns offer what either list holds)
     const [runFilter, setRunFilter] = useState<ChatRunFilter>(CHAT_RUN_ANY);
-    const allSessions      = useMemo((): ChatSession[] => [...active, ...inactive], [active, inactive]);
-    const filteredActive   = useMemo((): ChatSession[] => active  .filter((session: ChatSession) => matchesChatRun(session, runFilter)), [active,   runFilter]);
-    const filteredInactive = useMemo((): ChatSession[] => inactive.filter((session: ChatSession) => matchesChatRun(session, runFilter)), [inactive, runFilter]);
+    const allSessions      = useMemo((): ChatSessionSummary[] => [...active, ...inactive], [active, inactive]);
+    const filteredActive   = useMemo((): ChatSessionSummary[] => active  .filter((session: ChatSessionSummary) => matchesChatRun(session, runFilter)), [active,   runFilter]);
+    const filteredInactive = useMemo((): ChatSessionSummary[] => inactive.filter((session: ChatSessionSummary) => matchesChatRun(session, runFilter)), [inactive, runFilter]);
 
     return (
         <AdminPage>

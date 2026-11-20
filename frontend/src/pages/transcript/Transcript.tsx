@@ -1,4 +1,4 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { useLocation, useNavigate } from "react-router-dom";
 import ChatTranscript from "../chatDetails/components/ChatTranscript";
 import { blockStyle, colStyle, smallShadow, widthStyle } from "@/utils/styling/sharedStyles";
@@ -13,7 +13,7 @@ import { BsPlayCircle } from "react-icons/bs";
 
 export function Transcript() {
     const role = useAuth().account.role;
-    const { state } = useLocation() as { state: { chatSession: ChatSession, albumDisplay?: string } };
+    const { state } = useLocation() as { state: { chatSession: ChatSessionSummary, albumDisplay?: string } };
     const [biomarker, setBiomarker] = useState<string>("");
     const navigate = useNavigate();
     const toDaySummary = () => {navigate("/day", {state: {chatSession: state.chatSession, albumDisplay: state.albumDisplay}})}

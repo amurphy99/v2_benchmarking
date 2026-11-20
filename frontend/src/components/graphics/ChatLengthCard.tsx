@@ -1,7 +1,7 @@
-import { ChatSession } from "@/api";
+import { ChatSessionSummary } from "@/api";
 import { blockStyle } from "@/utils/styling/sharedStyles";
 
-export default function ChatLengthCard({role, sessions, type} : {role: string, sessions: ChatSession[], type: "Average" | ""}) {
+export default function ChatLengthCard({role, sessions, type} : {role: string, sessions: ChatSessionSummary[], type: "Average" | ""}) {
     const duration = ((sessions.reduce((acc, session) => acc + session.duration, 0) / sessions.length) / 60);
         if (window.isMobile) {
             return (
